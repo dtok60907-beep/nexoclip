@@ -607,7 +607,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
       {/* Header */}
       {isHeaderVisible && (
-        <header className="flex-shrink-0 h-16 border-b border-[#110C2A]/[0.08] flex items-center justify-between px-4 bg-white/70 backdrop-blur-xl z-50 gap-4">
+        <header className="flex-shrink-0 h-16 border-b border-[#110C2A]/[0.08] flex items-center justify-between px-4 bg-[#FFF6DE]/90 backdrop-blur-xl z-50 gap-4">
           {/* Left: Mobile menu toggle + Logo + Desktop Sidebar Toggle */}
           <div className="flex items-center gap-3">
             {/* Mobile drawer toggle */}
@@ -698,7 +698,7 @@ export default function StandaloneShell({ initialTab, children }) {
         {isHeaderVisible && (
           <aside
             className={`
-              fixed top-16 bottom-0 left-0 md:static md:h-full z-30 bg-white/65 backdrop-blur-xl border-r border-[#110C2A]/[0.08] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
+              fixed top-16 bottom-0 left-0 md:static md:h-full z-30 bg-[#FCEED1]/95 backdrop-blur-xl border-r border-[#110C2A]/[0.08] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
               ${isMobileOpen ? 'translate-x-0 w-60 z-50' : '-translate-x-full md:translate-x-0'}
               ${isSidebarCollapsed ? 'md:w-16' : 'md:w-52'}
             `}
