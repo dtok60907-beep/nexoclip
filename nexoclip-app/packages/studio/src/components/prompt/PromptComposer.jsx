@@ -12,22 +12,22 @@ const DEFAULT_POSITION_CLASS =
   "absolute bottom-4 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up";
 
 const DEFAULT_PANEL_CLASS =
-  "w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]";
+  "w-full bg-[#FFF6DE]/95 backdrop-blur-2xl rounded-[2rem] border border-[#110C2A]/10 p-4 flex flex-col gap-3 shadow-[0_18px_55px_rgba(17,12,42,0.16)]";
 
 const DEFAULT_TEXTAREA_CLASS =
-  "w-full bg-transparent border-none text-white text-sm placeholder:text-white/20 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40";
+  "w-full bg-transparent border-none text-[#110C2A] text-sm placeholder:text-[#110C2A]/45 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40";
 
 const DEFAULT_ACTION_CLASS =
-  "bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10 disabled:opacity-50 disabled:cursor-not-allowed";
+  "bg-[#A175FF] text-[#110C2A] px-7 py-3 rounded-full font-bold text-sm hover:bg-[#9467f4] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#A175FF]/25 hover:shadow-[#A175FF]/35 border border-[#A175FF]/20 z-10 disabled:opacity-50 disabled:cursor-not-allowed";
 
 const CONTROL_LAYOUT_CLASS =
   "h-[38px] flex items-center gap-2 rounded-md transition-all border group whitespace-nowrap shadow-inner focus:outline-none focus-visible:border-[#22d3ee]/45 focus-visible:ring-1 focus-visible:ring-[#22d3ee]/30";
 
 const CONTROL_IDLE_CLASS =
-  "text-white bg-[#16161a]/60 hover:bg-[#202026]/80 border-white/[0.06]";
+  "text-[#110C2A]/75 bg-white/70 hover:bg-white border-[#110C2A]/10";
 
 const CONTROL_ACTIVE_CLASS =
-  "text-[#22d3ee] bg-[#22d3ee]/10 hover:bg-[#22d3ee]/15 border-[#22d3ee]/25";
+  "text-[#110C2A] bg-[#A175FF]/20 hover:bg-[#A175FF]/30 border-[#A175FF]/40";
 
 const MEDIA_CONTROL_LAYOUT_CLASS =
   "w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group focus:outline-none focus-visible:border-[#22d3ee]/45 focus-visible:ring-1 focus-visible:ring-[#22d3ee]/30";
@@ -36,7 +36,7 @@ const DEFAULT_POPOVER_POSITION_CLASS =
   "absolute bottom-[calc(100%+12px)] left-0 z-50";
 
 const DEFAULT_POPOVER_CLASS =
-  "bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[160px] max-h-[40vh] overflow-y-auto custom-scrollbar";
+  "bg-[#FFF6DE]/98 rounded-[20px] p-3.5 shadow-[0_16px_45px_rgba(17,12,42,0.18)] border border-[#110C2A]/10 backdrop-blur-2xl min-w-[160px] max-h-[40vh] overflow-y-auto custom-scrollbar";
 
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -68,7 +68,7 @@ export function promptMediaButtonClassName({
     MEDIA_CONTROL_LAYOUT_CLASS,
     active
       ? "border-[#22d3ee]/60 bg-[#22d3ee]/5 hover:border-[#22d3ee]/70"
-      : "border-white/[0.03] bg-white/[0.03] hover:bg-white/[0.06] hover:border-[#22d3ee]/40",
+      : "border-[#110C2A]/10 bg-white/60 hover:bg-white hover:border-[#A175FF]/50",
     className,
   );
 }
@@ -77,7 +77,7 @@ export const PROMPT_MEDIA_PREVIEW_CLASS =
   "relative w-10 h-10 shrink-0 rounded-full border border-white/10 overflow-hidden shadow-md group";
 
 export const PROMPT_CONTROL_LABEL_CLASS =
-  "text-xs font-semibold text-current opacity-70 group-hover:text-[#22d3ee] group-hover:opacity-100 transition-all";
+  "text-xs font-semibold text-current opacity-75 group-hover:text-[#A175FF] group-hover:opacity-100 transition-all";
 
 export function PromptChevronIcon({ className = "" }) {
   return (
@@ -188,7 +188,7 @@ export function PromptPopoverHeader({ children, className = "" }) {
   return (
     <div
       className={joinClasses(
-        "text-[11px] font-semibold text-white/30 uppercase tracking-wider pb-2 border-b border-white/[0.05] mb-2 px-1",
+        "text-[11px] font-semibold text-[#110C2A]/55 uppercase tracking-wider pb-2 border-b border-[#110C2A]/10 mb-2 px-1",
         className,
       )}
     >
@@ -221,14 +221,14 @@ export function PromptMenuItem({
       role="menuitemradio"
       className={joinClasses(
         "w-full min-h-10 flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer transition-all group/menu-item",
-        "text-xs font-semibold text-white/70 hover:bg-[#22d3ee]/10 hover:text-[#22d3ee] focus:outline-none focus-visible:bg-[#22d3ee]/10 focus-visible:text-[#22d3ee]",
+        "text-xs font-semibold text-[#110C2A]/75 hover:bg-[#A175FF]/15 hover:text-[#110C2A] focus:outline-none focus-visible:bg-[#A175FF]/15 focus-visible:text-[#110C2A]",
         className,
       )}
     >
       <span className="min-w-0">
         <span className="block truncate">{children}</span>
         {description && (
-          <span className="block text-[9px] font-medium text-white/35 mt-0.5 truncate group-hover/menu-item:text-white/50">
+          <span className="block text-[9px] font-medium text-[#110C2A]/45 mt-0.5 truncate group-hover/menu-item:text-[#110C2A]/70">
             {description}
           </span>
         )}
@@ -255,7 +255,7 @@ export function PromptSegmentedControl({ children, className = "" }) {
   return (
     <div
       className={joinClasses(
-        "inline-flex items-center gap-1 bg-white/[0.03] border border-white/[0.05] rounded-full p-0.5",
+        "inline-flex items-center gap-1 bg-[#110C2A]/[0.04] border border-[#110C2A]/10 rounded-full p-0.5",
         className,
       )}
     >
@@ -281,7 +281,7 @@ export function PromptSegmentOption({
         "focus:outline-none focus-visible:ring-1 focus-visible:ring-[#22d3ee]/40",
         selected
           ? "bg-[#22d3ee] text-black shadow-md shadow-[#22d3ee]/20"
-          : "text-white/40 hover:text-white/70",
+          : "text-[#110C2A]/50 hover:text-[#110C2A]/80",
         className,
       )}
     >
