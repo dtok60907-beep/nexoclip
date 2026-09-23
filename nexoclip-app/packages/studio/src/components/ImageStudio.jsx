@@ -1361,7 +1361,7 @@ export default function ImageStudio({
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-app-bg relative p-4 md:p-6 overflow-hidden">
+    <div className="w-full h-full flex flex-col items-center justify-center bg-[#FCEED1] text-[#110C2A] relative p-4 md:p-6 overflow-hidden">
       
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
