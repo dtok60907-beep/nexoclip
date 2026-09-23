@@ -674,8 +674,8 @@ export default function StandaloneShell({ initialTab, children }) {
           {/* Right: Actions */}
           <div className="flex-shrink-0 flex items-center gap-3">
             <button onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
-              <span className="text-cyan-300">◈</span>
-              <span className="text-xs font-bold text-white/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
+              <span className="text-[#A175FF]">◈</span>
+              <span className="text-xs font-bold text-[#110C2A]/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
             </button>
 
             <JobListPanel />

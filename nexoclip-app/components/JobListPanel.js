@@ -119,7 +119,7 @@ export default function JobListPanel() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#110C2A]/70 hover:bg-[#A175FF]/15 hover:text-[#110C2A]"
         title="Jobs"
         aria-label="Jobs"
       >
@@ -131,21 +131,21 @@ export default function JobListPanel() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 max-h-96 w-80 overflow-auto rounded-xl border border-white/10 bg-[#0d0d0f] p-2 shadow-2xl">
+        <div className="absolute right-0 z-50 mt-2 max-h-96 w-80 overflow-auto rounded-[24px] border border-[#110C2A]/10 bg-[#FFF6DE] p-2 text-[#110C2A] shadow-[0_20px_60px_rgba(17,12,42,0.16)]">
           {items.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-white/40">No jobs yet.</p>
+            <p className="px-2 py-3 text-xs text-[#110C2A]/50">No jobs yet.</p>
           ) : (
             items.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5">
+              <div key={it.id} className="flex items-center gap-2 rounded-[14px] px-2 py-1.5 hover:bg-[#A175FF]/10">
                 {it.thumbnailUrl ? (
                   <img src={it.thumbnailUrl} alt="" className="h-8 w-8 rounded object-cover" />
                 ) : (
-                  <span className="flex h-8 w-8 items-center justify-center rounded bg-white/5 text-[10px] text-white/40">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#A175FF]/15 text-[10px] text-[#110C2A]/55">
                     {it.kind.slice(0, 3)}
                   </span>
                 )}
-                <span className="flex-1 truncate text-xs text-white/80">{it.title}</span>
-                <span className="text-[10px] uppercase text-white/40">{it.status}</span>
+                <span className="flex-1 truncate text-xs text-[#110C2A]/80">{it.title}</span>
+                <span className="text-[10px] uppercase text-[#110C2A]/50">{it.status}</span>
               </div>
             ))
           )}
