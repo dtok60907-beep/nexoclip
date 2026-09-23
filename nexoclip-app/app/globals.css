@@ -53,6 +53,15 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
+.nexoclip-studio-shell aside .text-white\/55 { color: rgba(17, 12, 42, 0.58) !important; }
+.nexoclip-studio-shell aside .text-white\/45 { color: rgba(17, 12, 42, 0.42) !important; }
+.nexoclip-studio-shell aside .text-white\/35 { color: rgba(17, 12, 42, 0.42) !important; }
+.nexoclip-studio-shell aside [class*="hover:text-white"]:hover { color: #110C2A !important; }
+.nexoclip-studio-shell aside [class*="hover:bg-white"]:hover { background: rgba(161, 117, 255, 0.10) !important; }
+.nexoclip-studio-shell header .text-white { color: #110C2A !important; }
+.nexoclip-studio-shell header .text-white\/60 { color: rgba(17, 12, 42, 0.60) !important; }
+.nexoclip-studio-shell header .text-white\/80 { color: rgba(17, 12, 42, 0.80) !important; }
+
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }

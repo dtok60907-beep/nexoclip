@@ -54,20 +54,23 @@ export default function LoginForm() {
   }
 
   const inputClass =
-    'w-full rounded-lg border border-black/15 bg-white px-3.5 py-3 text-sm text-[#111] placeholder:text-black/35 outline-none transition focus:border-black/40 disabled:opacity-60';
+    'w-full rounded-[18px] border border-[#110C2A]/10 bg-white px-4 py-3.5 text-sm text-[#110C2A] placeholder:text-[#110C2A]/35 outline-none transition focus:border-[#A175FF] focus:ring-4 focus:ring-[#A175FF]/15 disabled:opacity-60';
   const primaryBtn =
-    'w-full rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1e1e1e] px-4 py-3 text-sm font-medium text-white transition hover:from-[#454545] hover:to-[#252525] disabled:opacity-60';
+    'w-full rounded-[18px] bg-[#A175FF] px-4 py-3.5 text-sm font-bold text-[#110C2A] shadow-lg shadow-[#A175FF]/25 transition hover:-translate-y-0.5 hover:bg-[#9467f4] disabled:opacity-60';
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f2f2f2] px-4 py-12">
-      <div className="w-full max-w-sm">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#FFF6DE] px-4 py-12 text-[#110C2A]">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#A175FF]/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-[#8BDFDD]/35 blur-3xl" />
+      <div className="relative w-full max-w-sm rounded-[40px] border border-white/70 bg-white/75 p-7 shadow-[0_24px_80px_rgba(17,12,42,0.12)] backdrop-blur-xl sm:p-9">
         <div className="mb-5 flex justify-center">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-[#0b0b0c] text-lg font-black text-[#22d3ee]">
+          <div className="grid h-12 w-12 place-items-center rounded-[18px] bg-[#110C2A] text-lg font-black text-[#A175FF] shadow-lg shadow-[#A175FF]/20">
             N
           </div>
         </div>
 
-        <h1 className="mb-8 text-center text-2xl font-semibold text-[#111]">Welcome to Nexoclip</h1>
+        <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[#A175FF]">Welcome back</p>
+        <h1 className="mb-8 text-center text-3xl font-black tracking-tight text-[#110C2A]">Sign in to Nexoclip</h1>
 
         {error && (
           <p role="alert" className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -101,7 +104,7 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={backToEmail}
-              className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/10 bg-white px-3.5 py-2.5 text-left text-sm text-[#111] transition hover:bg-black/[0.02]"
+              className="flex w-full items-center justify-between gap-3 rounded-[18px] border border-[#110C2A]/10 bg-white px-3.5 py-2.5 text-left text-sm text-[#110C2A] transition hover:border-[#A175FF]/50 hover:bg-[#A175FF]/5"
             >
               <span className="min-w-0 truncate">{values.email}</span>
               <span className="flex-shrink-0 text-xs font-medium text-black/45">Change</span>
@@ -123,7 +126,7 @@ export default function LoginForm() {
           </form>
         )}
 
-        <p className="mt-5 text-center text-xs leading-5 text-black/45">
+        <p className="mt-5 text-center text-xs leading-5 text-[#110C2A]/50">
           By clicking “Continue” you agree to our{' '}
           <a href="https://www.nexoclip.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-black/70">Terms of use</a>{' '}&amp;{' '}
           <a href="https://www.nexoclip.com/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-black/70">Privacy Policy</a>.
