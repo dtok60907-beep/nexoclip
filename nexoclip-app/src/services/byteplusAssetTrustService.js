@@ -4,6 +4,7 @@ import {
   compareAndSetBytePlusAssetLinkStatus,
   createProcessingBytePlusAssetLink,
   findBytePlusAssetLink,
+  findBytePlusAssetGroup,
   markBytePlusAssetLinkStale,
   resetBytePlusAssetLink,
   updateBytePlusAssetLink,
@@ -107,6 +108,7 @@ const defaultRepository = {
   compareAndSetBytePlusAssetLinkStatus,
   createProcessingBytePlusAssetLink,
   findBytePlusAssetLink,
+  findBytePlusAssetGroup,
   markBytePlusAssetLinkStale,
   resetBytePlusAssetLink,
   updateBytePlusAssetLink,
@@ -218,7 +220,10 @@ export function createBytePlusAssetTrustService({
       inTransaction = false;
 
       const attemptId = link.attempt_id;
-      let groupId = link.group_id || configuredGroupId;
+      const existingProjectGroup = !link.group_id && !configuredGroupId && repository.findBytePlusAssetGroup
+        ? await repository.findBytePlusAssetGroup(client, projectName)
+        : null;
+      let groupId = link.group_id || configuredGroupId || existingProjectGroup;
       if (!groupId) {
         groupId = requireProviderId(await provider.createAssetGroup({
           name: SHARED_GROUP_NAME,

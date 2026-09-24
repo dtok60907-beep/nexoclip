@@ -80,33 +80,12 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
       }
 
       const references = collectReferences(body)
-      if (
-        durablePromptState
-        && isBytePlusSeedance(model)
-        && (
-          durablePromptState.hasIncompleteMentionAssets
-          || !durablePromptState.workspaceAssetIds.every((assetId) =>
-            references.includes(`/api/assets/${encodeURIComponent(assetId)}/download`),
-          )
-        )
-      ) {
-        return NextResponse.json({
-          error: 'Prompt mention references changed or are not persisted yet. Please wait for saving to finish and try again.',
-          code: 'PROMPT_STATE_NOT_PERSISTED',
-        }, { status: 409 })
-      }
       const legacyReferences = references.filter(isLegacyCanvasReference)
       if (legacyReferences.length && !(await projectOwnsLegacyReferences(sql, projectId, legacyReferences))) {
         return assetNotFoundResponse()
       }
 
       const parameters = mapLegacyParameters(body, kind)
-      if (isBytePlusSeedance(model) && !hasOnlyCanonicalAssetReferences(parameters)) {
-        return NextResponse.json({
-          error: 'Every Seedance reference must be imported into Assets and active in Trust for Seedance.',
-          code: 'BYTEPLUS_REFERENCE_NOT_TRUSTED',
-        }, { status: 422 })
-      }
       const supportedRatios = configuredModel?.aspectRatios ?? ['1:1', '16:9', '9:16', '4:3', '3:4']
       if (parameters.aspectRatio === 'auto') delete parameters.aspectRatio
       else if (parameters.aspectRatio !== undefined && !supportedRatios.includes(String(parameters.aspectRatio))) {
@@ -136,8 +115,6 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
 
 type DurablePromptState = {
   stateKey: string
-  workspaceAssetIds: string[]
-  hasIncompleteMentionAssets: boolean
 }
 
 function resolveDurablePromptState(
@@ -153,16 +130,8 @@ function resolveDurablePromptState(
   if (!promptNode) return null
 
   const mentions = normalizePersistedMentions(promptNode.data.mentions)
-  const workspaceAssetIds = [...new Set(mentions.flatMap((mention) => mention.selectedWorkspaceAssetIds ?? []))]
-  const hasIncompleteMentionAssets = mentions.some((mention) => {
-    const legacyCount = new Set(mention.selectedAssetIds).size
-    const canonicalCount = new Set(mention.selectedWorkspaceAssetIds ?? []).size
-    return canonicalCount === 0 || (legacyCount > 0 && canonicalCount !== legacyCount)
-  })
   return {
     stateKey: mentionStateKey(String(promptNode.data.text ?? '').trim(), mentions),
-    workspaceAssetIds,
-    hasIncompleteMentionAssets,
   }
 }
 
@@ -229,19 +198,6 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (videoUrl) parameters.referenceVideos = [videoUrl]
   if (frameImages.length) parameters.frameImages = frameImages
   return parameters
-}
-
-function isBytePlusSeedance(model: string): boolean {
-  return /(?:^|\/)(?:dreamina-)?seedance(?:[-.]|$)/i.test(model) || /^ep-20260916130618-t2z5j$/i.test(model)
-}
-
-function hasOnlyCanonicalAssetReferences(parameters: Record<string, unknown>): boolean {
-  const urls = [
-    ...(Array.isArray(parameters.referenceImages) ? parameters.referenceImages : []),
-    ...(Array.isArray(parameters.referenceVideos) ? parameters.referenceVideos : []),
-    ...(Array.isArray(parameters.frameImages) ? parameters.frameImages.map((frame) => frame && typeof frame === 'object' ? (frame as { url?: unknown }).url : undefined) : []),
-  ]
-  return urls.every((url) => typeof url === 'string' && /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url))
 }
 
 function isLegacyCanvasReference(url: string): boolean {

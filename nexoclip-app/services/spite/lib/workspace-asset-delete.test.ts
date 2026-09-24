@@ -78,6 +78,7 @@ test('canonical workspace deletion takes precedence over a colliding legacy gene
 
 test('internal cleanup removes canonical Canvas references before local deletion', async () => {
   const patched: any[] = []
+  const deletedNodes: any[] = []
   let proxied = false
   const handlers = createAssetRouteHandlers({
     getDb: () => sqlForWorkspaceAsset(),
@@ -87,6 +88,7 @@ test('internal cleanup removes canonical Canvas references before local deletion
         projection: { nodes: projectId === 'project-2' ? [{ id: 'node-1', data: { workspaceAssetId: 'asset-1', outputUrl: '/api/assets/asset-1/download' } }] : [], edges: [], scenes: [] },
       }),
       patchNodeData: async (input: any) => { patched.push(input) },
+      deleteNode: async (input: any) => { deletedNodes.push(input) },
     }) as any,
     fetchFn: async () => { proxied = true; return Response.json({ success: true }) },
     env: { NEXOCLIP_INTERNAL_URL: 'http://nexoclip:3000' },
@@ -98,7 +100,8 @@ test('internal cleanup removes canonical Canvas references before local deletion
 
   assert.equal(response.status, 200)
   assert.equal(proxied, false)
-  assert.deepEqual(patched[0].unset.sort(), ['outputUrl', 'workspaceAssetId'])
+  assert.equal(patched.length, 0)
+  assert.equal(deletedNodes[0].nodeId, 'node-1')
 })
 
 test('workspace folder cleanup compares UUID identities safely', () => {
@@ -113,6 +116,7 @@ test('reference patching clears legacy media URLs when the node has the exact ca
 
   assert.equal(patches.length, 1)
   assert.equal(patches[0].nodeId, 'target')
+  assert.equal(patches[0].deleteNode, true)
   assert.deepEqual(patches[0].unset.sort(), ['outputUrl', 'thumbnail', 'workspaceAssetId'])
 })
 

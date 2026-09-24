@@ -40,7 +40,11 @@ export function workspaceAssetReferencePatches(projection: CanvasProjection, ass
       ))
     const mentions = removeMentionIdentity(data.mentions, assetId)
     const mentionsChanged = JSON.stringify(mentions) !== JSON.stringify(data.mentions)
-    if (unset.length === 0 && !mentionsChanged) return []
-    return [{ nodeId: node.id, set: mentionsChanged ? { mentions } : {}, unset }]
+    // A media node represents exactly one workspace asset. Once its asset is
+    // deleted, retaining an empty node creates the "deleted asset stays on
+    // canvas" ghost. Prompt nodes only need their mention selections patched.
+    const deleteNode = identityMatches && ['outputUrl', 'thumbnail', 'url'].some(key => data[key] !== undefined)
+    if (unset.length === 0 && !mentionsChanged && !deleteNode) return []
+    return [{ nodeId: node.id, set: mentionsChanged ? { mentions } : {}, unset, deleteNode }]
   })
 }

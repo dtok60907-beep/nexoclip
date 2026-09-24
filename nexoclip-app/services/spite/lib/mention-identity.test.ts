@@ -42,7 +42,7 @@ test('canonical mention metadata compiles even before the folder cache refreshes
   assert.doesNotMatch(result.prompt, /@Nathan/)
 })
 
-test('partial canonical mention metadata does not silently omit selected assets', () => {
+test('partial canonical mention metadata keeps canonical assets without inventing trusted duplicates', () => {
   const result = compileMentionsForModel(
     '@Nathan walks into frame',
     [{
@@ -54,19 +54,18 @@ test('partial canonical mention metadata does not silently omit selected assets'
     [],
     model,
   )
-  assert.deepEqual(result.needsCanonicalImport, ['Nathan'])
-  assert.deepEqual(result.refGroups, [])
+  assert.deepEqual(result.refGroups[0].urls, ['/api/assets/workspace-front/download'])
 })
 
-test('legacy-only mentions report the folder that needs canonical import', () => {
+test('legacy-only mentions are sent as raw image references', () => {
   const result = compileMentionsForModel(
     '@Buratna walks into frame',
     [{ folderId: 'buratna', name: 'Buratna', selectedAssetIds: ['legacy-buratna'] }],
     [{ id: 'buratna', name: 'Buratna', type: 'character', assets: [{ id: 'legacy-buratna', r2_url: '/spite/api/r2-image/buratna.png' }] }],
     model,
   )
-  assert.deepEqual(result.needsCanonicalImport, ['Buratna'])
-  assert.deepEqual(result.refGroups, [])
+  assert.deepEqual(result.refGroups[0].urls, ['/spite/api/r2-image/buratna.png'])
+  assert.deepEqual(result.refGroups[0].workspaceAssetIds, [])
 })
 
 test('character mentions demand the exact same identity', () => {

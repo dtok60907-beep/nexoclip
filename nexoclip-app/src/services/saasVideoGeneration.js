@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { findExactTrustedWorkspaceAsset } from './assetService.js';
 import { createProviderRouter, markTrustedAssetRequest } from '../providers/providerRouter.js';
 import { createGeneratedAsset } from '../repositories/assetMetadataRepository.js';
 import {
@@ -10,22 +9,6 @@ import { isDirectBytePlusSeedance } from '../providers/providerRegistry.js';
 import { resolveReferenceImages } from './saasImageGeneration.js';
 
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'expired']);
-
-function trustedAssetError(status) {
-  if (status === 'processing') {
-    return Object.assign(new Error('Trusted BytePlus asset is still processing. Wait for Trust for Seedance to become active.'), {
-      code: 'BYTEPLUS_ASSET_PROCESSING', status: 409, retryable: true,
-    });
-  }
-  if (status === 'failed') {
-    return Object.assign(new Error('Trusted BytePlus asset failed processing. Retry Trust for Seedance before generating.'), {
-      code: 'BYTEPLUS_ASSET_FAILED', status: 422,
-    });
-  }
-  return Object.assign(new Error('Trusted BytePlus asset mapping is invalid. Retry Trust for Seedance before generating.'), {
-    code: 'BYTEPLUS_ASSET_INVALID', status: 422,
-  });
-}
 
 function videoRequest(job, { referenceImages, frameImages, referenceVideos }) {
   const parameters = job.parameters || {};
@@ -44,12 +27,11 @@ function videoRequest(job, { referenceImages, frameImages, referenceVideos }) {
   };
 }
 
-export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, findExactTrustedAsset = findExactTrustedWorkspaceAsset, env = process.env, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120 }) {
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120 }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
   return async (job) => {
     let hasTrustedAsset = false;
     const trustedMappings = [];
-    const deferredTrustedAssetErrors = new Map();
     const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
     const resolveWorkspaceAsset = isDirectBytePlusSeedance(job.model, env)
       ? async ({ workspaceId, assetId }) => {
@@ -68,40 +50,16 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
           });
           return `asset://${link.provider_asset_id.trim()}`;
         }
-        // A duplicate may have a newer Trust attempt still processing while an
-        // identical older asset is already active. Let byte-exact recovery run
-        // before surfacing this mapping's actionable error.
-        deferredTrustedAssetErrors.set(assetId, trustedAssetError(link.status));
+        // The selected asset is only sent as a BytePlus asset when its own
+        // Trust record is active. Processing, failed, and untrusted assets
+        // deliberately fall through to raw image resolution.
         return null;
       }
       : undefined;
-    const resolveWorkspaceAssetContent = resolveWorkspaceAsset
-      ? async ({ workspaceId, assetId, body, contentType }) => {
-        const match = await findExactTrustedAsset({
-          workspaceId, body, contentType, excludeAssetId: assetId, projectName,
-        }, storage, pool);
-        if (match?.provider_asset_id?.trim()) {
-          hasTrustedAsset = true;
-          return `asset://${match.provider_asset_id.trim()}`;
-        }
-        const deferredError = deferredTrustedAssetErrors.get(assetId);
-        if (deferredError) throw deferredError;
-        return null;
-      }
-      : undefined;
-    const resolution = { workspaceId: job.workspace_id, pool, storage, referenceStorage, resolveWorkspaceAsset, resolveWorkspaceAssetContent };
+    const resolution = { workspaceId: job.workspace_id, pool, storage, referenceStorage, resolveWorkspaceAsset };
     const referenceImages = await resolveReferenceImages({ ...resolution, referenceImages: job.parameters?.referenceImages });
     const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: (job.parameters?.frameImages || []).map((frame) => frame.url) });
     const referenceVideos = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceVideos, pool, storage, referenceStorage });
-    if (isDirectBytePlusSeedance(job.model, env)) {
-      const rawReference = [...referenceImages, ...frameImages, ...referenceVideos]
-        .find((reference) => !reference.startsWith('asset://'));
-      if (rawReference) {
-        throw Object.assign(new Error('Every Seedance reference must be an active Trusted Asset. Import it into Assets and use Trust for Seedance before generating.'), {
-          code: 'BYTEPLUS_REFERENCE_NOT_TRUSTED', status: 422,
-        });
-      }
-    }
     const request = videoRequest(job, { referenceImages, frameImages, referenceVideos });
     let submitted;
     try {

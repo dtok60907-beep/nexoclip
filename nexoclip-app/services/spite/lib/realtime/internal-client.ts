@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import * as Y from 'yjs'
 
 import {
+  deleteNode,
   importLegacyCanvas,
   readCanvasProjection,
   type CanvasProjection,
@@ -71,6 +72,7 @@ type InternalRequestFactoryOptions = {
 export type InternalRealtimeClient = {
   exportDocument(input: ExportDocumentInput): Promise<ExportDocumentResult>
   patchNodeData(input: PatchNodeDataInput): Promise<void>
+  deleteNode(input: ExportDocumentInput & { nodeId: string }): Promise<void>
   replaceDocument(input: ReplaceDocumentInput): Promise<void>
 }
 
@@ -146,6 +148,14 @@ export function createInternalRealtimeClient(options: InternalRequestFactoryOpti
         },
       })
     },
+    async deleteNode(input) {
+      await request({
+        userId: input.userId,
+        projectId: input.projectId,
+        action: 'delete-node',
+        body: { nodeId: input.nodeId },
+      })
+    },
     async replaceDocument(input) {
       await request({
         userId: input.userId,
@@ -176,6 +186,11 @@ export function applyInternalDocumentAction(
       unset: Array.isArray(body.unset) ? body.unset.filter((value): value is string => typeof value === 'string') : [],
       origin,
     })
+    return
+  }
+
+  if (action === 'delete-node') {
+    deleteNode(doc, typeof body.nodeId === 'string' ? body.nodeId : '')
     return
   }
 

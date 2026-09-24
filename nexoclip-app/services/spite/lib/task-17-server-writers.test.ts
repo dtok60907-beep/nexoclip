@@ -231,7 +231,7 @@ test('accepts generation when the submitted prompt state matches the durable con
   assert.equal((submissions[0] as any).input.prompt, 'compiled durable prompt')
 })
 
-test('rejects Seedance when a durable mention is missing from the submitted references', async () => {
+test('allows Seedance when a durable mention falls back to raw references', async () => {
   let submitted = false
   const mentions = [{
     folderId: 'nathan',
@@ -243,7 +243,7 @@ test('rejects Seedance when a durable mention is missing from the submitted refe
     getAuthenticatedUser: async () => ({ id: OWNER_ID }),
     getDb: ownedProjectSql,
     createNexoClipGenerationClient: () => ({
-      submit: async () => { submitted = true; throw new Error('submit should not be called') },
+      submit: async () => { submitted = true; return { id: 'generation-video-raw-1', kind: 'video', status: 'queued' } },
       status: async () => { throw new Error('status should not be called') },
     }),
     createInternalRealtimeClient: () => ({
@@ -276,19 +276,19 @@ test('rejects Seedance when a durable mention is missing from the submitted refe
     },
   }))
 
-  assert.equal(response.status, 409)
-  assert.equal((await response.json()).code, 'PROMPT_STATE_NOT_PERSISTED')
-  assert.equal(submitted, false)
+  assert.equal(response.status, 202)
+  assert.equal((await response.json()).generationStatus, 'queued')
+  assert.equal(submitted, true)
 })
 
-test('rejects Seedance when durable mention metadata has no complete canonical identity', async () => {
+test('allows Seedance when durable mention metadata has no canonical identity', async () => {
   let submitted = false
   const mentions = [{ folderId: 'nathan', name: 'Nathan', selectedAssetIds: ['legacy-nathan'] }]
   const handler = createGenerateSubmitHandler({
     getAuthenticatedUser: async () => ({ id: OWNER_ID }),
     getDb: ownedProjectSql,
     createNexoClipGenerationClient: () => ({
-      submit: async () => { submitted = true; throw new Error('submit should not be called') },
+      submit: async () => { submitted = true; return { id: 'generation-video-raw-2', kind: 'video', status: 'queued' } },
       status: async () => { throw new Error('status should not be called') },
     }),
     createInternalRealtimeClient: () => ({
@@ -321,9 +321,9 @@ test('rejects Seedance when durable mention metadata has no complete canonical i
     },
   }))
 
-  assert.equal(response.status, 409)
-  assert.equal((await response.json()).code, 'PROMPT_STATE_NOT_PERSISTED')
-  assert.equal(submitted, false)
+  assert.equal(response.status, 202)
+  assert.equal((await response.json()).generationStatus, 'queued')
+  assert.equal(submitted, true)
 })
 
 test('rejects non-portrait Seedance video settings before queueing', async () => {

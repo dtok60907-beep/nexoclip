@@ -12,6 +12,18 @@ export async function findBytePlusAssetLink(client, workspaceId, localAssetId) {
   return result.rows[0] || null;
 }
 
+export async function findBytePlusAssetGroup(client, projectName) {
+  const result = await client.query(
+    `SELECT group_id
+     FROM byteplus_asset_links
+     WHERE project_name = $1 AND group_id IS NOT NULL
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [projectName],
+  );
+  return result.rows[0]?.group_id || null;
+}
+
 export async function createProcessingBytePlusAssetLink(client, {
   workspaceId, localAssetId, projectName = 'default', attemptId,
 }) {

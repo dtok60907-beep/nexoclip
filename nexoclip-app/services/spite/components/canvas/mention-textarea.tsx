@@ -662,6 +662,18 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
   }
 
   function handleKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    // contentEditable turns a plain Enter into a block (<div>), while Shift+Enter
+    // inserts a <br>. The old serializer only has a stable representation for
+    // the latter, so a pasted prompt followed by Enter could be persisted with
+    // its lines collapsed and reopen corrupted after refresh. Normalize both
+    // shortcuts to an explicit line break before serializing.
+    if (e.key === 'Enter' && !e.shiftKey && !open) {
+      e.preventDefault()
+      document.execCommand('insertLineBreak')
+      handleInput()
+      return
+    }
+
     if (!open) return
     if (e.key === 'ArrowDown') {
       e.preventDefault()

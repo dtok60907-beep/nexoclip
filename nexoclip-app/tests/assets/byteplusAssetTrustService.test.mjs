@@ -5,7 +5,7 @@ import { BytePlusAssetsError } from '../../src/providers/byteplusAssetsClient.js
 import { listWorkspaceAssets } from '../../src/services/assetService.js';
 import { createBytePlusAssetTrustService } from '../../src/services/byteplusAssetTrustService.js';
 
-function fixture({ asset, link, casLosesTo, providerGet, env = {}, now = () => new Date('2026-09-16T12:00:00Z') } = {}) {
+function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, env = {}, now = () => new Date('2026-09-16T12:00:00Z') } = {}) {
   let current = link ? {
     project_name: 'project-x',
     attempt_id: '00000000-0000-4000-8000-000000000001',
@@ -28,18 +28,23 @@ function fixture({ asset, link, casLosesTo, providerGet, env = {}, now = () => n
     async findBytePlusAssetLink(_client, workspaceId, assetId) {
       return current?.workspace_id === workspaceId && current?.local_asset_id === assetId ? { ...current } : null;
     },
+    async findBytePlusAssetGroup(_client, projectName) {
+      return current?.project_name === projectName ? (current.group_id || existingGroup) : existingGroup;
+    },
     async createProcessingBytePlusAssetLink(_client, input) {
-      current ||= {
-        workspace_id: input.workspaceId,
-        local_asset_id: input.localAssetId,
-        project_name: input.projectName,
-        attempt_id: input.attemptId,
-        updated_at: now().toISOString(),
-        status: 'processing',
-        group_id: null,
-        provider_asset_id: null,
-        error: null,
-      };
+      if (!current || current.workspace_id !== input.workspaceId || current.local_asset_id !== input.localAssetId) {
+        current = {
+          workspace_id: input.workspaceId,
+          local_asset_id: input.localAssetId,
+          project_name: input.projectName,
+          attempt_id: input.attemptId,
+          updated_at: now().toISOString(),
+          status: 'processing',
+          group_id: null,
+          provider_asset_id: null,
+          error: null,
+        };
+      }
       return { ...current };
     },
     async updateBytePlusAssetLink(_client, input) {
@@ -149,6 +154,15 @@ test('uses a configured shared BytePlus group without creating a group', async (
 
   assert.deepEqual(shared.calls.groups, []);
   assert.equal(shared.calls.assets[0].groupId, 'shared-group');
+});
+
+test('reuses an existing project group for new trusted assets', async () => {
+  const shared = fixture({ asset: { ...image, id: 'asset-2' }, existingGroup: 'project-group' });
+
+  await shared.service.startTrust('workspace-1', 'asset-2');
+
+  assert.deepEqual(shared.calls.groups, []);
+  assert.equal(shared.calls.assets[0].groupId, 'project-group');
 });
 
 test('failed retry retains the group and rotates only the asset attempt token', async () => {

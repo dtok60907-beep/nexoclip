@@ -159,7 +159,11 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
           for (const { id } of ownedProjects) {
             const { projection } = await realtime.exportDocument({ userId: user.id, projectId: id })
             for (const patch of workspaceAssetReferencePatches(projection, assetId)) {
-              await realtime.patchNodeData({ userId: user.id, projectId: id, ...patch })
+              if (patch.deleteNode) {
+                await realtime.deleteNode({ userId: user.id, projectId: id, nodeId: patch.nodeId })
+              } else {
+                await realtime.patchNodeData({ userId: user.id, projectId: id, nodeId: patch.nodeId, set: patch.set, unset: patch.unset })
+              }
             }
           }
           const removedRows = await sql`
