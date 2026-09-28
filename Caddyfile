@@ -6,6 +6,10 @@
 			reverse_proxy ai-clip:4175
 		}
 
+		handle /canvas/api/internal/* {
+			respond 404
+		}
+
 		handle /spite/api/internal/* {
 			respond 404
 		}
@@ -19,8 +23,16 @@
 			reverse_proxy nexoclip-app:3000
 		}
 
+		handle /canvas/ws* {
+			reverse_proxy spite-realtime:3007
+		}
+
 		handle /spite/ws* {
 			reverse_proxy spite-realtime:3007
+		}
+
+		handle /canvas* {
+			reverse_proxy spite:3005
 		}
 
 		handle /spite* {

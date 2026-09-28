@@ -53,7 +53,8 @@ export function createBytePlusAssetTrustHandlers(deps = {}) {
     try {
       const tenant = await resolveTenant({ token: request.cookies.get(SESSION_COOKIE)?.value });
       const { assetId } = await params;
-      const state = await trustService[operation](tenant.workspace.id, assetId);
+      const canvasProjectId = new URL(request.url).searchParams.get('project_id') || '__legacy__';
+      const state = await trustService[operation](tenant.workspace.id, assetId, canvasProjectId);
       if (!state) {
         return Response.json({ error: { code: 'ASSET_NOT_FOUND', message: 'Asset not found' } }, { status: 404 });
       }

@@ -63,8 +63,9 @@ export async function importImageForTrust({
   return { assetId, canonicalUrl: payload.url }
 }
 
-export function bytePlusTrustUrl(assetId: string) {
-  return `/api/assets/${encodeURIComponent(assetId)}/byteplus-trust`
+export function bytePlusTrustUrl(assetId: string, canvasProjectId?: string) {
+  const suffix = canvasProjectId ? `?project_id=${encodeURIComponent(canvasProjectId)}` : ''
+  return `/api/assets/${encodeURIComponent(assetId)}/byteplus-trust${suffix}`
 }
 
 export function safeBytePlusTrustError(error?: { code?: string; message?: string }) {
@@ -132,10 +133,11 @@ export async function requestBytePlusTrust(
   assetId: string,
   method: 'GET' | 'POST',
   fetchFn: typeof fetch = fetch,
+  canvasProjectId?: string,
 ): Promise<BytePlusTrustState> {
   let response: Response
   try {
-    response = await fetchFn(bytePlusTrustUrl(assetId), { method })
+    response = await fetchFn(bytePlusTrustUrl(assetId, canvasProjectId), { method })
   } catch {
     return method === 'GET' ? { status: 'processing' } : { status: 'failed' }
   }

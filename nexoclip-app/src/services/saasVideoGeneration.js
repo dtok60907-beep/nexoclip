@@ -39,7 +39,7 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
     const resolveWorkspaceAsset = isDirectBytePlusSeedance(job.model, env)
       ? async ({ workspaceId, assetId }) => {
-        const link = await findBytePlusAssetLink(pool, workspaceId, assetId);
+        const link = await findBytePlusAssetLink(pool, workspaceId, assetId, job.project_id || '__legacy__');
         if (!link) return null;
         if (link.project_name !== projectName) {
           throw Object.assign(new Error('Trusted BytePlus asset belongs to another project. Recreate Trust for Seedance.'), {
@@ -71,7 +71,7 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     } catch (error) {
       if (!error?.assetNotFound || trustedMappings.length === 0) throw error;
       await Promise.all(trustedMappings.map(mapping => markBytePlusAssetLinkStale(pool, {
-        ...mapping, errorCode: 'BYTEPLUS_ASSET_NOT_FOUND',
+        ...mapping, errorCode: 'BYTEPLUS_ASSET_NOT_FOUND', canvasProjectId: job.project_id || '__legacy__',
       })));
       throw Object.assign(new Error('Trusted BytePlus asset is missing. Trust this asset again before generating.'), {
         code: 'BYTEPLUS_ASSET_STALE', status: 422,

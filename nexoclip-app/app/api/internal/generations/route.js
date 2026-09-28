@@ -64,7 +64,7 @@ export function createInternalGenerationHandler({
     if (body.action === 'submit') {
       if (!validInput(body.input)) return Response.json({ error: 'Invalid internal generation request' }, { status: 400 });
       const pool = loadPool();
-      const generation = await reserve(pool, workspace.id, { ...body.input, projectId: null }, {
+      const generation = await reserve(pool, workspace.id, { ...body.input, projectId: body.projectId }, {
         userId: body.userId,
         allowLegacyCanvasReferences: true,
       });
@@ -91,7 +91,7 @@ export function createInternalGenerationHandler({
         model: generation.model,
         parameters: { resolution: '1080p', draftTaskId: generation.provider_request_id },
         idempotencyKey: `draft-final:${generation.id}`,
-        projectId: null,
+        projectId: body.projectId,
       }, { userId: body.userId, allowLegacyCanvasReferences: true });
       try { await publish({ pool, kind: 'video' }); }
       catch (error) { logError({ event: 'generation_publication_deferred', generationId: finalGeneration.id, errorName: error?.name || 'Error', errorCode: error?.code || null }); }
