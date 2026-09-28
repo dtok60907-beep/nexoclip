@@ -44,6 +44,7 @@ export function createInternalGenerationHandler({
   logError = console.error,
 } = {}) {
   return async function POST(request) {
+    try {
     const body = await readBody(request);
     const authorization = {
       userId: body?.userId,
@@ -98,6 +99,17 @@ export function createInternalGenerationHandler({
     }
     if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
     return Response.json({ generation: canvasGeneration(generation, workspace.id) });
+    } catch (error) {
+      logError({
+        event: 'internal_generation_request_failed',
+        errorName: error?.name || 'Error',
+        errorMessage: error?.message || 'Unknown internal generation error',
+        errorCode: error?.code || null,
+      });
+      return Response.json({
+        error: error?.message || 'Internal generation request failed',
+      }, { status: 500 });
+    }
   };
 }
 
