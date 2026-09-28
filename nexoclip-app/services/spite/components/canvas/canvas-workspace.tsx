@@ -444,13 +444,21 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
     // Asset library is not needed to paint the graph. Defer it so the initial
     // Canvas snapshot and node handles become interactive first.
-    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
-    const cancelIdle = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
-    const handle = idle ? idle(loadData) : window.setTimeout(loadData, 120)
+    const idleApi = window as unknown as {
+      requestIdleCallback?: (callback: () => void) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+    const canUseIdle = typeof idleApi.requestIdleCallback === 'function'
+    const handle = canUseIdle
+      ? idleApi.requestIdleCallback!(loadData)
+      : window.setTimeout(loadData, 120)
     return () => {
       cancelled = true
-      if (idle && cancelIdle) cancelIdle(handle as number)
-      else window.clearTimeout(handle as number)
+      if (canUseIdle && typeof idleApi.cancelIdleCallback === 'function') {
+        idleApi.cancelIdleCallback(handle as number)
+      } else {
+        window.clearTimeout(handle as number)
+      }
     }
   }, [projectId])
 
