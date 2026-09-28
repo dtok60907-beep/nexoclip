@@ -31,6 +31,10 @@
 			reverse_proxy spite:3005
 		}
 
+		# Canonical public path is /canvas. Move old /spite bookmarks over.
+		redir /spite /canvas 308
+		redir /spite/* /canvas/{path} 308
+
 		# Backward compatibility for old bookmarks; new navigation uses /canvas.
 		handle /spite/api/workspace-assets* {
 			uri replace /spite/api/workspace-assets /api/assets
