@@ -180,8 +180,8 @@ services:
       context: ./nexoclip-app/services/spite
       target: web
       args:
-        NEXT_PUBLIC_BASE_PATH: /spite
-        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/spite/ws}
+        NEXT_PUBLIC_BASE_PATH: /canvas
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/canvas/ws}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -204,7 +204,7 @@ services:
       CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
       CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
       REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
-      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:?NEXT_PUBLIC_REALTIME_URL is required}
+      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/canvas/ws}
     depends_on:
       spite-realtime-migrate: { condition: service_completed_successfully }
       spite-ownership-migrate: { condition: service_completed_successfully }
