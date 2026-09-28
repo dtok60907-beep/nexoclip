@@ -102,7 +102,7 @@ export function useImageTrust({
       cancelled = true
       clearTimeout(timeout)
     }
-  }, [assetId, canvasProjectId, state.status]
+  }, [assetId, canvasProjectId, state.status])
 
   const label = state.status === 'active'
     ? 'Trusted for Seedance'
