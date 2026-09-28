@@ -841,7 +841,7 @@ export default function StandaloneShell({ initialTab, children }) {
           <div className="h-full w-full bg-black">
             <iframe
               title="Canvas"
-              src="/spite?embedded=canvas"
+              src="/canvas?embedded=canvas"
               className="h-full w-full border-0"
               allow="clipboard-read; clipboard-write"
             />
