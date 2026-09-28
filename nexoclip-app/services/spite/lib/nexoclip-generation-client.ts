@@ -88,10 +88,20 @@ export function createNexoClipGenerationClient(options: ClientOptions = {}): Nex
 }
 
 async function safeErrorMessage(response: Response): Promise<string> {
+  const fallback = `NexoClip durable generation request failed (HTTP ${response.status})`
   try {
-    const body = await response.json() as { error?: unknown }
-    return typeof body.error === 'string' ? body.error : 'NexoClip durable generation request failed'
+    const text = await response.text()
+    if (!text) return fallback
+    try {
+      const body = JSON.parse(text) as { error?: unknown; message?: unknown }
+      if (typeof body.error === 'string' && body.error.trim()) return body.error
+      if (typeof body.message === 'string' && body.message.trim()) return body.message
+    } catch {
+      // Proxies and platform errors may return plain text or HTML.
+    }
+    const plainText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    return plainText ? `${fallback}: ${plainText.slice(0, 240)}` : fallback
   } catch {
-    return 'NexoClip durable generation request failed'
+    return fallback
   }
 }
