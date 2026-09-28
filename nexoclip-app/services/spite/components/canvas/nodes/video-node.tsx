@@ -1386,9 +1386,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   syncGuardRef.current.beginUserEdit()
                   const next = !draftMode
                   setDraftMode(next)
-                  patchPersistedNodeData({ draftMode: next })
+                  if (next) setExtendMode(false)
+                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode })
                 }}
-                disabled={isGenerating || extendMode}
+                disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${draftMode ? 'bg-amber-500/25 text-amber-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
                 title="Seedance 2.5 Draft: 480p preview, final render uses 1080p"
               >Draft
@@ -1401,7 +1402,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   const next = !extendMode
                   setExtendMode(next)
                   if (next) setDraftMode(false)
-                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode })
+                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
                 }}
                 disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${extendMode ? 'bg-emerald-500/25 text-emerald-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
