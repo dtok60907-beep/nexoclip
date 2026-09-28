@@ -213,7 +213,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       {/* Output handle (card height ~170px). zIndex:5 matches the image
           and video nodes — keeps drag-origin detection robust against
           card content that might be added later. */}
-      <Handle type="source" id="prompt-out" position={Position.Right} style={{ top: 85, right: 0, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+      <Handle type="source" id="prompt-out" position={Position.Right} style={{ top: 85, right: 0, opacity: 0.01, width: 24, height: 24, zIndex: 20, pointerEvents: 'all' }} />
       <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" style={{ top: 85, left: '100%' }} />
 
       {/* Card content */}
