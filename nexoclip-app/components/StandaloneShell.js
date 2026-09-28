@@ -744,27 +744,18 @@ export default function StandaloneShell({ initialTab, children }) {
                       {(() => {
                         const canvasTab = TABS.find((item) => item.id === 'workflows');
                         if (!canvasTab) return null;
-                        const isActive = activeTab === canvasTab.id;
                         return (
                           <a
-                            href={`/studio/${canvasTab.id}`}
-                            onClick={(event) => handleNavigationItemClick(event, canvasTab.id)}
-                            aria-current={isActive ? 'page' : undefined}
+                            href={SPITE_URL}
                             aria-label={canvasTab.label}
                             title={isCollapsed ? canvasTab.label : undefined}
                             className={`
-                              group relative flex items-center rounded-lg transition-colors duration-150
+                              group relative flex items-center rounded-lg text-[#22d3ee] bg-white/[0.07] transition-colors duration-150 hover:bg-white/[0.08]
                               ${isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-2.5 py-2 text-[13px] font-medium'}
-                              ${isActive
-                                ? 'bg-white/[0.07] text-[#22d3ee]'
-                                : 'text-white/55 hover:text-white hover:bg-white/[0.04]'
-                              }
                             `}
                           >
-                            {isActive && (
-                              <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#22d3ee]" aria-hidden="true" />
-                            )}
-                            <span className={`flex-shrink-0 ${isActive ? 'text-[#22d3ee]' : 'text-white/45 group-hover:text-white/80'}`}>
+                            <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#22d3ee]" aria-hidden="true" />
+                            <span className="flex-shrink-0 text-[#22d3ee]">
                               {canvasTab.icon}
                             </span>
                             {!isCollapsed && <span className="truncate">{canvasTab.label}</span>}
