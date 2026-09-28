@@ -620,7 +620,11 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       parent.insertBefore(document.createTextNode(before), q.textNode)
       parent.insertBefore(chip, q.textNode)
       parent.insertBefore(document.createTextNode(afterText), q.textNode)
-      parent.removeChild(q.textNode)
+      // React or another DOM update may have already removed this text node.
+      // Guard the removal to avoid NotFoundError during rapid canvas updates.
+      if (q.textNode.parentNode === parent) {
+        parent.removeChild(q.textNode)
+      }
 
       // Place caret right after the inserted chip's trailing space.
       const inserted = chip.nextSibling
