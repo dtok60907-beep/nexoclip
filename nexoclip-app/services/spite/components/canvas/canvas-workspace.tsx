@@ -430,19 +430,28 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [activeSceneId])
 
   useEffect(() => {
+    let cancelled = false
     const loadData = async () => {
       try {
         const assetsResponse = await fetch(withBasePath(`/api/projects/${projectId}/assets`))
-        if (assetsResponse.ok) {
+        if (assetsResponse.ok && !cancelled) {
           const loadedAssets = await assetsResponse.json()
           setAssets(loadedAssets)
         }
       } catch (error) {
-        console.error('Error loading data:', error)
+        if (!cancelled) console.error('Error loading data:', error)
       }
     }
-
-    loadData()
+    // Asset library is not needed to paint the graph. Defer it so the initial
+    // Canvas snapshot and node handles become interactive first.
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    const cancelIdle = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
+    const handle = idle ? idle(loadData) : window.setTimeout(loadData, 120)
+    return () => {
+      cancelled = true
+      if (idle && cancelIdle) cancelIdle(handle as number)
+      else window.clearTimeout(handle as number)
+    }
   }, [projectId])
 
   useEffect(() => {
@@ -1079,10 +1088,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const sceneNodes = useMemo(() => {
     const selectedIds = new Set(selectedNodeIds)
     return (nodes as Node[]).map((node) => {
-      const nextNode = {
-        ...node,
-        selected: selectedIds.has(node.id),
+      const selected = selectedIds.has(node.id)
+      if (!lockedNodeIds.has(node.id) && node.selected === selected) {
+        return node
       }
+      const nextNode = node.selected === selected ? node : { ...node, selected }
       if (!lockedNodeIds.has(node.id)) {
         return nextNode
       }
