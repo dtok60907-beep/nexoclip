@@ -20,12 +20,12 @@
 
 		handle /canvas/api/workspace-assets* {
 			uri replace /canvas/api/workspace-assets /api/assets
-			reverse_proxy nexoclip-app:3000
+			reverse_proxy nexoclip:3000
 		}
 
 		handle /spite/api/workspace-assets* {
 			uri replace /spite/api/workspace-assets /api/assets
-			reverse_proxy nexoclip-app:3000
+			reverse_proxy nexoclip:3000
 		}
 
 		handle /canvas/ws* {
@@ -45,7 +45,7 @@
 		}
 
 		handle {
-			reverse_proxy nexoclip-app:3000
+			reverse_proxy nexoclip:3000
 		}
 	}
 }

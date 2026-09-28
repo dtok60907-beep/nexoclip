@@ -62,15 +62,16 @@ services:
       postgres: { condition: service_healthy }
 
   spite-realtime-migrate:
+    image: postgres:16-alpine
     platform: linux/amd64
-    build:
-      context: ./nexoclip-app/services/spite
-      target: migrate-realtime
     restart: "no"
     environment:
-      NODE_ENV: production
-      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
-      DATABASE_URL: ${DATABASE_URL_SPITE}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./nexoclip-app/services/spite/database-setup.sql:/database-setup.sql:ro
+    command: ["sh", "-c", "until pg_isready -h postgres -U nexoclip -d nexoclip; do sleep 1; done; psql -h postgres -U nexoclip -d nexoclip -f /database-setup.sql"]
+    depends_on:
+      postgres: { condition: service_healthy }
 
   spite-ownership-migrate:
     platform: linux/amd64
