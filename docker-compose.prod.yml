@@ -122,14 +122,17 @@ services:
   nexoclip:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: web
       args:
-        NEXT_PUBLIC_SPITE_URL: /spite
+        NEXT_PUBLIC_SPITE_URL: /canvas
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_SPITE_URL: /spite
+      NEXT_PUBLIC_SPITE_URL: /canvas
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-0}
+      NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: ${NEXT_PUBLIC_CREDIT_MARKUP_PERCENT:-0}
       DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
