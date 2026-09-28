@@ -1,13 +1,5 @@
-'use client';
-
-import { useEffect } from 'react';
-
-const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
+import { redirect } from 'next/navigation';
 
 export default function CanvasPage() {
-  useEffect(() => {
-    window.location.replace(`${SPITE_URL}?embedded=canvas`);
-  }, []);
-
-  return <main className="min-h-screen bg-black" aria-label="Canvas" />;
+  redirect('/spite?embedded=canvas');
 }

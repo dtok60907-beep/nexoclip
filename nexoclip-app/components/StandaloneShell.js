@@ -749,7 +749,7 @@ export default function StandaloneShell({ initialTab, children }) {
                         if (!canvasTab) return null;
                         return (
                           <a
-                            href={SPITE_URL}
+                            href="/canvas"
                             aria-label={canvasTab.label}
                             title={isCollapsed ? canvasTab.label : undefined}
                             className={`
@@ -841,7 +841,7 @@ export default function StandaloneShell({ initialTab, children }) {
           <div className="h-full w-full bg-black">
             <iframe
               title="Canvas"
-              src={`${SPITE_URL}?embedded=canvas`}
+              src="/spite?embedded=canvas"
               className="h-full w-full border-0"
               allow="clipboard-read; clipboard-write"
             />
