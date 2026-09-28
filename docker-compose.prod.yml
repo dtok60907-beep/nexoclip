@@ -52,7 +52,8 @@ services:
   nexoclip-migrate:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: migrate
     restart: "no"
     environment:
@@ -74,7 +75,8 @@ services:
   spite-ownership-migrate:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: node-runtime
     command: ["node", "scripts/migrate-spite-ownership.mjs"]
     restart: "no"
@@ -122,7 +124,8 @@ services:
   nexoclip:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: web
       args:
         NEXT_PUBLIC_SPITE_URL: /spite
@@ -246,7 +249,8 @@ services:
   image-worker:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: worker
     command: ["node", "src/queue/imageWorker.mjs"]
     restart: unless-stopped
@@ -281,7 +285,8 @@ services:
   video-worker:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: worker
     command: ["node", "src/queue/videoWorker.mjs"]
     restart: unless-stopped
