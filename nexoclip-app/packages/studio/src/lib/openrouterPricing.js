@@ -16,6 +16,25 @@ export function usdToCredits(usd, markup = MARKUP) {
   return Math.max(1, Math.ceil((usd * markup) / CREDIT_USD));
 }
 
+export function estimateVideoPrice({
+  pricing = {},
+  durationSeconds = 0,
+  inputImageCount = 0,
+  promptTokens = 0,
+  completionTokens = 0,
+  pricePerSecond = 0,
+}) {
+  const number = (value) => Number(value || 0);
+  const usd =
+    number(pricing.request) +
+    durationSeconds * number(pricePerSecond) +
+    inputImageCount * number(pricing.image) +
+    promptTokens * number(pricing.prompt) +
+    completionTokens * number(pricing.completion);
+
+  return { usd, credits: usdToCredits(usd) };
+}
+
 export function estimateImagePrice({
   pricing = {},
   inputImageCount = 0,
@@ -35,7 +54,7 @@ export function estimateImagePrice({
 }
 
 export async function fetchOpenRouterModels() {
-  const response = await fetch(MODELS_ENDPOINT);
+  const response = await fetch(MODELS_ENDPOINT, { cache: 'no-store' });
   if (!response.ok) throw new Error('Unable to load OpenRouter pricing');
   const payload = await response.json();
   return Array.isArray(payload?.data) ? payload.data : [];

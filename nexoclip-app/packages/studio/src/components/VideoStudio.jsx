@@ -27,6 +27,7 @@ import {
   getModesForModel,
   getMaxImagesForI2VModel,
 } from "../models.js";
+import { estimateVideoPrice, fetchOpenRouterModels, findOpenRouterModel } from "../lib/openrouterPricing.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -469,6 +470,14 @@ export default function VideoStudio({
     migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
   }, [PERSIST_KEY]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchOpenRouterModels()
+      .then((models) => { if (!cancelled) setOpenRouterPricing(models); })
+      .catch(() => { if (!cancelled) setOpenRouterPricing(null); });
+    return () => { cancelled = true; };
+  }, []);
+
   // ── mode state ──
   const [imageMode, setImageMode] = useState(false); // i2v
   const [v2vMode, setV2vMode] = useState(false);
@@ -477,6 +486,7 @@ export default function VideoStudio({
   const defaultModel = openRouterT2VModels[0];
   const [selectedModel, setSelectedModel] = useState(defaultModel.id);
   const [selectedModelName, setSelectedModelName] = useState(defaultModel.name);
+  const [openRouterPricing, setOpenRouterPricing] = useState(null);
   const [selectedAr, setSelectedAr] = useState(
     defaultModel.inputs?.aspect_ratio?.default || "16:9",
   );
@@ -525,6 +535,19 @@ export default function VideoStudio({
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
   const [lastGenerationId, setLastGenerationId] = useState(null);
   const [lastGenerationModel, setLastGenerationModel] = useState(null);
+
+  const videoPricingModel = openRouterPricing && (() => {
+    const models = v2vMode ? openRouterV2VModels : imageMode ? openRouterI2VModels : openRouterT2VModels;
+    const model = models.find((item) => item.id === selectedModel);
+    return model ? findOpenRouterModel(openRouterPricing, model.id) : null;
+  })();
+  const liveVideoEstimate = videoPricingModel
+    ? estimateVideoPrice({
+        pricing: videoPricingModel.pricing,
+        durationSeconds: Number.parseFloat(selectedDuration) || 0,
+        inputImageCount: imageMode ? Math.max(1, uploadedImageUrls.length || (uploadedImageUrl ? 1 : 0)) : 0,
+      })
+    : null;
 
   // ── history ──
   const [localHistory, setLocalHistory] = useState([]);
@@ -2184,7 +2207,7 @@ export default function VideoStudio({
                 </>
               ) : (
                 <>
-                  <span>Generate</span>
+                  <span>{liveVideoEstimate ? `Generate · ${liveVideoEstimate.credits.toLocaleString()} credits` : 'Generate'}</span>
                 </>
               )}
             </PromptAction>

@@ -24,6 +24,7 @@ import {
   getDefaultEffectForI2IModel,
   getI2IModelById,
 } from "../models.js";
+import { estimateImagePrice, fetchOpenRouterModels, findOpenRouterModel } from "../lib/openrouterPricing.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -907,6 +908,7 @@ export default function ImageStudio({
   const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
   const [selectedModelId, setSelectedModelId] = useState(openRouterT2IModels[0].id);
   const [selectedModelName, setSelectedModelName] = useState(openRouterT2IModels[0].name);
+  const [openRouterPricing, setOpenRouterPricing] = useState(null);
   const [selectedAr, setSelectedAr] = useState("9:16");
   const [selectedQuality, setSelectedQuality] = useState(() => {
     const resolutions = getResolutionsForModel(openRouterT2IModels[0].id);
@@ -916,6 +918,14 @@ export default function ImageStudio({
   const [maxImages, setMaxImages] = useState(1);
   const [seed, setSeed] = useState(null); // last-used seed, shown for reuse
   const [seedLocked, setSeedLocked] = useState(false); // when true, reuse `seed` instead of randomizing
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOpenRouterModels()
+      .then((models) => { if (!cancelled) setOpenRouterPricing(models); })
+      .catch(() => { if (!cancelled) setOpenRouterPricing(null); });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Prompt / upload state ───────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");
@@ -1261,6 +1271,19 @@ export default function ImageStudio({
       .catch(() => !cancelled && setCreditEstimate(null));
     return () => { cancelled = true; };
   }, []);
+
+  const mappedPricing = openRouterPricing && (() => {
+    const slug = (imageMode ? openRouterI2IModels : openRouterT2IModels)
+      .find((model) => model.id === selectedModelId);
+    return slug ? findOpenRouterModel(openRouterPricing, slug.id) : null;
+  })();
+  const liveImageEstimate = mappedPricing
+    ? estimateImagePrice({
+        pricing: mappedPricing.pricing,
+        inputImageCount: imageMode ? uploadedImageUrls.length : 0,
+        outputImageCount: batchSize,
+      })
+    : null;
 
   // ── Generation ───────────────────────────────────────────────────────────
   const randomSeed = () => Math.floor(Math.random() * 2147483647);
@@ -1855,7 +1878,7 @@ export default function ImageStudio({
                 </>
               ) : (
                 <>
-                  <span>{creditEstimate ? `Generate · ${Number(creditEstimate).toLocaleString()} credits ✦` : 'Generate ✦'}</span>
+                  <span>{liveImageEstimate ? `Generate · ${liveImageEstimate.credits.toLocaleString()} credits ✦` : creditEstimate ? `Generate · ${Number(creditEstimate).toLocaleString()} credits ✦` : 'Generate ✦'}</span>
                 </>
               )}
             </PromptAction>
