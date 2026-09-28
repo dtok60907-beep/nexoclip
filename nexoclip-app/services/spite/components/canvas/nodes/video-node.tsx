@@ -156,7 +156,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [colormap, setColormap] = useState<string>((data.colormap as string) || 'grayscale')
   const [modelId, setModelId] = useState((data.modelId as string) || 'seedance-1.5')
   const [duration, setDuration] = useState((data.duration as string) || '')
-  const [aspectRatio, setAspectRatio] = useState((data.aspectRatio as string) || '9:16')
+  const [aspectRatio, setAspectRatio] = useState((data.aspectRatio as string) || '16:9')
   const [resolution, setResolution] = useState((data.resolution as string) || '')
   const [enableAudio, setEnableAudio] = useState((data.enableAudio as boolean | undefined) ?? true)
   const [draftMode, setDraftMode] = useState((data.draftMode as boolean) || false)
@@ -266,7 +266,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setColormap((data.colormap as string) || 'grayscale')
     setModelId((data.modelId as string) || 'seedance-1.5')
     setDuration((data.duration as string) || '')
-    setAspectRatio((data.aspectRatio as string) || '9:16')
+    setAspectRatio((data.aspectRatio as string) || '16:9')
     setResolution((data.resolution as string) || '')
     setEnableAudio((data.enableAudio as boolean | undefined) ?? true)
     setDraftMode((data.draftMode as boolean) || false)
@@ -1308,7 +1308,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               onChange={(value) => {
                 syncGuardRef.current.beginUserEdit()
                 const nextModel = getModelById(value)
-                const nextAspectRatio = nextModel?.defaultAspectRatio || '9:16'
+                const nextAspectRatio = nextModel?.defaultAspectRatio || '16:9'
                 const nextDuration = nextModel?.defaultDuration || ''
                 const nextResolution = nextModel?.defaultResolution || ''
                 setModelId(value)
@@ -1366,7 +1366,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               />
             )}
 
-            {currentModel?.supportsDraft && (
+            {currentModel?.category === 'video' && (
               <ControlSelect
                 value={aspectRatio}
                 options={(currentModel.aspectRatios || []).map((ratio) => ({ value: ratio, label: ratio }))}

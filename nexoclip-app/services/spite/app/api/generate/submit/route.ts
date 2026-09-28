@@ -194,8 +194,6 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (isSeedance25) {
     // Draft and extend always use adaptive ratio. Normalize stale clients rather
     // than rejecting requests created before the Canvas control was added.
-  } else if (requestedRatio && requestedRatio !== '9:16') {
-    throw Object.assign(new Error('Video generation is portrait-only (9:16).'), { status: 400 })
   }
   if (isExtend && !videoUrl) {
     throw Object.assign(new Error('Seedance extend requires one source video.'), { status: 400 })
@@ -206,7 +204,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (settings.draftTaskId && (!isSeedance25 || settings.resolution !== '1080p')) {
     throw Object.assign(new Error('Draft finalization requires Seedance 2.5 at 1080p.'), { status: 400 })
   }
-  const parameters: Record<string, unknown> = { aspectRatio: isSeedance25 && (isExtend || settings.draft === true) ? 'adaptive' : '9:16' }
+  const parameters: Record<string, unknown> = { aspectRatio: isSeedance25 && (isExtend || settings.draft === true) ? 'adaptive' : (requestedRatio || '16:9') }
   for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId']) {
     if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
   }
