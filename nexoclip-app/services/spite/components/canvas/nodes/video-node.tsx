@@ -1187,6 +1187,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {outputUrl ? (
             <video
               src={outputUrl}
+              draggable={false}
+              onDragStart={(event) => event.preventDefault()}
               controls
               loop={enableLoop}
               muted={!enableAudio}

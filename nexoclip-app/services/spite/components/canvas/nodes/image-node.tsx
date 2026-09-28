@@ -1111,6 +1111,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             <img
               src={outputUrl}
               alt="Generated"
+              draggable={false}
+              onDragStart={(event) => event.preventDefault()}
               loading="lazy"
               decoding="async"
               className="w-full h-full object-cover cursor-zoom-in"

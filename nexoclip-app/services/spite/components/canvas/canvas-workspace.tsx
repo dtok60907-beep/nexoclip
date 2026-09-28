@@ -1279,7 +1279,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
             <ReactFlow
               nodes={sceneNodes}
               edges={styledSceneEdges}
-              onlyRenderVisibleElements
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
