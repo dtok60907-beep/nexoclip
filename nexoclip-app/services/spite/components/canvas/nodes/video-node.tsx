@@ -228,6 +228,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // Check connection states fresh on each render
   let hasConnectedFirstFrame = false
   let hasConnectedReferences = false
+  let hasConnectedVideoInput = false
   try {
     const edges = getEdges()
     const allIncomingEdges = edges.filter(edge => edge.target === id)
@@ -236,6 +237,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       (e.sourceHandle === 'image-out' && e.targetHandle !== 'end-frame-in' && e.targetHandle !== 'reference-in' && e.targetHandle !== 'video-in')
     )
     hasConnectedReferences = allIncomingEdges.some(e => e.targetHandle === 'reference-in')
+    hasConnectedVideoInput = allIncomingEdges.some(e => e.targetHandle === 'video-in')
   } catch { /* ignore */ }
 
   // Get current model config
@@ -347,6 +349,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // confusing fal validation failure.
   const refsRequireFirstFrame = !!currentModel?.referenceParam && currentModel.referenceParam === 'elements' && !currentModel.referenceModel
   const blockedNoFirstFrame = refsRequireFirstFrame && hasConnectedReferences && !hasConnectedFirstFrame
+  const blockedNoExtendVideo = extendMode && !hasConnectedVideoInput
 
   // Reset settings when the USER picks a new model. Skip the initial mount
   // so saved settings on a reloaded or duplicated node aren't immediately
@@ -996,12 +999,15 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (blockedNoFirstFrame) {
       return `${currentModel?.name} needs a first frame when references are connected — wire an image into the blue First frame handle.`
     }
+    if (blockedNoExtendVideo) {
+      return 'Extend requires a connected source video — wire a video node into the green Source video handle.'
+    }
     const label = `Generate ${numVideos} video${numVideos === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
     return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution, duration and model load.`
-  }, [blockedNoFirstFrame, costEstimate, currentModel, generationPersistenceGuard, modelId, numVideos, resolvedPrompt.connected, resolvedPrompt.prompt, upscaleMode])
+  }, [blockedNoExtendVideo, blockedNoFirstFrame, costEstimate, currentModel, generationPersistenceGuard, modelId, numVideos, resolvedPrompt.connected, resolvedPrompt.prompt, upscaleMode])
   const requestGenerate = () => {
-    if (submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
+    if (blockedNoExtendVideo || submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
         `You're about to submit ${numVideos} ${currentModel?.name || 'video'} generation${numVideos === 1 ? '' : 's'} ` +
@@ -1221,6 +1227,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {error && !feedbackState.isFailedRegeneration && (
             <div className="absolute bottom-2 left-2 right-2 bg-red-500/20 border border-red-500/30 rounded px-2 py-1">
               <span className="text-[9px] font-mono text-red-400">{error}</span>
+            </div>
+          )}
+
+          {!error && blockedNoExtendVideo && (
+            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
+              <span className="text-[9px] font-mono text-amber-300">
+                Extend membutuhkan video sumber. Hubungkan video ke handle Source video terlebih dahulu.
+              </span>
             </div>
           )}
 
@@ -1485,7 +1499,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           ) : (
             <button
               onClick={requestGenerate}
-              disabled={isGenerating || blockedNoFirstFrame || promptState.disabled || !generationPersistenceGuard.allowed}
+              disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
               className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
               title={generateTooltip}
             >
