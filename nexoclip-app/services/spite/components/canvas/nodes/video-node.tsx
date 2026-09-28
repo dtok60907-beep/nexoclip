@@ -1118,7 +1118,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           prompt textarea instead of the handle and silently fail. zIndex:5
           puts every Handle above the card so React Flow's drop detection
           actually finds them. */}
-      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 80, left: -12, opacity: 0.01, width: 24, height: 24, zIndex: 20, pointerEvents: 'all' }} />
+      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 80, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
       <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" position="left" top={80} visible />
 
       {/* First frame (blue) - only if model supports image input */}
