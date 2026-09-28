@@ -1228,7 +1228,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         redo,
       }}
     >
-      <div className="flex flex-col h-screen bg-[#080A0C] overflow-hidden">
+      <div className="spite-canvas-shell flex flex-col h-screen bg-[#0b0c10] overflow-hidden">
       <OnboardingTour surface="canvas" />
       {/* Auto-remove any persisted legacy note nodes on sync/hydration */}
       <LegacyNoteCleanup />
@@ -1349,8 +1349,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
               zoomOnPinch
               minZoom={0.1}
               maxZoom={4}
+              className="spite-react-flow"
               style={{ 
-                background: '#0D0F12',
+                background: '#0c0d12',
                 cursor: !allowDocumentMutation ? 'default' : activeTool === 'cut' ? 'crosshair' :
                        activeTool === 'sticker' ? 'none' :
                        activeTool === 'comment' ? 'copy' : 'default'
@@ -1364,9 +1365,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
             >
               <Background
                 variant={BackgroundVariant.Dots}
-                gap={24}
-                size={1.5}
-                color="#2a2e34"
+                gap={26}
+                size={1.2}
+                color="rgba(255,255,255,0.14)"
               />
 
               {minimapOpen && (

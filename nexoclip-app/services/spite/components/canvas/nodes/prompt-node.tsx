@@ -219,13 +219,21 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       {/* Card content */}
       <div
         ref={cardRef}
-        className="relative flex h-full w-full flex-col rounded-xl overflow-visible transition-all duration-200"
+        className="relative flex h-full w-full flex-col overflow-visible rounded-2xl bg-[#13151f]/95 backdrop-blur-xl transition-all duration-200"
         style={{
-          background: '#0D0F12',
-          border: selected ? '1.5px solid rgba(107,143,168,0.85)' : '1.5px solid rgba(107,143,168,0.25)',
-          boxShadow: selected ? '0 0 0 1px rgba(107,143,168,0.2), 0 0 24px rgba(107,143,168,0.15)' : 'none',
+          border: selected ? '1.5px solid rgba(56,189,248,0.9)' : '1px solid rgba(255,255,255,0.12)',
+          boxShadow: selected ? '0 0 0 1px rgba(56,189,248,0.22), 0 0 30px rgba(56,189,248,0.22), 0 24px 45px rgba(0,0,0,0.42)' : '0 24px 45px rgba(0,0,0,0.38)',
         }}
       >
+        <div className="flex items-center gap-2 rounded-t-2xl border-b border-white/[0.08] bg-[#181a25] px-3 py-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/15 text-sky-300">
+            <TextT size={14} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold tracking-tight text-slate-100">Prompt</p>
+            <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">Text Input</p>
+          </div>
+        </div>
         <MentionTextarea
           ref={editorRef}
           value={text}
@@ -233,7 +241,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           onChange={handleChange}
           folders={folders}
           placeholder="Enter your prompt — type @ to reference a folder…"
-          className="nodrag w-full bg-transparent resize-none outline-none text-[13px] text-foreground placeholder:text-muted-foreground/40 leading-relaxed p-4 min-h-[160px] cursor-text"
+          className="nodrag w-full flex-1 resize-none bg-transparent p-4 text-[13px] leading-relaxed text-slate-200 outline-none placeholder:text-slate-500 cursor-text"
           disabled={readOnly}
           rows={6}
         />

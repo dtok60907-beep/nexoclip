@@ -1170,24 +1170,36 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
       {/* Card content */}
       <div
-        className="flex flex-col rounded-xl overflow-hidden transition-all duration-200"
+        className="flex flex-col overflow-hidden rounded-2xl bg-[#13151f]/95 backdrop-blur-xl transition-all duration-200"
         style={{
-          background: '#0D0F12',
           border: feedbackFrameStyle.border || (isTaggedToShot
-            ? '1.5px solid rgba(251,191,36,0.7)' 
-            : selected 
-              ? '1.5px solid rgba(107,143,168,0.85)' 
-              : '1.5px solid rgba(107,143,168,0.25)'),
+            ? '1.5px solid rgba(251,191,36,0.7)'
+            : selected
+              ? '1.5px solid rgba(56,189,248,0.9)'
+              : '1px solid rgba(255,255,255,0.12)'),
           boxShadow: feedbackFrameStyle.boxShadow || (isTaggedToShot
             ? '0 0 0 1px rgba(251,191,36,0.2), 0 0 20px rgba(251,191,36,0.25), 0 0 40px rgba(251,191,36,0.1)'
-            : selected 
-              ? '0 0 0 1px rgba(107,143,168,0.2), 0 0 24px rgba(107,143,168,0.15)' 
-              : 'none'),
+            : selected
+              ? '0 0 0 1px rgba(56,189,248,0.22), 0 0 30px rgba(56,189,248,0.22), 0 24px 45px rgba(0,0,0,0.42)'
+              : '0 24px 45px rgba(0,0,0,0.38)'),
         }}
       >
+        <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#181a25] px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/15 text-sky-300">
+              <FilmStrip size={14} weight="bold" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold tracking-tight text-slate-100">Video Generation</p>
+              <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">{currentModel?.name || 'Select model'}</p>
+            </div>
+          </div>
+          <StatusBadge status={status} progress={progress} />
+        </div>
+
         {/* Preview area */}
         <div
-          className="bg-[#0a0c0f] flex items-center justify-center relative overflow-hidden"
+          className="relative flex items-center justify-center overflow-hidden bg-black"
           style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '16:9')) }}
         >
           {outputUrl ? (
@@ -1230,6 +1242,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             </div>
           )}
 
+          {!outputUrl && !isGenerating && !error && (
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_25%,rgba(56,189,248,.22),transparent_38%),linear-gradient(145deg,#080b12,#131b28)]">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+              <div className="relative flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/45 backdrop-blur-md">
+                  <Play size={18} weight="fill" className="ml-0.5 text-white" />
+                </div>
+                <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-400">Ready to generate</span>
+              </div>
+            </div>
+          )}
+
           {!error && blockedNoExtendVideo && (
             <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
               <span className="text-[9px] font-mono text-amber-300">
@@ -1245,11 +1269,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               </span>
             </div>
           )}
+          <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5">
+            {resolution && <span className="rounded-md border border-sky-400/60 bg-black/70 px-2 py-1 text-[10px] font-semibold text-white shadow-md backdrop-blur-md">{resolution}</span>}
+            <span className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-[10px] font-medium text-slate-200 backdrop-blur-md">{aspectRatio}</span>
+            {duration && <span className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-[10px] font-medium text-slate-200 backdrop-blur-md">{duration}</span>}
+          </div>
         </div>
       </div>
 
-      <div className="mt-2 rounded-xl border border-white/10 bg-[#0D0F12] px-3 pt-2 shadow-sm">
-        <div className="text-[10px] font-mono text-muted-foreground/60">
+      <div className="mt-2 rounded-xl border border-white/[0.08] bg-[#181a25] px-3 pt-2.5 shadow-inner">
+        <div className="min-h-7 text-[11px] leading-relaxed text-slate-400">
           {resolvedPrompt.connected
             ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
             : 'Connect a Text node first'}
@@ -1280,7 +1309,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         )}
 
         {/* Controls - Dynamic based on model */}
-        <div className="flex items-center justify-between px-3 pb-3 gap-2">
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/[0.06] px-0 pb-2.5 pt-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {/* Video count counter */}
             <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
@@ -1500,7 +1529,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             <button
               onClick={requestGenerate}
               disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
-              className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e3fb27] px-2 text-slate-950 shadow-lg shadow-lime-400/20 transition-colors hover:bg-[#d6ee17] disabled:cursor-not-allowed disabled:opacity-50"
               title={generateTooltip}
             >
               <Play size={10} weight="fill" />

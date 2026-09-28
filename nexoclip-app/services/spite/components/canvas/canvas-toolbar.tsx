@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, CheckCircle, Circle, WarningCircle, Prohibit, ListChecks, Question } from '@phosphor-icons/react'
+import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, CheckCircle, Circle, WarningCircle, Prohibit, ListChecks, Question, Sparkle, ShareNetwork, ChatCircleDots } from '@phosphor-icons/react'
 import { useReactFlow } from '@xyflow/react'
 import { useState } from 'react'
 import { getCanvasSaveIndicator } from '@/lib/canvas-runtime-ui'
@@ -33,22 +33,18 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
   const saveIndicator = getCanvasSaveIndicator(persistenceStatus)
 
   return (
-    <div className="glass flex items-center justify-between px-4 h-12 shrink-0 relative z-10">
+    <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0b0c11]/85 px-4 backdrop-blur-md relative z-30">
       {/* Left */}
       <div className="flex items-center gap-3">
         <a
           href={process.env.NEXT_PUBLIC_STUDIO_URL || '/studio'}
-          className="flex items-center gap-2 px-2 h-7 rounded-lg glass-hover text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex h-7 items-center gap-2 rounded-lg px-2 text-xs text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-slate-100"
         >
           <ArrowLeft size={14} weight="thin" />
           Kembali ke Studio
         </a>
-        <Link
-          href="/"
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Projects
-        </Link>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-amber-400 via-lime-400 to-emerald-400 text-slate-950 shadow-lg shadow-lime-500/10"><Sparkle size={16} weight="fill" /></div>
+        <Link href="/" className="text-xs font-medium text-slate-400 transition-colors hover:text-slate-100">Projects</Link>
         <div className="w-px h-4 bg-border" />
         {editing ? (
           <input
@@ -67,7 +63,7 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
               if (readOnly) return
               setEditing(true)
             }}
-            className="text-base tracking-tight text-foreground hover:text-accent transition-colors cursor-text"
+            className="text-sm font-semibold tracking-tight text-slate-200 transition-colors hover:text-sky-300 cursor-text"
             style={{ fontFamily: 'var(--font-montserrat)' }}
           >
             {projectName}
@@ -77,6 +73,9 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
 
       {/* Right */}
       <div className="flex items-center gap-1">
+        <button className="flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.06] px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-white/[0.1]" title="Ask agent"><ChatCircleDots size={14} /> <span className="hidden sm:inline">Mengobrol</span></button>
+        <button className="flex h-7 items-center gap-1.5 rounded-lg bg-white px-2.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-100" title="Share"><ShareNetwork size={14} /> <span className="hidden sm:inline">Bagikan</span></button>
+        <div className="mx-1 h-4 w-px bg-white/10" />
         <button
           onClick={() => zoomIn({ duration: 200 })}
           className="flex items-center justify-center w-7 h-7 rounded-lg glass-hover text-muted-foreground hover:text-foreground transition-colors"

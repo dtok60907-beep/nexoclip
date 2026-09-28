@@ -1,6 +1,29 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+.spite-canvas-shell {
+  background-color: #0c0d12;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+}
+
+.spite-react-flow .react-flow__pane { cursor: grab; }
+.spite-react-flow .react-flow__pane:active { cursor: grabbing; }
+.spite-react-flow .react-flow__node { filter: drop-shadow(0 22px 32px rgba(0,0,0,.38)); }
+.spite-react-flow .react-flow__edge-path {
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, .45));
+}
+.spite-react-flow .react-flow__edge.selected .react-flow__edge-path {
+  filter: drop-shadow(0 0 7px rgba(56, 189, 248, .78));
+}
+.spite-react-flow .react-flow__connection-path {
+  stroke: #38bdf8;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px rgba(56, 189, 248, .65));
+}
+.spite-glow-edge { pointer-events: stroke; }
+
 /* Dark-theme scrollbars. The browser default is a pale grey track that
    reads as white on our near-black surfaces; this overrides it. Applies
    to every scrollable surface in the app — there is no other scrollbar
