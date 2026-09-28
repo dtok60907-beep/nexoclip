@@ -7,7 +7,7 @@ import { findWorkspaceGenerationLimits, countRecentGenerations, countActiveGener
 
 // Canvas model configurations expose these ratios. Validation must not collapse
 // a model-specific choice (for example Nano Banana's 21:9) to a default.
-const aspectRatios = new Set(['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9']);
+const aspectRatios = new Set(['adaptive', '1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9']);
 const VIMAX_KINDS = new Set(['vimax_narrative_planning', 'vimax_novel_planning', 'vimax_render_video']);
 const VIMAX_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,95}$/;
 const VIMAX_PROMPTS = {
@@ -55,15 +55,28 @@ export function validateVideoGenerationInput(input, options = {}) {
   const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
   if (input?.kind !== 'video' || !prompt || prompt.length > 10000 || !model || model.length > 120) throw new Error('Video generation request is invalid');
   const parameters = {};
+  const isSeedance25 = /seedance-2\.5/i.test(model);
+  const isExtend = supplied.omniReferenceTaskType === 'extend';
+  const isDraft = supplied.draft === true;
+  const isDraftFinal = typeof supplied.draftTaskId === 'string' && supplied.draftTaskId.trim().length > 0;
   if (supplied.aspectRatio !== undefined) {
     if (!aspectRatios.has(supplied.aspectRatio)) throw new Error('Video aspect ratio is invalid');
     parameters.aspectRatio = supplied.aspectRatio;
   }
   if (supplied.duration !== undefined) {
-    if (!Number.isInteger(Number(supplied.duration)) || Number(supplied.duration) < 1 || Number(supplied.duration) > 60) throw new Error('Video duration is invalid');
+    const duration = Number(supplied.duration);
+    const allowsAutoDuration = isSeedance25 && (isExtend || supplied.omniReferenceTaskType === 'edit');
+    if (!Number.isInteger(duration) || (duration !== -1 && (duration < (isSeedance25 ? 4 : 1) || duration > (isSeedance25 ? 30 : 60))) || (duration === -1 && !allowsAutoDuration)) throw new Error('Video duration is invalid');
     parameters.duration = Number(supplied.duration);
   }
-  for (const key of ['resolution', 'seed']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
+  if (supplied.draft !== undefined && typeof supplied.draft !== 'boolean') throw new Error('Video draft must be boolean');
+  if (supplied.generateAudio !== undefined && typeof supplied.generateAudio !== 'boolean') throw new Error('Video generateAudio must be boolean');
+  if (supplied.omniReferenceTaskType !== undefined && !['auto', 'reference', 'edit', 'extend'].includes(supplied.omniReferenceTaskType)) throw new Error('Video task type is invalid');
+  if ((isDraft || isDraftFinal || isExtend) && !isSeedance25) throw new Error('Draft and extend are only supported by Seedance 2.5');
+  if (isDraft && supplied.resolution !== '480p') throw new Error('Draft mode requires 480p');
+  if (isDraftFinal && supplied.resolution !== '1080p') throw new Error('Draft finalization requires 1080p');
+  if (isExtend && supplied.aspectRatio !== 'adaptive') throw new Error('Seedance extend requires adaptive aspect ratio');
+  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
   for (const key of ['referenceImages', 'referenceVideos']) {
     if (supplied[key] !== undefined) {
       if (!validAssetReferences(supplied[key], options) || supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references`);

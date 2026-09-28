@@ -1,0 +1,51 @@
+【Generation Goal】
+Generate a premium, photorealistic tropical-adventure film for Bali Zoo's official Elephant Mud Fun experience. The film follows one approved guest observing a calm adult Asian elephant and calf in the authentic natural pool, building from quiet discovery to one gentle playful water-and-mud moment and ending on a warm, respectful wide view.
+
+【Reference Asset Roles】
+BaliZooElephantMudFunLocation defines only the approved natural-pool layout, earth textures, and tropical environment of the Elephant Mud Fun area.
+BaliZooElephantPool defines only the authentic shallow pool, water surface, mud texture, and physical pool details.
+BaliZooTropicalFoliage defines only the dense tropical greenery, leaves, and warm Bali daylight.
+BaliZooElephantPath defines only the approved natural earth path around the encounter area.
+BaliZooGuestWoman defines only the approved guest's facial identity, body proportions, hairstyle, and safari-appropriate wardrobe.
+ElephantMother defines only one adult Asian elephant's appearance, anatomy, and calm natural behavior.
+ElephantCalf defines only one baby Asian elephant's appearance, anatomy, and natural behavior.
+NatasyaRahanian is not used unless an individual shot is specifically generated from an approved matching owner reference; do not substitute her identity for BaliZooGuestWoman.
+BaliZooGuestFamily is not used unless a supplied source asset is explicitly assigned to a shot; do not introduce a family otherwise.
+BaliZooHandler is not used unless a handler is visible in the supplied source material; do not introduce a handler otherwise.
+
+【Subjects and Relationships】
+There is one approved guest, one adult Asian elephant, and one calf. The adult elephant and calf remain together naturally; the calf is never separated from the adult. The guest remains on the approved earth path at a safe respectful distance and does not touch either elephant. The elephants remain in or beside the authentic natural pool. Mud, water, and animal movements obey believable physical behavior.
+
+【Visual Treatment】
+Photorealistic cinematic premium tropical-adventure commercial. Use warm late-morning daylight, earthy brown mud tones, lush jungle greens, restrained coral and golden highlights, realistic skin and elephant texture, and gentle film grain. The feeling is playful but calm, authentic, respectful, and premium—not chaotic or cartoonish. Soft tropical sunlight comes from camera-left, naturally diffused by light clouds; lighting stays consistent.
+
+【Camera and Sound】
+Use immersive medium-wide documentary framing and intimate emotional close-ups. The camera has a restrained premium travel-documentary handheld feel with small organic operator adjustments only; no digital jitter, impossible drone motion, extreme slow motion, or fast zoom.
+<Gentle water splashes, elephant breathing, footsteps on wet earth, tropical birds, and leaves moving.>
+(Playful premium instrumental music: light hand percussion, warm marimba, acoustic guitar, and soft uplifting strings. No vocals; the music remains tasteful and never cartoonish.)
+There is no dialogue, voiceover, narration, or generated speech. The guest's mouth remains naturally closed except for normal silent breathing and smiles. No subtitles, signs, logos, or on-screen text appear.
+
+【Event Script】
+Shot 1 | Arrival at the natural pool
+At the start, a wide view of the authentic Elephant Mud Fun natural pool fills the lower half of the composition, surrounded by tropical foliage. The adult elephant stands partly in shallow water; the calf stays close beside it. Soft sunlight reflects on the water. From standing chest height on the approved earth path, the camera makes a gentle forward track. A small ripple spreads near the adult elephant's feet, one ear moves gently, and leaves shift in a warm breeze. End with both elephants calm and together in the pool.
+
+Shot 2 | Calf explores the water
+Continue at the same pool. The calf stands at the shallow edge while the adult elephant appears softly behind it for emotional context. From roughly 2.5 metres away at elephant shoulder height, the camera observes with stable handheld framing. The calf makes one small step through the shallow water, causing a gentle realistic splash. End with the calf beside the pool edge and the adult still nearby.
+
+Shot 3 | Guest observes respectfully
+The guest walks slowly along the approved earth path beside the encounter area. The adult elephant and calf remain visible in the natural pool behind her, framed through tropical foliage. From 2 metres away, the camera tracks slowly beside her from camera-left. The guest slows and turns her head toward the elephants with a relaxed, impressed smile. She stays on the path and never reaches toward the animals. End with the guest facing the pool and both elephants remaining together.
+
+Shot 4 | Gentle playful moment
+Show the same adult elephant in the natural pool with the calf nearby. From a safe respectful distance, the camera slowly pushes in while keeping the water detail natural. The adult elephant raises its trunk and makes one small, calm, realistic spray of water and mud that falls back into the pool. No large explosive splash goes toward the camera or guest. The calf remains near the adult. End after the splash settles into small ripples.
+
+Shot 5 | Guest's reaction
+Show a close three-quarter profile of the same guest at eye level, warm sunlight touching one side of her face. The adult elephant and calf remain recognizable as a blurred silhouette in the background. The camera makes a very subtle push-in with shallow depth of field. The guest smiles softly, then lowers her gaze for a moment while listening to the water. End with her still calm and standing on the earth path.
+
+Shot 6 | Respectful final wide view
+Return to a final wide vertical composition of the natural pool. The adult elephant and calf are in the pool; the same guest stands safely at frame-right on the earth path, looking toward them. Tropical greenery fills the background. The camera slowly pulls backward from medium-wide to a wider hero view, leaving a clean open area in the composition for post-production end-card placement. The calf takes one small natural step in water and the adult elephant gently moves its trunk. End with all three subjects in their established positions.
+
+【Maintain Consistency】
+Keep the approved natural-pool location, earth path, tropical greenery, light direction, guest identity and wardrobe, and the single adult-elephant/calf pair stable throughout. Keep elephant anatomy, mud, water, and animal behavior realistic and calm. Do not add people, crowds, staff, elephant-riding, unsafe interaction, artificial attractions, or extra elephants.
+
+【Negative Constraints】
+No on-screen text, subtitles, watermark, generated logo, misspelled words, fake branding, crowds, fantasy jungle, fake zoo attractions, unrealistic mud pool, unrealistic elephant anatomy, calf separated from adult, charging, aggressive behavior, elephant riding, unsafe interaction, forced contact, animal distress, animal cruelty, fake staff uniforms, altered identity, incorrect wardrobe, extra fingers, extra limbs, duplicate people, duplicate elephants, warped bodies, digital jitter, shaky camera, fast zoom, impossible camera movement, horror mood, stormy darkness, oversaturated color, cartoon appearance, plastic-looking skin, NSFW, nudity, explicit content, generated dialogue, narration, or background vocals.

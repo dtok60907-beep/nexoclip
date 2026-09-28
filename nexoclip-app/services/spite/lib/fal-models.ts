@@ -10,6 +10,8 @@ export interface ModelConfig {
   falModel: string // Kept as a UI compatibility alias; contains no fal endpoint.
   category: ModelCategory
   inputTypes: InputType[]
+  supportsDraft?: boolean
+  supportsExtend?: boolean
   aspectRatios: string[]
   durations?: string[]
   resolutions?: string[]
@@ -70,8 +72,20 @@ export const IMAGE_MODELS: ModelConfig[] = [
 export const VIDEO_MODELS: ModelConfig[] = [
   video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s']),
   video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s']),
-  video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p', '4K'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
-  video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p', '4K'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
+  {
+    ...video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
+    supportsDraft: true,
+    supportsExtend: true,
+    inputTypes: ['text', 'image', 'video'],
+    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'],
+  },
+  {
+    ...video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
+    supportsDraft: true,
+    supportsExtend: true,
+    inputTypes: ['text', 'image', 'video'],
+    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'],
+  },
 ]
 
 export const FAL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS]

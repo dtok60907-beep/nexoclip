@@ -1,0 +1,48 @@
+【Generation Goal】
+Generate a premium, photorealistic tourism film for Bali Zoo's official Breakfast with Orangutan experience. The film follows a quiet family breakfast near the authentic orangutan playground and ends on a warm, memorable shared view of the family and orangutan.
+
+【Reference Asset Roles】
+BaliZooBreakfastLocation defines only the approved outdoor breakfast-area layout near the orangutan playground, including the natural tropical setting.
+BaliZooTropicalFoliage defines only the lush greenery, foreground leaves, and warm morning atmosphere.
+BaliZooBreakfastTable defines only the refined outdoor table styling: white ceramic plates, fresh fruit, orange juice, linen napkins, wooden chairs, and natural bamboo details.
+BaliZooGuestMother defines only the mother's approved facial identity, hairstyle, body proportions, and wardrobe.
+BaliZooGuestChild defines only the child's approved facial identity, body proportions, and wardrobe.
+BaliZooOrangutan defines only one real orangutan's appearance, fur, anatomy, and calm natural behavior.
+BaliZooStaff is not used unless a staff member is visible in the supplied source material; do not introduce staff otherwise.
+
+【Subjects and Relationships】
+There is one mother, one child, and one orangutan. The mother and child remain seated at the breakfast table unless a stage says otherwise. The orangutan stays in the authentic approved playground or habitat area behind the breakfast area; it never sits on the table and never receives human food. The family watches the orangutan from a respectful distance. No direct contact occurs unless it is explicitly established by a supplied reference.
+
+【Visual Treatment】
+Photorealistic cinematic premium tourism commercial. Use warm sunrise and soft tropical morning color: natural greens, warm cream, pale wood, and gentle golden sunlight. The result has elegant editorial composition, realistic skin and fur detail, subtle natural film grain, and no neon or fantasy styling. Soft golden sunlight enters from camera-left, with natural bounced light from the table and pale surfaces; shadows remain gentle and consistent.
+
+【Camera and Sound】
+Use natural cinema-camera framing with intimate shallow focus for close details and deeper focus for establishing views. Handheld movement is restrained: only subtle operator breathing and organic micro-corrections, never digital jitter, fast zooms, or whip pans.
+<A quiet morning soundscape: soft birds, distant tropical leaves, faint tableware sounds, and natural zoo ambience.>
+(Soft felt piano begins quietly, joined by gentle acoustic guitar and restrained ambient strings; it gradually becomes more emotional toward the final stage, with no vocals and no loud percussion.)
+There is no dialogue, narration, or generated speech. All visible people keep their mouths naturally closed except for normal silent smiles and breathing. No subtitles, signs, logos, or on-screen text appear.
+
+【Event Script】
+Shot 1 | Establishing view
+At the start, the refined breakfast table fills the lower foreground: fruit, ceramic tableware, and linen napkins are clear. Tropical foliage frames the middle ground, while the orangutan playground sits behind it. The single orangutan is visible at a respectful distance in its authentic space. The camera observes from seated eye level behind soft foreground leaves and makes a very slow forward push. A breeze moves the leaves; the orangutan makes one small, realistic movement. No human face is clearly presented yet. End with the breakfast table, foliage, and orangutan all still spatially legible.
+
+Shot 2 | Child's discovery
+Continue in the same breakfast setting. The child sits at the table in three-quarter profile, with a fruit bowl and orange juice softly blurred in the foreground. The orangutan remains naturally visible in background depth. The camera makes a gentle lateral slide from left to right at seated eye level. The child looks toward the orangutan, slowly smiles, and leans forward slightly. End with the child still seated and the orangutan remaining in its habitat.
+
+Shot 3 | Orangutan portrait
+Show only the same orangutan in the authentic approved playground environment. Warm sunlight filters through tropical leaves in the foreground. From a respectful long-lens distance, the camera slowly pushes closer while keeping the orangutan's eyes and fur sharply detailed and the foliage softly blurred. The orangutan turns its head gently, blinks once, and makes one subtle anatomically correct arm or hand movement. It does not make human-like gestures. End with the orangutan calm and stationary in its habitat.
+
+Shot 4 | Family memory
+Return to the mother and child seated together at the same breakfast table, framed in the lower half of the composition. The orangutan playground remains behind them in natural depth. From approximately 2.5 metres away at seated eye level, the camera makes a very slow partial orbit from camera-right. The child points gently toward the orangutan; the mother first looks at the child, then looks toward the orangutan and responds with a warm, understated smile. End with both family members still seated and facing the orangutan area.
+
+Shot 5 | Quiet detail
+Show a close detail of the child's hand resting beside a breakfast plate. The fingertip lightly touches the edge of a linen napkin. In the soft background bokeh, the orangutan's warm silhouette and tropical foliage remain recognizable. The camera is close to the tabletop with only slight organic handheld movement. A breeze shifts the napkin edge and the child's hand naturally relaxes. End on the still tabletop composition.
+
+Shot 6 | Final shared view
+Return to a wide view of the same breakfast area framed by tropical foliage. The mother and child remain seated at the table; the same orangutan is naturally visible in its approved playground behind them. Begin near seated height behind foreground leaves, then make a slow, subtle upward rise into a calm wide composition. The mother and child look toward the orangutan; the orangutan continues one small natural movement. End on a clean, warm, unobstructed hero frame with the family, breakfast table, and orangutan all in their established locations.
+
+【Maintain Consistency】
+Keep the breakfast environment, table styling, warm morning lighting, mother and child identities and wardrobe, and the one orangutan's appearance stable across all shots. Preserve realistic orangutan anatomy and calm behavior. Do not add people, crowds, zoo attractions, buildings, cage bars in the foreground, extra animals, or extra breakfast items.
+
+【Negative Constraints】
+No on-screen text, subtitles, watermark, generated logo, misspelled words, crowds, fake attractions, fake buildings, orangutan on the dining table, orangutan eating human food unless supported by the supplied reference, aggressive behavior, human-like animal gestures, animal distress, forced physical contact, distorted faces, altered identity, extra fingers, extra limbs, duplicate child, duplicate animals, incorrect wardrobe, camera jitter, fast zooms, shaky digital movement, horror mood, dark night lighting, oversaturated color, plastic-looking skin, low-resolution imagery, NSFW, nudity, explicit content, background vocals, or spoken dialogue.

@@ -1,0 +1,189 @@
+# Bali Zoo — Complete Image-to-Image Reference Asset Pack
+
+Create each asset as a separate image-to-image generation. Upload only the listed source image(s) for that asset. Do not upload unrelated animal/reference images into the same generation; this prevents identity and scene contamination.
+
+## Source Asset Aliases
+
+- BaliZooFamilyWalkway = `WhatsApp Image 2026-09-25 at 03.48.15 (2).jpeg`
+- BaliZooKidsPlaygroundClose = `WhatsApp Image 2026-09-25 at 03.48.15 (1).jpeg`
+- BaliZooBabyOrangutan = `WhatsApp Image 2026-09-25 at 03.48.15.jpeg`
+- BaliZooLemurEncounter = `WhatsApp Image 2026-09-25 at 03.45.23 (2).jpeg`
+- BaliZooBirdEncounterFamily = `WhatsApp Image 2026-09-25 at 03.48.16 (1).jpeg`
+- BaliZooWaterplayKids = `WhatsApp Image 2026-09-25 at 03.48.16.jpeg`
+- BaliZooColorfulMural = `WhatsApp Image 2026-09-25 at 03.45.23.jpeg`
+- BaliZooLogoStone = `WhatsApp Image 2026-09-25 at 03.45.23 (1).jpeg`
+- BaliZooAreaMap = `WhatsApp Image 2026-09-25 at 03.45.24 (1).jpeg`
+- BaliZooCompositeAd = `WhatsApp Image 2026-09-25 at 03.45.24.jpeg`
+
+---
+
+# A. FAMILY REFERENCE ASSETS
+
+## A01 — `FamilyCharacterMaster`
+Source upload: BaliZooFamilyWalkway
+
+Use the uploaded family photo as the identity and wardrobe reference for the entire family. Preserve every visible family member's face, age appearance, skin tone, hairstyle, body proportions, relationships, and clothing silhouette exactly as in the source image. Keep the exact same number of people.
+
+Create a polished photorealistic editorial family portrait in a clean tropical Bali Zoo walkway. The family stands naturally close together with warm dappled daylight, bamboo and lush foliage softly blurred behind them. Make every face clearly visible and separately identifiable, with natural hands, realistic skin texture, calm genuine expressions, and consistent wardrobe. This is a high-resolution master character-reference plate for a cinematic brand film.
+
+No animals, crowds, text, logo, watermark, altered identity, altered outfit color, duplicated people, obscured faces, distorted hands, beauty-filter skin, or cartoon style.
+
+## A02 — `FamilyWalkingPlate`
+Source upload: BaliZooFamilyWalkway
+
+Use the uploaded family photo as the identity and wardrobe reference. Preserve every visible family member's face, age appearance, skin tone, hairstyle, body proportions, clothing, and relationships exactly as in the source image. Keep the exact same family count.
+
+Create a photorealistic full-body candid still of this same family walking together along a quiet bamboo-lined Bali Zoo pathway. The parents naturally hold the children’s hands; the family walks toward camera at an unhurried pace with warm genuine expressions. Use stone path, bamboo fence, lush greenery, soft tropical daylight, and a premium travel-editorial composition. Keep faces visible and recognizable. This is a clean motion-reference still for a cinematic walking shot.
+
+No new family members, animals, crowds, signage, text, logo, wardrobe changes, face changes, distorted legs, hands, or shoes, duplicate children, artificial fashion styling, or cartoon look.
+
+## A03 — `ChildWonderCloseUp`
+Source upload: BaliZooKidsPlaygroundClose
+
+Use the uploaded image as the identity reference. Select only the child already visible in the source image. Preserve the child’s exact facial identity, age appearance, hair, skin tone, body proportions, and clothing. Do not introduce another child or use a different face.
+
+Create a photorealistic close-up of the same child in a tropical Bali Zoo setting. The child is in three-quarter profile, looking slightly upward with quiet curiosity and a small natural smile. Warm daylight softly illuminates the eyes; green tropical foliage creates a gentle blurred background. A parent’s shoulder or hand may appear only as a subtle out-of-focus protective presence near the frame edge. Emotionally intimate, premium, natural, and suitable for a brand-film opening.
+
+No animals, text, logo, watermark, exaggerated smile, crying, makeup, plastic skin, extra fingers, duplicate child, changed clothes, changed hair, or cartoon look.
+
+## A04 — `ParentChildConnection`
+Source upload: BaliZooKidsPlaygroundClose
+
+Use the uploaded image as the identity and wardrobe reference. Preserve the selected parent and child exactly as they appear in the source image: face, skin tone, hair, age appearance, body proportions, clothing, and relationship.
+
+Create a photorealistic candid medium shot in a quiet tropical Bali Zoo pathway. The parent kneels or leans slightly toward the child; the child looks back with a soft natural smile. They share a calm affectionate moment under warm dappled light, with bamboo and lush green foliage in the background. Keep it understated and observational like a premium family-travel editorial photograph. Both faces are visible and sharp.
+
+No other people in clear focus, no animals, no crowds, no text, logo, watermark, altered identities, changed clothing, exaggerated pose, distorted hands, or cartoon style.
+
+## A05 — `FamilyClosingPlate`
+Source upload: BaliZooFamilyWalkway
+
+Use the uploaded family photo as the identity, family-count, body-proportion, and wardrobe reference. Preserve the same family group without adding or removing anyone.
+
+Create a photorealistic rear three-quarter wide still of the same family walking away together along a warm tropical Bali Zoo path in late-afternoon light. The family naturally occupies the lower third, surrounded by bamboo and lush foliage. Soft golden light filters through leaves. Keep the upper center clean with natural negative space for official typography and logo to be added manually in post-production. The mood is quiet, warm, and emotionally complete.
+
+No readable signs, text, logos, watermark, crowds, animals, new family members, wardrobe changes, identity changes, fake buildings, oversaturated sunset, fantasy effects, or cartoon styling.
+
+---
+
+# B. ORANGUTAN REFERENCE ASSETS
+
+## B01 — `BabyOrangutanPortrait`
+Source upload: BaliZooBabyOrangutan
+
+Use the uploaded baby orangutan image as the only animal identity reference. Preserve the baby orangutan’s face, eye shape, fur color, fur texture, age appearance, and natural anatomy exactly as visible. Do not create an adult orangutan from this image.
+
+Create a photorealistic close portrait of the same baby orangutan nestled safely in a lush tropical habitat context. Warm morning light passes softly through leaves. Keep expressive eyes, fine realistic fur detail, and a calm natural pose. The background has green foliage and soft warm reddish-brown adult-fur texture only as supporting context; do not reveal or invent a separate adult animal clearly in frame. This is an emotional animal-memory reference plate.
+
+No people, no cages in foreground, no text, no logo, no human clothing, no human-like pose, no smile aimed at camera, no fantasy animal, no altered anatomy, no duplicate orangutans, no cartoon look.
+
+## B02 — `OrangutanHabitatWide`
+Source upload: BaliZooBabyOrangutan + a real Bali Zoo orangutan habitat photo when available
+
+Use the baby orangutan image only for the baby’s facial identity, fur, and anatomy. Use the uploaded real habitat image only for the habitat layout, vegetation, platform materials, and lighting. Do not use people from either source.
+
+Create a photorealistic wide tropical orangutan-habitat plate. The same baby orangutan is naturally positioned on a low wooden platform or among safe habitat foliage, small in the composition with ample environmental context. Use warm morning light, natural green depth, wood, leaves, and realistic habitat scale. Keep the baby’s behavior calm and natural. This is a location-plus-animal continuity plate for video use.
+
+No breakfast table, no people, no cages in foreground, no text, no logo, no adult orangutan unless an adult reference is separately supplied, no human-like gestures, no animal distress, no distorted anatomy, no cartoon look.
+
+## B03 — `AdultOrangutanHabitatPortrait` — only if you obtain an adult orangutan source image
+Source upload: real adult orangutan photo from official Bali Zoo source
+
+Use the uploaded adult-orangutan image as the only identity reference for one adult orangutan. Preserve its visible face, fur color, age appearance, body scale, and anatomy. Do not use the baby-orangutan source to fabricate an adult.
+
+Create a photorealistic calm adult orangutan sitting naturally on a wooden habitat platform in lush tropical Bali Zoo foliage. Use warm early-morning light and realistic fur detail. The adult looks slightly past camera and makes no human-like gesture. This is a clean adult-orangutan reference plate.
+
+No people, no table, no text, no logo, no extra orangutans, no aggressive posture, no cages in foreground, no fantasy behavior, no cartoon style.
+
+---
+
+# C. BRAND / LOCATION REFERENCE ASSETS
+
+## C01 — `TropicalPathEmptyPlate`
+Source upload: BaliZooFamilyWalkway
+
+Use the uploaded image only for the bamboo fence, stone path, tropical vegetation, daylight direction, and Bali Zoo walkway materials. Do not use any person from the source.
+
+Create a photorealistic empty tropical Bali Zoo pathway. The bamboo-lined path curves gently forward through lush foliage, with warm dappled daylight and no people or animals. Keep a clean path center and soft natural framing leaves. This is a flexible establishing and transition location plate.
+
+No people, animals, text, logo, watermark, crowds, fake buildings, fantasy plants, dramatic fog, neon colors, or cartoon look.
+
+## C02 — `BaliZooEntranceHeroPlate` — use after you obtain an entrance photo
+Source upload: real Bali Zoo entrance photo from Google or official Bali Zoo source
+
+Use the uploaded entrance image only for the real entrance architecture, stone textures, vegetation, sign placement, and daylight conditions. Preserve the actual entrance layout. Do not attempt to generate readable sign text or logo.
+
+Create a photorealistic premium wide establishing plate of the same Bali Zoo entrance in warm early-morning or late-afternoon tropical light. Keep the entrance architecture and landscaping authentic. Leave clean negative space in the sky or foliage area for official logo/text to be added manually in post. No visitors unless they are clearly required by the source composition.
+
+No invented buildings, no altered entrance layout, no readable generated logo/text, no crowds, no fake animals, no watermark, no cartoon styling.
+
+## C03 — `MuralPhotoSpotPlate`
+Source upload: BaliZooColorfulMural
+
+Use the uploaded mural image only for the mural’s playful color palette, illustrated jungle-animal composition, surface materials, and surrounding foliage. Do not attempt to reproduce readable Bali Zoo lettering.
+
+Create a photorealistic wide Bali Zoo photo-spot plate featuring the same colorful animal mural in natural daylight, with clean foreground space and tropical foliage around the edges. Keep the mural as a real painted backdrop, not a living fantasy scene. This is a brand-atmosphere reference for a short family encounter or transition.
+
+No animated mural animals, no readable text, no logo recreation, no extra crowds, no plush toy unless the source requires it, no fantasy effects, no cartoon conversion of the full image.
+
+## C04 — `StoneBrandTexturePlate`
+Source upload: BaliZooLogoStone
+
+Use the uploaded image only for dark volcanic stone texture, planted ferns, and the colorful animal-silhouette sign style. Do not attempt to generate readable Bali Zoo lettering or exact logo typography.
+
+Create a photorealistic close environmental plate of dark volcanic stone with small tropical ferns and a colorful, out-of-focus animal-silhouette brand detail. Use warm side light and shallow depth of field. Keep the central or upper frame clean for official Bali Zoo branding to be added manually in post-production. This is a subtle closing transition reference, not a readable sign shot.
+
+No readable text, no exact generated logo, no watermark, no crowds, no animals moving, no fantasy wall transformation, no cartoon look.
+
+---
+
+# D. OPTIONAL BIRD-ENCOUNTER REFERENCE ASSETS
+
+## D01 — `FamilyBirdEncounterClose`
+Source upload: BaliZooBirdEncounterFamily
+
+Use the uploaded family image as the identity and wardrobe reference for the same family. Preserve their facial identities, family count, hair, clothing, and body proportions. Use the source birds only for their visible color, species-like appearance, size, perch positions, and calm behavior.
+
+Create a photorealistic intimate family encounter plate in front of the colorful Bali Zoo mural atmosphere. Keep only one or two birds visible, perched naturally on a parent’s hand or arm as supported by the source. Focus on the child looking from a colorful bird back toward a smiling parent. The scene is warm, close, and emotionally quiet—not a busy animal showcase.
+
+No extra birds, no extra family members, no aggressive wing flapping, no birds on faces, no text, no logo, no watermark, no distorted hands, no altered identities, no cartoon look.
+
+---
+
+# E. OPTIONAL WATERPLAY REFERENCE ASSETS
+
+## E01 — `WaterplayJoyClose`
+Source upload: BaliZooWaterplayKids
+
+Use the uploaded waterplay image only for children’s joyful energy, swimwear, water-splash environment, daylight, and physical water behavior. Preserve the visible child identities only if the source is intended to define specific child characters; otherwise use it only as action and location reference, not as the same family identity.
+
+Create a photorealistic child-height close action plate of one or two children laughing gently as sunlight catches a small water splash. Keep the scene warm and bright, with real water droplets and a soft blurred waterplay background. Focus on one genuine laugh and the emotional feeling of summer joy rather than a crowded waterpark scene.
+
+No nudity, no inappropriate focus on children’s bodies, no crowd, no text, no logo, no watermark, no exaggerated water explosion, no unsafe activity, no distorted limbs, no cartoon look.
+
+---
+
+# F. OPTIONAL LEMUR ENCOUNTER REFERENCE ASSETS
+
+## F01 — `LemurEncounterClose`
+Source upload: BaliZooLemurEncounter
+
+Use the uploaded image only for the guest’s visible identity, clothing, lemur species appearance, branch/platform arrangement, and lush tropical setting. Preserve the woman’s face and clothing if she is used. Preserve the ring-tailed lemurs’ realistic anatomy, count, and natural behavior.
+
+Create a photorealistic close encounter plate in the same lush Bali Zoo habitat. The guest holds one open hand calmly at a respectful distance while one lemur leans in with natural curiosity; the remaining lemurs stay naturally on branches or the wooden platform. Warm green foliage surrounds the scene. This is an optional animal encounter reference, not part of the emotional main edit unless needed.
+
+No extra lemurs, no aggressive behavior, no lemur on head or face, no forced contact, no food unless visible in the original reference, no text, no logo, no altered identity, no distorted limbs, no cartoon look.
+
+---
+
+# G. ASSETS NOT TO GENERATE FROM CURRENT REFERENCES
+
+- Do not use `BaliZooAreaMap` as a visual-style image reference. It is planning-only.
+- Do not use `BaliZooCompositeAd` as a literal scene reference. It mixes many animals and experiences in one promotional composite and can cause impossible or misleading scenes.
+- Do not use `BaliZooLionPortrait` in the emotional family film. Reserve it for a separate wildlife-focused concept.
+
+# Missing Physical References You Still Need To Find
+
+1. A clean real Bali Zoo entrance photo for `BaliZooEntranceHeroPlate`.
+2. A real adult orangutan photo if adult orangutan must appear. The baby photo must not be used to fabricate an adult.
+3. If you want a family near elephants, obtain a real Elephant Mud Fun location image and approved elephant image first. Do not derive elephant scenes from the current asset set.

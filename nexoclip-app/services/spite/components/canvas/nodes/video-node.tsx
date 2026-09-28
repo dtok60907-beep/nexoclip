@@ -159,6 +159,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [resolution, setResolution] = useState((data.resolution as string) || '')
   const [enableAudio, setEnableAudio] = useState((data.enableAudio as boolean | undefined) ?? true)
+  const [draftMode, setDraftMode] = useState((data.draftMode as boolean) || false)
+  const [extendMode, setExtendMode] = useState((data.extendMode as boolean) || false)
   const [enableLoop, setEnableLoop] = useState((data.enableLoop as boolean) || false)
   // Kling 2.6 voice IDs — up to 2, comma-separated in the input box.
   // User pastes IDs they generated from fal's create-voice endpoint;
@@ -267,6 +269,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setAspectRatio('9:16')
     setResolution((data.resolution as string) || '')
     setEnableAudio((data.enableAudio as boolean | undefined) ?? true)
+    setDraftMode((data.draftMode as boolean) || false)
+    setExtendMode((data.extendMode as boolean) || false)
     setEnableLoop((data.enableLoop as boolean) || false)
     setVoiceIds((data.voiceIds as string) || '')
     setNumVideos((data.numVideos as number) || 1)
@@ -280,7 +284,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.draftMode, data.extendMode, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
 
   useEffect(() => {
     if (outputUrl && outputUrl !== announcedOutputRef.current) {
@@ -834,9 +838,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         endImageUrl: connectedEndImageUrl,
         referenceGroups: referenceGroups.length ? referenceGroups : undefined,
         settings: {
-          aspectRatio,
+          aspectRatio: extendMode ? 'adaptive' : aspectRatio,
           duration,
-          resolution,
+          resolution: draftMode ? '480p' : resolution,
+          draft: currentModel?.supportsDraft ? draftMode : undefined,
+          omniReferenceTaskType: currentModel?.supportsExtend && extendMode ? 'extend' : undefined,
           videoUrl: connectedVideoUrl || undefined,
         },
       })
@@ -1349,6 +1355,36 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               />
             )}
             
+            {currentModel?.supportsDraft && (
+              <button
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  const next = !draftMode
+                  setDraftMode(next)
+                  patchPersistedNodeData({ draftMode: next })
+                }}
+                disabled={isGenerating || extendMode}
+                className={`px-2 h-6 rounded-md text-[10px] font-mono ${draftMode ? 'bg-amber-500/25 text-amber-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                title="Seedance 2.5 Draft: 480p preview, final render uses 1080p"
+              >Draft
+              </button>
+            )}
+            {currentModel?.supportsExtend && (
+              <button
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  const next = !extendMode
+                  setExtendMode(next)
+                  if (next) setDraftMode(false)
+                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode })
+                }}
+                disabled={isGenerating}
+                className={`px-2 h-6 rounded-md text-[10px] font-mono ${extendMode ? 'bg-emerald-500/25 text-emerald-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                title="Extend a connected source video with Seedance 2.5"
+              >Extend
+              </button>
+            )}
+
             {/* Resolution - only if model supports it */}
             {resolutionOptions.length > 0 && (
               <ControlSelect 

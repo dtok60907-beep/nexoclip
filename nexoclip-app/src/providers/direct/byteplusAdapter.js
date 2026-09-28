@@ -28,21 +28,27 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
   return {
     ...adapter,
     async generate(params) { return { ...(await adapter.generate(params)), provider: 'byteplus' }; },
-    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, frameImages, referenceImages, referenceVideos } = {}) {
-      const content = [{ type: 'text', text: prompt }];
+    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, draft, outputFormat, omniReferenceTaskType, draftTaskId, frameImages, referenceImages, referenceVideos } = {}) {
+      // Draft finalization uses only a draft_task content item. BytePlus reuses the
+      // original prompt/assets/settings from the draft and rejects them if repeated.
+      const content = draftTaskId
+        ? [{ type: 'draft_task', draft_task: { id: draftTaskId } }]
+        : [{ type: 'text', text: prompt }];
       // BytePlus requires an explicit role on image/video content parts — some models
       // (e.g. the mini variant) reject an image_url with no role ("role must be
       // specified for image contents"); others silently accept it without one. Always
       // sending it is the only combination confirmed to work across model variants.
-      const images = [
-        ...(referenceImages || []),
-        ...(frameImages || []).map((frame) => frame?.image_url?.url).filter(Boolean),
-      ];
-      for (const image of images) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
-      for (const video of referenceVideos || []) content.push({ type: 'video_url', role: 'reference_video', video_url: { url: video } });
+      if (!draftTaskId) {
+        const images = [
+          ...(referenceImages || []),
+          ...(frameImages || []).map((frame) => frame?.image_url?.url).filter(Boolean),
+        ];
+        for (const image of images) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
+        for (const video of referenceVideos || []) content.push({ type: 'video_url', role: 'reference_video', video_url: { url: video } });
+      }
       // Video generation is async-task based and lives under /tasks — /contents/generations
       // (used for images) silently accepts the request and returns an empty 200 for video models.
-      const response = await request('/contents/generations/tasks', { method: 'POST', body: JSON.stringify({ model, content, ...(duration !== undefined ? { duration } : {}), ...(resolution ? { resolution } : {}), ...(aspectRatio ? { ratio: aspectRatio } : {}), ...(generateAudio !== undefined ? { generate_audio: generateAudio } : {}) }) });
+      const response = await request('/contents/generations/tasks', { method: 'POST', body: JSON.stringify({ model, content, ...(duration !== undefined && !draftTaskId ? { duration } : {}), ...(resolution ? { resolution } : {}), ...(aspectRatio && !draftTaskId ? { ratio: aspectRatio } : {}), ...(generateAudio !== undefined && !draftTaskId ? { generate_audio: generateAudio } : {}), ...(draft !== undefined ? { draft: Boolean(draft) } : {}), ...(outputFormat ? { output_format: outputFormat } : {}), ...(omniReferenceTaskType && !draftTaskId ? { omni_reference_task_type: omniReferenceTaskType } : {}) }) });
       const payload = await response.json();
       return { ...payload, provider: 'byteplus', polling_url: payload.polling_url || null };
     },

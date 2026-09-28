@@ -1,0 +1,66 @@
+【Generation Goal】
+Generate a publishable emotional Bali Zoo branded short film built around one feeling: a child may not remember every detail of the day, but they will remember the wonder. The film begins with arrival at Bali Zoo, follows one family through a few intimate moments of discovery, and ends with a warm memory of leaving together. It is not a ticket promotion, company profile, or broad animal montage.
+
+【Reference Asset Roles】
+@BaliZooEntranceHeroPlate is used for the authentic Bali Zoo entrance architecture, stone textures, tropical landscaping, and the opening brand-location atmosphere. Do not generate readable entrance text or a logo.
+@BaliZooLogoStone is used as the final real brand lockup: dark volcanic stone, small ferns, and the official colorful Bali Zoo sign. Preserve the supplied real sign rather than generating replacement logo text.
+@ChildWonderCloseUp is used for the child’s exact identity, curly hair, green outfit, quiet curiosity, and warm opening close-up.
+@LemurFeedingEncounter is used for the main gentle animal-feeding encounter: guest identity and hand gesture, ring-tailed lemurs, wooden platform, tree branches, lush habitat, and respectful human-animal closeness.
+@BabyOrangutanPortrait is used for the baby orangutan’s exact face, fur texture, calm natural expression, and intimate animal-memory close-up.
+@FamilyWalkingPlate is used for the family’s exact identity, wardrobe, family count, bamboo-lined path, natural walking movement, and togetherness.
+@WaterplayJoyClose is used for the final joyful child-waterplay beat: sunlight, water droplets, and natural laughter.
+@FamilyClosingPlate is used for the same family walking away together, their wardrobe, family count, path environment, and final emotional composition.
+@FamilyCharacterMaster is used only to maintain the same family’s facial identities, age appearance, skin tones, hairstyles, body proportions, and wardrobe wherever family members appear.
+
+【Subjects and Relationships】
+The emotional focus is one child and the same family throughout all family scenes. The family count, identities, wardrobe, and relationships remain fixed. Animals are secondary: one gentle lemur-feeding encounter and one quiet baby-orangutan moment only. The guest in the lemur encounter remains the person defined by @LemurFeedingEncounter and is not substituted with the family unless the reference itself establishes that identity. The lemur feeding is calm and respectful. The baby orangutan remains only in its natural habitat context. No unsafe contact, forced attraction, exaggerated animal behavior, or animal catalogue montage.
+
+【Visual Treatment】
+Photorealistic cinematic tropical brand film. Warm Bali daylight, soft gold highlights, natural greens, cream and earth tones, realistic skin, fur, and water texture, subtle natural film grain. Premium, intimate, human, and publishable. Use tasteful AI motion only: gentle foliage parallax, slow camera movement, soft focus transitions, natural breeze, realistic water movement, and emotionally motivated match cuts. No fantasy transformation, sci-fi styling, flashy promo effects, or artificial spectacle.
+
+【Camera and Sound】
+Use varied premium travel-documentary camera language: a wide forward arrival move, an intimate face close-up, a hand-and-animal medium close-up, an animal portrait, a family tracking shot, a child-height waterplay beat, and a calm final wide resolution. Handheld movement is restrained to subtle organic operator breathing and small corrections. No digital jitter, fast zoom, whip pan, or impossible camera movement.
+<Natural Bali Zoo ambience: morning birds and leaves at the entrance, soft footsteps on the path, quiet habitat sounds during the lemur encounter, a gentle animal movement during the orangutan portrait, and water splashes with distant natural laughter near the end.>
+(Soft cinematic music: warm felt piano begins at arrival, light acoustic guitar enters during the encounter, restrained strings grow during the family walk, and gentle marimba/warm strings lift the waterplay beat. No vocals and no heavy percussion.)
+English dialogue is allowed only when minimal, soft, natural, and emotionally understated. It must not be intense, salesy, promotional, or delivered like an advertisement. No subtitles, signs, generated logo, or on-screen text appear in the generated footage.
+
+【Event Script】
+Shot 1 | Arrival — A world ahead
+Use @BaliZooEntranceHeroPlate. Begin with a clean wide view of the authentic Bali Zoo entrance in warm tropical morning light. Soft foreground leaves frame the entrance. The camera makes a slow, stable forward move toward the entrance or entry path. If family silhouettes are present, they remain small and seen from behind or in profile; do not reveal faces yet. <Morning birds and leaves move softly.> (One quiet felt-piano note begins.) End with a subtle light flare or foliage movement that motivates the cut to the child.
+
+Shot 2 | The look of wonder
+Use @ChildWonderCloseUp and @FamilyCharacterMaster. Cut to an intimate close-up of the child in three-quarter profile, looking slightly upward with quiet curiosity. Warm daylight catches the child’s eyes; a parent’s shoulder or hand remains softly out of focus at the frame edge as a protective presence. The camera slowly pushes in. The child gives one small natural smile. Optional soft off-camera parent dialogue in natural English: {Look at that.} End on the child’s eyes holding wonder.
+
+Shot 3 | The gentle encounter
+Use @LemurFeedingEncounter. Cut to a medium close-up of the guest gently offering food from an open hand to one calm ring-tailed lemur on a branch or wooden platform. One or two other lemurs stay quietly nearby, but the composition remains intimate and uncluttered. The camera makes a slow lateral move or restrained handheld push-in; the guest’s hand and the lemur’s face stay sharp while tropical foliage softly blurs behind them. The lemur leans in slowly, sniffing or taking a tiny bite with realistic anatomy and behavior. The guest keeps the hand steady and smiles softly. No dialogue. End with the encounter calm, safe, and respectful.
+
+Shot 4 | A quiet animal memory
+Use @BabyOrangutanPortrait. Cut from the feeding hand/animal gaze into a close portrait of the baby orangutan. The baby remains nestled in its natural habitat context. The camera slowly pushes closer; the baby orangutan blinks once and makes one tiny natural hand or mouth movement. The shot is still and intimate, mirroring the child’s gaze from Shot 2. Optional child dialogue, quiet and spontaneous in natural English: {Wow.} End on the orangutan’s calm eyes.
+
+Shot 5 | Together, forward
+Use @FamilyWalkingPlate and @FamilyCharacterMaster. Return to the same family walking together along the bamboo-lined Bali Zoo path. The camera tracks backward at the family’s walking speed and near child height. The parents naturally hold the children’s hands; bamboo and leaves pass softly at the frame edges while dappled sunlight moves across the stone path. The family’s expressions remain candid, warm, and unposed. <Soft footsteps on stone and leaves in the breeze.> End as the path opens forward.
+
+Shot 6 | Joy, unscripted
+Use @WaterplayJoyClose. Cut to a child-height close action moment: one or two children laugh as a gentle splash catches warm sunlight. Keep the background softly blurred and avoid a crowded waterpark view. The camera moves slightly with the water spray, shifting focus naturally between a child’s joyful face and sparkling droplets. Optional child dialogue in natural English: {Again!} <A small bright splash and genuine laughter.> End with droplets glowing in sunlight as the music reaches its warmest lift.
+
+Shot 7 | The wonder stays
+Use @FamilyClosingPlate, then make one clean match cut to @BaliZooLogoStone. First, the same family walks away together in a rear three-quarter wide composition along the warm tropical path. The family stays in the lower third while the camera slowly settles into stillness. Then cut to the supplied real Bali Zoo stone sign: dark volcanic stone, small ferns, and the official colorful animal-silhouette mark. Use a slow, subtle push-in or gentle parallax on the original sign image; preserve its real lettering and logo exactly rather than regenerating them. <Birds and leaves remain after the music resolves.> End on the real Bali Zoo sign for one calm beat; optional tagline typography may be added manually in post-production, but do not generate new text.
+
+【Maintain Consistency】
+Keep the family identities, count, wardrobe, and relationships stable across all family shots. Keep the entrance architecture and tropical lighting authentic to @BaliZooEntranceHeroPlate. Preserve the real official sign in @BaliZooLogoStone exactly in the final brand lockup; do not redraw, alter, or generate replacement logo typography. Use only two animal moments: the lemur feeding encounter and the baby-orangutan close-up. Keep all animal anatomy, distance, habitat context, and behavior realistic, calm, and respectful. The final result must feel like a polished Bali Zoo brand memory, not an AI demo, ticket promotion, or generic zoo montage.
+
+【Manual Post-Production Voiceover Option】
+Use this as external voiceover only if a cleaner premium result is needed:
+“They may not remember every path they walked.
+Or every sound they heard.
+But they will remember the feeling.
+The wonder.
+Bali Zoo.”
+
+【Manual Post-Production Text Option】
+Add only in editing, never generate in-video:
+“The wonder stays with you.”
+“Bali Zoo.”
+
+【Negative Constraints】
+No generated on-screen text, subtitles, watermark, fake logo, replacement logo, misspelled words, ticket promo, price promo, book-now CTA, animal catalogue montage, too many animals, crowded zoo scenes, unsafe animal contact, forced animal interaction, aggressive animals, animal distress, animal cruelty, fantasy creatures, talking animals, human-like animal gestures, unrealistic anatomy, lion interaction, bird encounter scene, mural scene, area map, or composite-ad imagery, orangutan outside its habitat, waterpark chaos, fake buildings, altered entrance architecture, neon sci-fi effects, cartoon look, oversaturated color, plastic skin, digital jitter, fast zoom, whip pan, low-resolution imagery, NSFW, nudity, explicit content, intense dialogue, sales dialogue, forced acting, long scripted conversation, generated narration unless explicitly requested, or background vocals.

@@ -1,0 +1,38 @@
+【Generation Goal】
+Generate Part 1 of a publishable emotional Bali Zoo brand film. Tell one continuous family-memory arc: arrival, a child’s curiosity, a gentle animal encounter, then a quiet moment of connection with a baby orangutan. The film feels premium, warm, intimate, and real—not a ticket advertisement, a company profile, or a fast animal montage.
+
+【Reference Asset Roles】
+@BaliZooEntranceHeroPlate defines only the authentic Bali Zoo entrance architecture, stone textures, entry path, tropical landscaping, and morning location atmosphere. Do not generate readable entrance lettering or a replacement logo.
+@ChildWonderCloseUp defines the child’s exact face, curly hair, green outfit, skin tone, age appearance, and quiet expression of curiosity.
+@FamilyCharacterMaster defines the same family’s complete identity authority: every family member, exact family count, face, age appearance, hair, body proportion, wardrobe, and relationship. Do not remove, add, merge, or replace any family member.
+@LemurFeedingEncounter defines the guest’s face, beige outfit, open-hand feeding gesture, ring-tailed lemur anatomy, wooden platform, branches, and lush green habitat.
+@BabyOrangutanPortrait defines only the baby orangutan’s exact face, eye shape, reddish fur texture, body scale, and calm natural anatomy.
+
+【Subjects and Relationships】
+The child is the emotional point of view. The family remains the same family defined by @FamilyCharacterMaster whenever family members appear. The guest in the lemur encounter is the separate guest defined by @LemurFeedingEncounter; do not replace her with the family. There is one primary lemur feeding from the guest’s open hand, with no more than two quiet lemurs in the background. The baby orangutan appears alone in its own natural habitat context. Every animal remains calm, safe, anatomically correct, and respectfully distanced from people.
+
+【Visual Treatment】
+Photorealistic cinematic tropical brand film. Warm Bali morning daylight, soft gold highlights, natural greens, cream and earth tones, realistic skin and fur detail, subtle natural film grain. The camera language is restrained premium travel documentary: deliberate framing, subtle operator breathing, soft focus transitions, no digital jitter. Music stays understated and emotional: felt piano first, then light acoustic guitar and restrained strings; no vocals.
+
+【Sound Rules】
+<Natural ambience only: morning birds, leaves moving, soft footsteps on stone, quiet habitat sounds, tiny animal movement.>
+No narration, subtitle, generated logo, watermark, sign text, sales language, or crowd noise. Dialogue is sparse and natural English only.
+
+【Event Script】
+Shot 1 | Arrival — A world ahead
+Use @BaliZooEntranceHeroPlate. Start with a wide vertical composition of the authentic Bali Zoo entrance in early warm morning light. The entrance and tropical landscaping sit in the middle ground; softly out-of-focus leaves frame the near foreground. The family may appear only as small rear-view silhouettes entering from the lower edge or walking toward the path, never large enough to reveal faces. The camera is at adult chest height, approximately four metres from the entrance, and makes one slow stable forward move. The sun creates gentle warm highlights on stone and leaves; no overexposure. <Morning birds and a light breeze through leaves.> (One quiet felt-piano note begins.) End with a foreground leaf passing softly across frame or a subtle warm flare to motivate the cut.
+
+Shot 2 | The look of wonder
+Use @ChildWonderCloseUp and @FamilyCharacterMaster. Cut to an intimate three-quarter close-up of the same child, framed from chest upward. The child occupies the upper-middle frame, looking slightly upward and just off camera toward an unseen animal encounter. Warm daylight catches the eyes. A parent’s shoulder or hand is softly out of focus near the lower edge, establishing care without distracting from the child. Camera is at the child’s eye level, around one metre away, with a very slow push-in; eyes remain sharp and tropical foliage falls into soft bokeh. The child breathes naturally, then gives one small genuine smile. Off-camera, a parent speaks in soft natural English: {Look at that.} The child listens without speaking. End on the child’s eyes holding quiet wonder.
+
+Shot 3 | The gentle encounter
+Use @LemurFeedingEncounter. Cut by matching the child’s upward gaze to the guest’s open hand. Stage the image in depth: the guest is on frame-left in a medium close-up, her open palm held steadily at chest height; one primary ring-tailed lemur is on the branch or wooden platform in front of her, moving gently toward the hand. One or two additional lemurs remain softly visible on branches in the background only. Keep the wooden platform, tree branches, and lush habitat faithful to the reference. Camera is 1.5 metres away at the height of the guest’s hand, executing a slow lateral slide from left to right. Focus starts on the guest’s hand, then naturally settles on the primary lemur’s face. The lemur slowly sniffs or takes one tiny natural bite; the guest keeps her hand still and smiles softly. <Leaves shift, a faint branch creaks, and a small animal movement is audible.> No dialogue. End with the animal calm and the hand still open.
+
+Shot 4 | A quiet animal memory
+Use @BabyOrangutanPortrait. Cut from the lemur’s face to the baby orangutan’s eyes. The baby orangutan is nestled safely within its natural habitat context, with warm reddish fur and green foliage softly surrounding it. Keep the frame intimate: face and eyes dominate the composition, with no people, no other clearly visible orangutan, and no foreground cage bars. Camera is at a respectful telephoto distance, using a slow delicate push-in. The baby blinks once, makes one tiny natural mouth or hand movement, and remains calm. The sound drops back to birds and soft leaves while restrained strings join the piano. Optional child voice, quiet and spontaneous, from off screen: {Wow.} End on the baby orangutan’s calm eyes, holding briefly for an edit point.
+
+【Maintain Consistency】
+Maintain the same warm morning light direction and color treatment across all four shots. Preserve all reference identities exactly. Do not turn the lemur guest into a member of the family. Do not add animals, people, buildings, props, or activities not established in the listed references.
+
+【Negative Constraints】
+No on-screen text, subtitle, watermark, generated logo, readable entrance sign, sales copy, CTA, crowds, extra family members, missing family members, changed faces, changed wardrobe, unsafe animal contact, feeding mess, animal aggression, animal distress, human-like animal gestures, fantasy creatures, distorted faces, distorted hands, extra fingers, duplicate animals, cage bars in foreground, fast zoom, whip pan, visible digital jitter, neon sci-fi effects, cartoon style, plastic skin, NSFW, nudity, explicit content, background vocals, or exaggerated acting.

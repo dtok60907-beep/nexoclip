@@ -162,7 +162,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
     : {}
   const allowed = kind === 'image'
     ? new Set(['aspectRatio', 'resolution', 'quality', 'seed', 'name', 'swap_url'])
-    : new Set(['aspectRatio', 'duration', 'resolution', 'seed', 'videoUrl'])
+    : new Set(['aspectRatio', 'duration', 'resolution', 'seed', 'videoUrl', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId'])
   const unsupported = Object.keys(settings).filter((key) => !allowed.has(key))
   if (unsupported.length) {
     throw Object.assign(new Error(`Unsupported durable generation parameters: ${unsupported.join(', ')}`), { status: 400 })
@@ -188,11 +188,29 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (tenantReferences.some((url) => !/^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url) && !isLegacyCanvasReference(url))) {
     throw Object.assign(new Error('Video references must be tenant assets or owned Canvas references'), { status: 400 })
   }
-  if (settings.aspectRatio !== undefined && settings.aspectRatio !== '' && settings.aspectRatio !== '9:16') {
+  const isSeedance25 = typeof body.model === 'string' && body.model.includes('seedance-2.5')
+  const isExtend = settings.omniReferenceTaskType === 'extend'
+  const requestedRatio = typeof settings.aspectRatio === 'string' ? settings.aspectRatio : ''
+  if (isSeedance25) {
+    if (requestedRatio && requestedRatio !== 'adaptive' && (isExtend || settings.draft === true)) {
+      throw Object.assign(new Error('Seedance 2.5 extend/draft requires ratio adaptive.'), { status: 400 })
+    }
+  } else if (requestedRatio && requestedRatio !== '9:16') {
     throw Object.assign(new Error('Video generation is portrait-only (9:16).'), { status: 400 })
   }
-  const parameters: Record<string, unknown> = { aspectRatio: '9:16' }
-  for (const key of ['resolution', 'seed']) if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
+  if (isExtend && !videoUrl) {
+    throw Object.assign(new Error('Seedance extend requires one source video.'), { status: 400 })
+  }
+  if (settings.draft === true && (!isSeedance25 || settings.resolution !== '480p')) {
+    throw Object.assign(new Error('Draft mode is only supported for Seedance 2.5 at 480p.'), { status: 400 })
+  }
+  if (settings.draftTaskId && (!isSeedance25 || settings.resolution !== '1080p')) {
+    throw Object.assign(new Error('Draft finalization requires Seedance 2.5 at 1080p.'), { status: 400 })
+  }
+  const parameters: Record<string, unknown> = { aspectRatio: isSeedance25 && (isExtend || settings.draft === true) ? 'adaptive' : '9:16' }
+  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId']) {
+    if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
+  }
   if (settings.duration !== undefined) parameters.duration = Number.parseInt(String(settings.duration), 10)
   if (referenceImages.length) parameters.referenceImages = referenceImages
   if (videoUrl) parameters.referenceVideos = [videoUrl]

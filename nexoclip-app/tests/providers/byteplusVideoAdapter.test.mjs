@@ -88,6 +88,42 @@ test('submit posts to the async /tasks endpoint, not /contents/generations', asy
   assert.equal(request.url, 'https://ark.example/api/v3/contents/generations/tasks');
 });
 
+test('submit maps Seedance 2.5 draft and extend parameters', async () => {
+  let request;
+  const adapter = createBytePlusAdapter({
+    apiKey: 'secret', baseUrl: 'https://ark.example/api/v3',
+    fetch: async (url, options) => { request = { url, options }; return jsonResponse({ id: 'cgt-1' }); },
+  });
+  await adapter.submit({
+    model: 'dreamina-seedance-2-5-260628', prompt: 'Extend @Video 1',
+    duration: 10, resolution: '480p', aspectRatio: 'adaptive', draft: true,
+    omniReferenceTaskType: 'extend', referenceVideos: ['https://cdn.example/in.mp4'],
+  });
+  const body = JSON.parse(request.options.body);
+  assert.equal(body.draft, true);
+  assert.equal(body.ratio, 'adaptive');
+  assert.equal(body.omni_reference_task_type, 'extend');
+  assert.equal(body.resolution, '480p');
+  assert.equal(body.content.find((part) => part.type === 'video_url').role, 'reference_video');
+});
+
+test('submit finalizes a draft without resending draft inputs', async () => {
+  let request;
+  const adapter = createBytePlusAdapter({
+    apiKey: 'secret', baseUrl: 'https://ark.example/api/v3',
+    fetch: async (url, options) => { request = { url, options }; return jsonResponse({ id: 'cgt-final' }); },
+  });
+  await adapter.submit({
+    model: 'dreamina-seedance-2-5-260628', draftTaskId: 'cgt-draft',
+    resolution: '1080p', prompt: 'must not be sent', referenceVideos: ['https://cdn.example/in.mp4'],
+  });
+  const body = JSON.parse(request.options.body);
+  assert.deepEqual(body.content, [{ type: 'draft_task', draft_task: { id: 'cgt-draft' } }]);
+  assert.equal(body.resolution, '1080p');
+  assert.equal(body.prompt, undefined);
+  assert.equal(body.ratio, undefined);
+});
+
 test('submit sends reference videos with the reference_video role BytePlus requires', async () => {
   let request;
   const adapter = createBytePlusAdapter({

@@ -1,0 +1,43 @@
+# Image-to-Image Reference Asset Prompts
+# Upload the source photo first, then use the matching prompt below.
+# Keep the source family image as the character/wardrobe reference; do not use a new invented family.
+
+## 01 — Family Character Master Reference
+
+Use the uploaded family photo as the identity reference for the entire family. Preserve every visible family member's face, age appearance, skin tone, hairstyle, body proportions, relationships, and clothing silhouette exactly as in the source image. Keep the same number of people and do not add or remove anyone.
+
+Create a polished photorealistic editorial family portrait in a clean tropical Bali Zoo walkway. The family stands naturally close together, relaxed and candid, with warm dappled daylight, bamboo and lush foliage softly blurred behind them. The result is a high-resolution character-reference plate for a cinematic brand film: all faces fully visible, each person separated clearly enough to identify, natural hands, realistic skin texture, calm genuine expressions, consistent wardrobe, no props blocking faces.
+
+Do not change identity, ethnicity, age appearance, hairstyle, clothing color, family count, or body proportions. No animals, no crowds, no text, no logo, no watermark, no distorted hands, no duplicate people, no beauty-filter skin, no cartoon look.
+
+## 02 — Family Walking Reference Plate
+
+Use the uploaded family photo as the identity and wardrobe reference. Preserve every visible family member's face, age appearance, skin tone, hairstyle, body proportions, clothing, and family relationships exactly as in the source image. Keep the exact same family count.
+
+Create a photorealistic candid full-body still of this same family walking together along a quiet bamboo-lined Bali Zoo pathway. The parents naturally hold the children’s hands; the family walks toward camera at an unhurried pace with warm, genuine expressions. Use soft tropical daylight, stone path, bamboo fence, lush greenery, and a premium travel-editorial composition. Keep all faces visible and recognizable. This is a clean motion-reference still for a later cinematic walking shot.
+
+Do not invent new family members, animals, crowds, signage, text, logo, or a different wardrobe. Do not alter faces or make anyone look like a different person. No distorted legs, hands, or shoes; no duplicate children; no artificial fashion styling; no cartoon look.
+
+## 03 — Child Wonder Reference Plate
+
+Use the uploaded family photo as the identity reference. Select only the child already present in the source image as the subject. Preserve that child’s exact facial identity, age appearance, hair, skin tone, body proportions, and clothing from the source image. Do not introduce another child or use a different face.
+
+Create a photorealistic close-up of the same child in a tropical Bali Zoo setting. The child is in three-quarter profile, looking slightly upward with quiet curiosity and a small natural smile. Warm daylight softly illuminates the eyes; green tropical foliage creates a gentle blurred background. A parent’s shoulder or hand may appear subtly at the edge of the frame only as an out-of-focus protective presence. The image is emotionally intimate, premium, natural, and suitable as the opening visual reference for a brand film.
+
+Do not alter the child’s identity, clothing, age appearance, or hairstyle. No animals, no text, no logo, no watermark, no exaggerated smile, no crying, no artificial makeup, no plastic skin, no extra fingers, no duplicate child, no cartoon look.
+
+## 04 — Parent-and-Child Connection Reference Plate
+
+Use the uploaded family photo as the identity and wardrobe reference. Preserve the selected parent and child exactly as they appear in the source image. Keep their faces, skin tone, hairstyle, age appearance, body proportions, clothing, and relationship unchanged.
+
+Create a photorealistic candid medium shot in a quiet tropical Bali Zoo pathway. The parent kneels or leans slightly toward the child; the child looks back at the parent with a soft smile. They share a calm, affectionate moment with warm dappled light, bamboo, and green foliage in the background. Keep the scene understated and observational, like a premium family-travel editorial photograph. Both faces are visible and sharp; the background is softly out of focus.
+
+Do not add other family members unless they are softly out of focus at a natural distance. No animals, no crowds, no text, no logo, no watermarks, no altered identities, no changed clothes, no exaggerated pose, no distorted hands, no cartoon look.
+
+## 05 — Family Closing Silhouette Reference Plate
+
+Use the uploaded family photo as the identity, family-count, body-proportion, and wardrobe reference. Preserve the same family group and do not add or remove anyone.
+
+Create a photorealistic rear three-quarter wide still of the same family walking away together along a warm tropical Bali Zoo path at late afternoon. The family is naturally grouped in the lower third of the frame, surrounded by bamboo and lush foliage. Soft golden light filters through leaves. Keep the upper center of the frame clean with natural negative space for official Bali Zoo typography to be added manually in post-production. The image should feel quiet, warm, and emotionally complete.
+
+Do not generate readable signs, text, logos, watermark, crowds, animals, new family members, altered wardrobe, altered facial identity, fake buildings, oversaturated sunset, fantasy effects, or cartoon styling.
