@@ -1190,7 +1190,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               controls
               loop={enableLoop}
               muted={!enableAudio}
-              preload="metadata"
+              preload="none"
               controlsList="nofullscreen"
               onDoubleClick={(e) => {
                 // The browser's built-in video controls trigger native

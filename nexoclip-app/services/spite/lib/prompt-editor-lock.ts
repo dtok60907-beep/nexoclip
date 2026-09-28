@@ -3,6 +3,8 @@ import type { Sql } from '@/lib/db'
 export const NODE_LOCK_LEASE_SECONDS = 15
 export const PROMPT_LOCK_LEASE_SECONDS = NODE_LOCK_LEASE_SECONDS
 
+let canvasLockSchemaReady: Promise<void> | null = null
+
 type CanvasNodeLockInput = {
   projectId: string
   nodeId: string
@@ -11,9 +13,10 @@ type CanvasNodeLockInput = {
 }
 
 export async function ensureCanvasNodeLocks(sql: Sql): Promise<void> {
+  if (canvasLockSchemaReady) return canvasLockSchemaReady
   // Keep the historical physical table during rolling deployment. Old Prompt
   // instances and new generic-node instances therefore share one authority.
-  await sql`
+  canvasLockSchemaReady = sql`
     CREATE TABLE IF NOT EXISTS canvas_prompt_editor_locks (
       project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       node_id text NOT NULL,
@@ -22,7 +25,11 @@ export async function ensureCanvasNodeLocks(sql: Sql): Promise<void> {
       expires_at timestamptz NOT NULL,
       PRIMARY KEY (project_id, node_id)
     )
-  `
+  `.then(() => undefined).catch((error) => {
+    canvasLockSchemaReady = null
+    throw error
+  })
+  return canvasLockSchemaReady
 }
 
 export async function claimCanvasNodeLock(sql: Sql, input: CanvasNodeLockInput) {
