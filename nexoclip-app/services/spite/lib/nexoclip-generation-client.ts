@@ -18,11 +18,13 @@ export type DurableGeneration = {
   result?: Record<string, unknown> | null
   error?: { message?: string } | null
   outputs?: Array<{ assetId: string; download?: { url: string }; url?: string }>
+  providerRequestId?: string
 }
 
 export type NexoClipGenerationClient = {
   submit(input: { userId: string; projectId: string; nodeId: string; input: DurableGenerationInput }): Promise<DurableGeneration>
   status(input: { userId: string; projectId: string; nodeId: string; generationId: string }): Promise<DurableGeneration>
+  finalizeDraft?(input: { userId: string; projectId: string; nodeId: string; generationId: string }): Promise<DurableGeneration>
 }
 
 export class NexoClipGenerationRequestError extends Error {
@@ -49,7 +51,7 @@ export function createNexoClipGenerationClient(options: ClientOptions = {}): Nex
   const createNonce = options.createNonce ?? crypto.randomUUID
   const fetchFn = options.fetchFn ?? fetch
   const request = async (
-    action: 'submit' | 'status',
+    action: 'submit' | 'status' | 'finalize-draft',
     input: { userId: string; projectId: string; nodeId: string; input?: DurableGenerationInput; generationId?: string },
   ): Promise<DurableGeneration> => {
     const secret = env.CANVAS_AUTH_HMAC_SECRET
@@ -81,6 +83,7 @@ export function createNexoClipGenerationClient(options: ClientOptions = {}): Nex
   return {
     submit: (input) => request('submit', input),
     status: (input) => request('status', input),
+    finalizeDraft: (input) => request('finalize-draft', input),
   }
 }
 

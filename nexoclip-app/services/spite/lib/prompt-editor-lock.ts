@@ -28,7 +28,7 @@ export async function ensureCanvasNodeLocks(sql: Sql): Promise<void> {
 export async function claimCanvasNodeLock(sql: Sql, input: CanvasNodeLockInput) {
   const rows = await sql`
     INSERT INTO canvas_prompt_editor_locks (project_id, node_id, participant_id, user_id, expires_at)
-    VALUES (${input.projectId}::uuid, ${input.nodeId}, ${input.participantId}, ${input.userId}, now() + interval '15 seconds')
+    VALUES (${input.projectId}, ${input.nodeId}, ${input.participantId}, ${input.userId}, now() + interval '15 seconds')
     ON CONFLICT (project_id, node_id) DO UPDATE
       SET expires_at = now() + interval '15 seconds'
       WHERE canvas_prompt_editor_locks.expires_at <= now()
@@ -43,7 +43,7 @@ export async function heartbeatCanvasNodeLock(sql: Sql, input: CanvasNodeLockInp
   const rows = await sql`
     UPDATE canvas_prompt_editor_locks
     SET expires_at = now() + interval '15 seconds'
-    WHERE project_id = ${input.projectId}::uuid
+    WHERE project_id = ${input.projectId}
       AND node_id = ${input.nodeId}
       AND participant_id = ${input.participantId}
       AND user_id = ${input.userId}
@@ -56,7 +56,7 @@ export async function heartbeatCanvasNodeLock(sql: Sql, input: CanvasNodeLockInp
 export async function releaseCanvasNodeLock(sql: Sql, input: CanvasNodeLockInput): Promise<void> {
   await sql`
     DELETE FROM canvas_prompt_editor_locks
-    WHERE project_id = ${input.projectId}::uuid
+    WHERE project_id = ${input.projectId}
       AND node_id = ${input.nodeId}
       AND participant_id = ${input.participantId}
       AND user_id = ${input.userId}

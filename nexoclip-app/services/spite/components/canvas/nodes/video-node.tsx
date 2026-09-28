@@ -517,6 +517,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           setGenerationId(null)
           updatePersistedNodeData((currentData) => ({
             ...completeGenerationNode(currentData, completedUrl),
+            ...(currentData.draftMode ? { lastGenerationId: reqId } : {}),
             generationId: undefined,
           }))
           clearPending()
@@ -1022,6 +1023,28 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const feedbackFrameStyle = feedbackState.isRegenerating || feedbackState.isFailedRegeneration ? feedbackState.frameStyle : {}
 
   // Build options from current model's config
+  const finalizeDraft = async () => {
+    const draftGenerationId = (data.lastGenerationId as string | undefined) || durableGenerationId
+    if (!draftGenerationId || !draftMode || status !== 'completed') return
+    setStatus('submitting')
+    setError(null)
+    try {
+      const response = await fetch(withBasePath('/api/generate/finalize-draft'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, nodeId: id, generationId: draftGenerationId }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.generation?.id) throw new Error(payload.error || 'Draft finalization failed')
+      setGenerationId(payload.generation.id)
+      setStatus(payload.generation.status === 'queued' ? 'in_queue' : 'in_progress')
+      setSubmittedAt(Date.now())
+      patchPersistedNodeData({ generationId: payload.generation.id, generationStatus: payload.generation.status, status: payload.generation.status === 'queued' ? 'in_queue' : 'in_progress', draftMode: false, resolution: '1080p', generationError: null, error: null, submittedAt: Date.now() })
+    } catch (error) {
+      setStatus('failed')
+      setError(error instanceof Error ? error.message : 'Draft finalization failed')
+    }
+  }
+
   const modelOptions = VIDEO_MODELS.map(m => ({ value: m.id, label: m.name }))
   const durationOptions = currentModel?.durations?.map(d => ({ value: d, label: d })) || []
   const resolutionOptions = currentModel?.resolutions?.map(r => ({ value: r, label: r })) || []
@@ -1423,7 +1446,13 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           
           {/* Submitted durable jobs cannot be safely cancelled locally; keep
               their node state aligned with the provider until completion. */}
-          {isGenerating ? null : status === 'failed' && generationId ? (
+          {isGenerating ? null : status === 'completed' && draftMode && durableGenerationId ? (
+            <button
+              onClick={finalizeDraft}
+              className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
+              title="Render this Draft at 1080p"
+            >Render 1080p</button>
+          ) : status === 'failed' && generationId ? (
             <button
               onClick={handleRecheck}
               className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"

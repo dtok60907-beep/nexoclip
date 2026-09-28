@@ -8,7 +8,7 @@ import { createCanvasAuthorizationActionDigest, verifyCanvasAuthorization } from
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 
-const ACTIONS = new Set(['submit', 'status']);
+const ACTIONS = new Set(['submit', 'status', 'finalize-draft']);
 const KINDS = new Set(['image', 'video']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -79,6 +79,23 @@ export function createInternalGenerationHandler({
       return Response.json({ error: 'Invalid internal generation request' }, { status: 400 });
     }
     const generation = await getGeneration(workspace.id, body.generationId, loadStorage());
+    if (body.action === 'finalize-draft') {
+      if (!generation || generation.kind !== 'video' || generation.status !== 'succeeded' || !generation.provider_request_id || !/seedance-2\.5/i.test(generation.model || '')) {
+        return Response.json({ error: 'A completed Seedance 2.5 draft is required' }, { status: 422 });
+      }
+      const pool = loadPool();
+      const finalGeneration = await reserve(pool, workspace.id, {
+        kind: 'video',
+        prompt: generation.prompt,
+        model: generation.model,
+        parameters: { resolution: '1080p', draftTaskId: generation.provider_request_id },
+        idempotencyKey: `draft-final:${generation.id}`,
+        projectId: null,
+      }, { userId: body.userId, allowLegacyCanvasReferences: true });
+      try { await publish({ pool, kind: 'video' }); }
+      catch (error) { logError({ event: 'generation_publication_deferred', generationId: finalGeneration.id, errorName: error?.name || 'Error', errorCode: error?.code || null }); }
+      return Response.json({ generation: finalGeneration }, { status: 201 });
+    }
     if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
     return Response.json({ generation: canvasGeneration(generation, workspace.id) });
   };

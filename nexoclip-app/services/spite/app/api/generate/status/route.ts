@@ -75,6 +75,7 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
         generationId: generation.id,
         generationStatus: patch?.generationStatus ?? (generation.status === 'queued' ? 'queued' : 'processing'),
         ...(outputUrl ? { outputUrl } : {}),
+        ...((generation.providerRequestId || (generation as unknown as { provider_request_id?: string }).provider_request_id) ? { providerRequestId: generation.providerRequestId || (generation as unknown as { provider_request_id?: string }).provider_request_id } : {}),
         ...(error ? { error } : {}),
       })
     } catch (error: any) {
