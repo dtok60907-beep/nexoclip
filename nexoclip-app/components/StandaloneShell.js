@@ -28,7 +28,6 @@ const RecastStudio = studioLazy('RecastStudio');
 const CinemaStudio = studioLazy('CinemaStudio');
 const AudioStudio = studioLazy('AudioStudio');
 const MarketingStudio = studioLazy('MarketingStudio');
-const WorkflowStudio = studioLazy('WorkflowStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
@@ -145,7 +144,7 @@ const TABS = [
     )
   },
   {
-    id: 'workflows',
+    id: 'canvas',
     label: 'Canvas',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -266,7 +265,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
   // Initialize activeTab from URL slug/params or default to 'image'
   const getInitialTab = () => {
-    if (idFromParams || slug.includes('workflow')) return 'workflows';
+    if (idFromParams || slug.includes('workflow') || slug.includes('canvas')) return 'canvas';
     if (initialTab) return initialTab;
     const firstSegment = slug[0];
     if (firstSegment && TABS.find(t => t.id === firstSegment)) return firstSegment;
@@ -453,7 +452,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
   // Auto-hide header when inside a specific workflow view
   useEffect(() => {
-    const isEditingWorkflow = (activeTab === 'workflows' || !!idFromParams) && urlWorkflowId;
+    const isEditingWorkflow = (activeTab === 'canvas' || !!idFromParams) && urlWorkflowId;
 
     if (isEditingWorkflow) {
       setIsHeaderVisible(false);
@@ -466,7 +465,7 @@ export default function StandaloneShell({ initialTab, children }) {
   useEffect(() => {
     const fromBuilder = sessionStorage.getItem("fromWorkflowBuilder");
 
-    if (fromBuilder && activeTab !== 'workflows') {
+    if (fromBuilder && activeTab !== 'canvas') {
       sessionStorage.removeItem("fromWorkflowBuilder");
       window.location.reload();
     }
@@ -742,7 +741,7 @@ export default function StandaloneShell({ initialTab, children }) {
                   <>
                     <div className={`space-y-0.5 ${isCollapsed ? 'mb-1' : 'mb-3 pb-3 border-b border-white/[0.06]'}`}>
                       {(() => {
-                        const canvasTab = TABS.find((item) => item.id === 'workflows');
+                        const canvasTab = TABS.find((item) => item.id === 'canvas');
                         if (!canvasTab) return null;
                         return (
                           <a
@@ -834,16 +833,13 @@ export default function StandaloneShell({ initialTab, children }) {
             <MarketingStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
           </div>
         )}
-        {activeTab === 'workflows' && (
-          <div className="h-full w-full">
-            <WorkflowStudio
-              apiKey={apiKey}
-              isHeaderVisible={isHeaderVisible}
-              onToggleHeader={setIsHeaderVisible}
-              onGenerationStart={makeGenerationStartCallback('workflows')}
-              onGenerationEnd={makeGenerationEndCallback('workflows')}
-              onGenerationComplete={makeSuccessCallback('workflows')}
-              onGenerationError={makeErrorCallback('workflows')}
+        {activeTab === 'canvas' && (
+          <div className="h-full w-full bg-black">
+            <iframe
+              title="Canvas"
+              src={SPITE_URL}
+              className="h-full w-full border-0"
+              allow="clipboard-read; clipboard-write"
             />
           </div>
         )}
