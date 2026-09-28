@@ -192,9 +192,8 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   const isExtend = settings.omniReferenceTaskType === 'extend'
   const requestedRatio = typeof settings.aspectRatio === 'string' ? settings.aspectRatio : ''
   if (isSeedance25) {
-    if (requestedRatio && requestedRatio !== 'adaptive' && (isExtend || settings.draft === true)) {
-      throw Object.assign(new Error('Seedance 2.5 extend/draft requires ratio adaptive.'), { status: 400 })
-    }
+    // Draft and extend always use adaptive ratio. Normalize stale clients rather
+    // than rejecting requests created before the Canvas control was added.
   } else if (requestedRatio && requestedRatio !== '9:16') {
     throw Object.assign(new Error('Video generation is portrait-only (9:16).'), { status: 400 })
   }

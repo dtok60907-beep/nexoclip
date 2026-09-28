@@ -156,7 +156,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [colormap, setColormap] = useState<string>((data.colormap as string) || 'grayscale')
   const [modelId, setModelId] = useState((data.modelId as string) || 'seedance-1.5')
   const [duration, setDuration] = useState((data.duration as string) || '')
-  const [aspectRatio, setAspectRatio] = useState('9:16')
+  const [aspectRatio, setAspectRatio] = useState((data.aspectRatio as string) || '9:16')
   const [resolution, setResolution] = useState((data.resolution as string) || '')
   const [enableAudio, setEnableAudio] = useState((data.enableAudio as boolean | undefined) ?? true)
   const [draftMode, setDraftMode] = useState((data.draftMode as boolean) || false)
@@ -266,7 +266,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setColormap((data.colormap as string) || 'grayscale')
     setModelId((data.modelId as string) || 'seedance-1.5')
     setDuration((data.duration as string) || '')
-    setAspectRatio('9:16')
+    setAspectRatio((data.aspectRatio as string) || '9:16')
     setResolution((data.resolution as string) || '')
     setEnableAudio((data.enableAudio as boolean | undefined) ?? true)
     setDraftMode((data.draftMode as boolean) || false)
@@ -1308,7 +1308,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               onChange={(value) => {
                 syncGuardRef.current.beginUserEdit()
                 const nextModel = getModelById(value)
-                const nextAspectRatio = '9:16'
+                const nextAspectRatio = nextModel?.defaultAspectRatio || '9:16'
                 const nextDuration = nextModel?.defaultDuration || ''
                 const nextResolution = nextModel?.defaultResolution || ''
                 setModelId(value)
@@ -1366,6 +1366,19 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               />
             )}
 
+            {currentModel?.supportsDraft && (
+              <ControlSelect
+                value={aspectRatio}
+                options={(currentModel.aspectRatios || []).map((ratio) => ({ value: ratio, label: ratio }))}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setAspectRatio(value)
+                  patchPersistedNodeData({ aspectRatio: value })
+                }}
+                disabled={isGenerating || draftMode || extendMode}
+              />
+            )}
+
             {/* Duration - only if model supports it */}
             {durationOptions.length > 0 && (
               <ControlSelect 
@@ -1386,8 +1399,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   syncGuardRef.current.beginUserEdit()
                   const next = !draftMode
                   setDraftMode(next)
-                  if (next) setExtendMode(false)
-                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode })
+                  if (next) {
+                    setExtendMode(false)
+                    setAspectRatio('adaptive')
+                  }
+                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
                 }}
                 disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${draftMode ? 'bg-amber-500/25 text-amber-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
@@ -1401,7 +1417,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   syncGuardRef.current.beginUserEdit()
                   const next = !extendMode
                   setExtendMode(next)
-                  if (next) setDraftMode(false)
+                  if (next) {
+                    setDraftMode(false)
+                    setAspectRatio('adaptive')
+                  }
                   patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
                 }}
                 disabled={isGenerating}
