@@ -131,6 +131,7 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_SPITE_URL: /canvas
+      SPITE_INTERNAL_URL: http://spite:3005
       CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-0}
       NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: ${NEXT_PUBLIC_CREDIT_MARKUP_PERCENT:-0}
       DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip

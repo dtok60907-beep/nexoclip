@@ -4,7 +4,14 @@ const nextConfig = {
   transpilePackages: ['studio', 'workflow-builder'],
   async rewrites() {
     const spiteUrl = process.env.SPITE_INTERNAL_URL || 'http://spite:3005';
-    return [{ source: '/canvas', destination: `${spiteUrl}/spite` }, { source: '/canvas/:path*', destination: `${spiteUrl}/spite/:path*` }];
+    // Keep the public URL as /canvas while forwarding to the same basePath
+    // that the Spite service was built with. Do not redirect or iframe it.
+    return {
+      beforeFiles: [
+        { source: '/canvas', destination: `${spiteUrl}/canvas` },
+        { source: '/canvas/:path*', destination: `${spiteUrl}/canvas/:path*` },
+      ],
+    };
   },
 };
 
