@@ -41,7 +41,7 @@ components:
       docker_args:
         NEXT_PUBLIC_BASE_PATH: /spite
         NEXT_PUBLIC_STUDIO_URL: https://studio.dev.cekat.ai/studio
-        NEXT_PUBLIC_REALTIME_URL: /spite/ws
+        NEXT_PUBLIC_REALTIME_URL: /canvas/ws
     deploy:
       charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-spite.yaml
 
