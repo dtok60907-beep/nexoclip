@@ -426,6 +426,10 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   const handleTabChange = useCallback((tabId) => {
+    if (tabId === 'canvas') {
+      window.location.assign('/canvas');
+      return;
+    }
     window.history.pushState(null, '', `/studio/${tabId}`);
     setActiveTab(tabId);
   }, []);
@@ -837,7 +841,7 @@ export default function StandaloneShell({ initialTab, children }) {
           <div className="h-full w-full bg-black">
             <iframe
               title="Canvas"
-              src={SPITE_URL}
+              src={`${SPITE_URL}?embedded=canvas`}
               className="h-full w-full border-0"
               allow="clipboard-read; clipboard-write"
             />
