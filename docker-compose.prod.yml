@@ -177,7 +177,7 @@ services:
       context: ./nexoclip-app/services/spite
       target: web
       args:
-        NEXT_PUBLIC_BASE_PATH: /spite
+        NEXT_PUBLIC_BASE_PATH: /canvas
         NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/canvas/ws}
     restart: unless-stopped
     environment:

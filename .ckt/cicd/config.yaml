@@ -39,7 +39,7 @@ components:
       docker_filepath: deploy/spite/Dockerfile.web
       docker_inject_runtime_env_during_build: true
       docker_args:
-        NEXT_PUBLIC_BASE_PATH: /spite
+        NEXT_PUBLIC_BASE_PATH: /canvas
         NEXT_PUBLIC_STUDIO_URL: https://studio.dev.cekat.ai/studio
         NEXT_PUBLIC_REALTIME_URL: /canvas/ws
     deploy:

@@ -231,7 +231,7 @@ services:
       context: ./nexoclip-app/services/spite
       target: web
       args:
-        NEXT_PUBLIC_BASE_PATH: /spite
+        NEXT_PUBLIC_BASE_PATH: /canvas
         NEXT_PUBLIC_STUDIO_URL: ${NEXT_PUBLIC_STUDIO_URL:-http://localhost/studio}
         NEXT_PUBLIC_REALTIME_URL: /canvas/ws
     container_name: nexoclip-spite

@@ -8,7 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
-ARG NEXT_PUBLIC_BASE_PATH=/spite
+ARG NEXT_PUBLIC_BASE_PATH=/canvas
 ARG NEXT_PUBLIC_STUDIO_URL=http://localhost:3000/studio
 ARG NEXT_PUBLIC_REALTIME_URL=/canvas/ws
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
