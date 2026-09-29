@@ -875,8 +875,20 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
   const minH = `${Math.max(1, rows) * 1.4}em`
 
   return (
-    <div className="relative">
-      <div className="relative">
+    // `flex-1` here (not just `h-full`) matters: our only sibling props
+    // inside the card (prompt-node's editorLockError banner and drag
+    // overlay) are `absolute`, so this is the sole participating flex
+    // item in the card's flex column. Without `flex-1` it collapses to
+    // content height instead of claiming the card's full height, which
+    // starves the scroll region below down to a sliver.
+    <div className="relative flex h-full min-h-0 flex-1 flex-col">
+      {/* Scroll boundary: the contentEditable below grows to its natural
+          content height with no cap of its own, so THIS wrapper — not the
+          editor div — must be the flexed, clipped element. Without it,
+          `flex-1`/overflow classes passed in via `className` land on the
+          editor (a non-flex-item three levels deep) and do nothing, so a
+          long prompt just spills out past the card's rounded border. */}
+      <div className="relative flex-1 min-h-0 overflow-y-auto custom-scrollbar">
         {/* contentEditable surface. */}
         <div
           ref={editorRef}
