@@ -58,14 +58,12 @@ import { BottomBar } from './bottom-bar'
 import { GenerationSettingsPanel } from './generation-settings-panel'
 import { SceneTimeline, type Shot } from './scene-timeline'
 import { AlignmentGuides, computeAlignmentGuides } from './alignment-guides'
-import { MapTrifold, X } from '@phosphor-icons/react'
+import { MapTrifold, X, ImageSquare, FilmSlate } from '@phosphor-icons/react'
 import { AddNodeMenu } from './add-node-menu'
 import { ImageNode } from './nodes/image-node'
 import { VideoNode } from './nodes/video-node'
 import { PromptNode } from './nodes/prompt-node'
 import { ReferenceNode } from './nodes/reference-node'
-import { CommentNode } from './nodes/comment-node'
-import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
 import { RealtimePresenceOverlay } from './realtime-presence'
 import { CanvasCollaborationProvider } from './canvas-collaboration'
@@ -78,8 +76,6 @@ const NODE_TYPES: NodeTypes = {
   videoGen: VideoNode,
   prompt: PromptNode,
   reference: ReferenceNode,
-  comment: CommentNode,
-  sticker: StickerNode,
   compress: CompressNode,
 }
 
@@ -208,8 +204,6 @@ function makeNode(
     prompt: `Prompt #${count}`,
     reference: `Reference Asset #${count}`,
     compress: `Compress #${count}`,
-    comment: '',
-    sticker: '',
   }
   return {
     id: makeId(),
@@ -232,45 +226,6 @@ const INITIAL_ASSETS: Asset[] = []
 
 // Clipboard buffer — lives outside component so it persists across re-renders
 let clipboardNodes: Node[] = []
-
-// Ghost sticker that follows the cursor during placement
-function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const onMove = (e: MouseEvent) => {
-      const rect = el.getBoundingClientRect()
-      setPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-    }
-    const onLeave = () => setPos(null)
-    el.addEventListener('mousemove', onMove)
-    el.addEventListener('mouseleave', onLeave)
-    return () => {
-      el.removeEventListener('mousemove', onMove)
-      el.removeEventListener('mouseleave', onLeave)
-    }
-  }, [containerRef])
-
-  if (!pos) return null
-
-  return (
-    <div
-      className="absolute pointer-events-none z-50 select-none"
-      style={{
-        left: pos.x,
-        top: pos.y,
-        transform: 'translate(-50%, -50%)',
-        fontSize: 32,
-        lineHeight: 1,
-        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))',
-      }}
-    >
-      {getLastSticker()}
-    </div>
-  )
-}
 
 function LegacyNoteCleanup() {
   const { allNodes, deleteNodes } = useCanvasCollaboration()
@@ -375,7 +330,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   )
 
   // Active tool state
-  const [activeTool, setActiveTool] = useState<'select' | 'hand' | 'cut' | 'sticker' | 'comment'>('select')
+  const [activeTool, setActiveTool] = useState<'select' | 'hand' | 'cut'>('select')
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -586,11 +541,119 @@ function CanvasInner({ projectId }: { projectId: string }) {
       })
     }
   }, [allowDocumentMutation, commands, updateNodeInternals])
-  
+
+  // Drag-to-disconnect: grabbing an edge's endpoint and dropping it either
+  // on another handle (reconnect) or empty canvas (detach) is the standard
+  // way to rewire node graphs. @xyflow/react v12 only enables this when
+  // `onReconnect` is supplied — without it, edges are otherwise immovable
+  // once drawn and the only way to remove one is to select it and press
+  // Delete, or use the cut tool. The ref tracks whether the drag ended on a
+  // valid handle; onReconnectEnd uses it to tell "dropped on a new target"
+  // apart from "dropped on empty space, detach it".
+  const edgeReconnectSuccessfulRef = useRef(true)
+
+  const onReconnectStart = useCallback(() => {
+    edgeReconnectSuccessfulRef.current = false
+  }, [])
+
+  const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    edgeReconnectSuccessfulRef.current = true
+    if (!allowDocumentMutation) return
+    if ((newConnection.source && lockedNodeIdsRef.current.has(newConnection.source))
+      || (newConnection.target && lockedNodeIdsRef.current.has(newConnection.target))) {
+      toast.error('This node is being edited by another collaborator')
+      return
+    }
+    if (!isValidConnection(newConnection)) {
+      const error = getConnectionError(newConnection.sourceHandle ?? null, newConnection.targetHandle ?? null)
+      toast.error(error, { description: 'These node types are not compatible', duration: 3000 })
+      return
+    }
+    commands.deleteEdge(oldEdge.id)
+    commands.connect(newConnection)
+    if (newConnection.source) updateNodeInternals(newConnection.source)
+    if (newConnection.target) updateNodeInternals(newConnection.target)
+  }, [allowDocumentMutation, commands, updateNodeInternals])
+
+  const onReconnectEnd = useCallback((_event: unknown, edge: Edge) => {
+    if (!edgeReconnectSuccessfulRef.current && allowDocumentMutation) {
+      commands.deleteEdge(edge.id)
+    }
+    edgeReconnectSuccessfulRef.current = true
+  }, [allowDocumentMutation, commands])
+
   const [minimapOpen, setMinimapOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flowPos: { x: number; y: number } } | null>(null)
   const { fitView, screenToFlowPosition, setCenter, getNodes } = useReactFlow()
   const flowRef = useRef<HTMLDivElement>(null)
+
+  // Drag-to-create: dragging a connection off an output handle and
+  // releasing it on empty canvas (instead of another handle) opens a small
+  // "what do you want here" menu instead of just dropping the connection.
+  // Picking one creates that node at the drop point and wires the original
+  // handle straight into it — no separate add-node-then-connect step.
+  const connectStartRef = useRef<{ nodeId: string; handleId: string | null; handleType: 'source' | 'target' | null } | null>(null)
+  const [pendingConnection, setPendingConnection] = useState<{
+    x: number
+    y: number
+    flowPos: { x: number; y: number }
+    sourceNodeId: string
+    sourceHandleId: string
+  } | null>(null)
+
+  const onConnectStart = useCallback((_event: unknown, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
+    connectStartRef.current = params.nodeId ? { nodeId: params.nodeId, handleId: params.handleId, handleType: params.handleType } : null
+  }, [])
+
+  const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
+    const start = connectStartRef.current
+    connectStartRef.current = null
+    // Only offer this for a drag that started on a source (output) handle —
+    // dragging from a target handle to empty space has no sensible "create
+    // and wire up" interpretation here.
+    if (!start || start.handleType !== 'source' || !start.handleId || !allowDocumentMutation) return
+    const target = event.target as HTMLElement
+    const droppedOnPane = target.classList?.contains('react-flow__pane')
+    if (!droppedOnPane) return
+    const point = 'changedTouches' in event ? event.changedTouches[0] : event
+    const flowPos = screenToFlowPosition({ x: point.clientX, y: point.clientY })
+    setPendingConnection({
+      x: point.clientX,
+      y: point.clientY,
+      flowPos,
+      sourceNodeId: start.nodeId,
+      sourceHandleId: start.handleId,
+    })
+  }, [allowDocumentMutation, screenToFlowPosition])
+
+  // Maps the handle the user dragged from to the target handle on the new
+  // node, per the same compatibility table isValidConnection enforces.
+  // video-out has no valid handle on an Image node at all, so that combo
+  // returns null and the caller skips offering "Image" for it.
+  const targetHandleFor = useCallback((sourceHandleId: string, newNodeType: 'imageGen' | 'videoGen'): string | null => {
+    if (sourceHandleId === 'prompt-out') return 'prompt-in'
+    if (sourceHandleId === 'image-out') return 'image-in'
+    if (sourceHandleId === 'video-out') return newNodeType === 'videoGen' ? 'video-in' : null
+    return null
+  }, [])
+
+  const handleCreateFromDrop = useCallback((newNodeType: 'imageGen' | 'videoGen') => {
+    if (!pendingConnection) return
+    const targetHandle = targetHandleFor(pendingConnection.sourceHandleId, newNodeType)
+    const newNode = makeNode(newNodeType, pendingConnection.flowPos, undefined, activeSceneId)
+    commands.createNode(newNode)
+    if (targetHandle) {
+      commands.connect({
+        source: pendingConnection.sourceNodeId,
+        sourceHandle: pendingConnection.sourceHandleId,
+        target: newNode.id,
+        targetHandle,
+      })
+      updateNodeInternals(pendingConnection.sourceNodeId)
+      updateNodeInternals(newNode.id)
+    }
+    setPendingConnection(null)
+  }, [pendingConnection, targetHandleFor, activeSceneId, commands, updateNodeInternals])
 
   const addNode = useCallback((type: string, flowPos?: { x: number; y: number }, initialData?: Record<string, any>) => {
     if (!allowDocumentMutation) return
@@ -1301,11 +1364,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
           onPatch={(nodeId, patch) => commands.patchNodeData(nodeId, patch)}
         />
 
-        {/* Ghost sticker that follows cursor when sticker tool is active */}
-        {activeTool === 'sticker' && (
-          <StickerGhost containerRef={flowRef} />
-        )}
-        
         {/* Filter nodes and edges to show only active scene */}
         {(() => {
           // Note: these computations are wrapped in useMemo above this JSX
@@ -1319,6 +1377,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onReconnect={onReconnect}
+              onReconnectStart={onReconnectStart}
+              onReconnectEnd={onReconnectEnd}
+              onConnectStart={onConnectStart}
+              onConnectEnd={onConnectEnd}
+              edgesReconnectable={allowDocumentMutation && activeTool === 'select'}
               nodesDraggable={allowDocumentMutation && activeTool === 'select'}
               nodesConnectable={allowDocumentMutation && activeTool === 'select'}
               isValidConnection={isValidConnection}
@@ -1330,22 +1394,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 // Peers see it through awareness and their wrapper becomes
                 // pointer-events:none; server lease remains the mutation gate.
                 presenceControllerRef.current?.startDragLock(node.id)
-                window.dispatchEvent(new Event('closeStickerPickers'))
               }}
-              onPaneClick={(e) => {
+              onPaneClick={() => {
                 // Leaving a node releases its transient interaction lock.
                 presenceControllerRef.current?.stopDragLock()
                 setSettingsNodeId(null)
-                // Always close any open sticker pickers
-                window.dispatchEvent(new Event('closeStickerPickers'))
-
-                // Place sticker or comment if tool is active
-                if (allowDocumentMutation && (activeTool === 'sticker' || activeTool === 'comment')) {
-                  const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-                  addNode(activeTool, flowPos)
-                  setActiveTool('select')
-                  return
-                }
                 // Default: deselect all
                 setSelectedNodeIds([])
               }}
@@ -1368,11 +1421,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
               minZoom={0.1}
               maxZoom={4}
               className="spite-react-flow"
-              style={{ 
+              style={{
                 background: '#0c0d12',
-                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' ? 'crosshair' :
-                       activeTool === 'sticker' ? 'none' :
-                       activeTool === 'comment' ? 'copy' : 'default'
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' ? 'crosshair' : 'default'
               }}
               proOptions={{ hideAttribution: true }}
               // Keep nodes mounted while they are off-screen. Generator polling,
@@ -1495,6 +1546,48 @@ function CanvasInner({ projectId }: { projectId: string }) {
           />
         </>
       )}
+
+      {/* Drag-off-a-handle-onto-empty-canvas menu: pick what the dropped
+          edge should connect to. Only offers node types the source handle
+          can actually wire into (see targetHandleFor). */}
+      {pendingConnection && (() => {
+        const canImage = targetHandleFor(pendingConnection.sourceHandleId, 'imageGen') !== null
+        const canVideo = targetHandleFor(pendingConnection.sourceHandleId, 'videoGen') !== null
+        return (
+          <>
+            <div
+              className="pointer-events-none fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPendingConnection(null)
+              }}
+            />
+            <div
+              className="fixed z-50 flex flex-col gap-0.5 rounded-xl border border-white/10 bg-[#12141c]/98 p-1 shadow-2xl backdrop-blur-xl"
+              style={{ left: pendingConnection.x, top: pendingConnection.y, transform: 'translate(-50%, 8px)' }}
+            >
+              {canImage && (
+                <button
+                  onClick={() => handleCreateFromDrop('imageGen')}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-slate-200 hover:bg-white/[0.08]"
+                >
+                  <ImageSquare size={15} className="text-cyan-400" />
+                  Image Generator
+                </button>
+              )}
+              {canVideo && (
+                <button
+                  onClick={() => handleCreateFromDrop('videoGen')}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-slate-200 hover:bg-white/[0.08]"
+                >
+                  <FilmSlate size={15} className="text-indigo-400" />
+                  Video Generator
+                </button>
+              )}
+            </div>
+          </>
+        )
+      })()}
       </div>
     </CanvasCollaborationProvider>
   )

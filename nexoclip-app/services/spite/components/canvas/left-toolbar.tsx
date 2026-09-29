@@ -33,8 +33,6 @@ import {
 import {
   Plus,
   Scissors,
-  Smiley,
-  ChatCircle,
   ArrowCounterClockwise,
   ArrowClockwise,
   User,
@@ -83,8 +81,6 @@ const TOOLS = [
   { id: 'hand', icon: Hand, label: 'Hand — pan canvas only' },
   { id: 'add', icon: Plus, label: 'Add node' },
   { id: 'cut', icon: Scissors, label: 'Cut connections' },
-  { id: 'sticker', icon: Smiley, label: 'Add sticker' },
-  { id: 'comment', icon: ChatCircle, label: 'Add comment' },
 ] as const
 
 const ASSET_CATEGORIES: { id: AssetCategory; icon: typeof User; label: string; color: string }[] = [
@@ -153,7 +149,7 @@ function TrustForSeedance({
 
 interface LeftToolbarProps {
   onAddNode?: (type: string) => void
-  onSetTool?: (tool: 'select' | 'hand' | 'cut' | 'sticker' | 'comment') => void
+  onSetTool?: (tool: 'select' | 'hand' | 'cut') => void
   activeTool?: string
   onUndo?: () => void
   onRedo?: () => void
@@ -2162,8 +2158,6 @@ export function LeftToolbar({
               if (tool.id === 'cut' && onSetTool) onSetTool('cut')
               if (tool.id === 'select' && onSetTool) onSetTool('select')
               if (tool.id === 'hand' && onSetTool) onSetTool('hand')
-              if (tool.id === 'sticker' && onSetTool) onSetTool('sticker')
-              if (tool.id === 'comment' && onSetTool) onSetTool('comment')
             }}
             className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
               activeTool === tool.id

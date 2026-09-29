@@ -288,7 +288,16 @@ class PresenceController {
   }
 
   private publishLock(nodeId: string): void {
-    this.writeField('lock', { nodeId })
+    // `readActiveLock` (below) already knows how to expire a stale lock —
+    // but only if we actually send `expiresAt`. Without it, a peer that
+    // disconnects mid-drag (tab closed, network drop, crash) before
+    // stopDragLock() can fire leaves its last-published `{ nodeId }` lock
+    // sitting in shared awareness state forever, and every other client
+    // reads that node as permanently held by someone else — exactly the
+    // "sometimes I just can't drag this node" reports. 3x the heartbeat
+    // interval gives normal jitter room to breathe while still clearing a
+    // truly dead peer's lock quickly.
+    this.writeField('lock', { nodeId, expiresAt: this.now() + this.heartbeatMs * 3 })
   }
 
   private scheduleLockHeartbeat(): void {

@@ -7,6 +7,7 @@ import { ArrowLeft, Question } from '@phosphor-icons/react'
 import { ProjectCard } from './project-card'
 import { NewProjectCard } from './new-project-card'
 import { SearchBar } from './search-bar'
+import { DashboardHero } from './dashboard-hero'
 import { OnboardingTour } from './onboarding/use-onboarding-tour'
 import { VersionBadge } from './version-badge'
 import { startTour } from '@/lib/onboarding'
@@ -42,9 +43,13 @@ export function ProjectsDashboard() {
     )
   }, [search, projects])
 
-  // Flow projects open the simple generation thread, not the canvas, so they get
-  // their own section instead of sitting among the canvas projects. Anything that
-  // isn't 'canvas' counts as Flow (so legacy 'mobile' rows still group correctly).
+  // Flow (the linear prompt→result thread) is no longer offered as a
+  // creation option — Canvas is the only project type this dashboard lets
+  // you start. Projects already created as Flow before that change still
+  // need somewhere to live, so they get their own small read-only section
+  // below (no "New Flow" card) instead of disappearing. Anything that
+  // isn't 'canvas' counts as Flow (so legacy 'mobile' rows still group
+  // correctly).
   const canvasProjects = useMemo(() => filtered.filter((p) => (p.origin ?? 'canvas') === 'canvas'), [filtered])
   const flowProjects = useMemo(() => filtered.filter((p) => (p.origin ?? 'canvas') !== 'canvas'), [filtered])
 
@@ -74,9 +79,20 @@ export function ProjectsDashboard() {
     <>
       {/* Brand background: ozone gradient base + film grain overlay,
           both fixed-position so the atmosphere stays consistent as the
-          project grid scrolls. Mirrors the login page. */}
+          project grid scrolls. Mirrors the login page. The dot-grid sits
+          on top of those two — it's the same pattern the hero uses, but
+          spans the whole page (not just the hero) so scrolling into the
+          project grid doesn't hit a visible seam where the pattern stops. */}
       <div className="spite-ozone-bg fixed inset-0 z-0 pointer-events-none" aria-hidden="true" />
       <div className="spite-grain" aria-hidden="true" />
+      <div
+        className="fixed inset-0 z-[1] pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(107,143,168,0.14) 1.2px, transparent 1.2px)',
+          backgroundSize: '24px 24px',
+        }}
+        aria-hidden="true"
+      />
 
       <div className="relative z-10 min-h-screen">
         {/* Header */}
@@ -96,40 +112,52 @@ export function ProjectsDashboard() {
                 <SearchBar value={search} onChange={setSearch} />
               </div>
 
-              {/* Build marker + replay the tour */}
+              {/* Build marker. The tour is triggered from "Panduan Singkat"
+                  in the section header below instead of duplicating an
+                  icon-only entry point here. */}
               <div className="shrink-0 flex items-center justify-end gap-2">
                 <VersionBadge />
-                <button
-                  onClick={() => startTour('dashboard')}
-                  aria-label="Take the tour"
-                  title="Take the tour"
-                  className="flex items-center justify-center w-8 h-8 rounded-lg glass-hover text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Question size={16} weight="regular" />
-                </button>
               </div>
             </div>
           </div>
         </header>
 
+        {/* Decorative node-graph hero — full-bleed like the canvas it
+            represents, not boxed into the article-width column below.
+            Hidden while searching so results aren't pushed off-screen. */}
+        {!search && (
+          <div data-tour="hero">
+            <DashboardHero />
+          </div>
+        )}
+
         {/* Main content */}
         <main className="max-w-6xl mx-auto px-6 md:px-10 py-10">
-          {/* Section label — "Canvas" mode (the node graph), paired with the
-              "Flow" section below. While searching, show the result count. */}
-          <div className="flex items-baseline gap-3 mb-6">
+
+          {/* Section label. While searching, show the result count instead. */}
+          <div className="flex items-baseline justify-between gap-3 mb-6">
             {search ? (
               <p className="text-[11px] font-mono tracking-[0.18em] uppercase text-muted-foreground/70">
                 {filtered.length} result{filtered.length !== 1 ? 's' : ''} for &quot;{search}&quot;
               </p>
             ) : (
-              <>
+              <div className="flex items-baseline gap-3">
                 <p className="text-[11px] font-mono tracking-[0.18em] uppercase text-muted-foreground/70">
-                  Canvas
+                  Semua Kanvas
                 </p>
                 <span className="text-[10px] font-mono text-muted-foreground/40">
                   {canvasProjects.length} · node canvas{canvasProjects.length !== 1 ? 'es' : ''}
                 </span>
-              </>
+              </div>
+            )}
+            {!search && (
+              <button
+                onClick={() => startTour('dashboard')}
+                className="flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground hover:text-accent transition-colors"
+              >
+                <Question size={12} weight="regular" />
+                Panduan Singkat
+              </button>
             )}
           </div>
 
@@ -174,21 +202,22 @@ export function ProjectsDashboard() {
             )}
           </div>
 
-          {/* Flow — the simple, linear prompt→result generation mode. These open
-              the generation thread instead of the canvas. Shown whenever there are
-              Flow projects, or always (with just the New card) when not searching. */}
-          {(flowProjects.length > 0 || !search) && (
+          {/* Flow — the simple, linear prompt→result generation mode. No longer
+              offered as something you can start (Canvas is the only creation
+              option now), so there's no "New Flow" card here — this section
+              is just a landing spot for projects that were already Flow
+              before that change, and disappears entirely once none are left. */}
+          {flowProjects.length > 0 && (
             <section className="mt-12">
               <div className="flex items-baseline gap-3 mb-6">
                 <p className="text-[11px] font-mono tracking-[0.18em] uppercase text-muted-foreground/70">
                   Flow
                 </p>
                 <span className="text-[10px] font-mono text-muted-foreground/40">
-                  {flowProjects.length} · generation thread{flowProjects.length !== 1 ? 's' : ''}
+                  {flowProjects.length} · generation thread{flowProjects.length !== 1 ? 's' : ''} (lama)
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {!search && <div data-tour="new-flow"><NewProjectCard origin="flow" onCreated={handleProjectCreated} /></div>}
                 {flowProjects.map((project) => (
                   <ProjectCard
                     key={project.id}

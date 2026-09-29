@@ -46,6 +46,13 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
   const [nodeHeight, setNodeHeight] = useState(typeof data.height === 'number' ? data.height : 500)
   const nodeHeightRef = useRef(nodeHeight)
+  // Mirrors nodeHeight: width must also be driven by local state during a
+  // resize drag. Reading it straight from `data.width` (as this used to)
+  // only updates once the resize is persisted and echoes back through the
+  // collaboration round-trip, which is why dragging looked frozen until
+  // mouseup.
+  const [nodeWidth, setNodeWidth] = useState(typeof data.width === 'number' ? data.width : 620)
+  const nodeWidthRef = useRef(nodeWidth)
   const { folders, refresh: refreshFolders } = useProjectFolders(projectId)
   const { patchNodeData, persistenceStatus } = useCanvasCollaboration()
   const readOnly = persistenceStatus === 'READ_ONLY'
@@ -114,6 +121,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     setNodeHeight(data.height)
   }, [data.height])
 
+  useEffect(() => {
+    if (typeof data.width !== 'number' || data.width === nodeWidthRef.current) return
+    nodeWidthRef.current = data.width
+    setNodeWidth(data.width)
+  }, [data.width])
+
   const handleContentHeightChange = useCallback((contentHeight: number) => {
     const desiredHeight = Math.max(180, Math.min(900, Math.ceil(contentHeight + 8)))
     if (desiredHeight <= nodeHeightRef.current + 2) return
@@ -138,25 +151,52 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   }, [id, patchNodeData, readOnly])
 
   const participantIdRef = useRef<string | null>(null)
+  // Status, not just ok/fail: callers need to tell "someone else genuinely
+  // holds the lock" (409 — real conflict) apart from a transient failure
+  // (network blip, auth-check timeout, db hiccup — anything else). Losing
+  // that distinction is what made the heartbeat below kick people out of
+  // an in-progress edit on a single flaky request.
   const sendEditorLock = useCallback(async (action: 'claim' | 'heartbeat' | 'release') => {
-    if (!projectId) return false
+    if (!projectId) return { ok: false, status: 0 }
     const participantId = participantIdRef.current ?? getOrCreateParticipantHint()
     participantIdRef.current = participantId
-    const response = await fetch(withBasePath(`/api/projects/${encodeURIComponent(projectId)}/prompt-editor-lock`), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, nodeId: id, participantId }),
-    })
-    return response.ok
+    try {
+      const response = await fetch(withBasePath(`/api/projects/${encodeURIComponent(projectId)}/prompt-editor-lock`), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, nodeId: id, participantId }),
+      })
+      return { ok: response.ok, status: response.status }
+    } catch {
+      // Network-level failure (offline, DNS hiccup, etc.) — same "transient,
+      // not a real conflict" bucket as a 5xx.
+      return { ok: false, status: 0 }
+    }
   }, [id, projectId])
 
   useEffect(() => {
     if (!editing) return
+    // Lease is 15s server-side (NODE_LOCK_LEASE_SECONDS in
+    // lib/prompt-editor-lock.ts) and we poll every 5s, i.e. up to two
+    // heartbeats can be lost before the lock actually expires. Only bail
+    // out of editing on a definitive 409 (another participant holds it) or
+    // once we've burned through that margin — not on the first blip.
+    let consecutiveFailures = 0
     const heartbeat = window.setInterval(() => {
-      void sendEditorLock('heartbeat').then((locked) => {
-        if (!locked) {
+      void sendEditorLock('heartbeat').then(({ ok, status }) => {
+        if (ok) {
+          consecutiveFailures = 0
+          return
+        }
+        if (status === 409) {
           setEditorLockError('Editor lock expired. Please open the node again.')
+          setEditing(false)
+          return
+        }
+        consecutiveFailures += 1
+        if (consecutiveFailures >= 3) {
+          setEditorLockError('Losing connection to the editor lock. Please open the node again.')
           setEditing(false)
         }
       })
@@ -193,8 +233,13 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     setClaimingEditorLock(true)
     setEditorLockError(null)
     try {
-      if (!(await sendEditorLock('claim'))) {
-        setEditorLockError('Prompt ini sedang diedit oleh user lain.')
+      const { ok, status } = await sendEditorLock('claim')
+      if (!ok) {
+        setEditorLockError(
+          status === 409
+            ? 'Prompt ini sedang diedit oleh user lain.'
+            : 'Tidak bisa mengunci editor (koneksi bermasalah). Coba lagi.',
+        )
         return
       }
       void refreshFolders()
@@ -213,7 +258,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     <div
       className="relative group"
       style={{
-        width: typeof data.width === 'number' ? data.width : 620,
+        width: nodeWidth,
         height: nodeHeight,
       }}
     >
@@ -225,8 +270,20 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
         maxHeight={900}
         lineStyle={{ borderColor: '#1597ff', borderWidth: 1 }}
         handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9 }}
-        onResizeEnd={(_, params) => {
+        onResize={(_, params) => {
+          // Live drag feedback: update local state on every frame so the
+          // card tracks the pointer. Not persisted here — patchNodeData on
+          // every mousemove would spam the collaboration channel; that only
+          // happens once, below, when the gesture ends.
+          nodeWidthRef.current = params.width
           nodeHeightRef.current = params.height
+          setNodeWidth(params.width)
+          setNodeHeight(params.height)
+        }}
+        onResizeEnd={(_, params) => {
+          nodeWidthRef.current = params.width
+          nodeHeightRef.current = params.height
+          setNodeWidth(params.width)
           setNodeHeight(params.height)
           patchNodeData(id, { width: params.width, height: params.height })
         }}
@@ -247,7 +304,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       {/* Card content */}
       <div
         ref={cardRef}
-        className={`relative flex h-full w-full flex-col overflow-visible rounded-xl border bg-[#161a22] transition-all duration-200 ${selected ? 'border-transparent' : 'border-[#2b313e]'}`}
+        className={`relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-[#161a22] transition-all duration-200 ${selected ? 'border-transparent' : 'border-[#2b313e]'}`}
         style={{ boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.7)' }}
       >
         <MentionTextarea
