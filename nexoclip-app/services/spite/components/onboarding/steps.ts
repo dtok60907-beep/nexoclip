@@ -63,7 +63,7 @@ export const TOURS: Record<TourSurface, TourStep[]> = {
     {
       target: '[data-tour="left-toolbar"]',
       title: 'Your tools',
-      body: 'Select, add nodes, cut connections, drop stickers and comments — all from this strip.',
+      body: 'Select, add nodes, cut connections — all from this strip.',
     },
     {
       target: '[data-tour="tool-add"]',

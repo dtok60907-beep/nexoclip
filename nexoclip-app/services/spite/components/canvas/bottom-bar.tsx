@@ -4,7 +4,6 @@ import {
   ArrowClockwise,
   ArrowCounterClockwise,
   ArrowsOut,
-  ChatCircle,
   ClockCounterClockwise,
   CornersOut,
   Cursor,
@@ -17,14 +16,14 @@ import {
   Package,
   Plus,
   Scissors,
-  Smiley,
+  Target,
   TextT,
   UploadSimple,
   User,
 } from '@phosphor-icons/react'
 import { useReactFlow, useViewport } from '@xyflow/react'
 
-type CanvasTool = 'select' | 'hand' | 'cut' | 'sticker' | 'comment'
+type CanvasTool = 'select' | 'hand' | 'cut'
 type AssetAction = 'history' | 'upload' | 'characters' | 'props' | 'locations' | 'general'
 
 interface BottomBarProps {
@@ -72,8 +71,6 @@ export function BottomBar({
     { id: 'select', icon: Cursor, label: 'Cursor — interact with nodes' },
     { id: 'hand', icon: Hand, label: 'Hand — pan canvas only' },
     { id: 'cut', icon: Scissors, label: 'Cut connections' },
-    { id: 'sticker', icon: Smiley, label: 'Add sticker' },
-    { id: 'comment', icon: ChatCircle, label: 'Add comment' },
   ]
 
   return (
@@ -106,8 +103,12 @@ export function BottomBar({
       </div>
 
       <div className="pointer-events-none absolute bottom-5 left-5 right-5 z-20 flex items-end justify-between">
-        <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/[0.09] bg-[#12141c]/95 px-2.5 py-1.5 shadow-xl backdrop-blur-xl"><ArrowsOut size={12} className="text-slate-400" /><span className="text-[11px] font-mono text-slate-400">Canvas {page}</span></div>
-        <button onClick={onRecenter} className="pointer-events-auto hidden" aria-label="Recenter canvas" />
+        <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/[0.09] bg-[#12141c]/95 px-2.5 py-1.5 shadow-xl backdrop-blur-xl">
+          <ArrowsOut size={12} className="text-slate-400" />
+          <span className="text-[11px] font-mono text-slate-400">Canvas {page}</span>
+          <div className="mx-1 h-3.5 w-px bg-white/10" />
+          <button onClick={onRecenter} className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-white/[0.08] hover:text-slate-200" title="Recenter canvas" aria-label="Recenter canvas"><Target size={13} /></button>
+        </div>
         <div className="pointer-events-auto"><ZoomReadout /></div>
       </div>
     </>
