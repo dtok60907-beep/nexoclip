@@ -20,7 +20,7 @@
 
 		handle /canvas/api/workspace-assets* {
 			uri replace /canvas/api/workspace-assets /api/assets
-			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip:3000}
+			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}
 
 		handle /canvas/ws* {
@@ -38,7 +38,7 @@
 		# Backward compatibility for old bookmarks; new navigation uses /canvas.
 		handle /spite/api/workspace-assets* {
 			uri replace /spite/api/workspace-assets /api/assets
-			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip:3000}
+			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}
 
 		handle /spite/ws* {
@@ -50,7 +50,7 @@
 		}
 
 		handle {
-			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip:3000}
+			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}
 	}
 }
