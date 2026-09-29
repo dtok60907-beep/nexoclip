@@ -236,17 +236,23 @@ export function resolveRealtimeWebsocketUrl(locationLike = globalThis.location):
   const configuredUrl = process.env.NEXT_PUBLIC_REALTIME_URL?.trim()
   if (configuredUrl) {
     try {
-      return new URL(configuredUrl).toString()
+      const configured = locationLike
+        ? new URL(configuredUrl, locationLike.href)
+        : new URL(configuredUrl)
+      configured.protocol = configured.protocol === 'https:' ? 'wss:'
+        : configured.protocol === 'http:' ? 'ws:'
+          : configured.protocol
+      return configured.toString()
     } catch {
       // Fall back to the deployment's same-origin websocket proxy.
     }
   }
 
   if (!locationLike) {
-    return withBasePath('/spite/ws')
+    return withBasePath('/ws')
   }
 
-  const base = new URL(withBasePath('/spite/ws'), locationLike.href)
+  const base = new URL(withBasePath('/ws'), locationLike.href)
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:'
   return base.toString()
 }

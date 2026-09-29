@@ -26,6 +26,20 @@ test('accepts owned legacy Canvas references only for the signed internal bridge
   assert.deepEqual(validateVideoGenerationInput(input, { allowLegacyCanvasReferences: true }).parameters, input.parameters);
 });
 
+test('preserves a validated Canvas project trust scope', () => {
+  const canvasProjectId = '11111111-1111-4111-8111-111111111111';
+  const result = validateVideoGenerationInput({
+    kind: 'video', prompt: 'A fox runs', model: 'bytedance/seedance-2.5',
+    parameters: { canvasProjectId },
+  });
+
+  assert.equal(result.parameters.canvasProjectId, canvasProjectId);
+  assert.throws(() => validateVideoGenerationInput({
+    kind: 'video', prompt: 'A fox runs', model: 'bytedance/seedance-2.5',
+    parameters: { canvasProjectId: 'not-a-project-id' },
+  }), /Canvas project id is invalid/);
+});
+
 test('rejects unsafe video reference URLs', () => {
   assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: 'bytedance/seedance-2.0', parameters: { referenceVideos: ['https://untrusted.example/video.mp4'] } }), /reference/i);
   assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: 'bytedance/seedance-2.0', parameters: { referenceVideos: ['https://untrusted.example/video.mp4'] } }, { allowLegacyCanvasReferences: true }), /reference/i);

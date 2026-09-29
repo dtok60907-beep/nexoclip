@@ -250,7 +250,8 @@ services:
   image-worker:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: worker
     command: ["node", "src/queue/imageWorker.mjs"]
     restart: unless-stopped
@@ -264,6 +265,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY}
+      BYTEPLUS_API_KEY_ID: ${BYTEPLUS_API_KEY_ID:-}
+      BYTEPLUS_API_KEY_SECRET: ${BYTEPLUS_API_KEY_SECRET:-}
+      BYTEPLUS_ACCESS_KEY_ID: ${BYTEPLUS_ACCESS_KEY_ID}
+      BYTEPLUS_SECRET_ACCESS_KEY: ${BYTEPLUS_SECRET_ACCESS_KEY}
       BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL}
       BYTEPLUS_SEEDANCE_2_ENDPOINT: ${BYTEPLUS_SEEDANCE_2_ENDPOINT:-}
       BYTEPLUS_SEEDANCE_2_5_ENDPOINT: ${BYTEPLUS_SEEDANCE_2_5_ENDPOINT:-}
@@ -285,7 +290,8 @@ services:
   video-worker:
     platform: linux/amd64
     build:
-      context: ./nexoclip-app
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
       target: worker
     command: ["node", "src/queue/videoWorker.mjs"]
     restart: unless-stopped

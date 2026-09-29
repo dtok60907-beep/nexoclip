@@ -139,6 +139,7 @@ export async function listWorkspaceAssets(workspaceId, pool = getPool()) {
      FROM assets a
      LEFT JOIN byteplus_asset_links bal
        ON bal.workspace_id = a.workspace_id AND bal.local_asset_id = a.id
+      AND bal.canvas_project_id = 'workspace'
      WHERE a.workspace_id = $1 ORDER BY a.created_at DESC`,
     [workspaceId],
   );

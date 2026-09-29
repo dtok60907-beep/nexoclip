@@ -349,34 +349,6 @@ export function SceneTimeline({
         />
       </div>
 
-      {/* Active scene indicator + actions */}
-      <div className="flex items-center gap-2 px-4 py-1.5">
-        <button className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/5 transition-colors">
-          <div className="w-2 h-2 rounded-full bg-accent/60" />
-          <span className="text-[13px] font-mono text-foreground/80">
-            {scenes.find(s => s.id === activeSceneId)?.name || 'Scene 1'}
-          </span>
-          <CaretDown size={12} className="text-muted-foreground/60" />
-        </button>
-
-        <div className="ml-auto">
-          <button
-            data-tour="export"
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[12px] font-mono text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-wait"
-            title="Download every tagged shot across all scenes as a zip"
-          >
-            {exporting ? (
-              <CircleNotch size={13} weight="bold" className="animate-spin" />
-            ) : (
-              <DownloadSimple size={13} weight="bold" />
-            )}
-            <span>{exporting ? 'Exporting...' : 'Export shots'}</span>
-          </button>
-        </div>
-      </div>
-
       {/* Delete-scene confirmation modal. Backdrop closes (treats as
           cancel), escape key closes via the backdrop's onClick. The
           parent owns the actual deletion via onDeleteScene; we just

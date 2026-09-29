@@ -39,6 +39,7 @@ test('publishes a successfully reserved internal image generation', async () => 
   }));
 
   assert.equal(response.status, 201);
+  assert.equal(reservations[0][2].parameters.canvasProjectId, projectId);
   assert.deepEqual(reservations[0][3], { userId, allowLegacyCanvasReferences: true });
   assert.deepEqual(published, [{ pool: { id: 'pool' }, kind: 'image' }]);
 });

@@ -60,6 +60,7 @@ import {
   ShieldCheck,
   ArrowsOut,
   Cursor,
+  Hand,
   Check,
   Lifebuoy,
   CircleNotch,
@@ -78,7 +79,8 @@ export interface Asset {
 }
 
 const TOOLS = [
-  { id: 'select', icon: Cursor, label: 'Select' },
+  { id: 'select', icon: Cursor, label: 'Cursor — interact with nodes' },
+  { id: 'hand', icon: Hand, label: 'Hand — pan canvas only' },
   { id: 'add', icon: Plus, label: 'Add node' },
   { id: 'cut', icon: Scissors, label: 'Cut connections' },
   { id: 'sticker', icon: Smiley, label: 'Add sticker' },
@@ -151,7 +153,7 @@ function TrustForSeedance({
 
 interface LeftToolbarProps {
   onAddNode?: (type: string) => void
-  onSetTool?: (tool: 'select' | 'cut' | 'sticker' | 'comment') => void
+  onSetTool?: (tool: 'select' | 'hand' | 'cut' | 'sticker' | 'comment') => void
   activeTool?: string
   onUndo?: () => void
   onRedo?: () => void
@@ -352,38 +354,51 @@ export function LeftToolbar({
   const trustSelectedAsset = async () => {
     const asset = selectedGenAsset
     if (!asset || asset.type !== 'image' || asset.byteplus_trust?.status === 'processing') return
+    const removingTrust = asset.byteplus_trust?.status === 'active'
     if (trustRequestsRef.current.has(asset.id)) return
 
     trustRequestsRef.current.add(asset.id)
     setTrustingAssetIds(current => new Set(current).add(asset.id))
     let state: BytePlusTrustState
     try {
-      const imported = await importImageForTrust({
-        url: asset.r2_url,
-        filename: `${asset.prompt || 'canvas-image'}.png`,
-      })
-      setTrustState(asset.id, { status: 'processing' })
-      if (imported.canonicalUrl !== asset.r2_url) {
-        const linked = await fetch(withBasePath(`/api/assets/${encodeURIComponent(asset.id)}`), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ canonical_url: imported.canonicalUrl }),
+      if (removingTrust) {
+        const workspaceAssetId = workspaceAssetIdFromUrl(asset.r2_url)
+        if (!workspaceAssetId) throw new Error('Trusted asset identity is unavailable')
+        state = await requestBytePlusTrust(workspaceAssetId, 'DELETE', fetch, projectId)
+        if (state.status === 'failed') throw new Error('Could not remove trusted asset')
+      } else {
+        const imported = await importImageForTrust({
+          url: asset.r2_url,
+          filename: `${asset.prompt || 'canvas-image'}.png`,
         })
-        if (!linked.ok) throw new Error('Could not link this workspace image')
-        setSelectedGenAsset(current => current?.id === asset.id
-          ? { ...current, r2_url: imported.canonicalUrl }
-          : current)
-        mutateFolders(current => current?.map(folder => ({
-          ...folder,
-          assets: folder.assets.map(item => item.id === asset.id
-            ? { ...item, r2_url: imported.canonicalUrl }
-            : item),
-        })), { revalidate: false })
-        mutateAssets()
+        setTrustState(asset.id, { status: 'processing' })
+        if (imported.canonicalUrl !== asset.r2_url) {
+          const linked = await fetch(withBasePath(`/api/assets/${encodeURIComponent(asset.id)}`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ canonical_url: imported.canonicalUrl }),
+          })
+          if (!linked.ok) throw new Error('Could not link this workspace image')
+          setSelectedGenAsset(current => current?.id === asset.id
+            ? { ...current, r2_url: imported.canonicalUrl }
+            : current)
+          mutateFolders(current => current?.map(folder => ({
+            ...folder,
+            assets: folder.assets.map(item => item.id === asset.id
+              ? { ...item, r2_url: imported.canonicalUrl }
+              : item),
+          })), { revalidate: false })
+          mutateAssets()
+        }
+        state = await requestBytePlusTrust(imported.assetId, 'POST', fetch, projectId)
       }
-      state = await requestBytePlusTrust(imported.assetId, 'POST')
     } catch {
-      state = { status: 'failed', error: { code: 'IMAGE_IMPORT_FAILED' } }
+      if (removingTrust) {
+        state = { status: 'active' }
+        toast.error('Could not remove this image from the project’s Seedance group.')
+      } else {
+        state = { status: 'failed', error: { code: 'IMAGE_IMPORT_FAILED' } }
+      }
     } finally {
       trustRequestsRef.current.delete(asset.id)
       setTrustingAssetIds(current => {
@@ -416,7 +431,7 @@ export function LeftToolbar({
     async function poll() {
       let next: BytePlusTrustState
       try {
-        next = await requestBytePlusTrust(providerAssetId, 'GET')
+        next = await requestBytePlusTrust(providerAssetId, 'GET', fetch, projectId)
       } catch {
         next = { status: 'failed' }
       }
@@ -431,18 +446,18 @@ export function LeftToolbar({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [documentVisible, historyOpen, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
+  }, [documentVisible, historyOpen, projectId, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
 
   useEffect(() => {
     const asset = selectedGenAsset
     const workspaceAssetId = workspaceAssetIdFromUrl(asset?.r2_url)
     if (!asset || asset.type !== 'image' || !workspaceAssetId) return
     let cancelled = false
-    requestBytePlusTrust(workspaceAssetId, 'GET')
+    requestBytePlusTrust(workspaceAssetId, 'GET', fetch, projectId)
       .then(state => { if (!cancelled) setTrustState(asset.id, state) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type])
+  }, [projectId, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type])
 
   // Listen for asset status changes (from canvas node deletion)
   useEffect(() => {
@@ -566,6 +581,29 @@ export function LeftToolbar({
     setHistoryExpanded(false)
     onShowHistoryChange?.(false)
   }
+
+  useEffect(() => {
+    const handleBottomToolbarAction = (event: Event) => {
+      const action = (event as CustomEvent<string>).detail
+      if (action === 'history') {
+        handleToggleHistory()
+        return
+      }
+      if (action === 'upload') {
+        fileInputRef.current?.click()
+        return
+      }
+      const category = action as AssetCategory
+      if (ASSET_CATEGORIES.some(item => item.id === category)) {
+        setHistoryOpen(false)
+        setExpanded(true)
+        setExpandedCategory(category)
+        onShowHistoryChange?.(false)
+      }
+    }
+    window.addEventListener('spite:bottom-toolbar-action', handleBottomToolbarAction)
+    return () => window.removeEventListener('spite:bottom-toolbar-action', handleBottomToolbarAction)
+  }, [historyOpen, onShowHistoryChange])
 
   // Bulk-select helpers.
   const toggleAssetSelected = (id: string) => {
@@ -2113,7 +2151,7 @@ export function LeftToolbar({
   // COMPACT TOOLBAR (normal view when history is closed)
   return (
     <div data-tour="left-toolbar" className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-start gap-2">
-      <div className="flex flex-col gap-1 glass rounded-xl p-1.5">
+      <div className="hidden flex-col gap-1 glass rounded-xl p-1.5" aria-hidden="true">
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
@@ -2123,6 +2161,7 @@ export function LeftToolbar({
               if (tool.id === 'add' && onAddNode) onAddNode('imageGen')
               if (tool.id === 'cut' && onSetTool) onSetTool('cut')
               if (tool.id === 'select' && onSetTool) onSetTool('select')
+              if (tool.id === 'hand' && onSetTool) onSetTool('hand')
               if (tool.id === 'sticker' && onSetTool) onSetTool('sticker')
               if (tool.id === 'comment' && onSetTool) onSetTool('comment')
             }}

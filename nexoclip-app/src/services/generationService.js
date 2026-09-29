@@ -55,6 +55,13 @@ export function validateVideoGenerationInput(input, options = {}) {
   const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
   if (input?.kind !== 'video' || !prompt || prompt.length > 10000 || !model || model.length > 120) throw new Error('Video generation request is invalid');
   const parameters = {};
+  if (supplied.canvasProjectId !== undefined) {
+    const canvasProjectId = String(supplied.canvasProjectId).trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(canvasProjectId)) {
+      throw new Error('Canvas project id is invalid');
+    }
+    parameters.canvasProjectId = canvasProjectId;
+  }
   const isSeedance25 = /seedance-2\.5/i.test(model);
   const isExtend = supplied.omniReferenceTaskType === 'extend';
   const isDraft = supplied.draft === true;

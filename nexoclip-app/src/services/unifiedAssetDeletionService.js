@@ -24,6 +24,7 @@ export async function deleteTrustedWorkspaceAsset({
   if (!workspaceId || !localAssetId) throw failure('Asset identity is required.', { code: 'ASSET_DELETE_INVALID', status: 400 });
   const snapshotClient = await pool.connect();
   let asset;
+  let providerLinks = [];
   try {
     await snapshotClient.query('BEGIN');
     const result = await snapshotClient.query(
@@ -37,6 +38,13 @@ export async function deleteTrustedWorkspaceAsset({
       [workspaceId, localAssetId],
     );
     asset = result.rows[0] || null;
+    providerLinks = result.rows
+      .filter(row => row.provider_asset_id)
+      .map(row => ({
+        providerAssetId: row.provider_asset_id,
+        projectName: row.project_name,
+        attemptId: row.attempt_id,
+      }));
     await snapshotClient.query('COMMIT');
   } catch (error) {
     await snapshotClient.query('ROLLBACK');
@@ -46,16 +54,16 @@ export async function deleteTrustedWorkspaceAsset({
   }
   if (!asset) return null;
 
-  if (asset.provider_asset_id && asset.project_name !== configuredProjectName) {
+  if (providerLinks.some(link => link.projectName !== configuredProjectName)) {
     throw failure('Trusted asset belongs to another BytePlus project.', {
       code: 'BYTEPLUS_PROJECT_MISMATCH', status: 409,
     });
   }
 
   let providerAlreadyMissing = false;
-  if (asset.provider_asset_id) {
+  for (const link of providerLinks) {
     try {
-      await bytePlusClient.deleteAsset({ assetId: asset.provider_asset_id, projectName: asset.project_name });
+      await bytePlusClient.deleteAsset({ assetId: link.providerAssetId, projectName: link.projectName });
     } catch (error) {
       if (isBytePlusAssetNotFound(error)) providerAlreadyMissing = true;
       else throw failure('BytePlus asset deletion can be retried.', {
@@ -84,29 +92,26 @@ export async function deleteTrustedWorkspaceAsset({
   const finalClient = await pool.connect();
   try {
     await finalClient.query('BEGIN');
-    if (asset.provider_asset_id) {
-      const deletedLink = await finalClient.query(
+    if (providerLinks.length > 0) {
+      const deletedLinks = await finalClient.query(
         `DELETE FROM byteplus_asset_links
-         WHERE workspace_id = $1 AND local_asset_id = $2
-           AND provider_asset_id = $3 AND attempt_id = $4`,
-        [workspaceId, localAssetId, asset.provider_asset_id, asset.attempt_id],
+         WHERE workspace_id = $1 AND local_asset_id = $2`,
+        [workspaceId, localAssetId],
       );
-      if (deletedLink.rowCount !== 1) {
+      if (deletedLinks.rowCount !== providerLinks.length) {
         throw failure('Asset Trust changed during deletion.', { code: 'ASSET_TRUST_CHANGED', status: 409, retryable: true });
       }
     }
     await finalClient.query('DELETE FROM generation_outputs WHERE workspace_id = $1 AND asset_id = $2', [workspaceId, localAssetId]);
-    const deleted = asset.provider_asset_id
-      ? await finalClient.query('DELETE FROM assets WHERE workspace_id = $1 AND id = $2', [workspaceId, localAssetId])
-      : await finalClient.query(
-        `DELETE FROM assets a
-         WHERE a.workspace_id = $1 AND a.id = $2
-           AND NOT EXISTS (
-             SELECT 1 FROM byteplus_asset_links bal
-             WHERE bal.workspace_id = a.workspace_id AND bal.local_asset_id = a.id
-           )`,
-        [workspaceId, localAssetId],
-      );
+    const deleted = await finalClient.query(
+      `DELETE FROM assets a
+       WHERE a.workspace_id = $1 AND a.id = $2
+         AND NOT EXISTS (
+           SELECT 1 FROM byteplus_asset_links bal
+           WHERE bal.workspace_id = a.workspace_id AND bal.local_asset_id = a.id
+         )`,
+      [workspaceId, localAssetId],
+    );
     if (deleted.rowCount !== 1) throw failure('Asset changed during deletion.', { code: 'ASSET_DELETE_CHANGED', status: 409, retryable: true });
     await finalClient.query('COMMIT');
   } catch (error) {

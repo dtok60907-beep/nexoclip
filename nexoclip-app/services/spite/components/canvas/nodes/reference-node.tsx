@@ -51,6 +51,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const imageTrust = useImageTrust({
     url: thumbnail,
     workspaceAssetId: data.workspaceAssetId,
+    canvasProjectId: projectId,
     filename: `${String(data.label || 'reference-image')}.png`,
     enabled: Boolean(selected) && Boolean(thumbnail) && !isUploading && !isAudio && !isVideo,
     onCanonicalized: useCallback(async (canonicalUrl: string, workspaceAssetId: string) => {

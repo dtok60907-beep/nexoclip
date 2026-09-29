@@ -3,17 +3,18 @@ import assert from 'node:assert/strict';
 import { BytePlusAssetsError } from '../../src/providers/byteplusAssetsClient.js';
 import { deleteTrustedWorkspaceAsset } from '../../src/services/unifiedAssetDeletionService.js';
 
-function fixture({ link = true, providerError, projectName = 'project-x', finalLinkDeleted = true, finalAssetDeleted = true, canvasComplete = true } = {}) {
+function fixture({ link = true, links, providerError, projectName = 'project-x', finalLinkDeleted = true, finalAssetDeleted = true, canvasComplete = true } = {}) {
   const calls = [];
   const asset = { id: 'asset-1', workspace_id: 'workspace-1', storage_key: 'workspace-1/a.png' };
   const mapping = link ? { provider_asset_id: 'provider-1', project_name: projectName, attempt_id: 'attempt-1' } : null;
+  const mappings = links || [{ ...asset, ...mapping }];
   let connection = 0;
   const pool = { async connect() {
     const phase = connection++;
     return { async query(text, values) {
       calls.push({ text, values });
-      if (text.includes('FROM assets a')) return { rows: [{ ...asset, ...mapping }] };
-      if (text.startsWith('DELETE FROM byteplus_asset_links')) return { rowCount: finalLinkDeleted ? 1 : 0, rows: [] };
+      if (text.startsWith('SELECT') && text.includes('FROM assets a')) return { rows: mappings };
+      if (text.startsWith('DELETE FROM byteplus_asset_links')) return { rowCount: finalLinkDeleted ? mappings.filter(row => row.provider_asset_id).length : 0, rows: [] };
       if (text.startsWith('DELETE FROM assets')) return { rowCount: finalAssetDeleted ? 1 : 0, rows: [] };
       return { rows: [], rowCount: 1 };
     }, release() { calls.push({ text: `RELEASE-${phase}` }); } };
@@ -41,9 +42,20 @@ test('deletes provider, storage, Canvas references, mapping, outputs, and asset'
     'Canvas cleanup must succeed before destructive storage deletion',
   );
   const mappingDelete = f.calls.find(c => c.text?.startsWith('DELETE FROM byteplus_asset_links'));
-  assert.match(mappingDelete.text, /attempt_id = \$4/);
-  assert.deepEqual(mappingDelete.values, ['workspace-1', 'asset-1', 'provider-1', 'attempt-1']);
+  assert.match(mappingDelete.text, /WHERE workspace_id = \$1 AND local_asset_id = \$2/);
+  assert.deepEqual(mappingDelete.values, ['workspace-1', 'asset-1']);
   assert.ok(f.calls.find(c => c.text?.startsWith('DELETE FROM assets')));
+});
+
+test('deletes every project-specific provider copy before deleting a shared workspace asset', async () => {
+  const asset = { id: 'asset-1', workspace_id: 'workspace-1', storage_key: 'workspace-1/a.png' };
+  const f = fixture({ links: [
+    { ...asset, provider_asset_id: 'provider-a', project_name: 'project-x', attempt_id: 'attempt-a' },
+    { ...asset, provider_asset_id: 'provider-b', project_name: 'project-x', attempt_id: 'attempt-b' },
+  ] });
+
+  assert.deepEqual(await run(f), { deleted: true, providerAlreadyMissing: false });
+  assert.deepEqual(f.calls.filter(call => call.text === 'PROVIDER').map(call => call.input.assetId), ['provider-a', 'provider-b']);
 });
 
 test('provider not found is idempotent and still cleans locally', async () => {

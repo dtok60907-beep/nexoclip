@@ -55,6 +55,7 @@ import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { JobsPanel } from './jobs-panel'
 import { LeftToolbar, type Asset } from './left-toolbar'
 import { BottomBar } from './bottom-bar'
+import { GenerationSettingsPanel } from './generation-settings-panel'
 import { SceneTimeline, type Shot } from './scene-timeline'
 import { AlignmentGuides, computeAlignmentGuides } from './alignment-guides'
 import { MapTrifold, X } from '@phosphor-icons/react'
@@ -327,6 +328,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
   } = realtime
   const { commands, undo, redo } = guardedRuntimeControls
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
+  const [settingsNodeId, setSettingsNodeId] = useState<string | null>(null)
+  useEffect(() => {
+    const openSettings = (event: Event) => setSettingsNodeId((event as CustomEvent<string>).detail)
+    window.addEventListener('open-generation-settings', openSettings)
+    return () => window.removeEventListener('open-generation-settings', openSettings)
+  }, [])
   const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
   const selectedSceneNodeIdsRef = useRef<string[]>([])
   const lockedNodeIdsRef = useRef<Set<string>>(new Set())
@@ -368,7 +375,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   )
 
   // Active tool state
-  const [activeTool, setActiveTool] = useState<'select' | 'cut' | 'sticker' | 'comment'>('select')
+  const [activeTool, setActiveTool] = useState<'select' | 'hand' | 'cut' | 'sticker' | 'comment'>('select')
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1122,6 +1129,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
     () => sceneNodes.filter(node => node.selected).map(node => node.id),
     [sceneNodes],
   )
+  const settingsNode = useMemo(() => {
+    if (!settingsNodeId) return null
+    const node = sceneNodes.find(item => item.id === settingsNodeId)
+    if (!node || (node.type !== 'imageGen' && node.type !== 'videoGen')) return null
+    return { id: node.id, type: node.type, data: node.data as Record<string, unknown> }
+  }, [sceneNodes, settingsNodeId])
   selectedSceneNodeIdsRef.current = selectedSceneNodeIds
 
   useEffect(() => {
@@ -1282,6 +1295,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
             </div>
           </div>
         )}
+        <GenerationSettingsPanel
+          node={settingsNode}
+          onClose={() => setSettingsNodeId(null)}
+          onPatch={(nodeId, patch) => commands.patchNodeData(nodeId, patch)}
+        />
+
         {/* Ghost sticker that follows cursor when sticker tool is active */}
         {activeTool === 'sticker' && (
           <StickerGhost containerRef={flowRef} />
@@ -1300,8 +1319,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
-              nodesDraggable={allowDocumentMutation}
-              nodesConnectable={allowDocumentMutation}
+              nodesDraggable={allowDocumentMutation && activeTool === 'select'}
+              nodesConnectable={allowDocumentMutation && activeTool === 'select'}
               isValidConnection={isValidConnection}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
@@ -1311,13 +1330,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 // Peers see it through awareness and their wrapper becomes
                 // pointer-events:none; server lease remains the mutation gate.
                 presenceControllerRef.current?.startDragLock(node.id)
-                window.dispatchEvent(new CustomEvent('canvas-node-active', { detail: node.id }))
                 window.dispatchEvent(new Event('closeStickerPickers'))
               }}
               onPaneClick={(e) => {
                 // Leaving a node releases its transient interaction lock.
                 presenceControllerRef.current?.stopDragLock()
-                window.dispatchEvent(new CustomEvent('canvas-node-active', { detail: null }))
+                setSettingsNodeId(null)
                 // Always close any open sticker pickers
                 window.dispatchEvent(new Event('closeStickerPickers'))
 
@@ -1342,7 +1360,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               onContextMenu={onContextMenu}
               selectionOnDrag
               selectionMode={SelectionMode.Partial}
-              panOnDrag={[1, 2]}
+              panOnDrag={activeTool === 'hand' ? true : [1, 2]}
               panOnScroll
               panOnScrollMode={PanOnScrollMode.Free}
               zoomOnScroll={false}
@@ -1352,7 +1370,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               className="spite-react-flow"
               style={{ 
                 background: '#0c0d12',
-                cursor: !allowDocumentMutation ? 'default' : activeTool === 'cut' ? 'crosshair' :
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' ? 'crosshair' :
                        activeTool === 'sticker' ? 'none' :
                        activeTool === 'comment' ? 'copy' : 'default'
               }}
@@ -1399,15 +1417,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
           viewport={viewport}
         />
 
-        {/* Unified left toolbar with assets */}
-        <LeftToolbar 
-          onAddNode={addNode}
-          onSetTool={setActiveTool}
-          activeTool={activeTool}
-          onUndo={undo}
-          onRedo={redo}
-          canUndo={!readOnly}
-          canRedo={!readOnly}
+        {/* Asset/history panels remain mounted; their former left toolbar is hidden
+            and all actions are now driven by the bottom toolbar. */}
+        <LeftToolbar
           assets={assets}
           onAssetsChange={setAssets}
           onSelectAsset={handleSelectAsset}
@@ -1439,14 +1451,25 @@ function CanvasInner({ projectId }: { projectId: string }) {
         )}
 
         <ViewportPersistor projectId={projectId} />
-        <BottomBar page={scenes.findIndex(s => s.id === activeSceneId) + 1} onRecenter={handleRecenter} />
+        <BottomBar
+          page={scenes.findIndex(s => s.id === activeSceneId) + 1}
+          onRecenter={handleRecenter}
+          activeTool={activeTool}
+          onSetTool={setActiveTool}
+          onAddNode={addNode}
+          onAssetAction={(action) => window.dispatchEvent(new CustomEvent('spite:bottom-toolbar-action', { detail: action }))}
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={!readOnly}
+          canRedo={!readOnly}
+        />
       </div>
 
       {/* Context menu backdrop + menu */}
       {contextMenu && (
         <>
           <div 
-            className="fixed inset-0 z-40"
+            className="pointer-events-none fixed inset-0 z-40"
             onClick={(e) => {
               e.stopPropagation()
               setContextMenu(null)

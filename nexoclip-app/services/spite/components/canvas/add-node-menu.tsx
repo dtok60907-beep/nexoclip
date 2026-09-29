@@ -1,18 +1,16 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
-  TextT,
-  ImageSquare,
-  FilmSlate,
-  Robot,
   ArrowFatLineUp,
-  Stack,
+  Browser,
+  FilmSlate,
+  Folder,
+  ImageSquare,
   MagnifyingGlass,
-  FrameCorners,
-  Sliders,
-  ArrowsOut,
-  ArrowsInSimple,
+  Robot,
+  SpeakerHigh,
+  TextT,
 } from '@phosphor-icons/react'
 
 export type NodeMenuItem = {
@@ -22,36 +20,28 @@ export type NodeMenuItem = {
   icon: React.ElementType
   category: string
   nodeType: string
-  // Optional model preset — when set, the new node is created with this
-  // model already selected. Used by category presets like Upscaler that
-  // spawn a video generator pre-configured to a specific model.
   defaultModelId?: string
+  color: string
+  badge?: string
 }
 
-const ITEMS: NodeMenuItem[] = [
-  { id: 'text',          label: 'Text',             shortcut: 'T', icon: TextT,          category: 'BASICS',   nodeType: 'prompt'    },
-  { id: 'image-gen',     label: 'Image Generator',  shortcut: 'N', icon: ImageSquare,    category: 'BASICS',   nodeType: 'imageGen'  },
-  { id: 'video-gen',     label: 'Video Generator',  shortcut: 'K', icon: FilmSlate,      category: 'BASICS',   nodeType: 'videoGen'  },
-  { id: 'assistant',     label: 'Assistant',        shortcut: 'A', icon: Robot,          category: 'BASICS',   nodeType: 'prompt'    },
-  { id: 'upload',        label: 'Upload',           shortcut: 'U', icon: ArrowFatLineUp, category: 'MEDIA',    nodeType: 'reference' },
-  { id: 'assets',        label: 'Assets',           shortcut: '',  icon: Stack,          category: 'MEDIA',    nodeType: 'reference' },
-  { id: 'stock',         label: 'Stock',            shortcut: '',  icon: MagnifyingGlass,category: 'MEDIA',    nodeType: 'reference' },
-  { id: 'frame',         label: 'Frame',            shortcut: 'F', icon: FrameCorners,   category: 'MODIFIERS',nodeType: 'prompt'    },
-  { id: 'compress',      label: 'Compress',         shortcut: '',  icon: ArrowsInSimple, category: 'MODIFIERS',nodeType: 'compress'  },
-  // UPSCALER: spawns a video generator with the Topaz upscaler model
-  // already selected. Same node body, just pre-configured.
-  { id: 'video-upscale', label: 'Video Upscaler',   shortcut: 'V', icon: ArrowsOut,      category: 'UPSCALER', nodeType: 'videoGen', defaultModelId: 'topaz-video-upscale' },
-  { id: 'image-upscale', label: 'Image Upscaler',   shortcut: '',  icon: ArrowsOut,      category: 'UPSCALER', nodeType: 'imageGen', defaultModelId: 'topaz-image-upscale' },
+const QUICK_ITEMS: NodeMenuItem[] = [
+  { id: 'prompt', label: 'Prompt', shortcut: 'T', icon: TextT, category: 'Quick', nodeType: 'prompt', color: '#595d6b' },
+  { id: 'image-gen', label: 'Image Generator', shortcut: 'N', icon: ImageSquare, category: 'Quick', nodeType: 'imageGen', color: '#32a7c7' },
+  { id: 'video-gen', label: 'Video Generator', shortcut: 'K', icon: FilmSlate, category: 'Quick', nodeType: 'videoGen', color: '#5661e8' },
+  { id: 'voice-gen', label: 'Voice Generator', shortcut: '', icon: SpeakerHigh, category: 'Quick', nodeType: 'prompt', color: '#cf407c' },
+  { id: 'assistant', label: 'LLM Assistant', shortcut: 'A', icon: Robot, category: 'Quick', nodeType: 'prompt', color: '#97a83d' },
+  { id: 'page', label: 'Page', shortcut: '', icon: Browser, category: 'Quick', nodeType: 'prompt', color: '#42a86b', badge: 'New' },
 ]
 
-const CATEGORIES = ['BASICS', 'MEDIA', 'MODIFIERS', 'UPSCALER']
+const SECTION_ITEMS: NodeMenuItem[] = [
+  { id: 'upload', label: 'Upload', shortcut: 'U', icon: ArrowFatLineUp, category: 'References', nodeType: 'reference', color: '#3fa86a' },
+  { id: 'assets', label: 'Assets', shortcut: '', icon: Folder, category: 'References', nodeType: 'reference', color: '#3fa86a' },
+  { id: 'image-gen-section', label: 'Image Generator', shortcut: '', icon: ImageSquare, category: 'Image', nodeType: 'imageGen', color: '#32a7c7' },
+  { id: 'video-gen-section', label: 'Video Generator', shortcut: '', icon: FilmSlate, category: 'Video', nodeType: 'videoGen', color: '#5661e8' },
+]
 
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
-  BASICS: Stack,
-  MEDIA: ImageSquare,
-  MODIFIERS: Sliders,
-  UPSCALER: ArrowsOut,
-}
+const ALL_ITEMS = [...QUICK_ITEMS, ...SECTION_ITEMS]
 
 interface AddNodeMenuProps {
   x: number
@@ -60,161 +50,85 @@ interface AddNodeMenuProps {
   onClose: () => void
 }
 
+function MenuItem({ item, onSelect, onClose }: { item: NodeMenuItem; onSelect: (item: NodeMenuItem) => void; onClose: () => void }) {
+  const Icon = item.icon
+  return (
+    <button
+      type="button"
+      onClick={event => { event.stopPropagation(); onSelect(item); onClose() }}
+      className="group flex w-full items-center rounded-[10px] px-2 py-[5px] text-left transition-colors hover:bg-[#282b34]"
+    >
+      <span className="mr-2.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-white shadow-sm" style={{ background: item.color }}><Icon size={14} weight="bold" /></span>
+      <span className="flex-1 text-[13.5px] font-semibold tracking-[-0.01em] text-[#e8ebf0]">{item.label}</span>
+      {item.badge ? <span className="rounded-full bg-[#ccff00] px-2 py-[1.5px] text-[10px] font-bold leading-tight text-black shadow-sm">{item.badge}</span> : null}
+    </button>
+  )
+}
+
 export function AddNodeMenu({ x, y, onSelect, onClose }: AddNodeMenuProps) {
   const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [pos, setPos] = useState({ left: x, top: y })
 
-  // Clamp the menu inside the viewport so it isn't clipped when right-clicking
-  // near the bottom or right edge of the screen. Runs synchronously after
-  // mount so the menu never paints in an off-screen position.
-  useLayoutEffect(() => {
-    const el = menuRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
+  const clampToViewport = () => {
+    const element = menuRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
     const margin = 8
-    let left = x
-    let top = y
-    if (left + rect.width > window.innerWidth - margin) {
-      left = Math.max(margin, window.innerWidth - rect.width - margin)
-    }
-    if (top + rect.height > window.innerHeight - margin) {
-      top = Math.max(margin, window.innerHeight - rect.height - margin)
-    }
-    if (left !== pos.left || top !== pos.top) setPos({ left, top })
-    // We only want this to recompute when the requested click position
-    // changes, not when our clamped state changes — guard above prevents
-    // the loop. eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [x, y])
+    setPos({
+      left: Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin)),
+      top: Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin)),
+    })
+  }
 
+  useLayoutEffect(clampToViewport, [x, y])
   useEffect(() => {
     inputRef.current?.focus()
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+    const handleResize = () => clampToViewport()
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    const handlePointerDown = (event: MouseEvent) => {
+      if (event.button !== 0) return
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) onClose()
     }
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose()
-    }
+    window.addEventListener('resize', handleResize)
     document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('mousedown', handlePointerDown)
     return () => {
+      window.removeEventListener('resize', handleResize)
       document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('mousedown', handlePointerDown)
     }
-  }, [onClose])
+  }, [onClose, x, y])
 
-  const filtered = ITEMS.filter(item => {
-    const matchSearch = search === '' || item.label.toLowerCase().includes(search.toLowerCase())
-    const matchCat = !activeCategory || item.category === activeCategory
-    return matchSearch && matchCat
-  })
-
-  const grouped = CATEGORIES.reduce<Record<string, NodeMenuItem[]>>((acc, cat) => {
-    const items = filtered.filter(i => i.category === cat)
-    if (items.length) acc[cat] = items
-    return acc
-  }, {})
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return query ? ALL_ITEMS.filter(item => item.label.toLowerCase().includes(query)) : ALL_ITEMS
+  }, [search])
+  const quick = filtered.filter(item => item.category === 'Quick')
+  const sections = ['References', 'Image', 'Video']
 
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 flex flex-col rounded-xl overflow-hidden"
-      style={{
-        left: pos.left,
-        top: pos.top,
-        width: 280,
-        background: 'rgba(14,16,20,0.97)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
-      }}
+      data-purpose="context-menu-wrapper"
+      className="fixed z-50 flex w-[264px] select-none flex-col overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#1e2025] p-[9px] text-[#f2f4f8] shadow-[0_20px_48px_-8px_rgba(0,0,0,0.7),0_8px_16px_-4px_rgba(0,0,0,0.5)]"
+      style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 16px)' }}
+      onWheel={event => event.stopPropagation()}
     >
-      {/* Search */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.06]">
-        <MagnifyingGlass size={12} weight="thin" className="text-muted-foreground shrink-0" />
-        <input
-          ref={inputRef}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search"
-          className="flex-1 bg-transparent outline-none text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50"
-        />
+      <div className="mb-1.5 flex h-9 w-full items-center gap-2 rounded-xl border border-white/[0.04] bg-[#2a2d35]/95 px-3 transition-all focus-within:border-white/20">
+        <MagnifyingGlass size={15} weight="bold" className="shrink-0 text-[#717786]" />
+        <input ref={inputRef} value={search} onChange={event => setSearch(event.target.value)} placeholder="Search" className="w-full border-0 bg-transparent p-0 text-[13.5px] font-normal tracking-[-0.01em] text-[#f2f4f8] outline-none placeholder:text-[#727888] focus:ring-0" />
       </div>
 
-      {/* Category icon tabs */}
-      <div className="flex items-center gap-1 px-2 py-2 border-b border-white/[0.06]">
-        <button
-          onClick={() => setActiveCategory(null)}
-          className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${!activeCategory ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
-        >
-          <Stack size={13} weight="regular" />
-        </button>
-        {CATEGORIES.map(cat => {
-          const Icon = CATEGORY_ICONS[cat]
-          return (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-              className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${activeCategory === cat ? 'bg-accent/20 text-accent' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
-            >
-              <Icon size={13} weight="regular" />
-            </button>
-          )
+      <div className="menu-scroll flex max-h-[460px] flex-col space-y-[2px] overflow-y-auto">
+        {quick.map(item => <MenuItem key={item.id} item={item} onSelect={onSelect} onClose={onClose} />)}
+        {sections.map(section => {
+          const items = filtered.filter(item => item.category === section)
+          if (items.length === 0) return null
+          return <div key={section}><div className="px-2 pb-0.5 pt-2 text-[11px] font-bold tracking-tight text-[#6d7380]">{section}</div>{items.map(item => <MenuItem key={item.id} item={item} onSelect={onSelect} onClose={onClose} />)}</div>
         })}
-      </div>
-
-      {/* Items */}
-      <div className="overflow-y-auto max-h-[340px] py-1">
-        {Object.entries(grouped).map(([cat, items]) => (
-          <div key={cat}>
-            <div className="px-3 pt-3 pb-1">
-              <span className="text-[9px] font-mono text-muted-foreground/50 tracking-widest uppercase">{cat}</span>
-            </div>
-            {items.map(item => (
-              <button
-                key={item.id}
-                onClick={(e) => { 
-                  e.stopPropagation()
-                  onSelect(item)
-                  onClose() 
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/5 transition-colors group"
-              >
-                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 group-hover:bg-accent/20 group-hover:text-accent text-muted-foreground transition-colors shrink-0">
-                  <item.icon size={13} weight="regular" />
-                </div>
-                <span className="flex-1 text-left text-[12px] font-mono text-foreground/80">{item.label}</span>
-                {item.shortcut && (
-                  <kbd className="text-[9px] font-mono text-muted-foreground/40 bg-white/5 px-1.5 py-0.5 rounded">
-                    {item.shortcut}
-                  </kbd>
-                )}
-              </button>
-            ))}
-          </div>
-        ))}
-        {Object.keys(grouped).length === 0 && (
-          <div className="px-3 py-6 text-center text-[11px] font-mono text-muted-foreground/40">No results</div>
-        )}
-      </div>
-
-      {/* Footer shortcuts */}
-      <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.06]">
-        <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/40">
-          <kbd className="bg-white/5 px-1.5 py-0.5 rounded">N</kbd>
-          <span>Open</span>
-        </div>
-        <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/40">
-          <kbd className="bg-white/5 px-1.5 py-0.5 rounded">↑↓</kbd>
-          <span>Navigate</span>
-        </div>
-        <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/40">
-          <kbd className="bg-white/5 px-1.5 py-0.5 rounded">↵</kbd>
-          <span>Insert</span>
-        </div>
+        {filtered.length === 0 ? <div className="px-3 py-6 text-center text-xs text-[#727888]">No results</div> : null}
       </div>
     </div>
   )

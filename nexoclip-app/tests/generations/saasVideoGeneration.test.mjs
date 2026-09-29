@@ -46,8 +46,8 @@ function trustedHandler({ links = {}, exactMatches = {}, model = 'bytedance/seed
       async pollVideo() { return { status: 'completed' }; },
       async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
     },
-    findBytePlusAssetLink: async (_client, workspaceId, assetId) => {
-      lookups.push([workspaceId, assetId]);
+    findBytePlusAssetLink: async (_client, workspaceId, assetId, canvasProjectId = 'workspace') => {
+      lookups.push(canvasProjectId === 'workspace' ? [workspaceId, assetId] : [workspaceId, assetId, canvasProjectId]);
       const link = links[`${workspaceId}:${assetId}`];
       return link ? { project_name: env.BYTEPLUS_PROJECT_NAME || 'default', ...link } : null;
     },
@@ -78,6 +78,17 @@ test('active workspace mapping substitutes an asset URI before download for stan
   assert.deepEqual(setup.downloads, []);
 });
 
+test('Seedance resolves trust in the Canvas project carried by the generation job', async () => {
+  const canvasProjectId = '11111111-1111-4111-8111-111111111111';
+  const setup = trustedHandler({ links: {
+    'workspace-1:asset-1': { workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'active', provider_asset_id: 'provider-1' },
+  } });
+
+  await runTrusted(setup, { canvasProjectId, referenceImages: [assetUrl('asset-1')] });
+
+  assert.deepEqual(setup.lookups, [['workspace-1', 'asset-1', canvasProjectId]]);
+});
+
 test('provider missing-asset failure invalidates the exact trusted mapping and stops reuse', async () => {
   const setup = trustedHandler({
     links: { 'workspace-1:asset-1': { workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'active', provider_asset_id: 'provider-1', attempt_id: 'attempt-1' } },
@@ -88,7 +99,7 @@ test('provider missing-asset failure invalidates the exact trusted mapping and s
     error => error.code === 'BYTEPLUS_ASSET_STALE' && /Trust this asset again/.test(error.message),
   );
   assert.deepEqual(setup.staleMappings, [{
-    workspaceId: 'workspace-1', localAssetId: 'asset-1', providerAssetId: 'provider-1',
+    workspaceId: 'workspace-1', localAssetId: 'asset-1', canvasProjectId: 'workspace', providerAssetId: 'provider-1',
     attemptId: 'attempt-1', errorCode: 'BYTEPLUS_ASSET_NOT_FOUND',
   }]);
 });

@@ -1,6 +1,7 @@
 import { SESSION_COOKIE } from '../../../../../src/lib/auth/session.js';
 import { getCurrentSession } from '../../../../../src/services/authService.js';
 import {
+  deleteBytePlusAssetTrust,
   getBytePlusAssetTrust,
   startBytePlusAssetTrust,
 } from '../../../../../src/services/byteplusAssetTrustService.js';
@@ -16,6 +17,7 @@ const safeErrors = {
   BYTEPLUS_ASSET_TYPE_UNSUPPORTED: ['Only image assets can be trusted for Seedance.', 400],
   BYTEPLUS_ASSET_SOURCE_UNAVAILABLE: ['Asset storage is not available to BytePlus.', 503],
   BYTEPLUS_ASSET_TRUST_FAILED: ['Unable to update trusted asset.', 502],
+  BYTEPLUS_ASSET_TRUST_CONFLICT: ['Trusted asset changed while it was being removed. Try again.', 409],
 };
 
 function errorResponse(error) {
@@ -45,6 +47,7 @@ async function resolveDefaultTenant({ token }) {
 export function createBytePlusAssetTrustHandlers(deps = {}) {
   const resolveTenant = deps.resolveTenantContext || resolveDefaultTenant;
   const trustService = deps.trustService || {
+    deleteTrust: deleteBytePlusAssetTrust,
     getTrust: getBytePlusAssetTrust,
     startTrust: startBytePlusAssetTrust,
   };
@@ -53,7 +56,16 @@ export function createBytePlusAssetTrustHandlers(deps = {}) {
     try {
       const tenant = await resolveTenant({ token: request.cookies.get(SESSION_COOKIE)?.value });
       const { assetId } = await params;
-      const state = await trustService[operation](tenant.workspace.id, assetId);
+      const requestedProjectId = request?.url
+        ? new URL(request.url).searchParams.get('canvas_project_id')
+        : null;
+      const canvasProjectId = requestedProjectId?.trim() || 'workspace';
+      if (canvasProjectId !== 'workspace' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(canvasProjectId)) {
+        return Response.json({ error: 'Invalid Canvas project id' }, { status: 400 });
+      }
+      const state = requestedProjectId
+        ? await trustService[operation](tenant.workspace.id, assetId, canvasProjectId)
+        : await trustService[operation](tenant.workspace.id, assetId);
       if (!state) {
         return Response.json({ error: { code: 'ASSET_NOT_FOUND', message: 'Asset not found' } }, { status: 404 });
       }
@@ -64,11 +76,13 @@ export function createBytePlusAssetTrustHandlers(deps = {}) {
   }
 
   return {
+    DELETE: (request, context) => handle('deleteTrust', request, context),
     GET: (request, context) => handle('getTrust', request, context),
     POST: (request, context) => handle('startTrust', request, context),
   };
 }
 
 const handlers = createBytePlusAssetTrustHandlers();
+export const DELETE = handlers.DELETE;
 export const GET = handlers.GET;
 export const POST = handlers.POST;

@@ -63,8 +63,11 @@ export async function importImageForTrust({
   return { assetId, canonicalUrl: payload.url }
 }
 
-export function bytePlusTrustUrl(assetId: string) {
-  return `/api/assets/${encodeURIComponent(assetId)}/byteplus-trust`
+export function bytePlusTrustUrl(assetId: string, canvasProjectId?: string) {
+  const path = `/api/assets/${encodeURIComponent(assetId)}/byteplus-trust`
+  return canvasProjectId
+    ? `${path}?canvas_project_id=${encodeURIComponent(canvasProjectId)}`
+    : path
 }
 
 export function safeBytePlusTrustError(error?: { code?: string; message?: string }) {
@@ -77,10 +80,15 @@ export function trustForSeedanceView(type: string, state: BytePlusTrustState, in
   if (type !== 'image') return null
 
   if (inFlight || state.status === 'processing') {
-    return { label: 'Trusting for Seedance', action: 'Trusting…', disabled: true }
+    const removing = inFlight && state.status === 'active'
+    return {
+      label: removing ? 'Removing from Seedance' : 'Trusting for Seedance',
+      action: removing ? 'Removing…' : 'Trusting…',
+      disabled: true,
+    }
   }
   if (state.status === 'active') {
-    return { label: 'Trusted for Seedance', action: null, disabled: true }
+    return { label: 'Trusted for Seedance', action: 'Remove from this project', disabled: false }
   }
   if (state.status === 'failed') {
     return {
@@ -130,12 +138,13 @@ export function applyBytePlusTrustState<T extends { id: string; byteplus_trust?:
 
 export async function requestBytePlusTrust(
   assetId: string,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   fetchFn: typeof fetch = fetch,
+  canvasProjectId?: string,
 ): Promise<BytePlusTrustState> {
   let response: Response
   try {
-    response = await fetchFn(bytePlusTrustUrl(assetId), { method })
+    response = await fetchFn(bytePlusTrustUrl(assetId, canvasProjectId), { method })
   } catch {
     return method === 'GET' ? { status: 'processing' } : { status: 'failed' }
   }

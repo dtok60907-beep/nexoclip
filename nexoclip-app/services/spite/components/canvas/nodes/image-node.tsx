@@ -3,8 +3,8 @@
 import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { Handle, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
-import { Play, CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise } from '@phosphor-icons/react'
+import { Handle, NodeResizer, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
+import { CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { NodeActionToolbar } from './node-toolbar'
 import { ShotSelector, type ShotOption } from './shot-selector'
@@ -30,57 +30,25 @@ import { createGenerationStatusQuery, getGenerationPromptState, parseAspectRatio
 import { GenerationFeedbackOverlay, getGenerationFeedbackState, isTerminalGenerationStatus, getTerminalGenerationToast } from './generation-feedback'
 
 const IMAGE_MODELS = getImageModels()
-
 type GenerationStatus = 'idle' | 'submitting' | 'in_queue' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
 
-function ControlSelect({ 
-  value, 
-  options, 
-  onChange,
-  disabled 
-}: { 
+function ControlSelect({ value, disabled }: {
   value: string
   options: { value: string; label: string }[]
   onChange: (value: string) => void
   disabled?: boolean
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
   return (
-    <div ref={ref} className="nodrag nopan relative">
-      <button 
-        onClick={() => !disabled && setOpen(!open)}
-        disabled={disabled}
-        className="nodrag nopan flex items-center gap-1 px-2 h-6 rounded-md bg-white/5 hover:bg-white/10 text-[10px] font-mono text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {value}
-        <CaretDown size={8} weight="bold" />
-      </button>
-      {open && (
-        <div className="absolute bottom-full left-0 mb-1 bg-[#1a1d21] border border-white/10 rounded-lg py-1 z-50 min-w-[120px] shadow-xl max-h-[200px] overflow-y-auto">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false) }}
-              className={`nodrag nopan w-full text-left px-3 py-1.5 text-[10px] font-mono hover:bg-white/10 transition-colors ${opt.value === value ? 'text-accent' : 'text-muted-foreground'}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      data-generation-setting="model"
+      disabled={disabled}
+      className="nodrag nopan flex h-7 items-center gap-1.5 bg-transparent px-0 text-[12px] font-semibold text-slate-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      title="Choose model and open generation settings"
+    >
+      {value}
+      <CaretDown size={11} weight="bold" className="text-slate-500" />
+    </button>
   )
 }
 
@@ -207,6 +175,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const imageTrust = useImageTrust({
     url: outputUrl,
     workspaceAssetId: data.workspaceAssetId,
+    canvasProjectId: projectId,
     filename: `${String(data.label || 'generated-image')}.png`,
     enabled: Boolean(selected) && Boolean(outputUrl) && !['submitting', 'in_queue', 'in_progress'].includes(status),
     onCanonicalized: useCallback((canonicalUrl: string, workspaceAssetId: string) => {
@@ -981,12 +950,21 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   return (
     <div
       className="relative group"
-      style={{ width: 360 }}
+      style={{ width: typeof data.width === 'number' ? data.width : 480 }}
+      onClickCapture={(event) => {
+        const control = (event.target as HTMLElement).closest<HTMLElement>('[data-generation-setting]')
+        if (control) {
+          window.dispatchEvent(new CustomEvent('open-generation-settings', { detail: id }))
+          window.dispatchEvent(new CustomEvent('open-generation-settings-section', { detail: control.dataset.generationSetting }))
+        }
+      }}
       onPointerDownCapture={(event) => {
         if (nodeLock.owned) return
+        const interactive = (event.target as HTMLElement).closest('button, input, textarea, select, video, a, [data-generation-setting], .nodrag')
+        void nodeLock.claim()
+        if (interactive) return
         event.preventDefault()
         event.stopPropagation()
-        void nodeLock.claim()
       }}
     >
       <NodeActionToolbar
@@ -1086,19 +1064,22 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
       {/* Card content */}
       <div
-        className="flex flex-col overflow-hidden rounded-2xl bg-[#13151f]/95 backdrop-blur-xl transition-all duration-200"
+        className="relative flex flex-col overflow-hidden rounded-md bg-[#17191e] p-4 transition-all duration-200"
         style={{
-          border: feedbackFrameStyle.border || (isTaggedToShot
-            ? '1.5px solid rgba(251,191,36,0.7)'
-            : selected
-              ? '1.5px solid rgba(56,189,248,0.9)'
-              : '1px solid rgba(255,255,255,0.12)'),
-          boxShadow: feedbackFrameStyle.boxShadow || (selected
-            ? '0 0 0 1px rgba(56,189,248,0.22), 0 0 30px rgba(56,189,248,0.22), 0 24px 45px rgba(0,0,0,0.42)'
-            : '0 24px 45px rgba(0,0,0,0.38)'),
+          border: selected ? 'none' : feedbackFrameStyle.border || 'none',
+          boxShadow: feedbackFrameStyle.boxShadow || 'none',
         }}
       >
-        <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#181a25] px-3 py-2.5">
+        <NodeResizer
+          isVisible={selected}
+          keepAspectRatio
+          minWidth={280}
+          minHeight={220}
+          lineStyle={{ borderColor: '#1597ff', borderWidth: 1 }}
+          handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9 }}
+          onResizeEnd={(_, params) => patchNodeData(id, { width: params.width, height: params.height })}
+        />
+        <div className="hidden" aria-hidden="true">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/15 text-sky-300">
               <ImageIcon size={14} weight="bold" />
@@ -1143,11 +1124,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           )}
           
           {!outputUrl && !isGenerating && !error && (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_22%,rgba(125,211,252,.25),transparent_36%),linear-gradient(145deg,#0b1019,#1b2635)]">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/15" />
-              <div className="relative flex h-full flex-col items-center justify-center gap-2 text-slate-400">
-                <ImageIcon size={28} weight="thin" />
-                <span className="text-[10px] font-mono uppercase tracking-[0.18em]">Ready to generate</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-[#17191e] text-[#343943]">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black/10">
+                <ImageIcon size={27} weight="thin" />
               </div>
             </div>
           )}
@@ -1159,23 +1138,21 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               <span className="text-[9px] font-mono text-red-400">{error}</span>
             </div>
           )}
-          <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5">
-            {resolution && <span className="rounded-md border border-sky-400/60 bg-black/70 px-2 py-1 text-[10px] font-semibold text-white shadow-md backdrop-blur-md">{resolution}</span>}
-            <span className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-[10px] font-medium text-slate-200 backdrop-blur-md">{aspectRatio}</span>
+          <div className="absolute bottom-[118px] left-3 z-20 flex items-center gap-1.5">
+            {resolution && <button data-generation-setting="resolution" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 shadow-md backdrop-blur-md" title="Edit resolution">{resolution}</button>}
+            <button data-generation-setting="aspect" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 backdrop-blur-md" title="Edit aspect ratio">{aspectRatio}</button>
           </div>
         </div>
       </div>
 
-      <div className="mt-2 rounded-xl border border-white/[0.08] bg-[#181a25] px-3 pt-2.5 shadow-inner">
-        <div className="min-h-7 text-[11px] leading-relaxed text-slate-400">
-          {resolvedPrompt.connected
-            ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
-            : 'Connect a Text node first'}
+      <div className="nodrag nopan absolute bottom-4 left-4 right-4 z-30 rounded-xl border border-[#2d313c] bg-[#20222a]/95 px-4 py-3 shadow-xl backdrop-blur-md">
+        <div className="min-h-7 text-[14px] font-semibold leading-relaxed text-[#8b94a5]">
+          {resolvedPrompt.connected ? null : 'Describe...'}
         </div>
 
         {/* Controls - Dynamic based on model */}
-        <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/[0.06] px-0 pb-2.5 pt-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap [&>*:not(.node-model-control)]:hidden">
             {/* Num images counter */}
             <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
               <button 
@@ -1210,6 +1187,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             </div>
 
             {/* Model selector */}
+            <div className="node-model-control flex items-center gap-2 text-emerald-400">
+            <ImageIcon size={15} weight="bold" />
             <ControlSelect 
               value={currentModel?.name || modelId} 
               options={modelOptions}
@@ -1225,6 +1204,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               }}
               disabled={isGenerating}
             />
+            </div>
             
             {/* Aspect ratio - dynamic based on model */}
             {aspectOptions.length > 0 && (
@@ -1270,10 +1250,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             <button
               onClick={requestGenerate}
               disabled={isGenerating || promptState.disabled || !generationPersistenceGuard.allowed}
-              className="flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e3fb27] px-2 text-slate-950 shadow-lg shadow-lime-400/20 transition-colors hover:bg-[#d6ee17] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
               title={generateTooltip}
             >
-              <Play size={10} weight="fill" />
+              <Sparkle size={12} weight="fill" />
+              <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatUSD(costEstimate.total) : 'Generate'}</span>
             </button>
           )}
         </div>

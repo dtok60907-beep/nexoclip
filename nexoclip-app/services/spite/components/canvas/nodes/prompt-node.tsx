@@ -2,10 +2,9 @@
 
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Position, NodeProps, Handle } from '@xyflow/react'
+import { Position, NodeProps, Handle, NodeResizer } from '@xyflow/react'
 import { TextT } from '@phosphor-icons/react'
 import { NodeActionToolbar } from './node-toolbar'
-import { ResizableNodeFrame } from './resizable-node-frame'
 import { MentionTextarea, type Mention, type MentionTextareaRef } from '../mention-textarea'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -45,6 +44,8 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const projectId = params.id as string | undefined
   const [text, setText] = useState((data.text as string) || '')
   const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
+  const [nodeHeight, setNodeHeight] = useState(typeof data.height === 'number' ? data.height : 500)
+  const nodeHeightRef = useRef(nodeHeight)
   const { folders, refresh: refreshFolders } = useProjectFolders(projectId)
   const { patchNodeData, persistenceStatus } = useCanvasCollaboration()
   const readOnly = persistenceStatus === 'READ_ONLY'
@@ -106,6 +107,20 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     setMentions(incomingMentions)
     queueMicrotask(finishSync)
   }, [data.text, data.mentions, editing, mentions, persistenceStatus, text])
+
+  useEffect(() => {
+    if (typeof data.height !== 'number' || data.height === nodeHeightRef.current) return
+    nodeHeightRef.current = data.height
+    setNodeHeight(data.height)
+  }, [data.height])
+
+  const handleContentHeightChange = useCallback((contentHeight: number) => {
+    const desiredHeight = Math.max(180, Math.min(900, Math.ceil(contentHeight + 8)))
+    if (desiredHeight <= nodeHeightRef.current + 2) return
+    nodeHeightRef.current = desiredHeight
+    setNodeHeight(desiredHeight)
+    patchNodeData(id, { height: desiredHeight })
+  }, [id, patchNodeData])
 
   const handleChange = useCallback((nextText: string, nextMentions: Mention[]) => {
     if (readOnly) {
@@ -195,19 +210,32 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <ResizableNodeFrame
-      nodeId={id}
-      data={data}
-      defaultSize={{ width: 340, height: 192 }}
-      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
-      claimLock={() => sendEditorLock('claim')}
-      releaseLock={() => { void sendEditorLock('release') }}
+    <div
+      className="relative group"
+      style={{
+        width: typeof data.width === 'number' ? data.width : 620,
+        height: nodeHeight,
+      }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={360}
+        minHeight={180}
+        maxWidth={900}
+        maxHeight={900}
+        lineStyle={{ borderColor: '#1597ff', borderWidth: 1 }}
+        handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9 }}
+        onResizeEnd={(_, params) => {
+          nodeHeightRef.current = params.height
+          setNodeHeight(params.height)
+          patchNodeData(id, { width: params.width, height: params.height })
+        }}
+      />
       <NodeActionToolbar nodeId={id} selected={selected} />
 
       {/* Node label */}
       <div className="absolute -top-6 left-0 text-[10px] font-mono text-muted-foreground/60 whitespace-nowrap pointer-events-none">
-        {(data.label as string) || 'Prompt #1'}
+        {(data.label as string)?.replace(/^Text(?: Input)?/i, 'Prompt') || 'Prompt'}
       </div>
 
       {/* Output handle (card height ~170px). zIndex:5 matches the image
@@ -219,31 +247,20 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       {/* Card content */}
       <div
         ref={cardRef}
-        className="relative flex h-full w-full flex-col overflow-visible rounded-2xl bg-[#13151f]/95 backdrop-blur-xl transition-all duration-200"
-        style={{
-          border: selected ? '1.5px solid rgba(56,189,248,0.9)' : '1px solid rgba(255,255,255,0.12)',
-          boxShadow: selected ? '0 0 0 1px rgba(56,189,248,0.22), 0 0 30px rgba(56,189,248,0.22), 0 24px 45px rgba(0,0,0,0.42)' : '0 24px 45px rgba(0,0,0,0.38)',
-        }}
+        className={`relative flex h-full w-full flex-col overflow-visible rounded-xl border bg-[#161a22] transition-all duration-200 ${selected ? 'border-transparent' : 'border-[#2b313e]'}`}
+        style={{ boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.7)' }}
       >
-        <div className="flex items-center gap-2 rounded-t-2xl border-b border-white/[0.08] bg-[#181a25] px-3 py-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/15 text-sky-300">
-            <TextT size={14} weight="bold" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold tracking-tight text-slate-100">Prompt</p>
-            <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">Text Input</p>
-          </div>
-        </div>
         <MentionTextarea
           ref={editorRef}
           value={text}
           mentions={mentions}
           onChange={handleChange}
           folders={folders}
-          placeholder="Enter your prompt — type @ to reference a folder…"
-          className="nodrag w-full flex-1 resize-none bg-transparent p-4 text-[13px] leading-relaxed text-slate-200 outline-none placeholder:text-slate-500 cursor-text"
+          placeholder="Type your prompt here..."
+          className="nodrag custom-scrollbar w-full flex-1 resize-none bg-transparent p-6 text-[16px] leading-[1.65] text-slate-300 outline-none placeholder:text-[16px] placeholder:text-slate-500 cursor-text"
           disabled={readOnly}
           rows={6}
+          onContentHeightChange={handleContentHeightChange}
         />
 
         {editorLockError && (
@@ -269,7 +286,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           />
         )}
       </div>
-    </ResizableNodeFrame>
+    </div>
   )
 }
 
