@@ -219,8 +219,11 @@ test('createPresenceController publishes selection, editing, and drag lock lifec
   assert.deepEqual(
     awareness.fieldWrites.filter((entry) => entry.key === 'lock'),
     [
-      { key: 'lock', value: { nodeId: 'node-1' } },
-      { key: 'lock', value: { nodeId: 'node-1' } },
+      // Every publish carries expiresAt = now + 3x heartbeat, so a peer
+      // that disconnects mid-drag (never reaching stopDragLock) doesn't
+      // leave a lock stuck in shared awareness state forever.
+      { key: 'lock', value: { nodeId: 'node-1', expiresAt: 1_000 + 2_000 * 3 } },
+      { key: 'lock', value: { nodeId: 'node-1', expiresAt: 3_000 + 2_000 * 3 } },
       { key: 'lock', value: null },
     ],
   )
