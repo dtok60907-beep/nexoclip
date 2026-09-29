@@ -3,7 +3,7 @@
 
 	route {
 		handle_path /ai-clip-api/* {
-			reverse_proxy ai-clip:4175
+			reverse_proxy {$AI_CLIP_UPSTREAM:ai-clip:4175}
 		}
 
 		handle /canvas/api/internal/* {
@@ -20,15 +20,15 @@
 
 		handle /canvas/api/workspace-assets* {
 			uri replace /canvas/api/workspace-assets /api/assets
-			reverse_proxy nexoclip:3000
+			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}
 
 		handle /canvas/ws* {
-			reverse_proxy spite-realtime:3007
+			reverse_proxy {$SPITE_REALTIME_UPSTREAM:spite-realtime:3007}
 		}
 
 		handle /canvas* {
-			reverse_proxy spite:3005
+			reverse_proxy {$SPITE_UPSTREAM:spite:3005}
 		}
 
 		# Canonical public path is /canvas. Move old /spite bookmarks over.
@@ -38,19 +38,19 @@
 		# Backward compatibility for old bookmarks; new navigation uses /canvas.
 		handle /spite/api/workspace-assets* {
 			uri replace /spite/api/workspace-assets /api/assets
-			reverse_proxy nexoclip:3000
+			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}
 
 		handle /spite/ws* {
-			reverse_proxy spite-realtime:3007
+			reverse_proxy {$SPITE_REALTIME_UPSTREAM:spite-realtime:3007}
 		}
 
 		handle /spite* {
-			reverse_proxy spite:3005
+			reverse_proxy {$SPITE_UPSTREAM:spite:3005}
 		}
 
 		handle {
-			reverse_proxy nexoclip:3000
+			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}
 	}
 }

@@ -10,16 +10,17 @@ async function body(response) {
   return response.json();
 }
 
-test('trust GET and POST require authentication', async () => {
+test('trust GET, POST, and DELETE require authentication', async () => {
   const handlers = createBytePlusAssetTrustHandlers({
     resolveTenantContext: async () => { throw Object.assign(new Error('Authentication required'), { status: 401 }); },
     trustService: {
+      async deleteTrust() { throw new Error('must not delete trust'); },
       async getTrust() { throw new Error('must not read trust'); },
       async startTrust() { throw new Error('must not start trust'); },
     },
   });
 
-  for (const handler of [handlers.GET, handlers.POST]) {
+  for (const handler of [handlers.GET, handlers.POST, handlers.DELETE]) {
     const response = await handler(request, context);
     assert.equal(response.status, 401);
     assert.deepEqual(await body(response), { error: { code: 'AUTHENTICATION_REQUIRED', message: 'Authentication required' } });
@@ -31,17 +32,19 @@ test('cross-workspace assets use not-found responses without disclosing mappings
   const handlers = createBytePlusAssetTrustHandlers({
     resolveTenantContext: async () => ({ workspace: { id: 'workspace-1' } }),
     trustService: {
+      async deleteTrust(...args) { calls.push(args); return null; },
       async getTrust(...args) { calls.push(args); return null; },
       async startTrust(...args) { calls.push(args); return null; },
     },
   });
 
-  for (const handler of [handlers.GET, handlers.POST]) {
+  for (const handler of [handlers.GET, handlers.POST, handlers.DELETE]) {
     const response = await handler(request, { params: Promise.resolve({ assetId: 'outside-asset' }) });
     assert.equal(response.status, 404);
     assert.deepEqual(await body(response), { error: { code: 'ASSET_NOT_FOUND', message: 'Asset not found' } });
   }
   assert.deepEqual(calls, [
+    ['workspace-1', 'outside-asset'],
     ['workspace-1', 'outside-asset'],
     ['workspace-1', 'outside-asset'],
   ]);
@@ -69,6 +72,32 @@ test('handlers use only the authenticated default workspace and return safe stat
   assert.deepEqual(calls, [
     ['GET', 'workspace-authenticated', 'asset-1'],
     ['POST', 'workspace-authenticated', 'asset-1'],
+  ]);
+});
+
+test('handlers forward the requested Canvas project trust scope', async () => {
+  const calls = [];
+  const projectId = '11111111-1111-4111-8111-111111111111';
+  const handlers = createBytePlusAssetTrustHandlers({
+    resolveTenantContext: async () => ({ workspace: { id: 'workspace-1' } }),
+    trustService: {
+      async deleteTrust(...args) { calls.push(args); return { status: 'not_trusted' }; },
+      async getTrust(...args) { calls.push(args); return { status: 'not_trusted' }; },
+      async startTrust(...args) { calls.push(args); return { status: 'processing' }; },
+    },
+  });
+  const scopedRequest = {
+    ...request,
+    url: `https://example.test/api/assets/asset-1/byteplus-trust?canvas_project_id=${projectId}`,
+  };
+
+  assert.equal((await handlers.GET(scopedRequest, context)).status, 200);
+  assert.equal((await handlers.POST(scopedRequest, context)).status, 200);
+  assert.equal((await handlers.DELETE(scopedRequest, context)).status, 200);
+  assert.deepEqual(calls, [
+    ['workspace-1', 'asset-1', projectId],
+    ['workspace-1', 'asset-1', projectId],
+    ['workspace-1', 'asset-1', projectId],
   ]);
 });
 

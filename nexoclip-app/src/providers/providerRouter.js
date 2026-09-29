@@ -5,7 +5,7 @@ import { createGoogleImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
 import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
-import { getDirectProvider, resolveDirectProviderModel, isDirectBytePlusSeedance, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
+import { getDirectProvider, resolveDirectProviderModel, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
 
 const TRUSTED_ASSET_REQUEST = Symbol('trustedBytePlusAssetRequest');
 
@@ -88,12 +88,12 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       });
     }
     const mapping = getDirectProvider(params.model);
-    // BytePlus endpoint IDs are deployment-specific and are not valid OpenRouter model IDs.
-    // Dedicated aliases with endpointEnv must resolve to endpoint IDs and route directly as well.
-    const hasDirectOnlyAsset = operation === 'video'
-      && isTrustedAssetRequest(params)
-      && isDirectBytePlusSeedance(params.model, env);
-    if (mapping?.provider === 'byteplus' && (mapping.endpointEnv || params.model.startsWith('ep-') || hasDirectOnlyAsset)) {
+    // BytePlus models always use BytePlus directly. Sending them through
+    // OpenRouter first made valid BytePlus requests fail whenever the unrelated
+    // OpenRouter credential was unavailable, and needlessly added latency even
+    // when fallback succeeded. Deployment aliases still resolve their endpoint
+    // IDs through the configured environment variable.
+    if (mapping?.provider === 'byteplus') {
       if (!directConfigured(env, 'byteplus')) throw createDirectProviderUnavailableError(params.model, 'byteplus');
       const adapter = directAdapter(env, 'byteplus', operation, fetchImpl);
       const directModel = resolveDirectProviderModel(mapping, env);

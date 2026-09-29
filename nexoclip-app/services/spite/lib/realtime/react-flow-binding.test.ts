@@ -653,6 +653,21 @@ test('resolveRealtimeWebsocketUrl prefers configured public realtime URL', () =>
   }
 })
 
+test('resolveRealtimeWebsocketUrl resolves a configured relative websocket path against the current origin', () => {
+  const previous = process.env.NEXT_PUBLIC_REALTIME_URL
+  process.env.NEXT_PUBLIC_REALTIME_URL = '/canvas/ws'
+
+  try {
+    assert.equal(
+      resolveRealtimeWebsocketUrl(new URL('http://localhost/canvas/project/example')),
+      'ws://localhost/canvas/ws',
+    )
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_REALTIME_URL
+    else process.env.NEXT_PUBLIC_REALTIME_URL = previous
+  }
+})
+
 test('resolveRealtimeWebsocketUrl falls back to same-origin websocket path', () => {
   const previous = process.env.NEXT_PUBLIC_REALTIME_URL
   delete process.env.NEXT_PUBLIC_REALTIME_URL

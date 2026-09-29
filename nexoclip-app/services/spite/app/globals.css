@@ -9,7 +9,29 @@
 
 .spite-react-flow .react-flow__pane { cursor: grab; }
 .spite-react-flow .react-flow__pane:active { cursor: grabbing; }
-.spite-react-flow .react-flow__node { filter: drop-shadow(0 22px 32px rgba(0,0,0,.38)); }
+.spite-react-flow .react-flow__node { filter: none; }
+.spite-react-flow .react-flow__node.selected {
+  outline: none;
+}
+.spite-react-flow .react-flow__node.selected::after {
+  content: none;
+}
+.spite-react-flow .react-flow__node-imageGen > div,
+.spite-react-flow .react-flow__node-videoGen > div {
+  border-radius: 6px;
+}
+.spite-react-flow .react-flow__node-imageGen [class*="bg-[#181a25]"],
+.spite-react-flow .react-flow__node-videoGen [class*="bg-[#181a25]"] {
+  background-color: #20222a !important;
+}
+.spite-react-flow .react-flow__node-imageGen [class*="border-white/[0.08]"],
+.spite-react-flow .react-flow__node-videoGen [class*="border-white/[0.08]"] {
+  border-color: #2d313c !important;
+}
+.spite-react-flow .react-flow__node-imageGen [class*="bg-white/[0.03]"],
+.spite-react-flow .react-flow__node-videoGen [class*="bg-white/[0.03]"] {
+  background-color: #20222a !important;
+}
 .spite-react-flow .react-flow__edge-path {
   stroke-linecap: round;
   filter: drop-shadow(0 0 4px rgba(56, 189, 248, .45));
@@ -23,6 +45,18 @@
   filter: drop-shadow(0 0 5px rgba(56, 189, 248, .65));
 }
 .spite-glow-edge { pointer-events: stroke; }
+
+.menu-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.menu-scroll::-webkit-scrollbar { width: 4px; }
+.menu-scroll::-webkit-scrollbar-track { background: transparent; }
+.menu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.menu-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
 
 /* Dark-theme scrollbars. The browser default is a pale grey track that
    reads as white on our near-black surfaces; this overrides it. Applies

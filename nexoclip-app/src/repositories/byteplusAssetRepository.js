@@ -1,108 +1,108 @@
-const columns = `id, workspace_id, local_asset_id, group_id, provider_asset_id, attempt_id,
+const columns = `id, workspace_id, canvas_project_id, local_asset_id, group_id, provider_asset_id, attempt_id,
   status, error, project_name, created_at, updated_at`;
 
-export async function findBytePlusAssetLink(client, workspaceId, localAssetId) {
+export async function findBytePlusAssetLink(client, workspaceId, localAssetId, canvasProjectId = 'workspace') {
   const result = await client.query(
     `SELECT ${columns}
      FROM byteplus_asset_links
-     WHERE workspace_id = $1 AND local_asset_id = $2
+     WHERE workspace_id = $1 AND local_asset_id = $2 AND canvas_project_id = $3
      LIMIT 1`,
-    [workspaceId, localAssetId],
+    [workspaceId, localAssetId, canvasProjectId],
   );
   return result.rows[0] || null;
 }
 
-export async function findBytePlusAssetGroup(client, projectName) {
+export async function findBytePlusAssetGroup(client, workspaceId, canvasProjectId, projectName) {
   const result = await client.query(
     `SELECT group_id
      FROM byteplus_asset_links
-     WHERE project_name = $1 AND group_id IS NOT NULL
+     WHERE workspace_id = $1 AND canvas_project_id = $2 AND project_name = $3 AND group_id IS NOT NULL
      ORDER BY updated_at DESC
      LIMIT 1`,
-    [projectName],
+    [workspaceId, canvasProjectId, projectName],
   );
   return result.rows[0]?.group_id || null;
 }
 
 export async function createProcessingBytePlusAssetLink(client, {
-  workspaceId, localAssetId, projectName = 'default', attemptId,
+  workspaceId, localAssetId, canvasProjectId = 'workspace', projectName = 'default', attemptId,
 }) {
   const result = await client.query(
-    `INSERT INTO byteplus_asset_links (workspace_id, local_asset_id, status, project_name, attempt_id)
-     VALUES ($1, $2, 'processing', $3, $4)
-     ON CONFLICT (workspace_id, local_asset_id) DO NOTHING
+    `INSERT INTO byteplus_asset_links (workspace_id, canvas_project_id, local_asset_id, status, project_name, attempt_id)
+     VALUES ($1, $2, $3, 'processing', $4, $5)
+     ON CONFLICT (workspace_id, canvas_project_id, local_asset_id) DO NOTHING
      RETURNING ${columns}`,
-    [workspaceId, localAssetId, projectName, attemptId],
+    [workspaceId, canvasProjectId, localAssetId, projectName, attemptId],
   );
-  return result.rows[0] || findBytePlusAssetLink(client, workspaceId, localAssetId);
+  return result.rows[0] || findBytePlusAssetLink(client, workspaceId, localAssetId, canvasProjectId);
 }
 
 export async function updateBytePlusAssetLink(client, {
-  workspaceId, localAssetId, groupId, providerAssetId, status, error, expectedAttemptId,
+  workspaceId, localAssetId, canvasProjectId = 'workspace', groupId, providerAssetId, status, error, expectedAttemptId,
 }) {
   const result = await client.query(
     `UPDATE byteplus_asset_links
-     SET group_id = COALESCE($3, group_id),
-         provider_asset_id = COALESCE($4, provider_asset_id),
-         status = $5, error = $6::jsonb, updated_at = now()
-     WHERE workspace_id = $1 AND local_asset_id = $2
-       AND ($7::uuid IS NULL OR attempt_id = $7)
+     SET group_id = COALESCE($4, group_id),
+         provider_asset_id = COALESCE($5, provider_asset_id),
+         status = $6, error = $7::jsonb, updated_at = now()
+     WHERE workspace_id = $1 AND local_asset_id = $2 AND canvas_project_id = $3
+       AND ($8::uuid IS NULL OR attempt_id = $8)
      RETURNING ${columns}`,
-    [workspaceId, localAssetId, groupId, providerAssetId, status, error && JSON.stringify(error), expectedAttemptId || null],
+    [workspaceId, localAssetId, canvasProjectId, groupId, providerAssetId, status, error && JSON.stringify(error), expectedAttemptId || null],
   );
   return result.rows[0] || null;
 }
 
 export async function compareAndSetBytePlusAssetLinkStatus(client, {
-  workspaceId, localAssetId, expectedStatus, expectedProviderAssetId, status, error, expectedAttemptId,
+  workspaceId, localAssetId, canvasProjectId = 'workspace', expectedStatus, expectedProviderAssetId, status, error, expectedAttemptId,
 }) {
   const result = await client.query(
     `UPDATE byteplus_asset_links
-     SET status = $5, error = $6::jsonb, updated_at = now()
-     WHERE workspace_id = $1 AND local_asset_id = $2
-       AND status = $3 AND provider_asset_id IS NOT DISTINCT FROM $4
-       AND ($7::uuid IS NULL OR attempt_id = $7)
+     SET status = $6, error = $7::jsonb, updated_at = now()
+     WHERE workspace_id = $1 AND local_asset_id = $2 AND canvas_project_id = $3
+       AND status = $4 AND provider_asset_id IS NOT DISTINCT FROM $5
+       AND ($8::uuid IS NULL OR attempt_id = $8)
      RETURNING ${columns}`,
-    [workspaceId, localAssetId, expectedStatus, expectedProviderAssetId, status, error && JSON.stringify(error), expectedAttemptId || null],
+    [workspaceId, localAssetId, canvasProjectId, expectedStatus, expectedProviderAssetId, status, error && JSON.stringify(error), expectedAttemptId || null],
   );
   return result.rows[0] || null;
 }
 
 export async function deleteBytePlusAssetLink(client, {
-  workspaceId, localAssetId, providerAssetId, attemptId,
+  workspaceId, localAssetId, canvasProjectId = 'workspace', providerAssetId, attemptId,
 }) {
   const result = await client.query(
     `DELETE FROM byteplus_asset_links
-     WHERE workspace_id = $1 AND local_asset_id = $2
-       AND provider_asset_id = $3 AND attempt_id = $4`,
-    [workspaceId, localAssetId, providerAssetId, attemptId],
+     WHERE workspace_id = $1 AND local_asset_id = $2 AND canvas_project_id = $3
+       AND provider_asset_id IS NOT DISTINCT FROM $4 AND attempt_id = $5`,
+    [workspaceId, localAssetId, canvasProjectId, providerAssetId, attemptId],
   );
   return result.rowCount > 0;
 }
 
 export async function markBytePlusAssetLinkStale(client, {
-  workspaceId, localAssetId, providerAssetId, attemptId, errorCode,
+  workspaceId, localAssetId, canvasProjectId = 'workspace', providerAssetId, attemptId, errorCode,
 }) {
   const result = await client.query(
     `UPDATE byteplus_asset_links
-     SET status = 'failed', error = $5::jsonb, updated_at = now()
-     WHERE workspace_id = $1 AND local_asset_id = $2
-       AND provider_asset_id = $3 AND attempt_id = $4`,
-    [workspaceId, localAssetId, providerAssetId, attemptId, JSON.stringify({ code: errorCode })],
+     SET status = 'failed', error = $6::jsonb, updated_at = now()
+     WHERE workspace_id = $1 AND local_asset_id = $2 AND canvas_project_id = $3
+       AND provider_asset_id = $4 AND attempt_id = $5`,
+    [workspaceId, localAssetId, canvasProjectId, providerAssetId, attemptId, JSON.stringify({ code: errorCode })],
   );
   return result.rowCount > 0;
 }
 
 export async function resetBytePlusAssetLink(client, {
-  workspaceId, localAssetId, attemptId, projectName, clearGroup = false,
+  workspaceId, localAssetId, canvasProjectId = 'workspace', attemptId, projectName, clearGroup = false,
 }) {
   const result = await client.query(
     `UPDATE byteplus_asset_links
-     SET provider_asset_id = NULL, attempt_id = $3, project_name = $4, status = 'processing',
-         group_id = CASE WHEN $5 THEN NULL ELSE group_id END, error = NULL, updated_at = now()
-     WHERE workspace_id = $1 AND local_asset_id = $2
+     SET provider_asset_id = NULL, attempt_id = $4, project_name = $5, status = 'processing',
+         group_id = CASE WHEN $6 THEN NULL ELSE group_id END, error = NULL, updated_at = now()
+     WHERE workspace_id = $1 AND local_asset_id = $2 AND canvas_project_id = $3
      RETURNING ${columns}`,
-    [workspaceId, localAssetId, attemptId, projectName, clearGroup],
+    [workspaceId, localAssetId, canvasProjectId, attemptId, projectName, clearGroup],
   );
   return result.rows[0] || null;
 }

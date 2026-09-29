@@ -291,14 +291,17 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
         ? await registerAssetByUrl()
         : selectedAssets.find(asset => !asset.isUploading)
       const resolvedAssetId = resolvedAsset?.id || assetId
-      if (!resolvedAssetId || !resolvedAsset?.workspaceAssetId) throw new Error('asset must be imported into Assets first')
+      if (!resolvedAssetId) throw new Error('asset is not ready yet')
 
+      const workspaceAssetIds = resolvedAsset?.workspaceAssetId
+        ? { [resolvedAssetId]: resolvedAsset.workspaceAssetId }
+        : {}
       const response = await fetch(withBasePath(`/api/folders/${folderId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           addAssetIds: [resolvedAssetId],
-          workspaceAssetIds: { [resolvedAssetId]: resolvedAsset.workspaceAssetId },
+          workspaceAssetIds,
         })
       })
       if (!response.ok) throw new Error(`folder update returned ${response.status}`)
@@ -337,10 +340,9 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
         readyAssets = [...readyAssets.filter(asset => asset.id !== generatedAsset.id), generatedAsset]
         setSelectedAssets(prev => [...prev.filter(asset => asset.id !== generatedAsset.id), generatedAsset])
       }
-      const legacyAssets = readyAssets.filter(asset => !asset.workspaceAssetId)
-      if (legacyAssets.length > 0) {
-        throw new Error('Every image must be imported into Assets before it can be saved as a reference')
-      }
+      // Older canvas uploads are valid generation_history assets even when
+      // they predate the canonical workspace asset index. The database keeps
+      // workspace_asset_id nullable specifically for this compatibility path.
       const assetIds = readyAssets.map(a => a.id)
       const workspaceAssetIds = Object.fromEntries(readyAssets
         .filter((asset): asset is AssetItem & { workspaceAssetId: string } => Boolean(asset.workspaceAssetId))

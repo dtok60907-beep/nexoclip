@@ -41,6 +41,7 @@ export interface Mention {
 
 export interface MentionTextareaRef {
   focus: () => void
+  getContentHeight: () => number
 }
 
 interface Props {
@@ -52,6 +53,7 @@ interface Props {
   className?: string
   disabled?: boolean
   rows?: number
+  onContentHeightChange?: (height: number) => void
 }
 
 const ICONS: Record<FolderType, any> = {
@@ -424,7 +426,7 @@ export function restoreCaretFromOffset(el: HTMLElement, targetOffset: number) {
 // ---------------------------------------------------------------------------
 
 export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function MentionTextarea(
-  { value, mentions, onChange, folders, placeholder, className, disabled, rows = 2 },
+  { value, mentions, onChange, folders, placeholder, className, disabled, rows = 2, onContentHeightChange },
   outerRef,
 ) {
   const editorRef = useRef<HTMLDivElement>(null)
@@ -442,6 +444,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
 
   useImperativeHandle(outerRef, () => ({
     focus: () => editorRef.current?.focus(),
+    getContentHeight: () => editorRef.current?.scrollHeight ?? 0,
   }))
 
   // Initial DOM render. We only re-render the editor from `value`+`mentions`
@@ -452,6 +455,17 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
   const lastFoldersStateKey = useRef('')
   const incomingStateKey = mentionStateKey(value, mentions)
   const foldersStateKey = mentionFoldersStateKey(folders)
+
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !onContentHeightChange) return
+    const reportHeight = () => onContentHeightChange(editor.scrollHeight)
+    reportHeight()
+    const observer = new ResizeObserver(reportHeight)
+    observer.observe(editor)
+    return () => observer.disconnect()
+  }, [incomingStateKey, onContentHeightChange])
+
   useEffect(() => {
     const el = editorRef.current
     if (!el) return

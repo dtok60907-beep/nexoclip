@@ -64,7 +64,11 @@ export function createInternalGenerationHandler({
     if (body.action === 'submit') {
       if (!validInput(body.input)) return Response.json({ error: 'Invalid internal generation request' }, { status: 400 });
       const pool = loadPool();
-      const generation = await reserve(pool, workspace.id, { ...body.input, projectId: null }, {
+      const generation = await reserve(pool, workspace.id, {
+        ...body.input,
+        projectId: null,
+        parameters: { ...(body.input.parameters || {}), canvasProjectId: body.projectId },
+      }, {
         userId: body.userId,
         allowLegacyCanvasReferences: true,
       });

@@ -7,6 +7,7 @@ import { createBytePlusAssetTrustService } from '../../src/services/byteplusAsse
 
 function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, env = {}, now = () => new Date('2026-09-16T12:00:00Z') } = {}) {
   let current = link ? {
+    canvas_project_id: 'workspace',
     project_name: 'project-x',
     attempt_id: '00000000-0000-4000-8000-000000000001',
     updated_at: now().toISOString(),
@@ -15,7 +16,7 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
     error: null,
     ...link,
   } : null;
-  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], resets: 0, cas: [] };
+  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], deletes: [], resets: 0, cas: [] };
   const client = {
     async query(text, values) {
       calls.queries.push({ text, values });
@@ -25,16 +26,25 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
     release() {},
   };
   const repository = {
-    async findBytePlusAssetLink(_client, workspaceId, assetId) {
-      return current?.workspace_id === workspaceId && current?.local_asset_id === assetId ? { ...current } : null;
+    async findBytePlusAssetLink(_client, workspaceId, assetId, canvasProjectId = 'workspace') {
+      return current?.workspace_id === workspaceId && current?.local_asset_id === assetId
+        && current?.canvas_project_id === canvasProjectId ? { ...current } : null;
     },
-    async findBytePlusAssetGroup(_client, projectName) {
-      return current?.project_name === projectName ? (current.group_id || existingGroup) : existingGroup;
+    async deleteBytePlusAssetLink(_client, input) {
+      calls.deletes.push(input)
+      if (!current || current.attempt_id !== input.attemptId || current.provider_asset_id !== input.providerAssetId) return false
+      current = null
+      return true
+    },
+    async findBytePlusAssetGroup(_client, workspaceId, canvasProjectId, projectName) {
+      return current?.workspace_id === workspaceId && current?.canvas_project_id === canvasProjectId
+        && current?.project_name === projectName ? (current.group_id || existingGroup) : existingGroup;
     },
     async createProcessingBytePlusAssetLink(_client, input) {
       if (!current || current.workspace_id !== input.workspaceId || current.local_asset_id !== input.localAssetId) {
         current = {
           workspace_id: input.workspaceId,
+          canvas_project_id: input.canvasProjectId || 'workspace',
           local_asset_id: input.localAssetId,
           project_name: input.projectName,
           attempt_id: input.attemptId,
@@ -96,6 +106,7 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
   };
   const provider = {
     async createAssetGroup(input) { calls.groups.push(input); calls.queries.push({ text: 'PROVIDER create-group' }); return { Id: 'group-secret' }; },
+    async deleteAsset(input) { calls.deletes.push({ provider: input }); return {}; },
     async createAsset(input) { calls.assets.push(input); calls.queries.push({ text: 'PROVIDER create-asset' }); return { Id: 'provider-asset-secret' }; },
     async getAsset(input) {
       calls.gets.push(input);
@@ -145,6 +156,43 @@ test('starts image trust in the workspace with a short-lived source URL and safe
   assert.ok(commitIndex >= 0 && commitIndex < calls.queries.findIndex(({ text }) => text === 'PROVIDER create-group'), 'claim must commit before provider I/O');
   assert.equal(getLink().provider_asset_id, 'provider-asset-secret');
   assert.doesNotMatch(JSON.stringify(await service.getTrust('workspace-1', 'asset-1')), /secret|signature|group/i);
+});
+
+test('creates independent provider groups for the same asset in different Canvas projects', async () => {
+  const projectA = '11111111-1111-4111-8111-111111111111';
+  const projectB = '22222222-2222-4222-8222-222222222222';
+  const first = fixture({ asset: image, env: { BYTEPLUS_ASSET_GROUP_ID: 'legacy-shared-group' } });
+  const second = fixture({ asset: image, env: { BYTEPLUS_ASSET_GROUP_ID: 'legacy-shared-group' } });
+
+  await first.service.startTrust('workspace-1', 'asset-1', projectA);
+  await second.service.startTrust('workspace-1', 'asset-1', projectB);
+
+  assert.equal(first.calls.groups.length, 1);
+  assert.equal(second.calls.groups.length, 1);
+  assert.match(first.calls.groups[0].name, /11111111/);
+  assert.match(second.calls.groups[0].name, /22222222/);
+  assert.notEqual(first.calls.groups[0].clientToken, second.calls.groups[0].clientToken);
+  assert.equal(first.getLink().canvas_project_id, projectA);
+  assert.equal(second.getLink().canvas_project_id, projectB);
+});
+
+test('removes trust only from the selected Canvas project group', async () => {
+  const projectA = '11111111-1111-4111-8111-111111111111';
+  const projectB = '22222222-2222-4222-8222-222222222222';
+  const activeLink = projectId => ({
+    workspace_id: 'workspace-1', canvas_project_id: projectId, local_asset_id: 'asset-1',
+    status: 'active', provider_asset_id: `provider-${projectId[0]}`, group_id: `group-${projectId[0]}`,
+  });
+  const first = fixture({ asset: image, link: activeLink(projectA) });
+  const second = fixture({ asset: image, link: activeLink(projectB), providerGet: { Status: 'Active' } });
+
+  assert.deepEqual(await first.service.deleteTrust('workspace-1', 'asset-1', projectA), { status: 'not_trusted' });
+  assert.deepEqual(await second.service.getTrust('workspace-1', 'asset-1', projectB), { status: 'active' });
+  assert.deepEqual(first.calls.deletes[0], {
+    provider: { assetId: 'provider-1', projectName: 'project-x' },
+  });
+  assert.equal(first.calls.deletes[1].canvasProjectId, projectA);
+  assert.equal(second.calls.deletes.length, 0);
 });
 
 test('uses a configured shared BytePlus group without creating a group', async () => {
@@ -425,6 +473,7 @@ test('GET compare-and-set loss reloads current state instead of regressing it', 
   assert.deepEqual(stale.calls.cas[0], {
     workspaceId: 'workspace-1',
     localAssetId: 'asset-1',
+    canvasProjectId: 'workspace',
     expectedStatus: 'processing',
     expectedProviderAssetId: 'provider-1',
     expectedAttemptId: '00000000-0000-4000-8000-000000000001',

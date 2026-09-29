@@ -30,6 +30,10 @@ test('trust URL targets the unprefixed main app and encodes the asset ID', () =>
     bytePlusTrustUrl('asset/with space'),
     '/api/assets/asset%2Fwith%20space/byteplus-trust',
   )
+  assert.equal(
+    bytePlusTrustUrl('asset-1', 'project/a'),
+    '/api/assets/asset-1/byteplus-trust?canvas_project_id=project%2Fa',
+  )
 })
 
 test('extracts only canonical workspace asset ids from image URLs', () => {
@@ -111,7 +115,7 @@ test('an in-flight POST disables trust before the server reports processing', ()
   })
 })
 
-test('processing and active trust states have accessible labels and no repeat action', () => {
+test('processing and active trust states expose project-scoped actions', () => {
   assert.deepEqual(trustForSeedanceView('image', { status: 'processing' }), {
     label: 'Trusting for Seedance',
     action: 'Trusting…',
@@ -119,7 +123,12 @@ test('processing and active trust states have accessible labels and no repeat ac
   })
   assert.deepEqual(trustForSeedanceView('image', { status: 'active' }), {
     label: 'Trusted for Seedance',
-    action: null,
+    action: 'Remove from this project',
+    disabled: false,
+  })
+  assert.deepEqual(trustForSeedanceView('image', { status: 'active' }, true), {
+    label: 'Removing from Seedance',
+    action: 'Removing…',
     disabled: true,
   })
 })
@@ -166,6 +175,28 @@ test('retryable GET failures remain processing and use bounded backoff', async (
   assert.equal(bytePlusTrustPollDelay(20), 30000)
 })
 
+test('project untrust uses DELETE against the scoped trust URL', async () => {
+  const calls: Array<{ url: string; method?: string }> = []
+  const state = await requestBytePlusTrust(
+    'asset-1',
+    'DELETE',
+    async (input, init) => {
+      calls.push({ url: String(input), method: init?.method })
+      return new Response(JSON.stringify({ status: 'not_trusted' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+    '11111111-1111-4111-8111-111111111111',
+  )
+
+  assert.deepEqual(state, { status: 'not_trusted', error: undefined })
+  assert.deepEqual(calls, [{
+    url: '/api/assets/asset-1/byteplus-trust?canvas_project_id=11111111-1111-4111-8111-111111111111',
+    method: 'DELETE',
+  }])
+})
+
 test('image generator and image reference nodes expose trust only while selected', () => {
   assert.match(imageNodeSource, /useImageTrust/)
   assert.match(referenceNodeSource, /useImageTrust/)
@@ -182,7 +213,7 @@ test('folder image details open without a workspace-list match and canonicalize 
   assert.match(toolbarSource, /setSelectedGenAsset\(full \|\|/)
   assert.match(toolbarSource, /importImageForTrust/)
   assert.match(toolbarSource, /canonical_url: imported\.canonicalUrl/)
-  assert.match(toolbarSource, /requestBytePlusTrust\(imported\.assetId, 'POST'\)/)
+  assert.match(toolbarSource, /requestBytePlusTrust\(imported\.assetId, 'POST', fetch, projectId\)/)
 })
 
 test('both detail layouts wire the shared trust action to the selected asset in-flight state', () => {
@@ -200,7 +231,7 @@ test('opening a canonical active asset revalidates provider trust instead of tru
     toolbarSource.indexOf('const workspaceAssetId = workspaceAssetIdFromUrl'),
     toolbarSource.indexOf('// Listen for asset status changes'),
   )
-  assert.match(validationEffect, /requestBytePlusTrust\(workspaceAssetId, 'GET'\)/)
+  assert.match(validationEffect, /requestBytePlusTrust\(workspaceAssetId, 'GET', fetch, projectId\)/)
   assert.doesNotMatch(validationEffect, /asset\.byteplus_trust \|\|/)
 })
 

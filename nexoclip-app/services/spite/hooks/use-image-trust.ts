@@ -16,6 +16,7 @@ interface UseImageTrustOptions {
   filename?: string
   workspaceAssetId?: unknown
   enabled?: boolean
+  canvasProjectId?: string
   onCanonicalized?: (canonicalUrl: string, assetId: string) => void
 }
 
@@ -24,6 +25,7 @@ export function useImageTrust({
   filename,
   workspaceAssetId,
   enabled = true,
+  canvasProjectId,
   onCanonicalized,
 }: UseImageTrustOptions) {
   const [assetId, setAssetId] = useState<string | null>(() => resolveWorkspaceAssetId(url, workspaceAssetId))
@@ -40,37 +42,46 @@ export function useImageTrust({
     if (!enabled || !nextAssetId) return
 
     let cancelled = false
-    requestBytePlusTrust(nextAssetId, 'GET')
+    requestBytePlusTrust(nextAssetId, 'GET', fetch, canvasProjectId)
       .then(next => {
         if (cancelled) return
         setState(next)
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [enabled, url, workspaceAssetId])
+  }, [canvasProjectId, enabled, url, workspaceAssetId])
 
   const trust = useCallback(async () => {
-    if (!enabled || !url || requestRef.current || state.status === 'processing' || state.status === 'active') return
+    if (!enabled || !url || requestRef.current || state.status === 'processing') return
     requestRef.current = true
     setInFlight(true)
     try {
       const canonicalAssetId = workspaceAssetIdFromUrl(url)
+      if (state.status === 'active') {
+        if (!canonicalAssetId) throw new Error('Trusted asset identity is unavailable')
+        const next = await requestBytePlusTrust(canonicalAssetId, 'DELETE', fetch, canvasProjectId)
+        if (next.status === 'failed') throw new Error('Could not remove trusted asset')
+        setState(next)
+        return
+      }
       const imported = canonicalAssetId
         ? { assetId: canonicalAssetId, canonicalUrl: url }
         : await importImageForTrust({ url, filename })
       setAssetId(imported.assetId)
       if (imported.canonicalUrl !== url) onCanonicalizedRef.current?.(imported.canonicalUrl, imported.assetId)
-      setState(await requestBytePlusTrust(imported.assetId, 'POST'))
+      setState(await requestBytePlusTrust(imported.assetId, 'POST', fetch, canvasProjectId))
     } catch (error) {
-      setState({
-        status: 'failed',
-        error: { code: error instanceof Error ? 'IMAGE_IMPORT_FAILED' : 'UNKNOWN' },
-      })
+      setState(state.status === 'active'
+        ? { status: 'active' }
+        : {
+            status: 'failed',
+            error: { code: error instanceof Error ? 'IMAGE_IMPORT_FAILED' : 'UNKNOWN' },
+          })
     } finally {
       requestRef.current = false
       setInFlight(false)
     }
-  }, [enabled, filename, state.status, url, workspaceAssetId])
+  }, [canvasProjectId, enabled, filename, state.status, url, workspaceAssetId])
 
   useEffect(() => {
     if (!assetId || state.status !== 'processing') return
@@ -84,7 +95,7 @@ export function useImageTrust({
         return
       }
       try {
-        const next = await requestBytePlusTrust(assetId, 'GET')
+        const next = await requestBytePlusTrust(assetId, 'GET', fetch, canvasProjectId)
         if (cancelled) return
         setState(next)
         if (next.status !== 'processing') return
@@ -100,10 +111,10 @@ export function useImageTrust({
       cancelled = true
       clearTimeout(timeout)
     }
-  }, [assetId, state.status])
+  }, [assetId, canvasProjectId, state.status])
 
   const label = state.status === 'active'
-    ? 'Trusted for Seedance'
+    ? 'Remove from this project'
     : state.status === 'processing' || inFlight
       ? 'Trusting for Seedance'
       : state.status === 'failed'
@@ -115,6 +126,6 @@ export function useImageTrust({
     inFlight,
     trust,
     label,
-    disabled: !enabled || !url || inFlight || state.status === 'processing' || state.status === 'active',
+    disabled: !enabled || !url || inFlight || state.status === 'processing',
   }
 }
