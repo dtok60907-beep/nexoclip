@@ -4,10 +4,12 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('../components/canvas/nodes/video-node.tsx', import.meta.url), 'utf8')
 
-test('video sound defaults on, preserves explicit false, and exposes no toggle', () => {
+test('video sound defaults on, preserves explicit false, is sent, and exposes no toggle', () => {
   assert.match(source, /useState\(\(data\.enableAudio as boolean \| undefined\) \?\? true\)/)
-  assert.match(source, /setEnableAudio\(\(data\.enableAudio as boolean \| undefined\) \?\? true\)/)
-  assert.match(source, /enableAudio: true/)
+  // Unset/explicit values resolve through the shared settings helper (covered
+  // by generation-settings.test.ts: defaults on, explicit false preserved).
+  assert.match(source, /setEnableAudio\(effective\.enableAudio\)/)
+  assert.match(source, /generateAudio: currentModel\?\.supportsAudio \? enableAudio : undefined/)
   assert.doesNotMatch(source, /setEnableAudio\(!enableAudio\)/)
   assert.doesNotMatch(source, /SpeakerSlash/)
 })

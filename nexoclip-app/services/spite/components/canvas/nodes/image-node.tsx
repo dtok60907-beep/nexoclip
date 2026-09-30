@@ -16,6 +16,7 @@ import { folderMediaLabel } from '@/lib/canvas-media-label'
 import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
+import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -32,16 +33,18 @@ import { GenerationFeedbackOverlay, getGenerationFeedbackState, isTerminalGenera
 const IMAGE_MODELS = getImageModels()
 type GenerationStatus = 'idle' | 'submitting' | 'in_queue' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
 
-function ControlSelect({ value, disabled }: {
+function ControlSelect({ value, disabled, section = 'model' }: {
   value: string
   options: { value: string; label: string }[]
   onChange: (value: string) => void
   disabled?: boolean
+  // Which part of the settings panel this control opens.
+  section?: 'model' | 'resolution' | 'aspect'
 }) {
   return (
     <button
       type="button"
-      data-generation-setting="model"
+      data-generation-setting={section}
       disabled={disabled}
       className="nodrag nopan flex h-7 items-center gap-1.5 bg-transparent px-0 text-[12px] font-semibold text-slate-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
       title="Choose model and open generation settings"
@@ -193,9 +196,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
   useEffect(() => {
     const finishSync = syncGuardRef.current.beginPropSync()
-    setModelId((data.modelId as string) || 'nano-banana-pro')
-    setAspectRatio((data.aspectRatio as string) || '')
-    setResolution((data.resolution as string) || '')
+    // Resolve unset fields exactly like the settings panel, so the node shows
+    // and submits what the panel displays.
+    const effective = resolveGenerationSettings('image', data as Record<string, unknown>)
+    setModelId(effective.modelId)
+    setAspectRatio(effective.aspectRatio)
+    setResolution(effective.resolution)
     setNumImages((data.numImages as number) || 1)
     const durableStatus = data.generationStatus === 'failed'
       ? 'failed'
@@ -1202,13 +1208,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               options={modelOptions}
               onChange={(value) => {
                 syncGuardRef.current.beginUserEdit()
-                const nextModel = getModelById(value)
-                const nextAspectRatio = nextModel?.defaultAspectRatio || ''
-                const nextResolution = nextModel?.defaultResolution || ''
-                setModelId(value)
-                setAspectRatio(nextAspectRatio)
-                setResolution(nextResolution)
-                patchPersistedNodeData({ modelId: value, aspectRatio: nextAspectRatio, resolution: nextResolution })
+                patchPersistedNodeData(settingsForModelChange('image', value, data as Record<string, unknown>))
               }}
               disabled={isGenerating}
             />
@@ -1218,6 +1218,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             {aspectOptions.length > 0 && (
               <ControlSelect 
                 value={aspectRatio || currentModel?.defaultAspectRatio || ''} 
+                section="aspect"
                 options={aspectOptions}
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
@@ -1232,6 +1233,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             {resolutionOptions.length > 0 && (
               <ControlSelect 
                 value={resolution || currentModel?.defaultResolution || ''} 
+                section="resolution"
                 options={resolutionOptions}
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()

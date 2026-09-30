@@ -15,6 +15,7 @@ import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from 
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
 import { findUntrustedReferences } from '@/lib/byteplus-trust'
+import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -31,16 +32,18 @@ import { GenerationFeedbackOverlay, getGenerationFeedbackState, isTerminalGenera
 const VIDEO_MODELS = getVideoModels()
 type GenerationStatus = 'idle' | 'submitting' | 'in_queue' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
 
-function ControlSelect({ value, disabled }: {
+function ControlSelect({ value, disabled, section = 'model' }: {
   value: string
   options: { value: string; label: string }[]
   onChange: (value: string) => void
   disabled?: boolean
+  // Which part of the settings panel this control opens.
+  section?: 'model' | 'resolution' | 'aspect' | 'duration'
 }) {
   return (
     <button
       type="button"
-      data-generation-setting="model"
+      data-generation-setting={section}
       disabled={disabled}
       className="nodrag nopan flex h-7 items-center gap-1.5 bg-transparent px-0 text-[12px] font-semibold text-slate-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
       title="Choose model and open generation settings"
@@ -235,15 +238,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   useEffect(() => {
     const finishSync = syncGuardRef.current.beginPropSync()
+    // Resolve unset fields exactly like the settings panel does, so the node
+    // shows and submits the same values the panel displays.
+    const effective = resolveGenerationSettings('video', data as Record<string, unknown>)
     setUpscaleMode((data.upscaleMode as 'standard' | 'creative') || 'standard')
     setColormap((data.colormap as string) || 'grayscale')
-    setModelId((data.modelId as string) || 'seedance-1.5')
-    setDuration((data.duration as string) || '')
-    setAspectRatio((data.aspectRatio as string) || '16:9')
-    setResolution((data.resolution as string) || '')
-    setEnableAudio((data.enableAudio as boolean | undefined) ?? true)
-    setDraftMode((data.draftMode as boolean) || false)
-    setExtendMode((data.extendMode as boolean) || false)
+    setModelId(effective.modelId)
+    setDuration(effective.duration)
+    setAspectRatio(effective.aspectRatio)
+    setResolution(effective.resolution)
+    setEnableAudio(effective.enableAudio)
+    setDraftMode(effective.draftMode)
+    setExtendMode(effective.extendMode)
     setEnableLoop((data.enableLoop as boolean) || false)
     setVoiceIds((data.voiceIds as string) || '')
     setNumVideos((data.numVideos as number) || 1)
@@ -845,6 +851,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           duration,
           resolution: draftMode ? '480p' : resolution,
           draft: currentModel?.supportsDraft ? draftMode : undefined,
+          // The audio toggle was never sent, so it had no effect on output.
+          generateAudio: currentModel?.supportsAudio ? enableAudio : undefined,
           omniReferenceTaskType: currentModel?.supportsExtend && extendMode ? 'extend' : undefined,
           videoUrl: connectedVideoUrl || undefined,
         },
@@ -1376,22 +1384,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               options={modelOptions}
               onChange={(value) => {
                 syncGuardRef.current.beginUserEdit()
-                const nextModel = getModelById(value)
-                const nextAspectRatio = nextModel?.defaultAspectRatio || '16:9'
-                const nextDuration = nextModel?.defaultDuration || ''
-                const nextResolution = nextModel?.defaultResolution || ''
-                setModelId(value)
-                setAspectRatio(nextAspectRatio)
-                setDuration(nextDuration)
-                setResolution(nextResolution)
-                setEnableAudio(false)
-                patchPersistedNodeData({
-                  modelId: value,
-                  aspectRatio: nextAspectRatio,
-                  duration: nextDuration,
-                  resolution: nextResolution,
-                  enableAudio: true,
-                })
+                // Same fields the settings panel writes; local state then
+                // follows from the persisted data instead of diverging from it.
+                patchPersistedNodeData(settingsForModelChange('video', value, data as Record<string, unknown>))
               }}
               disabled={isGenerating}
             />
@@ -1439,6 +1434,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             {currentModel?.category === 'video' && (
               <ControlSelect
                 value={aspectRatio}
+                section="aspect"
                 options={(currentModel.aspectRatios || []).map((ratio) => ({ value: ratio, label: ratio }))}
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
@@ -1453,6 +1449,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             {durationOptions.length > 0 && (
               <ControlSelect 
                 value={duration || currentModel?.defaultDuration || ''} 
+                section="duration"
                 options={durationOptions}
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
@@ -1504,6 +1501,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             {resolutionOptions.length > 0 && (
               <ControlSelect 
                 value={resolution || currentModel?.defaultResolution || ''} 
+                section="resolution"
                 options={resolutionOptions}
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CaretDown, Check, FilmStrip, Image as ImageIcon, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
-import { getImageModels, getModelById, getVideoModels } from '@/lib/fal-models'
+import { getImageModels, getVideoModels } from '@/lib/fal-models'
+import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 
 type SettingsNode = {
   id: string
@@ -16,7 +17,6 @@ type Props = {
   onPatch: (nodeId: string, patch: Record<string, unknown>) => void
 }
 
-const clampDuration = (value: unknown) => Math.min(30, Math.max(5, Number.parseInt(String(value || '5'), 10) || 5))
 
 export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
   const [modelOpen, setModelOpen] = useState(false)
@@ -35,34 +35,24 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
 
   const isVideo = node?.type === 'videoGen'
   const models = useMemo(() => isVideo ? getVideoModels() : getImageModels(), [isVideo])
-  const modelId = String(node?.data.modelId || (isVideo ? 'seedance-2.0' : 'nano-banana-pro'))
-  const currentModel = getModelById(modelId) || models[0]
-  const resolution = String(node?.data.resolution || currentModel?.defaultResolution || '')
-  const ratio = String(node?.data.aspectRatio || currentModel?.defaultAspectRatio || (isVideo ? '16:9' : '1:1'))
-  const duration = clampDuration(node?.data.duration || currentModel?.defaultDuration)
-  const batch = Number(node?.data[isVideo ? 'numVideos' : 'numImages'] || 1)
-  const audio = (node?.data.enableAudio as boolean | undefined) ?? true
-  const draft = Boolean(node?.data.draftMode)
-  const extend = Boolean(node?.data.extendMode)
+  // Same resolution the node uses when it submits, so the panel shows what
+  // will actually be generated.
+  const effective = resolveGenerationSettings(isVideo ? 'video' : 'image', node?.data)
+  const currentModel = effective.model || models[0]
+  const resolution = effective.resolution
+  const ratio = effective.aspectRatio
+  const duration = Number.parseInt(effective.duration, 10) || 5
+  const batch = effective.count
+  const audio = effective.enableAudio
+  const draft = effective.draftMode
+  const extend = effective.extendMode
 
   if (!node || !currentModel || (node.type !== 'imageGen' && node.type !== 'videoGen')) return null
 
   const patch = (values: Record<string, unknown>) => onPatch(node.id, values)
   const visibleModels = models.filter(model => `${model.name} ${model.description}`.toLowerCase().includes(search.toLowerCase()))
   const selectModel = (nextId: string) => {
-    const next = getModelById(nextId)
-    if (!next) return
-    patch({
-      modelId: next.id,
-      aspectRatio: next.defaultAspectRatio,
-      resolution: next.defaultResolution || '',
-      ...(isVideo ? {
-        duration: `${clampDuration(next.defaultDuration)}s`,
-        enableAudio: next.supportsAudio ? audio : false,
-        draftMode: next.supportsDraft ? draft : false,
-        extendMode: next.supportsExtend ? extend : false,
-      } : {}),
-    })
+    patch(settingsForModelChange(isVideo ? 'video' : 'image', nextId, node.data))
     setModelOpen(false)
   }
 

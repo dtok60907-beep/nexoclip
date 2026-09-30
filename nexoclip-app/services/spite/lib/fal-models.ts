@@ -44,7 +44,9 @@ const video = (
   category: 'video', inputTypes: ['text', 'image'], imageParam: 'image_urls',
   aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
   resolutions, durations, supportsAudio: true, defaultAspectRatio: '16:9',
-  defaultDuration: '5s', defaultResolution: resolutions.includes('1080p') ? '1080p' : '720p',
+  // 720p when offered: nodes now send this default explicitly (it used to be
+  // left to the provider), and 1080p costs roughly twice the tokens.
+  defaultDuration: '5s', defaultResolution: resolutions.includes('720p') ? '720p' : resolutions[0],
   description: `${name} direct via BytePlus`,
 })
 
