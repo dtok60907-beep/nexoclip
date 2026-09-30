@@ -66,15 +66,23 @@ export async function deleteTrustedWorkspaceAsset({
       await bytePlusClient.deleteAsset({ assetId: link.providerAssetId, projectName: link.projectName });
     } catch (error) {
       if (isBytePlusAssetNotFound(error)) providerAlreadyMissing = true;
-      else throw failure('BytePlus asset deletion can be retried.', {
-        code: 'BYTEPLUS_ASSET_DELETE_RETRYABLE', status: 503, retryable: true,
-      });
+      else {
+        console.error('[asset-delete] BytePlus DeleteAsset failed', JSON.stringify({
+          localAssetId, code: error?.code, providerCode: error?.providerCode, status: error?.status, retryable: error?.retryable,
+        }));
+        throw failure('BytePlus asset deletion can be retried.', {
+          code: 'BYTEPLUS_ASSET_DELETE_RETRYABLE', status: 503, retryable: true,
+        });
+      }
     }
   }
 
   const canvas = await cleanupCanvasReferences({
     workspaceId, localAssetId, canonicalUrl: `/api/assets/${encodeURIComponent(localAssetId)}/download`,
-  }).catch(() => ({ complete: false }));
+  }).catch((error) => {
+    console.error('[asset-delete] Canvas reference cleanup failed', localAssetId, error?.message);
+    return { complete: false };
+  });
   if (!canvas?.complete) {
     throw failure('Canvas reference cleanup is incomplete.', {
       code: 'CANVAS_REFERENCE_CLEANUP_INCOMPLETE', status: 503, retryable: true,
@@ -83,7 +91,8 @@ export async function deleteTrustedWorkspaceAsset({
 
   try {
     await storage.delete(asset.storage_key);
-  } catch {
+  } catch (error) {
+    console.error('[asset-delete] storage delete failed', localAssetId, error?.name, error?.message);
     throw failure('Asset storage deletion failed.', {
       code: 'ASSET_STORAGE_DELETE_FAILED', status: 503, retryable: true,
     });

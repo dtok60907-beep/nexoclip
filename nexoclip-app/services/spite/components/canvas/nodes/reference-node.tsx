@@ -62,7 +62,10 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     onCanonicalized: useCallback(async (canonicalUrl: string, workspaceAssetId: string) => {
       if (!(await nodeLock.claim())) return
       setThumbnail(canonicalUrl)
-      patchNodeData(id, { thumbnail: canonicalUrl, assetId: workspaceAssetId, workspaceAssetId })
+      // `assetId` is the Canvas (generation_history) id that folders validate
+      // against — keep it. Overwriting it with the workspace id made
+      // Add-to-folder fail with "Asset not found" right after Trust.
+      patchNodeData(id, { thumbnail: canonicalUrl, workspaceAssetId })
     }, [id, nodeLock, patchNodeData]),
   })
 
@@ -260,7 +263,9 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         onClose={() => setFolderModalOpen(false)}
         folderType={folderType}
         projectId={projectId}
-        assetId={(data.assetId as string) || ''}
+        // Nodes trusted before the fix above had `assetId` overwritten with
+        // the workspace id; let the modal resolve the Canvas id by URL instead.
+        assetId={data.assetId && data.assetId !== data.workspaceAssetId ? String(data.assetId) : ''}
         assetUrl={thumbnail || ''}
       />
     </ResizableNodeFrame>
