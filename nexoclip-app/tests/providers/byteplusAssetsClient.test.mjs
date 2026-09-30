@@ -175,6 +175,31 @@ test('classifies only typed BytePlus asset-not-found failures', async () => {
   assert.equal(isBytePlusAssetNotFound(new Error('AssetNotFound')), false);
 });
 
+test('classifies BytePlus qualified NotFound codes as asset-not-found', async () => {
+  for (const providerCode of ['NotFound.asset_id', 'NotFound.group_id']) {
+    const client = createBytePlusAssetsClient({
+      env,
+      now: fixedNow,
+      fetchFn: async () => jsonResponse({ ResponseMetadata: { Error: { Code: providerCode } } }, 404),
+    });
+    await assert.rejects(client.deleteAsset({ assetId: 'asset-1', projectName: 'project-x' }), (error) => {
+      assert.equal(error.code, 'NotFound');
+      assert.equal(error.providerCode, providerCode);
+      assert.ok(isBytePlusAssetNotFound(error));
+      return true;
+    });
+  }
+  const other = createBytePlusAssetsClient({
+    env,
+    now: fixedNow,
+    fetchFn: async () => jsonResponse({ ResponseMetadata: { Error: { Code: 'InvalidParameter.NotFoundish' } } }, 400),
+  });
+  await assert.rejects(other.deleteAsset({ assetId: 'asset-1', projectName: 'project-x' }), (error) => {
+    assert.equal(isBytePlusAssetNotFound(error), false);
+    return true;
+  });
+});
+
 test('preserves retryable status for DeleteAsset rate limits and server failures', async () => {
   for (const status of [429, 500]) {
     const client = createBytePlusAssetsClient({

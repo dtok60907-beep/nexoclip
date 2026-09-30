@@ -80,12 +80,18 @@ function unavailableError(status = 503) {
   });
 }
 
+// BytePlus also reports missing resources with a qualified code such as
+// "NotFound.asset_id" / "NotFound.group_id"; treat those as not-found too, or
+// deleting an asset whose group was removed on BytePlus fails forever.
+function notFoundCode(providerCode) {
+  if (BYTEPLUS_ASSET_NOT_FOUND_CODES.has(providerCode)) return providerCode;
+  return typeof providerCode === 'string' && providerCode.startsWith('NotFound.') ? 'NotFound' : null;
+}
+
 function requestError(status, providerError, action) {
   const providerCode = providerError?.Code;
   const error = new BytePlusAssetsError('BytePlus Assets API request failed.', {
-    code: BYTEPLUS_ASSET_NOT_FOUND_CODES.has(providerCode)
-      ? providerCode
-      : 'BYTEPLUS_ASSETS_REQUEST_FAILED',
+    code: notFoundCode(providerCode) || 'BYTEPLUS_ASSETS_REQUEST_FAILED',
     status,
   });
   // Server-log context only. The provider's free-text Message is deliberately
