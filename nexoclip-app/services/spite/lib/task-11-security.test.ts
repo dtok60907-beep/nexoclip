@@ -160,6 +160,45 @@ test('asset canonicalization verifies an owned main-app image before replacing i
   assert.equal(storedUrl, canonical)
 })
 
+test('asset canonicalization accepts the download redirect without following it to storage', async () => {
+  const canonical = '/api/assets/550e8400-e29b-41d4-a716-446655440011/download?workspace_id=550e8400-e29b-41d4-a716-446655440020'
+  const stored: string[] = []
+  const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
+    if (normalized.includes('from generation_history g join projects p on p.id::text = g.project_id')) {
+      return [{ id: 'owned-asset', project_id: OWNER_PROJECT_ID, r2_url: '/api/r2-image/old.png' }]
+    }
+    if (normalized.startsWith('update generation_history set r2_url = ?')) {
+      stored.push(String(values[0]))
+      return []
+    }
+    throw new Error(`Unhandled SQL in canonical redirect test: ${normalized}`)
+  }
+  let owned = true
+  const handlers = createAssetRouteHandlers({
+    getDb: () => sql as any,
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    env: { NEXOCLIP_INTERNAL_URL: 'http://main.internal' },
+    fetchFn: async (_url, init) => {
+      assert.equal(init?.redirect, 'manual')
+      return owned
+        ? new Response(null, { status: 302, headers: { location: 'https://storage.example/signed' } })
+        : new Response('{"error":"Asset not found"}', { status: 404, headers: { 'content-type': 'application/json' } })
+    },
+  })
+  const patch = () => handlers.PATCH(
+    makeRequest('http://spite.local/api/assets/owned-asset', { method: 'PATCH', body: { canonical_url: canonical } }) as any,
+    { params: Promise.resolve({ assetId: 'owned-asset' }) } as any,
+  )
+
+  assert.equal((await patch()).status, 200)
+  assert.deepEqual(stored, [canonical])
+
+  owned = false
+  assert.equal((await patch()).status, 404)
+  assert.deepEqual(stored, [canonical])
+})
+
 test('assets/by-url requires projectId and scopes lookup/update to owned projects', async () => {
   let updatedRows = 0
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {

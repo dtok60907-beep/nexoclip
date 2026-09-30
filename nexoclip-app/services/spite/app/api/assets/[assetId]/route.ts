@@ -114,10 +114,17 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
           if (!canonicalPath || !baseUrl) {
             return NextResponse.json({ error: 'Invalid workspace asset URL' }, { status: 400 })
           }
+          // The download route answers an owned asset with a 302 to a signed
+          // storage URL (and 404 otherwise). Following that redirect downloaded
+          // the whole file from storage and could hang for minutes, which left
+          // Trust spinning forever; the redirect itself proves ownership.
           const upstream = await fetchFn(`${baseUrl}${parsed.pathname}${parsed.search}`, {
             headers: { cookie: request.headers.get('cookie') ?? '' },
+            redirect: 'manual',
+            signal: AbortSignal.timeout(10_000),
           })
-          const isOwnedImage = upstream.ok && upstream.headers.get('content-type')?.startsWith('image/')
+          const redirectsToStorage = upstream.status >= 300 && upstream.status < 400 && Boolean(upstream.headers.get('location'))
+          const isOwnedImage = redirectsToStorage || (upstream.ok && upstream.headers.get('content-type')?.startsWith('image/'))
           await upstream.body?.cancel()
           if (!isOwnedImage) {
             return NextResponse.json({ error: 'Workspace image not found' }, { status: 404 })
