@@ -28,7 +28,9 @@ import {
   type Edge,
   type NodeChange,
   type EdgeChange,
+  type XYPosition,
 } from '@xyflow/react'
+import { bufferDragChanges, createDragBufferState } from '@/lib/drag-position-buffer'
 import { ScissorsEdge } from './edges/scissors-edge'
 import { withNodeErrorBoundary } from './node-error-boundary'
 import {
@@ -431,6 +433,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
     setSelectedNodeIds((previous) => filterSelectedNodeIdsToVisible(previous, visibleIds))
   }, [nodes])
 
+  const dragBufferRef = useRef(createDragBufferState())
+  const [dragOverlay, setDragOverlay] = useState<ReadonlyMap<string, XYPosition>>(() => new Map())
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const selectChanges = changes.filter((change) => change.type === 'select')
     if (selectChanges.length > 0) {
@@ -440,12 +444,14 @@ function CanvasInner({ projectId }: { projectId: string }) {
       )
     }
 
-    const durableChanges = changes.filter((change) => change.type !== 'select')
-    if (!allowDocumentMutation || durableChanges.length === 0) {
+    const nonSelectChanges = changes.filter((change) => change.type !== 'select')
+    if (!allowDocumentMutation || nonSelectChanges.length === 0) {
       return
     }
 
-    commands.applyNodeChanges(durableChanges)
+    const { durable, overlayChanged } = bufferDragChanges(dragBufferRef.current, nonSelectChanges, Date.now())
+    if (overlayChanged) setDragOverlay(new Map(dragBufferRef.current.overlay))
+    if (durable.length > 0) commands.applyNodeChanges(durable)
   }, [allowDocumentMutation, commands, nodes])
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
@@ -1183,7 +1189,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // React Flow to re-diff the whole graph each time).
   const sceneNodes = useMemo(() => {
     const selectedIds = new Set(selectedNodeIds)
-    return (nodes as Node[]).map((node) => {
+    return (nodes as Node[]).map((documentNode) => {
+      const dragPosition = dragOverlay.get(documentNode.id)
+      const node = dragPosition ? { ...documentNode, position: dragPosition } : documentNode
       const selected = selectedIds.has(node.id)
       // User-applied lock (node.data.locked, toggled from that node's own
       // toolbar) vs. a remote collaborator's transient drag/edit lock
@@ -1222,7 +1230,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }
       return nextNode
     })
-  }, [lockedNodeIds, nodes, selectedNodeIds])
+  }, [dragOverlay, lockedNodeIds, nodes, selectedNodeIds])
   const selectedSceneNodeIds = useMemo(
     () => sceneNodes.filter(node => node.selected).map(node => node.id),
     [sceneNodes],
