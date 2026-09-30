@@ -1,4 +1,5 @@
 import { isBytePlusAssetNotFound } from '../providers/byteplusAssetsClient.js';
+import { thumbnailKeyFor } from './assetThumbnailService.js';
 
 export class UnifiedAssetDeletionError extends Error {
   constructor(message, { code, status = 409, retryable = false } = {}) {
@@ -113,6 +114,8 @@ export async function deleteTrustedWorkspaceAsset({
 
   try {
     await storage.delete(asset.storage_key);
+    // Best effort: a missing thumbnail is fine, a leftover one is only waste.
+    await Promise.resolve(storage.delete(thumbnailKeyFor(asset.storage_key))).catch(() => {});
   } catch (error) {
     console.error('[asset-delete] storage delete failed', localAssetId, error?.name, error?.message);
     await markProviderCopiesMissing();

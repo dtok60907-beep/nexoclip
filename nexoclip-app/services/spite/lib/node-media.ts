@@ -59,3 +59,12 @@ export function resolveNodeReferenceUrl(data: NodeData): string | undefined {
 export function nodeHasNoMedia(data: NodeData): boolean {
   return resolveNodeMediaUrl(data) === undefined
 }
+
+// Display-only: small tiles (asset panel, reference nodes, input chips) load
+// the server's 512px WebP of a workspace asset instead of the full original.
+// Never store this URL in node data or send it to a provider.
+export function displayThumbnailUrl(url: string | undefined | null): string | undefined {
+  if (!url) return undefined
+  if (!/^(?:\/canvas)?\/api\/assets\/[^/?#]+\/download$/.test(url)) return url
+  return `${url}?variant=thumb`
+}

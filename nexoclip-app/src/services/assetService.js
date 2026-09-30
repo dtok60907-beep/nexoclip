@@ -3,6 +3,7 @@ import { getPool } from '../db/pool.js';
 import { LocalObjectStorage } from '../storage/localObjectStorage.js';
 import { R2ObjectStorage } from '../storage/r2ObjectStorage.js';
 import { listAssets } from '../repositories/assetMetadataRepository.js';
+import { ensureAssetThumbnail } from './assetThumbnailService.js';
 
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'audio/wav']);
 const maxSizeBytes = 50 * 1024 * 1024;
@@ -197,7 +198,7 @@ export const DISPLAY_DOWNLOAD_CACHE = {
   responseCacheControl: 'private,max-age=21600,immutable',
 };
 
-export async function createAssetDownload(workspaceId, assetId, storage = createStorage(), downloadOptions = {}) {
+export async function createAssetDownload(workspaceId, assetId, storage = createStorage(), downloadOptions = {}, { variant = null, ensureThumbnail = ensureAssetThumbnail } = {}) {
   if (!workspaceId) throw new Error('workspace_id is required');
   if (!assetId) throw new Error('asset_id is required');
   const result = await getPool().query(
@@ -206,5 +207,14 @@ export async function createAssetDownload(workspaceId, assetId, storage = create
   );
   const asset = result.rows[0];
   if (!asset) return null;
-  return { asset, download: await storage.createDownloadUrl({ key: asset.storage_key, ...downloadOptions }) };
+  let key = asset.storage_key;
+  if (variant === 'thumb') {
+    try {
+      key = (await ensureThumbnail(storage, asset)) || asset.storage_key;
+    } catch (error) {
+      // A thumbnail is an optimization: never fail the view because of it.
+      console.error('[asset-thumbnail] falling back to original', asset.id, error?.message);
+    }
+  }
+  return { asset, download: await storage.createDownloadUrl({ key, ...downloadOptions }) };
 }

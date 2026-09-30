@@ -13,7 +13,8 @@ export async function GET(request, { params }) {
     if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
     const tenant = await resolveTenantContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId });
     const { assetId } = await params;
-    const result = await createAssetDownload(tenant.workspace.id, assetId, createStorage(), DISPLAY_DOWNLOAD_CACHE);
+    const variant = new URL(request.url).searchParams.get('variant') === 'thumb' ? 'thumb' : null;
+    const result = await createAssetDownload(tenant.workspace.id, assetId, createStorage(), DISPLAY_DOWNLOAD_CACHE, { variant });
     if (!result) return Response.json({ error: 'Asset not found' }, { status: 404 });
     return new Response(null, {
       status: 302,

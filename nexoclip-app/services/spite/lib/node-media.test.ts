@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from './node-media'
+import { displayThumbnailUrl, resolveNodeMediaUrl, resolveNodeReferenceUrl } from './node-media'
 
 test('prefixes legacy root-relative media URLs with the configured base path', () => {
   process.env.NEXT_PUBLIC_BASE_PATH = '/spite'
@@ -39,4 +39,11 @@ test('reference URL points at the trusted workspace asset instead of the legacy 
     '/api/assets/45f74b7b-3abd-4c9f-85ea-9e05a7d1df75/download?workspace_id=w',
   )
   assert.equal(resolveNodeReferenceUrl({ thumbnail: 'https://cdn.example/a.png' }), 'https://cdn.example/a.png')
+})
+
+test('display tiles use the thumbnail variant only for workspace asset downloads', () => {
+  assert.equal(displayThumbnailUrl('/api/assets/abc-123/download'), '/api/assets/abc-123/download?variant=thumb')
+  assert.equal(displayThumbnailUrl('/api/r2-image/uploads/a.png'), '/api/r2-image/uploads/a.png')
+  assert.equal(displayThumbnailUrl('/api/assets/abc-123/download?x=1'), '/api/assets/abc-123/download?x=1')
+  assert.equal(displayThumbnailUrl(undefined), undefined)
 })

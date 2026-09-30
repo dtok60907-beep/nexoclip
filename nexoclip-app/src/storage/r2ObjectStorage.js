@@ -1,5 +1,5 @@
 import { createHash, createHmac } from 'node:crypto';
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 function required(name) {
   const value = process.env[name];
@@ -114,6 +114,16 @@ export class R2ObjectStorage {
 
   async delete(key) {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async exists(key) {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return true;
+    } catch (error) {
+      if (error?.name === 'NotFound' || error?.$metadata?.httpStatusCode === 404) return false;
+      throw error;
+    }
   }
 
   async get(key) {

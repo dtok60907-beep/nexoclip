@@ -1,6 +1,7 @@
 'use client'
 
 import { SpeakerHigh } from '@phosphor-icons/react'
+import { displayThumbnailUrl } from '@/lib/node-media'
 
 // Renders the visual body of an asset (image / video / audio) — used
 // by the asset panel grid, the expanded asset preview, the lightbox,
@@ -93,7 +94,7 @@ export function AssetThumb({
   // a few hundred thumbnails without saturating the main thread.
   return (
     <img
-      src={url}
+      src={displayThumbnailUrl(url)}
       alt=""
       loading="lazy"
       decoding="async"

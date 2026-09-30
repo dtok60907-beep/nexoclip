@@ -7,7 +7,7 @@ import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { SimpleNodeToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
-import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { displayThumbnailUrl, resolveNodeMediaUrl } from '@/lib/node-media'
 import { AddToFolderModal } from '../add-to-folder-modal'
 import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -233,7 +233,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
                 }}
               />
             ) : (
-              <img src={thumbnail} alt="" className="w-full h-auto block cursor-zoom-in" loading="lazy" decoding="async" />
+              <img src={displayThumbnailUrl(thumbnail)} alt="" className="w-full h-auto block cursor-zoom-in" loading="lazy" decoding="async" />
             )}
             {isUploading && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">

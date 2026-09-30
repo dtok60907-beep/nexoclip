@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { X, LinkBreak, WarningCircle } from '@phosphor-icons/react'
-import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { displayThumbnailUrl, resolveNodeMediaUrl } from '@/lib/node-media'
 import { useCanvasCollaboration } from './canvas-collaboration'
 
 // A small count badge pinned just outside a media input handle. Click it to see
@@ -121,7 +121,7 @@ export function ConnectedInputs({ nodeId, handleId, side, top, label = 'Connecte
               <div key={it.edgeId} className="relative group" title={it.title}>
                 {it.url ? (
                   <img
-                    src={it.url}
+                    src={displayThumbnailUrl(it.url)}
                     alt=""
                     className="w-[52px] h-[52px] rounded-md object-cover border border-white/10 bg-black/40"
                     draggable={false}
