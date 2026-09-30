@@ -598,10 +598,18 @@ export function SimpleNodeToolbar({
   nodeId,
   selected,
   locked,
+  trustAction,
 }: {
   nodeId: string
   selected?: boolean
   locked?: boolean
+  trustAction?: {
+    label: string
+    disabled: boolean
+    active: boolean
+    processing: boolean
+    onClick: () => void
+  }
 }) {
   const { patchNodeData, deleteNodes } = useCanvasCollaboration()
 
@@ -623,6 +631,16 @@ export function SimpleNodeToolbar({
           accent={locked}
           onClick={() => patchNodeData(nodeId, { locked: !locked })}
         />
+        {trustAction && (
+          <ToolBtn
+            icon={trustAction.processing ? CircleNotch : ShieldCheck}
+            label={trustAction.label || 'Trust for Seedance'}
+            onClick={trustAction.onClick}
+            disabled={trustAction.disabled}
+            accent={trustAction.active}
+            spinning={trustAction.processing}
+          />
+        )}
       </div>
     </NodeToolbar>
   )

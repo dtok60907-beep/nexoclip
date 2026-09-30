@@ -4,10 +4,9 @@ import { Position, NodeProps, Handle } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { Image as ImageIcon, UploadSimple, CircleNotch, VideoCamera, SpeakerHigh } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
-import { NodeActionToolbar } from './node-toolbar'
+import { SimpleNodeToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
-import { AddToFolderModal } from '../add-to-folder-modal'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -21,8 +20,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const nodeLock = useNodeOwnershipLock(projectId, id)
   const { createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
   const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl(data as Record<string, unknown>) || null)
-  const [folderModalOpen, setFolderModalOpen] = useState(false)
-  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
   // Sync thumbnail from data prop
@@ -53,7 +50,12 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     workspaceAssetId: data.workspaceAssetId,
     canvasProjectId: projectId,
     filename: `${String(data.label || 'reference-image')}.png`,
-    enabled: Boolean(selected) && Boolean(thumbnail) && !isUploading && !isAudio && !isVideo,
+    // Not gated on `selected` — the trust border on the card (below) needs
+    // to reflect real status at a glance for every reference node on the
+    // canvas, not just whichever one is currently clicked. This only costs
+    // one extra GET per node on mount/thumbnail-change; the hook's own
+    // polling loop only runs while a request is actually 'processing'.
+    enabled: Boolean(thumbnail) && !isUploading && !isAudio && !isVideo,
     onCanonicalized: useCallback(async (canonicalUrl: string, workspaceAssetId: string) => {
       if (!(await nodeLock.claim())) return
       setThumbnail(canonicalUrl)
@@ -90,12 +92,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     createNextShot(id)
   }
 
-  const handleAddToFolder = async (type: 'character' | 'prop' | 'location') => {
-    if (!(await nodeLock.claim())) return
-    setFolderType(type)
-    setFolderModalOpen(true)
-  }
-
   return (
     <ResizableNodeFrame
       nodeId={id}
@@ -106,13 +102,10 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
       claimLock={nodeLock.claim}
       releaseLock={nodeLock.release}
     >
-      <NodeActionToolbar
+      <SimpleNodeToolbar
         nodeId={id}
         selected={selected}
-        nodeLabel={(data.label as string) || 'Reference'}
-        assetId={data.assetId as string}
-        assetUrl={thumbnail || undefined}
-        assetType={isAudio ? 'image' : isVideo ? 'video' : 'image'}
+        locked={Boolean(data.locked)}
         trustAction={thumbnail && !isAudio && !isVideo ? {
           label: imageTrust.label,
           disabled: imageTrust.disabled,
@@ -120,8 +113,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
           processing: imageTrust.inFlight || imageTrust.state.status === 'processing',
           onClick: imageTrust.trust,
         } : undefined}
-        onAddToFolder={handleAddToFolder}
-        onViewFullscreen={thumbnail && !isAudio ? () => setLightboxOpen(true) : undefined}
       />
 
       {!isAudio && (
@@ -190,11 +181,17 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
           width: '100%',
           height: '100%',
           background: '#0D0F12',
-          border: isTaggedToShot 
-            ? '1.5px solid rgba(251,191,36,0.7)' 
-            : selected 
-              ? '1.5px solid rgba(107,143,168,0.85)' 
-              : '1.5px solid rgba(107,143,168,0.25)',
+          // Trust status outranks shot-tag/selected — it's a content
+          // verification signal, not a layout one, so it should read at a
+          // glance across the whole canvas rather than get lost behind
+          // whichever node happens to be selected right now.
+          border: imageTrust.state.status === 'active'
+            ? '1.5px solid rgba(52,211,153,0.8)'
+            : isTaggedToShot
+              ? '1.5px solid rgba(251,191,36,0.7)'
+              : selected
+                ? '1.5px solid rgba(107,143,168,0.85)'
+                : '1.5px solid rgba(107,143,168,0.25)',
         }}
       >
         {/* Media area */}
@@ -247,15 +244,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      {/* Add to folder modal */}
-      <AddToFolderModal
-        open={folderModalOpen}
-        onClose={() => setFolderModalOpen(false)}
-        folderType={folderType}
-        projectId={projectId}
-        assetId={(data.assetId as string) || ''}
-        assetUrl={thumbnail || ''}
-      />
     </ResizableNodeFrame>
   )
 }
