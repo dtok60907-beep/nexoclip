@@ -215,17 +215,20 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   return parameters
 }
 
+// The app has been served from /spite and, more recently, /canvas
+// (NEXT_PUBLIC_BASE_PATH); either prefix may still show up on stored or
+// freshly-uploaded r2-image URLs, so both must be recognized here.
 function isLegacyCanvasReference(url: string): boolean {
-  return /^\/(?:spite\/)?api\/r2-image\/.+/.test(url)
+  return /^\/(?:spite\/|canvas\/)?api\/r2-image\/.+/.test(url)
 }
 
 async function projectOwnsLegacyReferences(sql: ReturnType<typeof getDb>, projectId: string, references: string[]): Promise<boolean> {
-  const normalizedReferences = [...new Set(references.map((url) => url.replace(/^\/spite/, '')))]
+  const normalizedReferences = [...new Set(references.map((url) => url.replace(/^\/(?:spite|canvas)/, '')))]
   const rows = await sql`
-    SELECT count(DISTINCT regexp_replace(r2_url, '^/spite', ''))::int AS owned_count
+    SELECT count(DISTINCT regexp_replace(r2_url, '^/(spite|canvas)', ''))::int AS owned_count
     FROM generation_history
     WHERE project_id = ${projectId}
-      AND regexp_replace(r2_url, '^/spite', '') = ANY(${normalizedReferences}::text[])
+      AND regexp_replace(r2_url, '^/(spite|canvas)', '') = ANY(${normalizedReferences}::text[])
   ` as Array<{ owned_count: number }>
   return Number(rows[0]?.owned_count ?? 0) === normalizedReferences.length
 }

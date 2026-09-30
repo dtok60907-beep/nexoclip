@@ -29,7 +29,7 @@ export function resolveWorkspaceAssetId(
 export function trustImportSourceUrl(url: string) {
   try {
     const parsed = new URL(url, 'https://canvas.invalid')
-    if (!/^\/(?:spite\/)?api\/r2-image\//.test(parsed.pathname)) return url
+    if (!/^\/(?:spite\/|canvas\/)?api\/r2-image\//.test(parsed.pathname)) return url
     parsed.searchParams.set('trust_import', '1')
     return `${parsed.pathname}${parsed.search}`
   } catch {
