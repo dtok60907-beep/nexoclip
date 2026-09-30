@@ -90,6 +90,11 @@ export type ReactFlowBindingOptions = {
   createId?: () => string
   createSceneId?: () => string
   duplicateOffset?: Position
+  // The scene this tab shows. Local on purpose: switching scenes used to
+  // write the shared document, which moved every collaborator (and your
+  // other tabs) to that scene and made Ctrl+Z switch scenes back.
+  initialActiveSceneId?: string
+  onActiveSceneChange?: (sceneId: string) => void
 }
 
 const NODE_EPHEMERAL_KEYS = new Set(['selected', 'dragging', 'measured'])
@@ -102,25 +107,35 @@ export function createReactFlowBinding(
 ): RealtimeCanvasBinding {
   const listeners = new Set<() => void>()
   const duplicateOffset = options.duplicateOffset ?? DEFAULT_DUPLICATE_OFFSET
-  let snapshot = deriveSnapshot(doc)
+  let localActiveSceneId = options.initialActiveSceneId
+  const currentSceneId = (): string => {
+    const projection = readCanvasProjection(doc)
+    return localActiveSceneId && projection.scenes.some((scene) => scene.id === localActiveSceneId)
+      ? localActiveSceneId
+      : projection.activeSceneId
+  }
+  let snapshot = deriveSnapshot(doc, currentSceneId())
 
   const undoManager = new Y.UndoManager([doc.getMap('nodes'), doc.getMap('edges'), doc.getMap('meta')], {
     trackedOrigins: new Set([LOCAL_REACT_FLOW_ORIGIN]),
   })
 
   const handleUpdate = () => {
-    snapshot = deriveSnapshot(doc)
+    snapshot = deriveSnapshot(doc, currentSceneId())
     for (const listener of listeners) {
       listener()
     }
+  }
+  const showScene = (sceneId: string) => {
+    localActiveSceneId = sceneId
+    options.onActiveSceneChange?.(sceneId)
   }
 
   doc.on('update', handleUpdate)
 
   const rawMutations: RawBindingMutations = {
     createNode(node) {
-      const activeSceneId = readActiveSceneId(doc)
-      upsertNodeRecord(doc, normalizeNode(node, activeSceneId))
+      upsertNodeRecord(doc, normalizeNode(node, currentSceneId()))
     },
 
     patchNode(nodeId, patch) {
@@ -152,18 +167,28 @@ export function createReactFlowBinding(
       const scenes = readCanvasProjection(doc).scenes
       const nextScenes = [...scenes, { id: nextId, name: name ?? nextSceneName(scenes) }]
       setScenesRecord(doc, nextScenes)
-      setActiveSceneRecord(doc, nextId)
+      showScene(nextId)
       return nextId
     },
 
     deleteScene(sceneId) {
       if (!sceneId) return
+      const scenes = readCanvasProjection(doc).scenes
+      if (currentSceneId() === sceneId) {
+        const index = scenes.findIndex((scene) => scene.id === sceneId)
+        const remaining = scenes.filter((scene) => scene.id !== sceneId)
+        const next = remaining[Math.max(0, index - 1)] ?? remaining[0]
+        if (next) showScene(next.id)
+      }
       deleteSceneRecord(doc, sceneId)
     },
 
     switchScene(sceneId) {
-      if (!sceneId) return
-      setActiveSceneRecord(doc, sceneId)
+      if (!sceneId || sceneId === currentSceneId()) return
+      if (!readCanvasProjection(doc).scenes.some((scene) => scene.id === sceneId)) return
+      showScene(sceneId)
+      // No document write, so no update event: refresh this tab's view.
+      handleUpdate()
     },
 
     setProjectName(name) {
@@ -193,7 +218,7 @@ export function createReactFlowBinding(
             case 'add': {
               const nextNode = nextNodesById.get(change.item.id)
               if (nextNode) {
-                upsertNodeRecord(doc, normalizeNode(nextNode as NodeInput, readActiveSceneId(doc)))
+                upsertNodeRecord(doc, normalizeNode(nextNode as NodeInput, currentSceneId()))
               }
               break
             }
@@ -203,7 +228,7 @@ export function createReactFlowBinding(
             case 'replace': {
               const nextNode = nextNodesById.get(change.id)
               if (nextNode) {
-                upsertNodeRecord(doc, normalizeNode(nextNode as NodeInput, readActiveSceneId(doc)))
+                upsertNodeRecord(doc, normalizeNode(nextNode as NodeInput, currentSceneId()))
               }
               break
             }
@@ -367,7 +392,7 @@ export function createReactFlowBinding(
           idMap.set(node.id, nextId)
           createdIds.push(nextId)
           upsertNodeRecord(doc, {
-            ...normalizeNode(node as NodeInput, readActiveSceneId(doc)),
+            ...normalizeNode(node as NodeInput, currentSceneId()),
             id: nextId,
             position: {
               x: node.position.x + duplicateOffset.x,
@@ -436,9 +461,9 @@ export function createReactFlowBinding(
   return binding
 }
 
-function deriveSnapshot(doc: Y.Doc): RealtimeCanvasBindingSnapshot {
+function deriveSnapshot(doc: Y.Doc, activeSceneIdOverride?: string): RealtimeCanvasBindingSnapshot {
   const projection = readCanvasProjection(doc)
-  const activeSceneId = projection.activeSceneId
+  const activeSceneId = activeSceneIdOverride ?? projection.activeSceneId
   const allNodes = projection.nodes.map((node) => ({ ...node, data: { ...ensureRecord(node.data) } }))
   const allEdges = projection.edges.map((edge) => ({ ...edge, data: { ...ensureRecord(edge.data) } }))
   const nodes = allNodes.filter((node) => readNodeSceneId(node) === activeSceneId)
@@ -614,13 +639,6 @@ function setScenesRecord(doc: Y.Doc, scenes: CanvasScene[]): void {
   meta.set('scenes', scenes.map((scene) => ({ id: scene.id, name: scene.name })))
 }
 
-function setActiveSceneRecord(doc: Y.Doc, sceneId: string): void {
-  const projection = readCanvasProjection(doc)
-  if (!projection.scenes.some((scene) => scene.id === sceneId)) {
-    return
-  }
-  doc.getMap('meta').set('activeSceneId', sceneId)
-}
 
 function setProjectNameRecord(doc: Y.Doc, name: string): void {
   const projectName = name.trim() || 'Untitled Project'
@@ -652,9 +670,6 @@ function deleteSceneRecord(doc: Y.Doc, sceneId: string): void {
   }
 }
 
-function readActiveSceneId(doc: Y.Doc): string {
-  return readCanvasProjection(doc).activeSceneId
-}
 
 function readNodeSceneId(node: { data?: unknown }): string | undefined {
   const data = ensureRecord(node.data)

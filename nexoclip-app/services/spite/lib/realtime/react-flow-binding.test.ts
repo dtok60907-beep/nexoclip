@@ -848,3 +848,34 @@ test('undo reverts user edits but not automatic (undoable: false) writes', () =>
   assert.equal(data.generationStatus, 'completed')
   binding.destroy()
 })
+
+test('the active scene is per binding: switching does not move other tabs or get undone', () => {
+  const doc = createCanvasDocument()
+  let sceneIds = 0
+  const tabA = createReactFlowBinding(doc, { createSceneId: () => `scene-new-${++sceneIds}` })
+  const tabB = createReactFlowBinding(doc)
+  const remembered: string[] = []
+  const tabC = createReactFlowBinding(doc, { onActiveSceneChange: (id) => remembered.push(id) })
+
+  const created = tabA.createScene('Scene 2')
+  assert.equal(tabA.getSnapshot().activeSceneId, created)
+  assert.equal(tabB.getSnapshot().activeSceneId, 'scene-1')
+
+  tabA.createNode({ id: 'in-scene-2', type: 'prompt', position: { x: 0, y: 0 }, data: {} })
+  assert.equal(tabA.getSnapshot().nodes.some((node) => node.id === 'in-scene-2'), true)
+  assert.equal(tabB.getSnapshot().nodes.some((node) => node.id === 'in-scene-2'), false)
+
+  tabC.switchScene(created)
+  assert.deepEqual(remembered, [created])
+  const restored = createReactFlowBinding(doc, { initialActiveSceneId: created })
+  assert.equal(restored.getSnapshot().activeSceneId, created)
+
+  // Switching is not an undo step: undo reverts the last document edit
+  // (here: creating the scene and its node), never just the scene switch.
+  tabA.switchScene('scene-1')
+  tabA.undo()
+  assert.equal(tabA.getSnapshot().activeSceneId, 'scene-1')
+  assert.equal(tabA.getSnapshot().scenes.some((scene) => scene.id === created), false)
+
+  for (const binding of [tabA, tabB, tabC, restored]) binding.destroy()
+})

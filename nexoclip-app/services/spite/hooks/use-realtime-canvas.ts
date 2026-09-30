@@ -280,7 +280,15 @@ export class RealtimeCanvasRoom {
   ) {
     this.fetchFn = options.fetchFn ?? globalThis.fetch.bind(globalThis)
     this.doc = new Y.Doc()
-    this.binding = createReactFlowBinding(this.doc)
+    const sceneStorageKey = `spite:active-scene:${this.projectId}`
+    let initialActiveSceneId: string | undefined
+    try { initialActiveSceneId = globalThis.localStorage?.getItem(sceneStorageKey) ?? undefined } catch {}
+    this.binding = createReactFlowBinding(this.doc, {
+      initialActiveSceneId,
+      onActiveSceneChange: (sceneId) => {
+        try { globalThis.localStorage?.setItem(sceneStorageKey, sceneId) } catch {}
+      },
+    })
     this.snapshot = {
       ...this.binding.getSnapshot(),
       peers: [],
