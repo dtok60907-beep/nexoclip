@@ -8,6 +8,7 @@ import { SimpleNodeToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { AddToFolderModal } from '../add-to-folder-modal'
 import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { ResizableNodeFrame } from './resizable-node-frame'
@@ -21,6 +22,8 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const { createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
   const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl(data as Record<string, unknown>) || null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [folderModalOpen, setFolderModalOpen] = useState(false)
+  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
 
   // Sync thumbnail from data prop
   useEffect(() => {
@@ -92,6 +95,12 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     createNextShot(id)
   }
 
+  const handleAddToFolder = async (type: 'character' | 'prop' | 'location') => {
+    if (!(await nodeLock.claim())) return
+    setFolderType(type)
+    setFolderModalOpen(true)
+  }
+
   return (
     <ResizableNodeFrame
       nodeId={id}
@@ -106,6 +115,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         nodeId={id}
         selected={selected}
         locked={Boolean(data.locked)}
+        onAddToFolder={handleAddToFolder}
         trustAction={thumbnail && !isAudio && !isVideo ? {
           label: imageTrust.label,
           disabled: imageTrust.disabled,
@@ -244,6 +254,15 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
+      {/* Add to folder modal */}
+      <AddToFolderModal
+        open={folderModalOpen}
+        onClose={() => setFolderModalOpen(false)}
+        folderType={folderType}
+        projectId={projectId}
+        assetId={(data.assetId as string) || ''}
+        assetUrl={thumbnail || ''}
+      />
     </ResizableNodeFrame>
   )
 }

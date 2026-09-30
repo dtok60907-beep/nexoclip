@@ -599,6 +599,7 @@ export function SimpleNodeToolbar({
   selected,
   locked,
   trustAction,
+  onAddToFolder,
 }: {
   nodeId: string
   selected?: boolean
@@ -610,8 +611,10 @@ export function SimpleNodeToolbar({
     processing: boolean
     onClick: () => void
   }
+  onAddToFolder?: (type: 'character' | 'prop' | 'location') => void
 }) {
   const { patchNodeData, deleteNodes } = useCanvasCollaboration()
+  const [addToMenuOpen, setAddToMenuOpen] = useState(false)
 
   return (
     <NodeToolbar isVisible={selected} position={Position.Top} offset={12}>
@@ -631,6 +634,18 @@ export function SimpleNodeToolbar({
           accent={locked}
           onClick={() => patchNodeData(nodeId, { locked: !locked })}
         />
+        {onAddToFolder && (
+          <div className="relative">
+            <ToolBtn icon={At} label="Add to Character/Location/Prop" onClick={() => setAddToMenuOpen((v) => !v)} />
+            {addToMenuOpen && (
+              <DropdownMenu onClose={() => setAddToMenuOpen(false)}>
+                <MenuItem label="Character" icon={User} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Location" icon={MapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Prop" icon={Package} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
+              </DropdownMenu>
+            )}
+          </div>
+        )}
         {trustAction && (
           <ToolBtn
             icon={trustAction.processing ? CircleNotch : ShieldCheck}
