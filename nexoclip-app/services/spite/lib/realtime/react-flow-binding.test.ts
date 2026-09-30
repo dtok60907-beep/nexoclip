@@ -879,3 +879,23 @@ test('the active scene is per binding: switching does not move other tabs or get
 
   for (const binding of [tabA, tabB, tabC, restored]) binding.destroy()
 })
+
+test('snapshots keep unchanged node objects so only edited nodes re-render', () => {
+  const doc = createCanvasDocument()
+  for (const id of ['a', 'b']) {
+    upsertNode(doc, { id, type: 'prompt', position: { x: 0, y: 0 }, data: { sceneId: 'scene-1', text: id } })
+  }
+  const binding = createReactFlowBinding(doc)
+  const before = binding.getSnapshot()
+  const nodeA = before.nodes.find((node) => node.id === 'a')
+
+  binding.patchNodeData('b', { text: 'edited' })
+  const after = binding.getSnapshot()
+  assert.equal(after.nodes.find((node) => node.id === 'a'), nodeA)
+  assert.notEqual(after.nodes.find((node) => node.id === 'b'), before.nodes.find((node) => node.id === 'b'))
+  assert.equal(after.nodes.find((node) => node.id === 'b')!.data.text, 'edited')
+
+  binding.patchNodeData('b', { text: 'edited' })
+  assert.equal(binding.getSnapshot().nodes, after.nodes, 'a no-op write keeps the same nodes array')
+  binding.destroy()
+})

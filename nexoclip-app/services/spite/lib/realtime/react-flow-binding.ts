@@ -121,7 +121,7 @@ export function createReactFlowBinding(
   })
 
   const handleUpdate = () => {
-    snapshot = deriveSnapshot(doc, currentSceneId())
+    snapshot = deriveSnapshot(doc, currentSceneId(), snapshot)
     for (const listener of listeners) {
       listener()
     }
@@ -461,15 +461,67 @@ export function createReactFlowBinding(
   return binding
 }
 
-function deriveSnapshot(doc: Y.Doc, activeSceneIdOverride?: string): RealtimeCanvasBindingSnapshot {
+// Content signatures of the objects handed out in earlier snapshots, so an
+// unchanged node is compared without re-serializing the old copy.
+const projectionSignatures = new WeakMap<object, string>()
+
+// Structural sharing: every update used to rebuild every node and edge object,
+// so dragging one node or typing in one prompt re-rendered every node on the
+// canvas (and reset crashed-node boundaries). Unchanged items keep the object
+// from the previous snapshot; unchanged lists keep the previous array.
+function shareUnchanged<T extends { id: string }>(next: T[], previous: T[] | undefined): T[] {
+  if (!previous) {
+    return next
+  }
+  const previousById = new Map(previous.map((item) => [item.id, item]))
+  let changed = next.length !== previous.length
+  const shared = next.map((item, index) => {
+    const signature = JSON.stringify(item)
+    const prior = previousById.get(item.id)
+    if (prior) {
+      let priorSignature = projectionSignatures.get(prior)
+      if (priorSignature === undefined) {
+        priorSignature = JSON.stringify(prior)
+        projectionSignatures.set(prior, priorSignature)
+      }
+      if (priorSignature === signature) {
+        if (previous[index] !== prior) changed = true
+        return prior
+      }
+    }
+    projectionSignatures.set(item, signature)
+    changed = true
+    return item
+  })
+  return changed ? shared : previous
+}
+
+function sameItems<T>(next: T[], previous: T[] | undefined): T[] {
+  return previous && previous.length === next.length && next.every((item, index) => item === previous[index])
+    ? previous
+    : next
+}
+
+function deriveSnapshot(
+  doc: Y.Doc,
+  activeSceneIdOverride?: string,
+  previous?: RealtimeCanvasBindingSnapshot,
+): RealtimeCanvasBindingSnapshot {
   const projection = readCanvasProjection(doc)
   const activeSceneId = activeSceneIdOverride ?? projection.activeSceneId
-  const allNodes = projection.nodes.map((node) => ({ ...node, data: { ...ensureRecord(node.data) } }))
-  const allEdges = projection.edges.map((edge) => ({ ...edge, data: { ...ensureRecord(edge.data) } }))
-  const nodes = allNodes.filter((node) => readNodeSceneId(node) === activeSceneId)
+  const allNodes = shareUnchanged(
+    projection.nodes.map((node) => ({ ...node, data: { ...ensureRecord(node.data) } })),
+    previous?.allNodes,
+  )
+  const allEdges = shareUnchanged(
+    projection.edges.map((edge) => ({ ...edge, data: { ...ensureRecord(edge.data) } })),
+    previous?.allEdges,
+  )
+  const nodes = sameItems(allNodes.filter((node) => readNodeSceneId(node) === activeSceneId), previous?.nodes)
   const visibleNodeIds = new Set(nodes.map((node) => node.id))
-  const edges = allEdges.filter(
-    (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
+  const edges = sameItems(
+    allEdges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)),
+    previous?.edges,
   )
 
   return {
