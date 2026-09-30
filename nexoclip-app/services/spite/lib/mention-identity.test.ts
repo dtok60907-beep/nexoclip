@@ -152,3 +152,13 @@ test('a mentioned tag is not re-added from another folder with the same name', (
   assert.equal(result.refGroups.length, 1)
   assert.doesNotMatch(result.prompt, /person\/character/)
 })
+
+test('mentions of deleted folders are reported once folders have loaded', () => {
+  const folders = [{ id: 'kept', name: 'Kept', type: 'location' as const, assets: [{ id: 'k', workspaceAssetId: 'wk', r2_url: '/k.png' }] }]
+  const mentions = [
+    { folderId: 'kept', name: 'Kept', selectedAssetIds: ['k'] },
+    { folderId: 'gone', name: 'Gone', selectedAssetIds: ['g'], selectedWorkspaceAssetIds: ['wg'] },
+  ]
+  assert.deepEqual(compileMentionsForModel('@Kept @Gone', mentions, folders, model).missingFolders, ['Gone'])
+  assert.deepEqual(compileMentionsForModel('@Kept @Gone', mentions, [], model).missingFolders, [])
+})

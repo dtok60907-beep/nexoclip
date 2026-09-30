@@ -54,6 +54,9 @@ export interface CompiledMentions {
   prompt: string
   refGroups: ReferenceGroup[]
   strategy: RefStrategy
+  // Mentions whose folder no longer exists (only reported once folders have
+  // loaded). Generating with them would send images that were deleted.
+  missingFolders: string[]
 }
 
 // Must match tagFromName in mention-textarea.tsx — collapses any run of
@@ -268,5 +271,9 @@ export function compileMentionsForModel(
     refGroups = orderedFolderIds.map((fid) => groupsByFolderId.get(fid)!)
   }
 
-  return { prompt: rewritten, refGroups, strategy }
+  const missingFolders = folders.length === 0
+    ? []
+    : [...new Set(mentions.filter((m) => !folders.some((f) => f.id === m.folderId)).map((m) => m.name))]
+
+  return { prompt: rewritten, refGroups, strategy, missingFolders }
 }

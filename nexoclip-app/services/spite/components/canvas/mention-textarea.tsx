@@ -234,6 +234,7 @@ function makeChipElement(
   selectedAssetIds: string[],
   doc: Document,
   selectedWorkspaceAssetIds: string[] = [],
+  missing = false,
 ): HTMLSpanElement {
   const span = doc.createElement('span')
   span.dataset.mention = '1'
@@ -243,10 +244,14 @@ function makeChipElement(
   span.dataset.assetIds = selectedAssetIds.join(',')
   span.dataset.workspaceAssetIds = selectedWorkspaceAssetIds.join(',')
   span.contentEditable = 'false'
-  const cls = COLOR[folder.type]
+  const cls = missing ? 'bg-red-500/15 text-red-300 border-red-500/40 line-through' : COLOR[folder.type]
   span.className =
     'mention-chip inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] border align-middle select-none cursor-pointer hover:opacity-90 ' +
     cls
+  if (missing) {
+    span.dataset.missing = '1'
+    span.title = 'This folder was deleted — remove this mention or pick another folder.'
+  }
   span.textContent = folder.name
   return span
 }
@@ -308,7 +313,10 @@ function renderInitial(
             .map((asset) => asset.workspaceAssetId)
             .filter((id): id is string => Boolean(id))
         : []
-      el.appendChild(makeChipElement(folder, m.selectedAssetIds, document, m.selectedWorkspaceAssetIds || derivedWorkspaceIds))
+      // Resolved only from the saved mention while folders are loaded means
+      // the folder was deleted.
+      const missing = !('assets' in folder) && folders.length > 0
+      el.appendChild(makeChipElement(folder, m.selectedAssetIds, document, m.selectedWorkspaceAssetIds || derivedWorkspaceIds, missing))
     } else {
       // Unresolved tag — keep the literal text so the user can fix it.
       el.appendChild(document.createTextNode(match[0]))

@@ -748,6 +748,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       usedSlots,
     )
 
+    if (compiled.missingFolders.length > 0) {
+      // A mentioned folder was deleted: its images are gone, so the provider
+      // would get dead references. Say which ones instead of failing later.
+      setError(`Folder ${compiled.missingFolders.map((name) => `@${name}`).join(', ')} no longer exists. Remove it from the prompt or pick another folder.`)
+      setStatus('idle')
+      setSubmittedAt(undefined)
+      return
+    }
+
     // Extra connected images go ahead of folder-mention refs (they're the more
     // explicit intent), then the mention groups keep their order.
     const allRefGroups = [

@@ -813,6 +813,15 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
 
+    if (compiled.missingFolders.length > 0) {
+      // A mentioned folder was deleted: its images are gone, so the provider
+      // would get dead references. Say which ones instead of failing later.
+      setError(`Folder ${compiled.missingFolders.map((name) => `@${name}`).join(', ')} no longer exists. Remove it from the prompt or pick another folder.`)
+      setStatus('idle')
+      setSubmittedAt(undefined)
+      return
+    }
+
     // Seedance rejects real-person photos that aren't trusted, but only after
     // the job is queued. Name the untrusted references and let the user decide.
     const untrusted = await findUntrustedReferences([
