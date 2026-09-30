@@ -77,6 +77,27 @@ export async function deleteTrustedWorkspaceAsset({
     }
   }
 
+  // From here on the BytePlus copies are gone. If a later step fails the local
+  // asset survives, so its trust records must stop claiming "active" — otherwise
+  // generation sends the photo raw and BytePlus rejects it as a real person.
+  const markProviderCopiesMissing = async () => {
+    if (!providerLinks.length) return;
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query(
+        `UPDATE byteplus_asset_links
+         SET status = 'failed', error = $3::jsonb, updated_at = now()
+         WHERE workspace_id = $1 AND local_asset_id = $2 AND provider_asset_id IS NOT NULL`,
+        [workspaceId, localAssetId, JSON.stringify({ code: 'BYTEPLUS_ASSET_NOT_FOUND' })],
+      );
+    } catch (error) {
+      console.error('[asset-delete] could not mark trust as missing', localAssetId, error?.message);
+    } finally {
+      client?.release();
+    }
+  };
+
   const canvas = await cleanupCanvasReferences({
     workspaceId, localAssetId, canonicalUrl: `/api/assets/${encodeURIComponent(localAssetId)}/download`,
   }).catch((error) => {
@@ -84,6 +105,7 @@ export async function deleteTrustedWorkspaceAsset({
     return { complete: false };
   });
   if (!canvas?.complete) {
+    await markProviderCopiesMissing();
     throw failure('Canvas reference cleanup is incomplete.', {
       code: 'CANVAS_REFERENCE_CLEANUP_INCOMPLETE', status: 503, retryable: true,
     });
@@ -93,6 +115,7 @@ export async function deleteTrustedWorkspaceAsset({
     await storage.delete(asset.storage_key);
   } catch (error) {
     console.error('[asset-delete] storage delete failed', localAssetId, error?.name, error?.message);
+    await markProviderCopiesMissing();
     throw failure('Asset storage deletion failed.', {
       code: 'ASSET_STORAGE_DELETE_FAILED', status: 503, retryable: true,
     });

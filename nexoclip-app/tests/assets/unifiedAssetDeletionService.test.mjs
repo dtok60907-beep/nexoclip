@@ -93,3 +93,16 @@ test('compare-and-set refuses to delete a newer Trust mapping', async () => {
   await assert.rejects(run(f), error => error.code === 'ASSET_TRUST_CHANGED');
   assert.equal(f.calls.some(c => c.text?.startsWith('DELETE FROM assets')), false);
 });
+
+test('a delete that fails after removing the BytePlus copy marks its trust as missing', async () => {
+  const canvas = fixture({ canvasComplete: false });
+  await assert.rejects(run(canvas), error => error.code === 'CANVAS_REFERENCE_CLEANUP_INCOMPLETE');
+  const providerIndex = canvas.calls.findIndex(c => c.text === 'PROVIDER');
+  const markIndex = canvas.calls.findIndex(c => c.text?.includes("SET status = 'failed'"));
+  assert.ok(providerIndex >= 0 && markIndex > providerIndex);
+  assert.deepEqual(canvas.calls[markIndex].values, ['workspace-1', 'asset-1', JSON.stringify({ code: 'BYTEPLUS_ASSET_NOT_FOUND' })]);
+
+  const untrusted = fixture({ link: false, links: [{ id: 'asset-1', workspace_id: 'workspace-1', storage_key: 'k' }], canvasComplete: false });
+  await assert.rejects(run(untrusted), error => error.code === 'CANVAS_REFERENCE_CLEANUP_INCOMPLETE');
+  assert.equal(untrusted.calls.some(c => c.text?.includes("SET status = 'failed'")), false);
+});
