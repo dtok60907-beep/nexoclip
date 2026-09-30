@@ -16,6 +16,5 @@ services/*/.env*
 services/vimax/.tenants
 services/vimax/.vimax
 services/vimax/.working_dir
-services/ai-clip/output
 *.log
 .DS_Store

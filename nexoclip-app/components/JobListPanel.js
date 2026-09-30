@@ -62,12 +62,9 @@ export default function JobListPanel() {
         }
         pollUrl = `/api/openrouter/videos/${providerId}?job_id=${encodeURIComponent(durableId)}`;
       } else if (job.kind === 'clipping') {
-        const pythonJobId = job.params?.pythonJobId;
-        if (!pythonJobId) {
-          forgetActiveJob(workspaceId, durableId, window.localStorage);
-          return;
-        }
-        pollUrl = `/api/ai-clip/jobs/${pythonJobId}?job_id=${encodeURIComponent(durableId)}`;
+        // AI Clipping was removed; its jobs can never finish now.
+        forgetActiveJob(workspaceId, durableId, window.localStorage);
+        return;
       } else {
         // Other job kinds are advanced by their server workers. Keep them in
         // the durable store until /api/jobs reports a terminal status.

@@ -99,30 +99,6 @@ services:
         condition: service_completed_successfully
     restart: "no"
 
-  ai-clip:
-    profiles: ["ai-clip"]
-    mem_limit: 1g
-    build:
-      context: ./nexoclip-app/services/ai-clip
-    environment:
-      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN:?AI_CLIP_RUNTIME_TOKEN is required}
-      LOCAL_WHISPER_DEVICE: cpu
-      LOCAL_OUTPUT_DIR: /data/output
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}
-      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_BUCKET: ${R2_BUCKET_NAME:-}
-      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
-    volumes:
-      - ai-clip-output:/data/output
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4175/healthz', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
 
   nexoclip-asset-storage-init:
     image: busybox:1.37
@@ -315,9 +291,7 @@ services:
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       MUAPI_API_KEY: ${MUAPI_API_KEY:-}
-      AI_CLIP_RUNTIME_URL: http://ai-clip:4175
       SPITE_INTERNAL_URL: http://spite:3005/spite
-      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN:?AI_CLIP_RUNTIME_TOKEN is required}
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
       LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET:?LOCAL_OBJECT_STORAGE_SECRET is required}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -371,4 +345,3 @@ volumes:
   caddy-config:
   nexoclip-redis-data:
   nexoclip-assets:
-  ai-clip-output:

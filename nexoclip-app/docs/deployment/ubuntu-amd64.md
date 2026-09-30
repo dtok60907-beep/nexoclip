@@ -35,7 +35,7 @@ sudo ufw enable
 sudo ufw status
 ```
 
-Do not open ports 3000, 3005, 3006, 4173, 4175, 4180, 6379, or PostgreSQL.
+Do not open ports 3000, 3005, 3006, 4173, 4180, 6379, or PostgreSQL.
 
 ## 4. Prepare managed services
 
@@ -85,15 +85,6 @@ Replace `VPS_IP`:
 curl -I http://VPS_IP/
 curl -I http://VPS_IP/spite/login
 curl -I http://VPS_IP/scheduler/login
-curl http://VPS_IP/ai-clip-api/healthz
-```
-
-Expected AI Clip health response: `{"ok":true}`. A protected request without the shared token must return 401:
-
-```bash
-curl -i -X POST http://VPS_IP/ai-clip-api/internal/v1/clip-jobs \
-  -H 'content-type: application/json' \
-  -d '{}'
 ```
 
 Check container state and logs:
@@ -101,7 +92,6 @@ Check container state and logs:
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 docker compose --env-file .env.production -f docker-compose.prod.yml logs -f --tail=200
-docker compose --env-file .env.production -f docker-compose.prod.yml logs -f ai-clip
 docker compose --env-file .env.production -f docker-compose.prod.yml restart spite
 ```
 

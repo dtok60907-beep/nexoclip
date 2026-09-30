@@ -21,7 +21,6 @@ const studioLazy = (name) => dynamic(() => import('studio').then(mod => mod[name
 });
 
 const VideoStudio = studioLazy('VideoStudio');
-const ClippingStudio = studioLazy('ClippingStudio');
 const VibeMotionStudio = studioLazy('VibeMotionStudio');
 const LipSyncStudio = studioLazy('LipSyncStudio');
 const RecastStudio = studioLazy('RecastStudio');
@@ -63,20 +62,6 @@ const TABS = [
         <path d="M9 18V5l12-2v13"/>
         <circle cx="6" cy="18" r="3"/>
         <circle cx="18" cy="16" r="3"/>
-      </svg>
-    )
-  },
-  {
-    id: 'clipping',
-    label: 'AI Clipping',
-    hidden: true,
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="6" cy="6" r="3"/>
-        <circle cx="6" cy="18" r="3"/>
-        <line x1="20" y1="4" x2="8.12" y2="15.88"/>
-        <line x1="14.47" y1="14.47" x2="20" y2="20"/>
-        <line x1="8.12" y1="8.12" x2="12" y2="12"/>
       </svg>
     )
   },
@@ -188,7 +173,7 @@ const NAVIGATION_CATEGORIES = [
   {
     id: 'video',
     label: 'Video',
-    tabIds: ['video', 'clipping', 'vibe-motion', 'lipsync', 'body-swap', 'marketing'],
+    tabIds: ['video', 'vibe-motion', 'lipsync', 'body-swap', 'marketing'],
     icon: (
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="4" width="15" height="16" rx="2"/>
@@ -800,11 +785,6 @@ export default function StandaloneShell({ initialTab, children }) {
         {activeTab === 'video' && (
           <div className="h-full w-full">
             <VideoStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
-          </div>
-        )}
-        {activeTab === 'clipping' && (
-          <div className="h-full w-full">
-            <ClippingStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('clipping')} onGenerationEnd={makeGenerationEndCallback('clipping')} onGenerationComplete={makeSuccessCallback('clipping')} onGenerationError={makeErrorCallback('clipping')} />
           </div>
         )}
         {activeTab === 'vibe-motion' && (

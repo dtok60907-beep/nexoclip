@@ -1035,64 +1035,6 @@ export async function getHistory(apiKey, { cursor, limit = 50 } = {}) {
     return await response.json();
 }
 
-// Self-hosted (services/ai-clip, mode="local") — no MuAPI. There is only one
-// clipping algorithm, so unlike image/video there is no per-model provider choice.
-export async function runClipping(_apiKey, params) {
-    const workspaceHeaders = params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {};
-    const submitRes = await fetch('/api/ai-clip/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
-        body: JSON.stringify({
-            video_url: params.video_url,
-            num_clips: params.num_highlights || 3,
-            aspect_ratio: params.aspect_ratio || '9:16',
-            topic_hint: params.topic_hint || '',
-        }),
-    });
-    if (!submitRes.ok) throw new Error(`Clipping request failed: ${submitRes.status}`);
-    const submitData = await submitRes.json();
-    const jobId = submitData.id;
-    const durableJobId = submitData.job_id;
-    if (!jobId) throw new Error('No job id returned from clipping submission');
-    if (params.onRequestId) params.onRequestId(jobId);
-
-    const hasLocalStorage = typeof window !== 'undefined' && window.localStorage;
-    if (durableJobId && params.workspace_id && hasLocalStorage) {
-        rememberActiveJob(params.workspace_id, durableJobId, window.localStorage);
-    }
-    const forgetJob = () => {
-        if (durableJobId && params.workspace_id && hasLocalStorage) {
-            forgetActiveJob(params.workspace_id, durableJobId, window.localStorage);
-        }
-    };
-
-    const maxAttempts = 180; // 180 * 5s = 15 minutes
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const pollUrl = durableJobId
-            ? `/api/ai-clip/jobs/${jobId}?job_id=${encodeURIComponent(durableJobId)}`
-            : `/api/ai-clip/jobs/${jobId}`;
-        const pollRes = await fetch(pollUrl, { headers: workspaceHeaders });
-        if (!pollRes.ok) throw new Error(`Clipping poll failed: ${pollRes.status}`);
-        const pollData = await pollRes.json();
-        if (pollData.status === 'completed') {
-            forgetJob();
-            const shorts = pollData.shorts || [];
-            return {
-                id: jobId,
-                outputs: shorts.map((s) => s.url).filter(Boolean),
-                shorts,
-            };
-        }
-        if (pollData.status === 'failed') {
-            forgetJob();
-            throw new Error(`Clipping failed: ${pollData.error || 'unknown error'}`);
-        }
-    }
-    forgetJob();
-    throw new Error('Clipping timed out after polling.');
-}
-
 export async function runMotionGraphics(apiKey, params) {
     const payload = {
         prompt: params.prompt,

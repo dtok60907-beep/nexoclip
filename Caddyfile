@@ -2,10 +2,6 @@
 	encode zstd gzip
 
 	route {
-		handle_path /ai-clip-api/* {
-			reverse_proxy {$AI_CLIP_UPSTREAM:ai-clip:4175}
-		}
-
 		handle /canvas/api/internal/* {
 			respond 404
 		}

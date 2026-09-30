@@ -76,7 +76,6 @@ If `config:check` fails, deployment must stop before any migration or `up`.
 - `spite`: `/spite/login` non-5xx
 - `scheduler`: `/scheduler/login` non-5xx
 - `vimax`: `/healthz`
-- `ai-clip`: `/healthz`
 - `redis`: authenticated `PING`
 
 Caddy should be the only service exposing host ports; internal services remain private on the Compose network.

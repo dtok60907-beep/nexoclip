@@ -15,7 +15,6 @@
     "dev": "next dev --turbopack",
     "dev:storyboard": "cd services/vimax/web && VIMAX_PYTHON_CMD=\"$(cd .. && pwd)/.venv/bin/python\" node server.mjs",
     "dev:vimax-runtime": "cd services/vimax && VIMAX_RUNTIME_TOKEN=\"${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN (match .env.local)}\" VIMAX_TENANTS_ROOT=\"$(pwd)/.tenants\" .venv/bin/uvicorn runtime_api.app:app --host 127.0.0.1 --port 4174",
-    "dev:ai-clip": "cd services/ai-clip && set -a && . ../../.env.local && set +a && .venv/bin/uvicorn api:app --host 127.0.0.1 --port 4175",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

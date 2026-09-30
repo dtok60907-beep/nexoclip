@@ -15,7 +15,6 @@ services:
       nexoclip: { condition: service_healthy }
       spite: { condition: service_healthy }
       spite-realtime: { condition: service_healthy }
-      ai-clip: { condition: service_healthy }
 
   postgres:
     image: postgres:16-alpine
@@ -87,29 +86,6 @@ services:
       nexoclip-migrate: { condition: service_completed_successfully }
       spite-realtime-migrate: { condition: service_completed_successfully }
 
-  ai-clip:
-    platform: linux/amd64
-    build:
-      context: ./nexoclip-app/services/ai-clip
-    restart: unless-stopped
-    environment:
-      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN}
-      LOCAL_WHISPER_DEVICE: cpu
-      LOCAL_OUTPUT_DIR: /data/output
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
-      R2_BUCKET: ${R2_BUCKET_NAME}
-      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
-    volumes:
-      - ai-clip-output:/data/output
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4175/healthz', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 20
 
   asset-storage-init:
     image: busybox:1.37
@@ -149,8 +125,6 @@ services:
       BYTEPLUS_PROJECT_NAME: ${BYTEPLUS_PROJECT_NAME:-default}
       BYTEPLUS_REGION: ${BYTEPLUS_REGION:-ap-southeast-1}
       BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL}
-      AI_CLIP_RUNTIME_URL: http://ai-clip:4175
-      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
@@ -168,7 +142,6 @@ services:
       asset-storage-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       nexoclip-migrate: { condition: service_completed_successfully }
-      ai-clip: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
@@ -331,6 +304,5 @@ volumes:
   nexoclip-assets:
   postgres-data:
   redis-data:
-  ai-clip-output:
   caddy-data:
   caddy-config:

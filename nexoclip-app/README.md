@@ -90,7 +90,7 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 
 **Hosted version:** [https://muapi.ai/open-generative-ai?utm_source=github&utm_medium=readme&utm_campaign=open-generative-ai](https://muapi.ai/open-generative-ai?utm_source=github&utm_medium=readme&utm_campaign=open-generative-ai)
 
-Use all studios (Image, Video, Audio, AI Clipping, Vibe Motion, Lip Sync, Cinema, Marketing, Workflows, Agents, Design Agent, Apps, MCP & CLI) directly in your browser — no Node.js, no setup. Sign up for a free account to start generating. The hosted version is always up to date with the latest models.
+Use all studios (Image, Video, Audio, Vibe Motion, Lip Sync, Cinema, Marketing, Workflows, Agents, Design Agent, Apps, MCP & CLI) directly in your browser — no Node.js, no setup. Sign up for a free account to start generating. The hosted version is always up to date with the latest models.
 
 **Follow** the [creator](https://x.com/matchaman11) for updates
 
@@ -311,7 +311,6 @@ A healthy run on Apple Silicon prints `total params memory size = 1969.78MB (VRA
 - **Multi-Image Input** — Upload up to 14 reference images for compatible edit models (Nano Banana 2 Edit, Flux Kontext Dev, GPT-4o Edit, and more). Multi-select picker with order badges, batch upload, and a "Use Selected" confirmation flow.
 - **Video Studio** — Generate videos from text prompts (40+ text-to-video models) or animate a start-frame image (60+ image-to-video models). Same intelligent mode switching as Image Studio.
 - **Audio Studio** — Generate and edit AI audio/music from text prompts.
-- **AI Clipping** — Auto-clip and extract highlights from longer video content.
 - **Vibe Motion Studio** — Motion/animation generation studio for stylized video effects.
 - **Lip Sync Studio** — Animate portrait images or sync lips on existing videos using audio. 9 dedicated models across two modes: portrait image + audio → talking video, and video + audio → lipsync video.
 - **Body Swap (Recast) Studio** — Swap/recast a subject's body or appearance in an image or video.
@@ -547,7 +546,7 @@ Open-Generative-AI/
 ├── packages/
 │   └── studio/                 # Shared React component library
 │       └── src/
-│           ├── index.js        # Exports: ImageStudio, VideoStudio, AudioStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, MarketingStudio, WorkflowStudio, AgentStudio, DesignAgentStudio, AppsStudio, AiInfluencerStudio, McpCliStudio
+│           ├── index.js        # Exports: ImageStudio, VideoStudio, AudioStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, MarketingStudio, WorkflowStudio, AgentStudio, DesignAgentStudio, AppsStudio, AiInfluencerStudio, McpCliStudio
 │           ├── models.js       # 400+ model definitions (single source of truth)
 │           ├── muapi.js        # API client (named exports, apiKey as first param)
 │           └── components/
@@ -584,7 +583,7 @@ Lip sync jobs use the same two-step pattern: a dedicated `processLipSync()` meth
 | **Image-to-Image** | 70+ | Nano Banana 2 Edit (×14), Flux Kontext Pro, GPT-4o Edit, Seededit v3, Upscaler, Background Remover |
 | **Text-to-Video** | 85+ | Kling v3, Sora 2, Veo 3, Wan 2.6, Seedance 2.0, Seedance 2.0 Extend, Seedance Pro, Hailuo 2.3, Runway Gen-3 |
 | **Image-to-Video** | 120+ | Kling v2.1 I2V, Veo3 I2V, Runway I2V, Seedance 2.0 I2V, Midjourney v7 I2V, Hunyuan I2V, Wan2.2 I2V |
-| **Video-to-Video** | 35+ | Video effects, AI Clipping, Vibe Motion, video-conditioned edits |
+| **Video-to-Video** | 35+ | Video effects, Vibe Motion, video-conditioned edits |
 | **Lip Sync** | 15 | Infinite Talk I2V, Wan 2.2 Speech to Video, LTX 2.3 Lipsync, LTX 2 19B Lipsync, Sync, LatentSync, Creatify, Veed, Infinite Talk V2V |
 | **Body Swap / Recast** | 3 | Subject/appearance recast across image and video |
 | **Audio** | 15+ | Text-to-music, remix, and audio editing models |
