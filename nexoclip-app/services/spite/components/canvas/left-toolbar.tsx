@@ -285,7 +285,9 @@ export function LeftToolbar({
       const payload = await response.json()
       return Array.isArray(payload.assets) ? payload.assets : []
     },
-    { refreshInterval: 15000, revalidateOnFocus: true }
+    // Local uploads, deletes and trust changes revalidate immediately; this
+    // interval only picks up assets added from other tabs/devices.
+    { refreshInterval: 60_000, revalidateOnFocus: true }
   )
 
   // Fetch folders for THIS project. Always-on (no historyOpen gate) so a
