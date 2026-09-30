@@ -5,6 +5,7 @@ import {
   createLocalPresenceSnapshot,
   createPresenceController,
   createPresenceSnapshotSync,
+  getOrCreateDeviceHint,
   getOrCreateParticipantHint,
   getPresenceColor,
   presenceSnapshotNeedsPublish,
@@ -318,4 +319,25 @@ test('presence sync does not recurse when awareness emits update synchronously o
   assert.ok(writes <= 2, `expected a bounded number of writes, got ${writes}`)
   assert.deepEqual(state?.selection, { nodeIds: ['node-a'] })
   assert.deepEqual(state?.editing, { nodeId: 'node-a' })
+})
+
+
+test('device hint is shared per browser storage while participant hints stay per tab', () => {
+  const shared = new MemoryStorage()
+  const tabA = new MemoryStorage()
+  const tabB = new MemoryStorage()
+  assert.equal(getOrCreateDeviceHint(shared), getOrCreateDeviceHint(shared))
+  assert.notEqual(getOrCreateParticipantHint(tabA), getOrCreateParticipantHint(tabB))
+})
+
+test('the controller publishes its device id and remote peers expose it', () => {
+  let state: Record<string, unknown> | null = {}
+  const awareness = {
+    getLocalState: () => state,
+    setLocalState: (next: Record<string, unknown> | null) => { state = next },
+  }
+  createPresenceController({ awareness, participantId: 'p1', deviceId: 'device-1' })
+  assert.equal(state?.deviceId, 'device-1')
+  const [peer] = projectRemotePresence([{ clientId: 2, participantId: 'p2', deviceId: 'device-1' }])
+  assert.equal(peer.deviceId, 'device-1')
 })

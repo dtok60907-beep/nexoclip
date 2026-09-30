@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
-import type { Node } from '@xyflow/react'
+import { useReactFlow, type Node } from '@xyflow/react'
 
 import {
   type PresencePoint,
@@ -24,10 +23,14 @@ const FALLBACK_NODE_WIDTH = 240
 const FALLBACK_NODE_HEIGHT = 120
 
 export function RealtimePresenceOverlay({ peers, nodes, viewport }: RealtimePresenceProps) {
-  const nodeById = useMemo(
-    () => new Map(nodes.map((node) => [node.id, node])),
-    [nodes],
-  )
+  // Nodes coming from the shared document carry no rendered size (it is
+  // ephemeral and never synced), so every highlight used the small fallback
+  // box. React Flow's internal node has the measured size.
+  const { getInternalNode } = useReactFlow()
+  const nodeById = new Map(nodes.map((node) => {
+    const measured = node.measured ?? getInternalNode(node.id)?.measured
+    return [node.id, measured ? { ...node, measured } : node] as const
+  }))
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">

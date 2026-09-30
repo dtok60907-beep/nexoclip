@@ -58,6 +58,7 @@ export type PresencePeer = {
   editing?: unknown
   lock?: unknown
   sceneId?: unknown
+  deviceId?: unknown
 }
 
 export type RemotePresencePeer = {
@@ -70,11 +71,15 @@ export type RemotePresencePeer = {
   editing?: PresenceEditing
   lock?: PresenceLock
   sceneId?: string
+  // Shared by every tab of the same browser; used to tell "my other tab"
+  // apart from another person.
+  deviceId?: string
 }
 
 export type PresenceControllerOptions = {
   awareness: PresenceAwareness | null
   participantId: string
+  deviceId?: string
   throttleMs?: number
   heartbeatMs?: number
   now?: () => number
@@ -83,6 +88,7 @@ export type PresenceControllerOptions = {
 }
 
 const PARTICIPANT_HINT_STORAGE_KEY = 'spite:participant-hint'
+const DEVICE_HINT_STORAGE_KEY = 'spite:device-hint'
 const DEFAULT_CURSOR_THROTTLE_MS = 48
 const DEFAULT_LOCK_HEARTBEAT_MS = 2_000
 
@@ -104,6 +110,12 @@ export function getOrCreateParticipantHint(
   const created = createId()
   storage?.setItem(key, created)
   return created
+}
+
+// Unlike the participant hint (sessionStorage, one per tab), the device hint
+// lives in localStorage so all tabs of one browser share it.
+export function getOrCreateDeviceHint(storage: PresenceStorage | undefined = getDefaultLocalStorage()): string {
+  return getOrCreateParticipantHint(storage, { key: DEVICE_HINT_STORAGE_KEY })
 }
 
 export function getPresenceColor(participantId: string): PresenceColors {
@@ -141,6 +153,7 @@ export function projectRemotePresence(
       editing,
       lock,
       sceneId: readSceneId(peer.sceneId),
+      deviceId: typeof peer.deviceId === 'string' && peer.deviceId ? peer.deviceId : undefined,
     }
   })
 }
@@ -232,6 +245,7 @@ class PresenceController {
     this.awareness?.setLocalState?.({
       ...(this.awareness.getLocalState?.() ?? {}),
       participantId: this.participantId,
+      ...(options.deviceId ? { deviceId: options.deviceId } : {}),
     })
   }
 
@@ -369,6 +383,14 @@ class PresenceController {
 
     this.clearTimer(this.lockTimer)
     this.lockTimer = null
+  }
+}
+
+function getDefaultLocalStorage(): PresenceStorage | undefined {
+  try {
+    return globalThis.localStorage
+  } catch {
+    return undefined
   }
 }
 

@@ -41,6 +41,7 @@ import { useRealtimeCanvas } from '@/hooks/use-realtime-canvas'
 import {
   createLocalPresenceSnapshot,
   createPresenceController,
+  getOrCreateDeviceHint,
   getOrCreateParticipantHint,
   createPresenceSnapshotSync,
   projectRemotePresence,
@@ -293,6 +294,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('open-generation-settings', openSettings)
   }, [])
   const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
+  const [localDeviceId] = useState(() => (typeof window === 'undefined' ? '' : getOrCreateDeviceHint()))
   const selectedSceneNodeIdsRef = useRef<string[]>([])
   const lockedNodeIdsRef = useRef<Set<string>>(new Set())
   const [presenceNow, setPresenceNow] = useState(() => Date.now())
@@ -355,6 +357,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     const controller = createPresenceController({
       awareness,
       participantId: getOrCreateParticipantHint(),
+      deviceId: localDeviceId,
     })
 
     const syncPresenceSnapshot = createPresenceSnapshotSync({
@@ -1111,6 +1114,13 @@ function CanvasInner({ projectId }: { projectId: string }) {
     () => projectRemotePresence(realtimePeers, { now: presenceNow }),
     [realtimePeers, presenceNow],
   )
+  // Other tabs of this same browser are not other people: don't draw their
+  // selection/cursor or list them as guests. (Their editing/drag locks still
+  // count, so one prompt can't be edited from two tabs at once.)
+  const visiblePresence = useMemo(
+    () => remotePresence.filter((peer) => !peer.deviceId || peer.deviceId !== localDeviceId),
+    [localDeviceId, remotePresence],
+  )
   const lockedNodeMembershipKey = useMemo(() => {
     const locks = new Set<string>()
     for (const peer of remotePresence) {
@@ -1353,7 +1363,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         jobsPanelOpen={jobsPanelOpen}
         onToggleJobsPanel={() => setJobsPanelOpen(v => !v)}
         activeJobCount={activeJobCount}
-        guests={remotePresence}
+        guests={visiblePresence}
         onFollowGuest={handleFollowGuest}
       />
 
@@ -1483,7 +1493,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         })()}
 
         <RealtimePresenceOverlay
-          peers={remotePresence}
+          peers={visiblePresence}
           nodes={sceneNodes}
           viewport={viewport}
         />
