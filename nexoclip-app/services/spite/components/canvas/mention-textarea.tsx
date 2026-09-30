@@ -367,10 +367,65 @@ function placeCaretAfter(node: Node) {
   sel.addRange(range)
 }
 
+type CaretSegment =
+  | { kind: 'text'; node: Text; start: number; length: number }
+  | { kind: 'chip'; node: HTMLElement; start: number; length: number }
+  | { kind: 'break'; node: Node; start: number; length: 1 }
+
+// Walk the editor in the same order and with the same rules as
+// serializeEditor (chips = "@tag", <br> = newline, a block element starts a
+// new line), so caret offsets line up with the saved text even when the
+// browser has nested content inside <div>s. `onPosition` is called at every
+// (parent, childIndex) boundary with the offset reached so far.
+function walkCaretSegments(
+  el: HTMLElement,
+  onSegment: (segment: CaretSegment) => boolean | void,
+  onPosition?: (parent: Node, index: number, offset: number) => boolean | void,
+): number {
+  let offset = 0
+  let lastChar = ''
+  let stopped = false
+  const walk = (parent: Node) => {
+    const children = Array.from(parent.childNodes)
+    for (let index = 0; index <= children.length && !stopped; index += 1) {
+      if (onPosition?.(parent, index, offset)) { stopped = true; return }
+      if (index === children.length) break
+      const node = children[index]
+      if (node.nodeType === Node.TEXT_NODE) {
+        const length = (node as Text).data.length
+        if (onSegment({ kind: 'text', node: node as Text, start: offset, length })) { stopped = true; return }
+        offset += length
+        if (length) lastChar = (node as Text).data.slice(-1)
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const e = node as HTMLElement
+        if (e.dataset?.mention === '1') {
+          const length = `@${tagFromName(e.dataset.name || '')}`.length
+          if (onSegment({ kind: 'chip', node: e, start: offset, length })) { stopped = true; return }
+          offset += length
+          lastChar = 'x'
+        } else if (e.tagName === 'BR') {
+          if (onSegment({ kind: 'break', node: e, start: offset, length: 1 })) { stopped = true; return }
+          offset += 1
+          lastChar = '\n'
+        } else {
+          if (BLOCK_TAGS.has(e.tagName) && offset > 0 && lastChar !== '\n') {
+            if (onSegment({ kind: 'break', node: e, start: offset, length: 1 })) { stopped = true; return }
+            offset += 1
+            lastChar = '\n'
+          }
+          walk(e)
+        }
+      }
+    }
+  }
+  walk(el)
+  return offset
+}
+
 // Capture the collapsed caret's offset into the serialized editor string
 // (the same format used by serializeEditor) so we can restore it after a
 // full DOM re-render. Returns null if there's no collapsed caret inside
-// `el` or we can't compute a mapping.
+// `el`.
 export function captureCaretOffset(el: HTMLElement): number | null {
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0) return null
@@ -378,133 +433,63 @@ export function captureCaretOffset(el: HTMLElement): number | null {
   if (!range.collapsed) return null
   const start = range.startContainer
   const startOffset = range.startOffset
-  // Ensure the selection is inside the editor
   if (!el.contains(start)) return null
 
-  let offset = 0
-  for (const node of Array.from(el.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const t = node as Text
-      if (node === start) {
-        return offset + Math.min(startOffset, t.data.length)
+  let found: number | null = null
+  walkCaretSegments(
+    el,
+    (segment) => {
+      if (segment.kind === 'text' && segment.node === start) {
+        found = segment.start + Math.min(startOffset, segment.length)
+        return true
       }
-      offset += t.data.length
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const e = node as HTMLElement
-      if (e.dataset?.mention === '1') {
-        // A chip serializes as @<tagFromName(name)>
-        const tag = `@${tagFromName(e.dataset.name || '')}`
-        const len = tag.length
-        // If the caret is inside a text node child of the chip (unlikely
-        // since chips are contentEditable=false), consider it as after.
-        if (e.contains(start)) return offset + len
-        offset += len
-      } else if (e.tagName === 'BR') {
-        if (node === start) return offset
-        offset += 1
-      } else {
-        const txt = e.textContent || ''
-        if (e.contains(start)) {
-          // If selection is inside a nested element, try to map to
-          // its text nodes by walking its child nodes.
-          let innerOffset = 0
-          const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, null)
-          let cur: Node | null
-          while ((cur = walker.nextNode())) {
-            if (cur === start) return offset + innerOffset + Math.min(startOffset, (cur as Text).data.length)
-            innerOffset += (cur as Text).data.length
-          }
-          return offset + innerOffset
-        }
-        offset += txt.length
+      // Chips are contentEditable=false; a caret inside one counts as after it.
+      if (segment.kind === 'chip' && segment.node.contains(start)) {
+        found = segment.start + segment.length
+        return true
       }
-    }
-  }
-  // If we fell through, place at end
-  return offset
+      return false
+    },
+    (parent, index, offset) => {
+      if (parent === start && index === startOffset) {
+        found = offset
+        return true
+      }
+      return false
+    },
+  )
+  return found
 }
 
-// Restore a collapsed caret previously captured with captureCaretOffset.
-// Best-effort: if the exact mapping isn't possible we place the caret at
-// the closest sensible boundary (after a chip or at end).
+// Place a collapsed caret at `targetOffset` of the serialized editor string.
 export function restoreCaretFromOffset(el: HTMLElement, targetOffset: number) {
-  let offset = targetOffset
-  for (const node of Array.from(el.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const t = node as Text
-      if (offset <= t.data.length) {
-        const sel = window.getSelection()
-        if (!sel) return
-        const range = document.createRange()
-        range.setStart(t, offset)
-        range.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(range)
-        return
-      }
-      offset -= t.data.length
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const e = node as HTMLElement
-      if (e.dataset?.mention === '1') {
-        const tag = `@${tagFromName(e.dataset.name || '')}`
-        const len = tag.length
-        if (offset <= len) {
-          // Place caret after the chip
-          placeCaretAfter(e)
-          return
-        }
-        offset -= len
-      } else if (e.tagName === 'BR') {
-        if (offset <= 1) {
-          placeCaretAfter(e)
-          return
-        }
-        offset -= 1
-      } else {
-        const txt = e.textContent || ''
-        if (offset <= txt.length) {
-          // Find the text node to place into
-          const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, null)
-          let cur: Node | null
-          let soFar = 0
-          while ((cur = walker.nextNode())) {
-            const len = (cur as Text).data.length
-            if (offset <= soFar + len) {
-              const sel = window.getSelection()
-              if (!sel) return
-              const range = document.createRange()
-              range.setStart(cur as Text, offset - soFar)
-              range.collapse(true)
-              sel.removeAllRanges()
-              sel.addRange(range)
-              return
-            }
-            soFar += len
-          }
-          // fallback: place after element
-          placeCaretAfter(e)
-          return
-        }
-        offset -= txt.length
-      }
+  const sel = window.getSelection()
+  if (!sel) return
+  const range = document.createRange()
+  let placed = false
+  walkCaretSegments(el, (segment) => {
+    const end = segment.start + segment.length
+    if (segment.kind === 'text' && targetOffset <= end) {
+      range.setStart(segment.node, Math.max(0, targetOffset - segment.start))
+      placed = true
+    } else if (segment.kind === 'chip' && targetOffset <= end) {
+      if (targetOffset <= segment.start) range.setStartBefore(segment.node)
+      else range.setStartAfter(segment.node)
+      placed = true
+    } else if (segment.kind === 'break' && targetOffset <= segment.start) {
+      if (segment.node.nodeName === 'BR') range.setStartBefore(segment.node)
+      else range.setStart(segment.node, 0)
+      placed = true
     }
+    return placed
+  })
+  if (!placed) {
+    range.selectNodeContents(el)
+    range.collapse(false)
   }
-  // If target beyond end, place caret at end of editor.
-  const last = el.lastChild
-  if (last) {
-    if (last.nodeType === Node.TEXT_NODE) {
-      const t = last as Text
-      const sel = window.getSelection()
-      if (!sel) return
-      const range = document.createRange()
-      range.setStart(t, t.data.length)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
-    } else {
-      placeCaretAfter(last)
-    }
-  }
+  range.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(range)
 }
 
 // ---------------------------------------------------------------------------

@@ -86,6 +86,8 @@ if (!JSDOM) {
 
   test('capture and restore collapsed caret across a chip boundary', () => {
   const el = document.createElement('div')
+  // Selections only apply to nodes in the document.
+  document.body.appendChild(el)
   const before = document.createTextNode('Hello ')
   const chip = document.createElement('span')
   chip.dataset.mention = '1'
@@ -228,5 +230,40 @@ if (JSDOM) {
     const html = nodesToHtml(buildPastedNodes(document, 'a <b> & @alur1\nnext', folders))
     assert.doesNotMatch(html, /<div|<b>/)
     assert.match(html, /a &lt;b&gt; &amp; <span[^>]*data-mention="1"[^>]*>alur1<\/span><br>next/)
+  })
+}
+
+
+if (JSDOM) {
+  test('caret offsets match the serialized text inside browser-created <div> lines', () => {
+    const el = document.createElement('div')
+    document.body.appendChild(el)
+    el.appendChild(document.createTextNode('Shot 1'))
+    const line = document.createElement('div')
+    const chip = document.createElement('span')
+    chip.dataset.mention = '1'
+    chip.dataset.name = 'alur1'
+    chip.textContent = 'alur1'
+    line.appendChild(chip)
+    const tail = document.createTextNode(' next')
+    line.appendChild(tail)
+    el.appendChild(line)
+
+    const text = serializeEditor(el).text
+    assert.equal(text, 'Shot 1\n@alur1 next')
+    const range = document.createRange()
+    range.setStart(tail, 3)
+    range.collapse(true)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    const offset = captureCaretOffset(el)!
+    assert.equal(text.slice(0, offset), 'Shot 1\n@alur1 ne')
+
+    window.getSelection()!.removeAllRanges()
+    restoreCaretFromOffset(el, offset)
+    const restored = window.getSelection()!.getRangeAt(0)
+    assert.equal(restored.startContainer, tail)
+    assert.equal(restored.startOffset, 3)
+    el.remove()
   })
 }
