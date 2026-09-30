@@ -15,8 +15,11 @@
 export const CREDITS_PER_USD = 100;
 const CREDIT_PRECISION = 10;
 
+// Generation markup only. The older NEXT_PUBLIC_CREDIT_MARKUP_PERCENT is not
+// read here: it is set to 0 in production for other displays and would
+// silently remove the markup.
 export function markupMultiplier(env = process.env) {
-  const raw = env.CREDIT_MARKUP_PERCENT ?? env.NEXT_PUBLIC_CREDIT_MARKUP_PERCENT;
+  const raw = env.CREDIT_MARKUP_PERCENT;
   const percent = raw === undefined || raw === '' ? 30 : Number(raw);
   return Number.isFinite(percent) && percent >= 0 ? 1 + percent / 100 : 1.3;
 }

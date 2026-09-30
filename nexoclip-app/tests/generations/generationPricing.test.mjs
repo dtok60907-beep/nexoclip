@@ -75,3 +75,7 @@ test('image jobs settle at reported usage: OpenRouter USD, Google/OpenAI tokens'
   assert.deepEqual(openAIImageUsage({ input_tokens: 50, output_tokens: 4160 }), { inputTokens: 50, imageOutputTokens: 4160 });
   resetOpenRouterPriceCache();
 });
+
+test('the legacy NEXT_PUBLIC markup variable does not remove the generation markup', () => {
+  assert.equal(usdToCredits(1, { NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: '0' }), 130);
+});
