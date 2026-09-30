@@ -1004,27 +1004,32 @@ function CanvasInner({ projectId }: { projectId: string }) {
       if (isEditingText(e.target)) return
 
       const ctrl = e.ctrlKey || e.metaKey
+      // Shift and CapsLock turn e.key into 'Z', which broke Ctrl+Shift+Z and
+      // every shortcut while CapsLock was on.
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      // Ctrl+Shift+R/Ctrl+Shift+V etc. stay with the browser.
+      const plainCtrl = ctrl && !e.shiftKey && !e.altKey
 
       // Undo/Redo
-      if (ctrl && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
-      if (ctrl && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
-      if (ctrl && e.key === 'y') { e.preventDefault(); redo() }
+      if (ctrl && key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      if (ctrl && key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
+      if (ctrl && key === 'y') { e.preventDefault(); redo() }
 
       // Node type shortcuts
-      if (ctrl && e.key === 'n') { e.preventDefault(); addNode('imageGen') }
-      if (ctrl && e.key === 'k') { e.preventDefault(); addNode('videoGen') }
-      if (ctrl && e.key === 't') { e.preventDefault(); addNode('prompt') }
-      if (ctrl && e.key === 'r') { e.preventDefault(); addNode('reference') }
+      if (plainCtrl && key === 'n') { e.preventDefault(); addNode('imageGen') }
+      if (plainCtrl && key === 'k') { e.preventDefault(); addNode('videoGen') }
+      if (plainCtrl && key === 't') { e.preventDefault(); addNode('prompt') }
+      if (plainCtrl && key === 'r') { e.preventDefault(); addNode('reference') }
 
       // Edit shortcuts
-      if (ctrl && e.key === 'c') {
+      if (plainCtrl && key === 'c') {
         e.preventDefault()
         const selectedIds = new Set(selectedNodeIds)
         clipboardNodes = nodes
           .filter((node) => selectedIds.has(node.id))
           .map((node) => ({ ...node, data: { ...(node.data as Record<string, unknown>) } }))
       }
-      if (ctrl && e.key === 'x') {
+      if (plainCtrl && key === 'x') {
         e.preventDefault()
         const selectedIds = new Set(selectedNodeIds)
         clipboardNodes = nodes
@@ -1033,7 +1038,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         deleteSelected()
       }
       // Ctrl+V for internal node clipboard — image paste is handled by onPaste
-      if (allowDocumentMutation && ctrl && e.key === 'v' && clipboardNodes.length) {
+      if (allowDocumentMutation && plainCtrl && key === 'v' && clipboardNodes.length) {
         const copies = clipboardNodes.map((node) => ({
           ...node,
           id: makeId(),
@@ -1047,7 +1052,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         })
         setSelectedNodeIds(copies.map((node) => node.id))
       }
-      if (ctrl && e.key === 'd') { e.preventDefault(); duplicateSelected() }
+      if (plainCtrl && key === 'd') { e.preventDefault(); duplicateSelected() }
 
       // Delete — only the dedicated Delete key (NOT Backspace). Backspace
       // is too easy to hit by accident while editing prompts and was
