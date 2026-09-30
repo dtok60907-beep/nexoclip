@@ -29,7 +29,9 @@ function errorResponse(error) {
   }
   const safe = safeErrors[error.code];
   if (safe) {
-    console.error('[byteplus-trust]', error.code, error.message);
+    console.error('[byteplus-trust]', error.code, error.message, JSON.stringify({
+      status: error.status, action: error.action, providerCode: error.providerCode,
+    }));
     return Response.json({ error: { code: error.code, message: safe[0] } }, { status: error.status || safe[1] });
   }
   // Unexpected failures (e.g. a DB error) are masked for the client, so log

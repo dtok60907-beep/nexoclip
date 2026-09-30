@@ -522,3 +522,40 @@ test('workspace listing adds only safe trust state and preserves ordinary asset 
   assert.doesNotMatch(sql, /SELECT[\s\S]*bal\.(group_id|provider_asset_id)(?!\s+IS NOT NULL)/i);
   assert.doesNotMatch(JSON.stringify(assets), /provider-secret|raw provider error/);
 });
+
+test('replaces a remembered project group that was deleted on BytePlus', async () => {
+  const shared = fixture({ asset: { ...image, id: 'asset-2' }, existingGroup: 'deleted-group' });
+  const createAsset = shared.provider.createAsset;
+  shared.provider.createAsset = async (input) => {
+    if (input.groupId === 'deleted-group') {
+      shared.calls.assets.push(input);
+      throw new BytePlusAssetsError('BytePlus Assets API request failed.', { code: 'BYTEPLUS_ASSETS_REQUEST_FAILED', status: 400 });
+    }
+    return createAsset(input);
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await shared.service.startTrust('workspace-1', 'asset-2');
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(shared.calls.groups.length, 1);
+  const originalGroupToken = createHash('sha256').update('byteplus-assets:v2:workspace-1:workspace:project-x:create-group').digest('hex');
+  assert.notEqual(shared.calls.groups[0].clientToken, originalGroupToken);
+  assert.deepEqual(shared.calls.assets.map((input) => input.groupId), ['deleted-group', 'group-secret']);
+  assert.notEqual(shared.calls.assets[0].clientToken, shared.calls.assets[1].clientToken);
+  assert.equal(shared.getLink().group_id, 'group-secret');
+  assert.equal(shared.getLink().provider_asset_id, 'provider-asset-secret');
+});
+
+test('does not replace a configured shared group when asset creation fails', async () => {
+  const configured = fixture({ asset: image, env: { BYTEPLUS_ASSET_GROUP_ID: 'configured-group' } });
+  configured.provider.createAsset = async () => {
+    throw new BytePlusAssetsError('BytePlus Assets API request failed.', { code: 'BYTEPLUS_ASSETS_REQUEST_FAILED', status: 400 });
+  };
+
+  await assert.rejects(configured.service.startTrust('workspace-1', 'asset-1'), { code: 'BYTEPLUS_ASSETS_REQUEST_FAILED' });
+  assert.equal(configured.calls.groups.length, 0);
+});

@@ -80,13 +80,19 @@ function unavailableError(status = 503) {
   });
 }
 
-function requestError(status, providerCode) {
-  return new BytePlusAssetsError('BytePlus Assets API request failed.', {
+function requestError(status, providerError, action) {
+  const providerCode = providerError?.Code;
+  const error = new BytePlusAssetsError('BytePlus Assets API request failed.', {
     code: BYTEPLUS_ASSET_NOT_FOUND_CODES.has(providerCode)
       ? providerCode
       : 'BYTEPLUS_ASSETS_REQUEST_FAILED',
     status,
   });
+  // Server-log context only. The provider's free-text Message is deliberately
+  // not kept: it can echo request credentials.
+  error.action = action;
+  error.providerCode = typeof providerCode === 'string' ? providerCode.slice(0, 120) : null;
+  return error;
 }
 
 function invalidResponseError() {
@@ -166,13 +172,13 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
       if (TRANSIENT_STATUSES.has(response.status) || response.status >= 500) {
         throw unavailableError(response.status);
       }
-      let providerCode;
+      let providerError;
       try {
-        providerCode = (await response.json())?.ResponseMetadata?.Error?.Code;
+        providerError = (await response.json())?.ResponseMetadata?.Error;
       } catch {
         // Preserve the safe generic request error for malformed error bodies.
       }
-      throw requestError(response.status, providerCode);
+      throw requestError(response.status, providerError, action);
     }
     let responseBody;
     try {
@@ -183,7 +189,7 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
     const providerError = responseBody?.ResponseMetadata?.Error;
     if (providerError) {
       if (TRANSIENT_ERROR_CODES.has(providerError.Code)) throw unavailableError();
-      throw requestError(response.status >= 400 ? response.status : 400, providerError.Code);
+      throw requestError(response.status >= 400 ? response.status : 400, providerError, action);
     }
     if (!responseBody?.Result || typeof responseBody.Result !== 'object') throw invalidResponseError();
     return responseBody.Result;

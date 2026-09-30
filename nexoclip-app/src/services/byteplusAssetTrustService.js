@@ -40,8 +40,11 @@ function clientToken(workspaceId, assetId, operation, attemptId) {
   return createHash('sha256').update(`byteplus-assets:v1:${workspaceId}:${assetId}:${operation}${attempt}`).digest('hex');
 }
 
-function sharedGroupClientToken(workspaceId, canvasProjectId, projectName) {
-  return createHash('sha256').update(`byteplus-assets:v2:${workspaceId}:${canvasProjectId}:${projectName}:create-group`).digest('hex');
+function sharedGroupClientToken(workspaceId, canvasProjectId, projectName, replacingGroupId = null) {
+  // A replacement group needs its own token: reusing the original one can make
+  // BytePlus hand back the group that was deleted.
+  const replacing = replacingGroupId ? `:replace:${replacingGroupId}` : '';
+  return createHash('sha256').update(`byteplus-assets:v2:${workspaceId}:${canvasProjectId}:${projectName}:create-group${replacing}`).digest('hex');
 }
 
 function unavailableSourceError() {
@@ -228,24 +231,45 @@ export function createBytePlusAssetTrustService({
         ? await repository.findBytePlusAssetGroup(client, workspaceId, canvasProjectId, projectName)
         : null;
       let groupId = link.group_id || configuredGroupId || existingProjectGroup;
-      if (!groupId) {
+      const reusedGroup = Boolean(groupId) && groupId !== configuredGroupId;
+      const createGroup = async (replacingGroupId = null) => {
         groupId = requireProviderId(await provider.createAssetGroup({
           name: canvasProjectId === 'workspace' ? SHARED_GROUP_NAME : `${SHARED_GROUP_NAME} · ${canvasProjectId.slice(0, 8)}`,
           description: canvasProjectId === 'workspace' ? SHARED_GROUP_DESCRIPTION : `NexoClip Canvas project ${canvasProjectId}`,
-          clientToken: sharedGroupClientToken(workspaceId, canvasProjectId, projectName),
+          clientToken: sharedGroupClientToken(workspaceId, canvasProjectId, projectName, replacingGroupId),
         }));
         link = await repository.updateBytePlusAssetLink(client, {
           workspaceId, localAssetId: assetId, canvasProjectId, groupId, status: 'processing', error: null,
           expectedAttemptId: attemptId,
         });
-        if (!link) return projectBytePlusTrustState(await repository.findBytePlusAssetLink(client, workspaceId, assetId, canvasProjectId));
+        return Boolean(link);
+      };
+      if (!groupId && !(await createGroup())) {
+        return projectBytePlusTrustState(await repository.findBytePlusAssetLink(client, workspaceId, assetId, canvasProjectId));
       }
 
       if (!link.provider_asset_id) {
-        const providerAssetId = requireProviderId(await provider.createAsset({
+        const createAsset = (retry = '') => provider.createAsset({
           groupId, url: sourceUrl, name: asset.filename,
-          clientToken: clientToken(workspaceId, assetId, 'create-asset', attemptId),
-        }));
+          clientToken: clientToken(workspaceId, assetId, 'create-asset', `${attemptId}${retry}`),
+        });
+        let created;
+        try {
+          created = await createAsset(`:regroup:${groupId}`);
+        } catch (error) {
+          // A remembered group may have been deleted on BytePlus (e.g. from its
+          // console). Every later trust in this project would then fail, so
+          // start a fresh group once and retry.
+          if (!reusedGroup || !(error instanceof BytePlusAssetsError) || error.retryable) throw error;
+          console.error('[byteplus-trust] createAsset failed in remembered group; creating a new group', JSON.stringify({
+            groupId, action: error.action, providerCode: error.providerCode, status: error.status,
+          }));
+          if (!(await createGroup(groupId))) {
+            return projectBytePlusTrustState(await repository.findBytePlusAssetLink(client, workspaceId, assetId, canvasProjectId));
+          }
+          created = await createAsset(`:regroup:${groupId}`);
+        }
+        const providerAssetId = requireProviderId(created);
         link = await repository.updateBytePlusAssetLink(client, {
           workspaceId, localAssetId: assetId, canvasProjectId, groupId, providerAssetId, status: 'processing', error: null,
           expectedAttemptId: attemptId,
