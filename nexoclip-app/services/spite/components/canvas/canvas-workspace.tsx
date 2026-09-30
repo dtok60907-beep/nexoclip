@@ -30,6 +30,7 @@ import {
   type EdgeChange,
 } from '@xyflow/react'
 import { ScissorsEdge } from './edges/scissors-edge'
+import { withNodeErrorBoundary } from './node-error-boundary'
 import {
   getConnectorAnimation,
   CONNECTOR_ANIMATION_EVENT,
@@ -71,12 +72,14 @@ import { useCanvasCollaboration } from './canvas-collaboration'
 import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
 import { selectLegacyNoteDeletionIds } from '@/lib/legacy-notes'
 
+// Each node gets its own error boundary so one bad node can't take the whole
+// canvas down with it.
 const NODE_TYPES: NodeTypes = {
-  imageGen: ImageNode,
-  videoGen: VideoNode,
-  prompt: PromptNode,
-  reference: ReferenceNode,
-  compress: CompressNode,
+  imageGen: withNodeErrorBoundary(ImageNode),
+  videoGen: withNodeErrorBoundary(VideoNode),
+  prompt: withNodeErrorBoundary(PromptNode),
+  reference: withNodeErrorBoundary(ReferenceNode),
+  compress: withNodeErrorBoundary(CompressNode),
 }
 
 const EDGE_TYPES: EdgeTypes = {

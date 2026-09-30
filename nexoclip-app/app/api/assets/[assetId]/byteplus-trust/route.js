@@ -29,8 +29,12 @@ function errorResponse(error) {
   }
   const safe = safeErrors[error.code];
   if (safe) {
+    console.error('[byteplus-trust]', error.code, error.message);
     return Response.json({ error: { code: error.code, message: safe[0] } }, { status: error.status || safe[1] });
   }
+  // Unexpected failures (e.g. a DB error) are masked for the client, so log
+  // the real cause — otherwise production shows nothing but a bare 500.
+  console.error('[byteplus-trust] unexpected error', error);
   return Response.json({
     error: { code: 'BYTEPLUS_ASSET_TRUST_FAILED', message: 'Unable to update trusted asset.' },
   }, { status: 500 });
