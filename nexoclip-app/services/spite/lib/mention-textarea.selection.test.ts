@@ -5,6 +5,7 @@ import {
   buildPastedNodes,
   captureCaretOffset,
   serializeEditor,
+  serializeRange,
   mentionFoldersStateKey,
   restoreCaretFromOffset,
   shouldPersistRenderedMentionState,
@@ -177,5 +178,44 @@ if (JSDOM) {
     assert.equal(chip.dataset.folderId, 'folder-alur1')
     assert.equal(chip.dataset.workspaceAssetIds, 'ws-a1')
     assert.equal(serializeEditor(el).text, 'Line one @alur1 end\nLine two @unknown')
+  })
+}
+
+
+if (JSDOM) {
+  test('copied chips round-trip into identical chips on paste, keeping their image selection', () => {
+    const source = document.createElement('div')
+    source.appendChild(document.createTextNode('Show '))
+    const chip = document.createElement('span')
+    chip.dataset.mention = '1'
+    chip.dataset.name = 'Dewi'
+    chip.dataset.folderId = 'folder-dewi'
+    chip.dataset.assetIds = 'legacy-front'
+    chip.dataset.workspaceAssetIds = 'ws-front'
+    chip.textContent = 'Dewi'
+    source.appendChild(chip)
+    source.appendChild(document.createTextNode(' walking'))
+    document.body.appendChild(source)
+
+    const range = document.createRange()
+    range.selectNodeContents(source)
+    const copied = serializeRange(range)
+    assert.equal(copied.text, 'Show @Dewi walking')
+
+    const folders = [{
+      id: 'folder-dewi', name: 'Dewi', type: 'character' as const,
+      assets: [
+        { id: 'legacy-front', workspaceAssetId: 'ws-front', r2_url: '/f.png', type: 'image' as const },
+        { id: 'legacy-side', workspaceAssetId: 'ws-side', r2_url: '/s.png', type: 'image' as const },
+      ],
+    }]
+    const target = document.createElement('div')
+    buildPastedNodes(document, copied.text, folders, copied.mentions).forEach((node) => target.appendChild(node))
+    const pasted = target.querySelector('[data-mention="1"]') as HTMLElement
+    assert.equal(pasted.dataset.folderId, 'folder-dewi')
+    assert.equal(pasted.dataset.assetIds, 'legacy-front')
+    assert.equal(pasted.dataset.workspaceAssetIds, 'ws-front')
+    assert.deepEqual(serializeEditor(target), copied)
+    source.remove()
   })
 }

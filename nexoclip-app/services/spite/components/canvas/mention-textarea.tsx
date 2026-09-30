@@ -136,7 +136,19 @@ export function serializeEditor(el: HTMLElement): { text: string; mentions: Ment
 // Build the nodes for pasted plain text: line breaks become <br> (never the
 // <div>s execCommand('insertText') creates) and @tags naming a known folder
 // become chips right away.
-export function buildPastedNodes(doc: Document, raw: string, folders: MentionFolder[]): Node[] {
+// Clipboard type carrying chip metadata (folder + selected images), so a
+// prompt copied from one node pastes into another with identical chips.
+export const MENTION_CLIPBOARD_TYPE = 'application/x-spite-mentions'
+
+// Serialize the part of the editor covered by `range` like a saved prompt:
+// chips become "@tag" plus their mention metadata.
+export function serializeRange(range: Range): { text: string; mentions: Mention[] } {
+  const holder = range.startContainer.ownerDocument!.createElement('div')
+  holder.appendChild(range.cloneContents())
+  return serializeEditor(holder)
+}
+
+export function buildPastedNodes(doc: Document, raw: string, folders: MentionFolder[], copiedMentions: Mention[] = []): Node[] {
   const nodes: Node[] = []
   const lines = raw.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').split('\n')
   lines.forEach((line, lineIndex) => {
@@ -146,14 +158,21 @@ export function buildPastedNodes(doc: Document, raw: string, folders: MentionFol
     let match: RegExpExecArray | null
     while ((match = re.exec(line))) {
       const tag = match[1].toLowerCase()
-      const folder = folders.find((f) => tagFromName(f.name).toLowerCase() === tag)
+      const copied = copiedMentions.find((m) => tagFromName(m.name).toLowerCase() === tag)
+      const folder = (copied ? folders.find((f) => f.id === copied.folderId) : undefined)
+        || folders.find((f) => tagFromName(f.name).toLowerCase() === tag)
+        || (copied ? { id: copied.folderId, name: copied.name, type: 'general' as FolderType } : undefined)
       if (!folder) continue
       if (match.index > lastIndex) nodes.push(doc.createTextNode(line.slice(lastIndex, match.index)))
+      const keepSelection = copied && copied.folderId === folder.id
+      const assets = 'assets' in folder ? folder.assets : []
       nodes.push(makeChipElement(
         folder,
-        folder.assets.map((asset) => asset.id),
+        keepSelection ? copied.selectedAssetIds : assets.map((asset) => asset.id),
         doc,
-        folder.assets.map((asset) => asset.workspaceAssetId).filter((id): id is string => Boolean(id)),
+        keepSelection
+          ? copied.selectedWorkspaceAssetIds || []
+          : assets.map((asset) => asset.workspaceAssetId).filter((id): id is string => Boolean(id)),
       ))
       lastIndex = re.lastIndex
     }
@@ -948,13 +967,46 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onClick={handleClick}
+          onCopy={(e) => {
+            const el = editorRef.current
+            const sel = window.getSelection()
+            if (!el || !sel || sel.rangeCount === 0 || sel.isCollapsed) return
+            const range = sel.getRangeAt(0)
+            if (!el.contains(range.commonAncestorContainer)) return
+            // Default copy takes only the chips' visible names (no "@"), so a
+            // paste elsewhere turned every chip into plain text.
+            const { text, mentions } = serializeRange(range)
+            e.preventDefault()
+            e.clipboardData.setData('text/plain', text)
+            e.clipboardData.setData(MENTION_CLIPBOARD_TYPE, JSON.stringify(mentions))
+          }}
+          onCut={(e) => {
+            const el = editorRef.current
+            const sel = window.getSelection()
+            if (!el || disabled || !sel || sel.rangeCount === 0 || sel.isCollapsed) return
+            const range = sel.getRangeAt(0)
+            if (!el.contains(range.commonAncestorContainer)) return
+            const { text, mentions } = serializeRange(range)
+            e.preventDefault()
+            e.clipboardData.setData('text/plain', text)
+            e.clipboardData.setData(MENTION_CLIPBOARD_TYPE, JSON.stringify(mentions))
+            range.deleteContents()
+            handleInput()
+          }}
           onPaste={(e) => {
             // Paste as plain text so users can't smuggle in arbitrary HTML.
             e.preventDefault()
             const el = editorRef.current
             const t = e.clipboardData.getData('text/plain')
             if (!el || !t) return
-            const nodes = buildPastedNodes(document, t, folders)
+            let copiedMentions: Mention[] = []
+            try {
+              const parsed = JSON.parse(e.clipboardData.getData(MENTION_CLIPBOARD_TYPE) || '[]')
+              if (Array.isArray(parsed)) copiedMentions = parsed.filter((m) => m && typeof m.folderId === 'string' && typeof m.name === 'string')
+            } catch {
+              copiedMentions = []
+            }
+            const nodes = buildPastedNodes(document, t, folders, copiedMentions)
             if (nodes.length === 0) return
             const sel = window.getSelection()
             let range: Range
