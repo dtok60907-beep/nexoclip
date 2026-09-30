@@ -151,10 +151,15 @@ function collectGroups(
     }
     consider(folder, m.selectedAssetIds, m.selectedWorkspaceAssetIds)
   }
+  // Only fall back to name matching for tags that have no mention metadata.
+  // Otherwise two folders sharing a name (e.g. "alur4" as both a location and
+  // a character) both got sent, pushing the request past the reference limit.
+  const mentionedTags = new Set(mentions.map((m) => tagFromName(m.name).toLowerCase()))
   const scanRe = /@([\w-]+)/g
   let scanMatch: RegExpExecArray | null
   while ((scanMatch = scanRe.exec(prompt))) {
     const tag = scanMatch[1].toLowerCase()
+    if (mentionedTags.has(tag)) continue
     const folder = folders.find((f) => tagFromName(f.name).toLowerCase() === tag)
     if (folder) consider(folder)
   }

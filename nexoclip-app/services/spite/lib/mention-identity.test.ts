@@ -138,3 +138,17 @@ test('repeated mentions spell out the identity instruction only once', () => {
   assert.equal(result.prompt.match(/exact same person\/character/g)?.length, 1)
   assert.match(result.prompt, /reference image 1 sits\. reference image 1 leaves\./)
 })
+
+test('a mentioned tag is not re-added from another folder with the same name', () => {
+  const result = compileMentionsForModel(
+    'Walk past @alur4 slowly',
+    [{ folderId: 'loc-alur4', name: 'alur4', selectedAssetIds: ['a4'], selectedWorkspaceAssetIds: ['workspace-a4'] }],
+    [
+      { id: 'char-alur4', name: 'alur4', type: 'character', assets: [{ id: 'a4', workspaceAssetId: 'workspace-a4', r2_url: '/canvas/api/r2-image/a4.png' }] },
+      { id: 'loc-alur4', name: 'alur4', type: 'location', assets: [{ id: 'a4', workspaceAssetId: 'workspace-a4', r2_url: '/canvas/api/r2-image/a4.png' }] },
+    ],
+    model,
+  )
+  assert.equal(result.refGroups.length, 1)
+  assert.doesNotMatch(result.prompt, /person\/character/)
+})

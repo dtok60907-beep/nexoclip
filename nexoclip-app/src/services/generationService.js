@@ -93,7 +93,8 @@ export function validateVideoGenerationInput(input, options = {}) {
   for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
   for (const key of ['referenceImages', 'referenceVideos']) {
     if (supplied[key] !== undefined) {
-      if (!validAssetReferences(supplied[key], options) || supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references`);
+      if (Array.isArray(supplied[key]) && supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references: too many (${supplied[key].length}/10)`);
+      if (!validAssetReferences(supplied[key], options)) throw new Error(`Video ${key} must be tenant asset references`);
       parameters[key] = supplied[key];
     }
   }
