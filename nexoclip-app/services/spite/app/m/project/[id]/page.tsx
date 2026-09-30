@@ -14,6 +14,7 @@ import { useIsMobile } from '@/components/ui/use-mobile'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { VersionBadge } from '@/components/version-badge'
 import { startTour } from '@/lib/onboarding'
+import { GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 
 type Asset = {
   id: string
@@ -27,6 +28,30 @@ type Asset = {
 }
 
 type Ref = { id: string; previewUrl: string; proxyUrl: string | null; uploading: boolean }
+
+type PendingFlowJob = {
+  generationId: string; nodeId: string; prompt: string; model: string
+  aspect: string; refs: string[]; startedAt: number
+}
+
+const flowJobsKey = (projectId: string) => `spite:flow-jobs:${projectId}`
+function readFlowJobs(projectId: string): PendingFlowJob[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(flowJobsKey(projectId)) || '[]')
+    return Array.isArray(parsed)
+      ? parsed.filter((j) => j && typeof j.generationId === 'string' && Date.now() - Number(j.startedAt) < GIVE_UP_AFTER_MS)
+      : []
+  } catch { return [] }
+}
+function writeFlowJobs(projectId: string, jobs: PendingFlowJob[]) {
+  try { localStorage.setItem(flowJobsKey(projectId), JSON.stringify(jobs)) } catch {}
+}
+function rememberFlowJob(projectId: string, job: PendingFlowJob) {
+  writeFlowJobs(projectId, [...readFlowJobs(projectId).filter((j) => j.generationId !== job.generationId), job])
+}
+function forgetFlowJob(projectId: string, generationId: string) {
+  writeFlowJobs(projectId, readFlowJobs(projectId).filter((j) => j.generationId !== generationId))
+}
 
 // Flow mode — the simple, linear prompt→result generation thread (the
 // counterpart to Canvas). One responsive component: a phone-optimized single
@@ -192,35 +217,68 @@ export default function FlowThread() {
         const msg = [hint, submitRes.status === 401 ? '' : submitData.error].filter(Boolean).join(' — ')
         setError(msg || 'Submit failed'); decPending(); return
       }
-      const { generationId } = submitData
-      for (let k = 0; k < 120; k++) {
-        await new Promise((r) => setTimeout(r, 2000))
-        const q = new URLSearchParams({ generationId, nodeId, projectId, mobile: '1' })
-        const sd = await (await fetch(withBasePath(`/api/generate/status?${q.toString()}`))).json().catch(() => ({}))
-        if (sd.generationStatus === 'completed') {
-          const url = sd.outputUrl
-          if (url) {
-            setAssets((prev) => [
-              { id: `new-${Date.now()}-${i}`, type: 'image', model: m?.name || null, r2_url: url, prompt: myPrompt, created_at: new Date().toISOString(), aspect: asp, refs: refUrls },
-              ...prev,
-            ])
-            // Persist the references against this result so Reuse can restore
-            // them after a reload too (best-effort; in-memory state covers the
-            // current session regardless).
-            if (refUrls.length) fetch(withBasePath('/api/assets'), {
-              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url, refs: refUrls, projectId }),
-            }).catch(() => {})
-          }
-          decPending(); return
-        }
-        if (sd.generationStatus === 'failed') { setError(sd.error || 'Generation failed'); decPending(); return }
+      const job: PendingFlowJob = {
+        generationId: submitData.generationId, nodeId, prompt: myPrompt, model: m?.name || mId,
+        aspect: asp, refs: refUrls, startedAt: Date.now(),
       }
-      setError('Timed out waiting for a result.'); decPending()
+      rememberFlowJob(projectId, job)
+      await pollFlowJob(job)
     } catch (err) {
       console.error('[flow/thread] error:', err); setError('Something went wrong.'); decPending()
     }
   }
+
+  // Polls one job to its end. Same cadence as Canvas nodes; the job keeps
+  // running server-side even if this page closes, and is resumed on the next
+  // visit (the old 4-minute cap reported "Timed out" for jobs still running).
+  async function pollFlowJob(job: PendingFlowJob) {
+    try {
+      while (Date.now() - job.startedAt < GIVE_UP_AFTER_MS) {
+        await new Promise((r) => setTimeout(r, nextPollDelay(Date.now() - job.startedAt)))
+        if (isHiddenDocument()) continue
+        const q = new URLSearchParams({ generationId: job.generationId, nodeId: job.nodeId, projectId, mobile: '1', prompt: job.prompt, model: job.model })
+        const sd = await (await fetch(withBasePath(`/api/generate/status?${q.toString()}`))).json().catch(() => ({}))
+        if (sd.generationStatus === 'completed') {
+          forgetFlowJob(projectId, job.generationId)
+          const url = sd.outputUrl
+          if (url) {
+            setAssets((prev) => prev.some((a) => a.r2_url === url) ? prev : [
+              { id: `gen-${job.generationId}`, type: 'image', model: job.model, r2_url: url, prompt: job.prompt, created_at: new Date().toISOString(), aspect: job.aspect, refs: job.refs },
+              ...prev,
+            ])
+            // Persist the references against this result so Reuse can restore
+            // them after a reload too.
+            if (job.refs.length) fetch(withBasePath('/api/assets'), {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, refs: job.refs, projectId }),
+            }).catch(() => {})
+          }
+          decPending(); return
+        }
+        if (sd.generationStatus === 'failed') {
+          forgetFlowJob(projectId, job.generationId)
+          setError(sd.error || 'Generation failed'); decPending(); return
+        }
+      }
+      forgetFlowJob(projectId, job.generationId)
+      setError('Still not finished after 45 minutes. It may still complete — check the library before generating again.'); decPending()
+    } catch (err) {
+      console.error('[flow/thread] poll error:', err); setError('Something went wrong.'); decPending()
+    }
+  }
+
+  // Resume jobs that were still running when the page was closed or reloaded.
+  const resumedRef = useRef(false)
+  useEffect(() => {
+    if (!projectId || resumedRef.current) return
+    resumedRef.current = true
+    const jobs = readFlowJobs(projectId)
+    if (jobs.length === 0) return
+    setPending((p) => p + jobs.length)
+    for (const job of jobs) void pollFlowJob(job)
+    // pollFlowJob only uses state setters and the stable projectId.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   function generate() {
     if (!prompt.trim() || busy || uploadingRef) return

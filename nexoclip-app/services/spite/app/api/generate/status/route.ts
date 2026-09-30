@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getDb } from '@/lib/db'
+import { assetExpiresAt } from '@/lib/retention'
 import { createTerminalGenerationPatch } from '@/lib/durable-generation'
 import {
   createNexoClipGenerationClient,
@@ -22,6 +23,24 @@ interface GenerateStatusDeps {
   getAuthenticatedUser?: typeof getAuthenticatedUser
   createNexoClipGenerationClient?: () => NexoClipGenerationClient
   createInternalRealtimeClient?: () => InternalRealtimeClient
+  recordMobileResult?: typeof recordMobileResult
+}
+
+// Flow (/m) lists its thread from generation_history, but durable generations
+// were never written there, so every result vanished on reload. Record each
+// finished mobile result once, keyed by the generation id so repeated polls
+// (or two tabs) cannot duplicate it.
+async function recordMobileResult(
+  sql: ReturnType<typeof getDb>,
+  input: { generationId: string; projectId: string; kind: string; url: string; prompt: string; model: string },
+): Promise<void> {
+  const expiresAt = (await assetExpiresAt())?.toISOString() ?? null
+  await sql`
+    INSERT INTO generation_history (id, type, model, prompt, r2_url, used_in_canvas, created_at, expires_at, project_id)
+    VALUES (${`gen-${input.generationId}`}, ${input.kind === 'video' ? 'video' : 'image'}, ${input.model}, ${input.prompt},
+            ${input.url}, false, CURRENT_TIMESTAMP, ${expiresAt}, ${input.projectId})
+    ON CONFLICT (id) DO NOTHING
+  `
 }
 
 export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
@@ -29,6 +48,7 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
   const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
   const createGenerationClient = deps.createNexoClipGenerationClient ?? createNexoClipGenerationClient
   const createRealtimeClient = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
+  const recordResult = deps.recordMobileResult ?? recordMobileResult
 
   return async function GET(request: Request) {
     try {
@@ -74,6 +94,20 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
 
       const outputUrl = patch?.outputUrl as string | undefined
       const error = patch?.generationError as string | null | undefined
+      if (mobile && outputUrl && generation.status === 'succeeded') {
+        try {
+          await recordResult(db(), {
+            generationId: generation.id,
+            projectId,
+            kind: generation.kind,
+            url: outputUrl,
+            prompt: (searchParams.get('prompt') || '').slice(0, 4000),
+            model: (searchParams.get('model') || '').slice(0, 200),
+          })
+        } catch (recordError) {
+          console.error('[generation-status] mobile result not recorded', recordError)
+        }
+      }
       return NextResponse.json({
         generationId: generation.id,
         generationStatus: patch?.generationStatus ?? (generation.status === 'queued' ? 'queued' : 'processing'),

@@ -1113,3 +1113,27 @@ test('batch extras are accepted while the node tracks job 1 and do not overwrite
   assert.equal(submissions.length, 1)
   assert.deepEqual(patches, [])
 })
+
+test('finished mobile (Flow) results are recorded to history; canvas polls are not', async () => {
+  const recorded: Array<Record<string, unknown>> = []
+  const handler = createGenerateStatusHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: ownedProjectSql,
+    createNexoClipGenerationClient: () => ({
+      submit: async () => { throw new Error('submit should not be called') },
+      status: async () => ({ id: 'g9', kind: 'image', status: 'succeeded', outputs: [{ assetId: 'a', download: { url: '/api/assets/a/download' } }] }),
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('node-1', 'imageGen', { generationId: 'g9' }), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+    recordMobileResult: async (_sql, input) => { recorded.push(input) },
+  })
+
+  const mobile = await handler(makeRequest(`http://spite.local/api/generate/status?projectId=${PROJECT_ID}&nodeId=m-1&generationId=g9&mobile=1&prompt=red%20kite&model=Nano%20Banana`))
+  assert.equal((await mobile.json()).generationStatus, 'completed')
+  assert.deepEqual(recorded, [{ generationId: 'g9', projectId: PROJECT_ID, kind: 'image', url: '/api/assets/a/download', prompt: 'red kite', model: 'Nano Banana' }])
+
+  await handler(makeRequest(`http://spite.local/api/generate/status?projectId=${PROJECT_ID}&nodeId=node-1&generationId=g9`))
+  assert.equal(recorded.length, 1)
+})
