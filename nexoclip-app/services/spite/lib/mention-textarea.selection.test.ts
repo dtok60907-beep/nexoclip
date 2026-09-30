@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildPastedNodes,
   captureCaretOffset,
+  serializeEditor,
   mentionFoldersStateKey,
   restoreCaretFromOffset,
   shouldPersistRenderedMentionState,
@@ -129,3 +131,51 @@ if (!JSDOM) {
 })
 }
 
+
+
+if (JSDOM) {
+  const folder = {
+    id: 'folder-alur1', name: 'alur1', type: 'location' as const,
+    assets: [{ id: 'legacy-a1', workspaceAssetId: 'ws-a1', r2_url: '/a1.png', type: 'image' as const }],
+  }
+  const chipFor = (name: string, folderId: string) => {
+    const chip = document.createElement('span')
+    chip.dataset.mention = '1'
+    chip.dataset.name = name
+    chip.dataset.folderId = folderId
+    chip.textContent = name
+    return chip
+  }
+
+  test('serializer keeps line breaks and chips inside browser-created <div> lines', () => {
+    const el = document.createElement('div')
+    el.appendChild(document.createTextNode('Shot 1'))
+    const line2 = document.createElement('div')
+    line2.appendChild(document.createTextNode('Dewi near '))
+    line2.appendChild(chipFor('alur1', 'folder-alur1'))
+    line2.appendChild(document.createTextNode('\u00a0now'))
+    el.appendChild(line2)
+    const empty = document.createElement('div')
+    empty.appendChild(document.createElement('br'))
+    el.appendChild(empty)
+    const line4 = document.createElement('div')
+    line4.textContent = 'Shot 2'
+    el.appendChild(line4)
+
+    const { text, mentions } = serializeEditor(el)
+    assert.equal(text, 'Shot 1\nDewi near @alur1 now\n\nShot 2')
+    assert.deepEqual(mentions.map((m) => m.folderId), ['folder-alur1'])
+  })
+
+  test('pasted text becomes flat text, <br> line breaks and chips for known folders', () => {
+    const nodes = buildPastedNodes(document, 'Line one @alur1 end\r\nLine two @unknown', [folder])
+    const el = document.createElement('div')
+    nodes.forEach((node) => el.appendChild(node))
+    assert.equal(el.querySelectorAll('div').length, 0)
+    assert.equal(el.querySelectorAll('br').length, 1)
+    const chip = el.querySelector('[data-mention="1"]') as HTMLElement
+    assert.equal(chip.dataset.folderId, 'folder-alur1')
+    assert.equal(chip.dataset.workspaceAssetIds, 'ws-a1')
+    assert.equal(serializeEditor(el).text, 'Line one @alur1 end\nLine two @unknown')
+  })
+}

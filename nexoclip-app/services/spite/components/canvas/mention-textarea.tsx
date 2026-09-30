@@ -88,33 +88,78 @@ export function tagFromName(name: string): string {
 // and the literal text for everything else.
 // ---------------------------------------------------------------------------
 
-function serializeEditor(el: HTMLElement): { text: string; mentions: Mention[] } {
+// Elements the browser uses to lay out lines inside a contentEditable
+// (Chrome wraps pasted/typed lines in <div>s). Each starts a new line.
+const BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'UL', 'OL', 'BLOCKQUOTE', 'PRE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
+
+// Walk the editor recursively. Reading only the top level turned any <div>
+// the browser created (after a multi-line paste) into its bare textContent:
+// its lines ran together and chips inside it lost their "@", so mentions
+// silently became plain text once the prompt was saved and re-rendered.
+export function serializeEditor(el: HTMLElement): { text: string; mentions: Mention[] } {
   let text = ''
   const mentions: Mention[] = []
   const seen = new Set<string>()
-  el.childNodes.forEach((node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      text += node.textContent ?? ''
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const e = node as HTMLElement
-      if (e.dataset?.mention === '1') {
-        const folderId = e.dataset.folderId || ''
-        const name = e.dataset.name || ''
-        const assetIds = (e.dataset.assetIds || '').split(',').filter(Boolean)
-        const workspaceAssetIds = (e.dataset.workspaceAssetIds || '').split(',').filter(Boolean)
-        text += `@${tagFromName(name)}`
-        if (folderId && !seen.has(folderId)) {
-          seen.add(folderId)
-          mentions.push({ folderId, name, selectedAssetIds: assetIds, selectedWorkspaceAssetIds: workspaceAssetIds })
+  const walk = (parent: Node) => {
+    parent.childNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        // contentEditable inserts non-breaking spaces around edits; store
+        // plain spaces so the prompt text stays clean.
+        text += (node.textContent ?? '').replace(/\u00a0/g, ' ')
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const e = node as HTMLElement
+        if (e.dataset?.mention === '1') {
+          const folderId = e.dataset.folderId || ''
+          const name = e.dataset.name || ''
+          const assetIds = (e.dataset.assetIds || '').split(',').filter(Boolean)
+          const workspaceAssetIds = (e.dataset.workspaceAssetIds || '').split(',').filter(Boolean)
+          text += `@${tagFromName(name)}`
+          if (folderId && !seen.has(folderId)) {
+            seen.add(folderId)
+            mentions.push({ folderId, name, selectedAssetIds: assetIds, selectedWorkspaceAssetIds: workspaceAssetIds })
+          }
+        } else if (e.tagName === 'BR') {
+          text += '\n'
+        } else if (BLOCK_TAGS.has(e.tagName)) {
+          if (text && !text.endsWith('\n')) text += '\n'
+          walk(e)
+        } else {
+          walk(e)
         }
-      } else if (e.tagName === 'BR') {
-        text += '\n'
-      } else {
-        text += e.textContent ?? ''
       }
-    }
-  })
+    })
+  }
+  walk(el)
   return { text, mentions }
+}
+
+// Build the nodes for pasted plain text: line breaks become <br> (never the
+// <div>s execCommand('insertText') creates) and @tags naming a known folder
+// become chips right away.
+export function buildPastedNodes(doc: Document, raw: string, folders: MentionFolder[]): Node[] {
+  const nodes: Node[] = []
+  const lines = raw.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').split('\n')
+  lines.forEach((line, lineIndex) => {
+    if (lineIndex > 0) nodes.push(doc.createElement('br'))
+    const re = /@([\w-]+)/g
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = re.exec(line))) {
+      const tag = match[1].toLowerCase()
+      const folder = folders.find((f) => tagFromName(f.name).toLowerCase() === tag)
+      if (!folder) continue
+      if (match.index > lastIndex) nodes.push(doc.createTextNode(line.slice(lastIndex, match.index)))
+      nodes.push(makeChipElement(
+        folder,
+        folder.assets.map((asset) => asset.id),
+        doc,
+        folder.assets.map((asset) => asset.workspaceAssetId).filter((id): id is string => Boolean(id)),
+      ))
+      lastIndex = re.lastIndex
+    }
+    if (lastIndex < line.length) nodes.push(doc.createTextNode(line.slice(lastIndex)))
+  })
+  return nodes
 }
 
 // Read DOM mentions only (without normalised text) — used inside event
@@ -902,8 +947,27 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
           onPaste={(e) => {
             // Paste as plain text so users can't smuggle in arbitrary HTML.
             e.preventDefault()
+            const el = editorRef.current
             const t = e.clipboardData.getData('text/plain')
-            document.execCommand('insertText', false, t)
+            if (!el || !t) return
+            const nodes = buildPastedNodes(document, t, folders)
+            if (nodes.length === 0) return
+            const sel = window.getSelection()
+            let range: Range
+            if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+              range = sel.getRangeAt(0)
+              range.deleteContents()
+            } else {
+              range = document.createRange()
+              range.selectNodeContents(el)
+              range.collapse(false)
+            }
+            const fragment = document.createDocumentFragment()
+            nodes.forEach((node) => fragment.appendChild(node))
+            const last = nodes[nodes.length - 1]
+            range.insertNode(fragment)
+            placeCaretAfter(last)
+            handleInput()
           }}
           className={`${className || ''} whitespace-pre-wrap break-words [&_*]:select-text`}
           style={{ minHeight: minH, outline: 'none' }}
