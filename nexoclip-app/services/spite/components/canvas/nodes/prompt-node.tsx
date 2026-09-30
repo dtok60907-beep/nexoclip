@@ -16,6 +16,7 @@ import {
   shouldApplyRemoteMentionState,
 } from '@/lib/mention-state'
 import { withBasePath } from '@/lib/base-path'
+import { describeLockFailure } from '@/lib/lock-messages'
 import { getOrCreateParticipantHint } from '@/lib/realtime/presence'
 
 function HandleIcon({ icon: Icon, color, style }: { icon: React.ElementType; color: string; style?: React.CSSProperties }) {
@@ -172,7 +173,8 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, nodeId: id, participantId }),
       })
-      return { ok: response.ok, status: response.status }
+      const holder = response.ok ? undefined : ((await response.json().catch(() => ({}))) as { holder?: unknown }).holder
+      return { ok: response.ok, status: response.status, holder }
     } catch {
       // Network-level failure (offline, DNS hiccup, etc.) — same "transient,
       // not a real conflict" bucket as a 5xx.
@@ -243,13 +245,13 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     setClaimingEditorLock(true)
     setEditorLockError(null)
     try {
-      const { ok, status } = await sendEditorLock('claim')
+      const { ok, status, holder } = await sendEditorLock('claim')
       if (!ok) {
-        setEditorLockError(
-          status === 409
-            ? 'Prompt ini sedang diedit oleh user lain.'
-            : 'Tidak bisa mengunci editor (koneksi bermasalah). Coba lagi.',
-        )
+        // Editing stays one-tab-at-a-time (two tabs editing one prompt would
+        // overwrite each other), but say when the holder is your own tab.
+        setEditorLockError(status === 409 && holder === 'self'
+          ? 'Prompt ini sedang dibuka di tab lain kamu. Tutup editornya di tab itu atau tunggu ±15 detik.'
+          : describeLockFailure(status, holder))
         return
       }
       void refreshFolders()

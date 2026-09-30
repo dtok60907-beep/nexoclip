@@ -6,6 +6,7 @@ import {
   claimPromptEditorLock,
   ensurePromptEditorLocks,
   heartbeatPromptEditorLock,
+  readCanvasNodeLockHolder,
   releasePromptEditorLock,
 } from '@/lib/prompt-editor-lock'
 import { projectNotFoundResponse, unauthorizedResponse, userOwnsProject } from '@/lib/project-ownership'
@@ -41,7 +42,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       ? await claimPromptEditorLock(sql, input)
       : await heartbeatPromptEditorLock(sql, input)
     if (!lock) {
-      return NextResponse.json({ error: 'This prompt is being edited by another user' }, { status: 409 })
+      const holderUserId = await readCanvasNodeLockHolder(sql, input).catch(() => null)
+      const holder = holderUserId === user.id ? 'self' : 'other'
+      return NextResponse.json({
+        error: holder === 'self' ? 'This node is open in another of your tabs' : 'This prompt is being edited by another user',
+        holder,
+      }, { status: 409 })
     }
     return NextResponse.json({ locked: true, expiresAt: lock.expires_at })
   } catch (error) {

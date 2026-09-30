@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { withBasePath } from '@/lib/base-path'
-import { getOrCreateParticipantHint } from '@/lib/realtime/presence'
+import { getOrCreateDeviceHint } from '@/lib/realtime/presence'
+import { describeLockFailure } from '@/lib/lock-messages'
 
 export function useNodeOwnershipLock(projectId: string | undefined, nodeId: string) {
   const participantId = useRef<string | undefined>(undefined)
@@ -10,29 +11,36 @@ export function useNodeOwnershipLock(projectId: string | undefined, nodeId: stri
   const [isOwned, setIsOwned] = useState(false)
   const owned = useRef(false)
 
+  const lastFailure = useRef<string | null>(null)
   const request = useCallback(async (action: 'claim' | 'heartbeat' | 'release') => {
     if (!projectId) return false
-    participantId.current ??= getOrCreateParticipantHint()
-    const response = await fetch(withBasePath(`/api/projects/${encodeURIComponent(projectId)}/prompt-editor-lock`), {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, nodeId, participantId: participantId.current }),
-    })
-    return response.ok
+    // One identity per browser (not per tab): generating from any of your own
+    // tabs must not be blocked by another tab holding the same node.
+    participantId.current ??= getOrCreateDeviceHint()
+    let response: Response
+    try {
+      response = await fetch(withBasePath(`/api/projects/${encodeURIComponent(projectId)}/prompt-editor-lock`), {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, nodeId, participantId: participantId.current }),
+      })
+    } catch {
+      lastFailure.current = describeLockFailure(0)
+      return false
+    }
+    if (response.ok) return true
+    const body = await response.json().catch(() => ({})) as { holder?: unknown }
+    lastFailure.current = describeLockFailure(response.status, body.holder)
+    return false
   }, [nodeId, projectId])
 
   const claim = useCallback(async () => {
     if (owned.current) return true
-    try {
-      owned.current = await request('claim')
-      setIsOwned(owned.current)
-      if (!owned.current) setError('Node sedang dikerjakan user lain.')
-      else window.dispatchEvent(new CustomEvent('canvas-node-active', { detail: nodeId }))
-      return owned.current
-    } catch {
-      setError('Lock node tidak tersedia. Coba lagi.')
-      return false
-    }
-  }, [request])
+    owned.current = await request('claim')
+    setIsOwned(owned.current)
+    if (!owned.current) setError(lastFailure.current || describeLockFailure(500))
+    else window.dispatchEvent(new CustomEvent('canvas-node-active', { detail: nodeId }))
+    return owned.current
+  }, [nodeId, request])
 
   const release = useCallback(() => {
     if (!owned.current) return
@@ -56,5 +64,9 @@ export function useNodeOwnershipLock(projectId: string | undefined, nodeId: stri
     return () => window.clearInterval(timer)
   }, [request])
 
-  return { claim, release, owned: isOwned, error, clearError: () => setError(null) }
+  // Read synchronously right after a failed claim: `error` is React state and
+  // is still the previous value inside the same handler.
+  const failureMessage = useCallback(() => lastFailure.current || describeLockFailure(500), [])
+
+  return { claim, release, owned: isOwned, error, failureMessage, clearError: () => setError(null) }
 }

@@ -37,7 +37,12 @@ export async function claimCanvasNodeLock(sql: Sql, input: CanvasNodeLockInput) 
     INSERT INTO canvas_prompt_editor_locks (project_id, node_id, participant_id, user_id, expires_at)
     VALUES (${input.projectId}, ${input.nodeId}, ${input.participantId}, ${input.userId}, now() + interval '15 seconds')
     ON CONFLICT (project_id, node_id) DO UPDATE
-      SET expires_at = now() + interval '15 seconds'
+      -- Taking over an expired lock must also take ownership; renewing only
+      -- expires_at left the previous holder in place, so the new holder's
+      -- first heartbeat failed ("lock ended") and the old tab held it again.
+      SET expires_at = now() + interval '15 seconds',
+          participant_id = EXCLUDED.participant_id,
+          user_id = EXCLUDED.user_id
       WHERE canvas_prompt_editor_locks.expires_at <= now()
         OR (canvas_prompt_editor_locks.participant_id = ${input.participantId}
           AND canvas_prompt_editor_locks.user_id = ${input.userId})
@@ -68,6 +73,16 @@ export async function releaseCanvasNodeLock(sql: Sql, input: CanvasNodeLockInput
       AND participant_id = ${input.participantId}
       AND user_id = ${input.userId}
   `
+}
+
+// Who holds a live lock, so a refused claim can say "your other tab" rather
+// than "another user" when it is the same person.
+export async function readCanvasNodeLockHolder(sql: Sql, input: Pick<CanvasNodeLockInput, 'projectId' | 'nodeId'>): Promise<string | null> {
+  const rows = await sql`
+    SELECT user_id FROM canvas_prompt_editor_locks
+    WHERE project_id = ${input.projectId} AND node_id = ${input.nodeId} AND expires_at > now()
+  ` as Array<{ user_id: string }>
+  return rows[0]?.user_id ?? null
 }
 
 export const ensurePromptEditorLocks = ensureCanvasNodeLocks

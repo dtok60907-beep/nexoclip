@@ -52,3 +52,10 @@ test('heartbeat and release are constrained to the current owner', async () => {
     assert.match(query, /user_id =/)
   }
 })
+
+test('taking over an expired lock also transfers ownership', async () => {
+  const fixture = fakeSql([[{ participant_id: 'tab-2', expires_at: 'later' }]])
+  await claimCanvasNodeLock(fixture.sql, { ...input, participantId: 'tab-2' })
+  assert.match(fixture.queries[0], /participant_id = excluded\.participant_id/)
+  assert.match(fixture.queries[0], /user_id = excluded\.user_id/)
+})

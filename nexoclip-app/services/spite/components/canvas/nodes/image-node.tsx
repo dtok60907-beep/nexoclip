@@ -652,7 +652,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
     if (!(await nodeLock.claim())) {
-      toast.error(nodeLock.error || 'Node sedang dikerjakan user lain.')
+      toast.error(nodeLock.failureMessage())
       return
     }
     const { connected, prompt: compiledPrompt, mentions: promptMentions } = resolveIncomingPrompt(id, getNodes(), getEdges())
