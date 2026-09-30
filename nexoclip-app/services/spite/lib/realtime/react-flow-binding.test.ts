@@ -427,6 +427,8 @@ test('binding updateNodeData merges against authoritative node data so concurren
     prompt: 'hello',
     outputUrl: '/generated.png',
     remoteOnly: 'keep-me',
+    generationStatus: 'completed',
+    generationError: null,
     status: 'completed',
     error: null,
   })
