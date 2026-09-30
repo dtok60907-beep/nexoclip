@@ -11,6 +11,10 @@
 	}
 
 	# Internal endpoints must never be exposed by the public Studio gateway.
+	handle /canvas/api/internal/* {
+		respond 404
+	}
+
 	handle /spite/api/internal/* {
 		respond 404
 	}
@@ -22,6 +26,11 @@
 	# Canvas must read durable workspace assets from the NexoClip app while
 	# retaining the same-origin session cookie. Strip the Canvas-only alias
 	# before proxying so it reaches the app's canonical /api/assets route.
+	handle /canvas/api/workspace-assets* {
+		uri replace /canvas/api/workspace-assets /api/assets
+		reverse_proxy {$NEXOCLIP_UPSTREAM:ai-ugc-app.ai-ugc.svc.cluster.local:8080}
+	}
+
 	handle /spite/api/workspace-assets* {
 		uri replace /spite/api/workspace-assets /api/assets
 		reverse_proxy {$NEXOCLIP_UPSTREAM:ai-ugc-app.ai-ugc.svc.cluster.local:8080}
@@ -29,8 +38,16 @@
 
 	# Keep Canvas and its WebSocket endpoint on the Studio origin so the
 	# NexoClip session cookie is available to Canvas requests.
+	handle /canvas/ws* {
+		reverse_proxy {$SPITE_REALTIME_UPSTREAM:ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007}
+	}
+
 	handle /spite/ws* {
 		reverse_proxy {$SPITE_REALTIME_UPSTREAM:ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007}
+	}
+
+	handle /canvas* {
+		reverse_proxy {$SPITE_UPSTREAM:ai-ugc-spite.ai-ugc.svc.cluster.local:3005}
 	}
 
 	handle /spite* {
