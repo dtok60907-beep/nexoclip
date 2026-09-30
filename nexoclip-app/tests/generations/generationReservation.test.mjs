@@ -105,3 +105,12 @@ test('rejects reservation when the workspace balance is insufficient', async () 
   );
   assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
 });
+
+test('reserves the per-model price instead of the flat rule when the model is priced', async () => {
+  const pool = poolFor({ balance: '1000' });
+  await createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'byteplus/seedream-4-5-251128', idempotencyKey: 'request-9', operation: 'image_generation' }, {
+    userId: 'u1', priceGeneration: async () => ({ usd: 0.04, credits: 5.2 }),
+  });
+  const ledger = pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text));
+  assert.ok(ledger.values.includes(-5.2), `reservation ledger values: ${JSON.stringify(ledger.values)}`);
+});

@@ -54,6 +54,29 @@ async function fetchAsBlob(url, fetchImpl) {
   return new Blob([buffer], { type: contentType });
 }
 
+// Token usage in the shape generationPricing expects, so jobs settle at
+// what the provider actually used.
+export function openAIImageUsage(usage) {
+  if (!usage || typeof usage !== 'object') return {};
+  return { inputTokens: Number(usage.input_tokens) || 0, imageOutputTokens: Number(usage.output_tokens) || 0 };
+}
+
+export function googleImageUsage(metadata) {
+  if (!metadata || typeof metadata !== 'object') return {};
+  let imageOutputTokens = 0;
+  let textOutputTokens = Number(metadata.thoughtsTokenCount) || 0;
+  const details = Array.isArray(metadata.candidatesTokensDetails) ? metadata.candidatesTokensDetails : [];
+  if (details.length) {
+    for (const detail of details) {
+      if (String(detail?.modality).toUpperCase() === 'IMAGE') imageOutputTokens += Number(detail.tokenCount) || 0;
+      else textOutputTokens += Number(detail?.tokenCount) || 0;
+    }
+  } else {
+    imageOutputTokens = Number(metadata.candidatesTokenCount) || 0;
+  }
+  return { inputTokens: Number(metadata.promptTokenCount) || 0, imageOutputTokens, textOutputTokens };
+}
+
 export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai.com/v1', fetch: fetchImpl = globalThis.fetch } = {}) {
   return { async generate({ model, prompt, size, aspectRatio, quality, referenceImages }) {
     const imageSize = openAIImageSize(aspectRatio, size);
@@ -75,9 +98,10 @@ export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai
       }
     } catch (error) { throw transientError('openai', error); }
     if (!response.ok) throw transientError('openai', response, await readErrorDetail(response));
-    const outputs = normalizeImagePayload(await response.json());
+    const payload = await response.json();
+    const outputs = normalizeImagePayload(payload);
     if (!outputs.length) throw Object.assign(new Error('OpenAI returned no images'), { code: 'OPENAI_INVALID_RESPONSE', status: 502 });
-    return { provider: 'openai', status: 'succeeded', outputs };
+    return { provider: 'openai', status: 'succeeded', outputs, usage: openAIImageUsage(payload?.usage) };
   } };
 }
 
@@ -102,9 +126,10 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
       });
     } catch (error) { throw transientError('byteplus', error); }
     if (!response.ok) throw transientError('byteplus', response, await readErrorDetail(response));
-    const outputs = normalizeImagePayload(await response.json());
+    const payload = await response.json();
+    const outputs = normalizeImagePayload(payload);
     if (!outputs.length) throw Object.assign(new Error('BytePlus returned no images'), { code: 'BYTEPLUS_INVALID_RESPONSE', status: 502 });
-    return { provider: 'byteplus', status: 'succeeded', outputs };
+    return { provider: 'byteplus', status: 'succeeded', outputs, usage: { generated_images: Number(payload?.usage?.generated_images) || outputs.length } };
   } };
 }
 
@@ -145,8 +170,9 @@ export function createGoogleImageAdapter({ apiKey, baseUrl = 'https://generative
         code: 'GOOGLE_IMAGE_FAILED',
       });
     }
-    const outputs = normalizeImagePayload(await response.json());
+    const payload = await response.json();
+    const outputs = normalizeImagePayload(payload);
     if (!outputs.length) throw Object.assign(new Error('Google returned no images'), { code: 'GOOGLE_INVALID_RESPONSE', status: 502 });
-    return { provider: 'google', status: 'succeeded', outputs };
+    return { provider: 'google', status: 'succeeded', outputs, usage: googleImageUsage(payload?.usageMetadata) };
   } };
 }

@@ -2,6 +2,7 @@ import { transitionGeneration, isRetryableFailure, retryDelayMs } from './genera
 import { captureGenerationCredits, recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 import { transitionGenerationJob, retryGenerationJob, failGenerationJob, completeGenerationJob } from '../repositories/generationStateRepository.js';
 import { randomUUID } from 'node:crypto';
+import { actualGenerationCredits } from '../services/generationPricing.js';
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
@@ -44,6 +45,26 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+// Credits to capture: the provider's reported usage priced per model, never
+// more than was reserved. usage.cost used to be passed through as credits,
+// but providers report it in USD, which would have refunded almost the
+// whole reservation. With no usable usage, the reservation is captured.
+async function settledCredits(job, usage, priceActualUsage) {
+  const reserved = Number(job.estimated_cost ?? 0);
+  let actual = null;
+  try {
+    actual = await priceActualUsage(job, usage || {});
+  } catch (error) {
+    console.error('[pricing] could not price actual usage', job.id, error?.message);
+  }
+  if (actual === null || !Number.isFinite(actual)) return reserved;
+  if (actual > reserved) {
+    console.warn('[pricing] actual cost above reservation; capturing the reservation', { generationId: job.id, actual, reserved });
+    return reserved;
+  }
+  return actual;
+}
+
 export function createGenerationProcessor({
   pool,
   handler,
@@ -58,6 +79,7 @@ export function createGenerationProcessor({
   captureCredits = captureGenerationCredits,
   releaseCredits = releaseGenerationReservation,
   settleUnreserved = settleUnreservedGeneration,
+  priceActualUsage = actualGenerationCredits,
 }) {
   if (!pool || typeof handler !== 'function') throw new TypeError('pool and handler are required');
 
@@ -105,7 +127,7 @@ export function createGenerationProcessor({
       }
       transitionGeneration('running', nextStatus);
       if (nextStatus === 'succeeded' && settleCredits && job.reservation_ledger_id) {
-        await captureCredits(pool, { workspaceId, generationId: job.id, actualCost: result.usage?.cost ?? job.estimated_cost ?? 0 });
+        await captureCredits(pool, { workspaceId, generationId: job.id, actualCost: await settledCredits(job, result.usage, priceActualUsage) });
       }
       if (nextStatus === 'processing') {
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'processing', attempt, claimToken });

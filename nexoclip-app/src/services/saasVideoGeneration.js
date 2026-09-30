@@ -126,7 +126,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const client = await pool.connect();
     try {
       const asset = await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}.mp4`, contentType, sizeBytes: output.buffer.length });
-      return { status: 'succeeded', provider, providerRequestId, outputs: [{ assetId: asset.id }], usage };
+      // BytePlus reports the billed tokens on the finished task.
+      return { status: 'succeeded', provider, providerRequestId, outputs: [{ assetId: asset.id }], usage: { ...usage, ...(status?.usage && typeof status.usage === 'object' ? status.usage : {}) } };
     } finally { client.release(); }
   };
 }

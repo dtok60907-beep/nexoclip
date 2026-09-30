@@ -82,7 +82,8 @@ export function createOpenRouterImageAdapter({ baseUrl = DEFAULT_BASE_URL, apiKe
         providerRequestId: payload.id || (payload.created == null ? null : String(payload.created)),
         outputs,
         usage: payload.usage && typeof payload.usage === 'object' ? {
-          ...(payload.usage.cost !== undefined ? { cost: payload.usage.cost } : {}),
+          // OpenRouter reports the charge in USD.
+          ...(payload.usage.cost !== undefined ? { cost: payload.usage.cost, costUsd: Number(payload.usage.cost) } : {}),
           ...(payload.usage.total_tokens !== undefined ? { total_tokens: payload.usage.total_tokens } : {}),
         } : {},
       };

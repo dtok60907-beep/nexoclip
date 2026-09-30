@@ -3,6 +3,7 @@ import { createImageGeneration, createVimaxGeneration, findGeneration, findGener
 import { createCreditAccount, insertCreditEntry, lockCreditAccount, updateCreditBalance } from '../repositories/creditRepository.js';
 import { findPricingRule } from '../repositories/pricingRepository.js';
 import { estimateCost } from './pricingService.js';
+import { estimateGenerationCredits } from './generationPricing.js';
 import { findWorkspaceGenerationLimits, countRecentGenerations, countActiveGenerations, sumBudgetGenerations } from '../repositories/generationLimitsRepository.js';
 
 // Canvas model configurations expose these ratios. Validation must not collapse
@@ -152,10 +153,19 @@ async function enforceGenerationLimits(client, workspaceId, cost) {
   }
 }
 
-export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId, allowLegacyCanvasReferences = false } = {}) {
+export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId, allowLegacyCanvasReferences = false, priceGeneration = estimateGenerationCredits } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
   if (!userId) throw new Error('Generation user is required');
   const validated = input?.kind === 'video' ? validateVideoGenerationInput(input, { allowLegacyCanvasReferences }) : validateImageGenerationInput(input);
+  // Priced per model/resolution/duration before the transaction: it may
+  // fetch live OpenRouter prices and must not hold row locks meanwhile.
+  // Unknown models fall back to the flat pricing rule below.
+  let modelPrice = null;
+  try {
+    modelPrice = await priceGeneration({ kind: validated.kind === 'video' ? 'video' : 'image', ...validated });
+  } catch (error) {
+    console.error('[pricing] model price unavailable, using flat rule', validated.model, error?.message);
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -164,7 +174,8 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
 
     const selected = await findPricingRule(client, { operation: input.operation || (validated.kind === 'video' ? 'video_generation' : 'image_generation'), pricingVersion: input.pricingVersion || null });
     if (!selected) throw new Error('Pricing rule not found');
-    const estimate = estimateCost({ ...selected, quantity: 1 });
+    const ruleEstimate = estimateCost({ ...selected, quantity: 1 });
+    const estimate = modelPrice ? { ...ruleEstimate, amount: String(modelPrice.credits) } : ruleEstimate;
     await enforceGenerationLimits(client, workspaceId, Number(estimate.amount));
     await createCreditAccount(client, workspaceId);
     const account = await lockCreditAccount(client, workspaceId);

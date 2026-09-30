@@ -31,7 +31,7 @@ test('submits an image request and normalizes base64 output', async () => {
   assert.deepEqual(result, {
     provider: 'openrouter', status: 'succeeded', providerRequestId: '123',
     outputs: [{ url: 'data:image/png;base64,aGVsbG8=', mimeType: 'image/png' }],
-    usage: { cost: 0.04 },
+    usage: { cost: 0.04, costUsd: 0.04 },
   });
 });
 
