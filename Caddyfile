@@ -31,6 +31,16 @@
 			reverse_proxy {$SPITE_UPSTREAM:spite:3005}
 		}
 
+		# Legacy clients (stale cached JS bundle from before the /spite ->
+		# /canvas basePath migration) may still open a WebSocket to
+		# /spite/ws. A WS upgrade handshake does NOT follow HTTP redirects
+		# — the browser just fails the connection — so this MUST be
+		# proxied directly, ahead of the catch-all redirect below, instead
+		# of silently becoming unreachable dead code behind it.
+		handle /spite/ws* {
+			reverse_proxy {$SPITE_REALTIME_UPSTREAM:spite-realtime:3007}
+		}
+
 		# Canonical public path is /canvas. Move old /spite bookmarks over.
 		redir /spite /canvas 308
 		redir /spite/* /canvas/{path} 308
@@ -39,10 +49,6 @@
 		handle /spite/api/workspace-assets* {
 			uri replace /spite/api/workspace-assets /api/assets
 			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
-		}
-
-		handle /spite/ws* {
-			reverse_proxy {$SPITE_REALTIME_UPSTREAM:spite-realtime:3007}
 		}
 
 		handle /spite* {

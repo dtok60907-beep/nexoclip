@@ -255,7 +255,6 @@ services:
       CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
       CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
       REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
-      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/spite/ws}
     depends_on:
       spite-realtime-migrate:
         condition: service_completed_successfully
