@@ -828,3 +828,23 @@ test('realtime room caches one doc/provider per project, refreshes tokens throug
   assert.equal(createdProviders[0].destroyed, true)
 }
 )
+test('undo reverts user edits but not automatic (undoable: false) writes', () => {
+  const doc = createCanvasDocument()
+  upsertNode(doc, {
+    id: 'gen',
+    type: 'imageGen',
+    position: { x: 0, y: 0 },
+    data: { sceneId: 'scene-1', label: 'Image', modelId: 'a' },
+  })
+  const binding = createReactFlowBinding(doc)
+
+  binding.patchNodeData('gen', { modelId: 'b' })
+  binding.patchNodeData('gen', { outputUrl: '/result.png', generationStatus: 'completed' }, { undoable: false })
+  binding.undo()
+
+  const data = readCanvasProjection(doc).nodes.find((node) => node.id === 'gen')!.data
+  assert.equal(data.modelId, 'a')
+  assert.equal(data.outputUrl, '/result.png')
+  assert.equal(data.generationStatus, 'completed')
+  binding.destroy()
+})

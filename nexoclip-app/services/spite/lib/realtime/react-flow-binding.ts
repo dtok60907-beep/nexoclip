@@ -17,6 +17,13 @@ import {
 } from './document'
 
 export const LOCAL_REACT_FLOW_ORIGIN = Object.freeze({ source: 'spite-react-flow-binding' })
+// Local writes the user didn't make by hand (generation results and status,
+// canonical URLs, derived labels). Persisted and synced like any local write,
+// but not tracked by undo: Ctrl+Z used to revert a finished generation's
+// output or the "running" state of a job that was still being paid for.
+export const LOCAL_SYSTEM_ORIGIN = Object.freeze({ source: 'spite-system-write' })
+
+export type NodeWriteOptions = { undoable?: boolean }
 
 type JsonRecord = Record<string, unknown>
 type CanvasScene = CanvasProjection['scenes'][number]
@@ -43,7 +50,7 @@ type NodeDataUpdater = (currentData: JsonRecord) => JsonRecord
 type RawBindingMutations = {
   createNode: (node: NodeInput) => void
   patchNode: (nodeId: string, patch: NodePatch) => void
-  patchNodeData: (nodeId: string, patch: JsonRecord) => void
+  patchNodeData: (nodeId: string, patch: JsonRecord, options?: NodeWriteOptions) => void
   deleteNode: (nodeId: string) => void
   createEdge: (edge: EdgeInput) => void
   deleteEdge: (edgeId: string) => void
@@ -68,7 +75,7 @@ export type RealtimeCanvasBinding = RawBindingMutations & {
   subscribe: (listener: () => void) => () => void
   applyNodeChanges: (changes: NodeChange[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
-  updateNodeData: (nodeId: string, updater: NodeDataUpdater) => void
+  updateNodeData: (nodeId: string, updater: NodeDataUpdater, options?: NodeWriteOptions) => void
   replaceShot: (nodeId: string, shotId: string) => void
   createNextShot: (nodeId: string) => string | null
   duplicateNodes: (nodeIds: string[]) => string[]
@@ -271,17 +278,17 @@ export function createReactFlowBinding(
       })
     },
 
-    patchNodeData(nodeId, patch) {
+    patchNodeData(nodeId, patch, options) {
       runLocalTransaction(doc, () => {
         rawMutations.patchNodeData(nodeId, patch)
-      })
+      }, options)
     },
 
-    updateNodeData(nodeId, updater) {
+    updateNodeData(nodeId, updater, options) {
       if (!nodeId) return
       runLocalTransaction(doc, () => {
         updateNodeDataRecord(doc, nodeId, updater)
-      })
+      }, options)
     },
 
     replaceShot(nodeId, shotId) {
@@ -450,8 +457,8 @@ function deriveSnapshot(doc: Y.Doc): RealtimeCanvasBindingSnapshot {
     projectName: projection.projectName ?? 'Untitled Project',  }
 }
 
-function runLocalTransaction(doc: Y.Doc, callback: () => void): void {
-  doc.transact(callback, LOCAL_REACT_FLOW_ORIGIN)
+function runLocalTransaction(doc: Y.Doc, callback: () => void, options?: NodeWriteOptions): void {
+  doc.transact(callback, options?.undoable === false ? LOCAL_SYSTEM_ORIGIN : LOCAL_REACT_FLOW_ORIGIN)
 }
 
 function upsertNodeRecord(doc: Y.Doc, node: NodeInput): void {

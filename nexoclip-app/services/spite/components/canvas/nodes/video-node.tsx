@@ -188,9 +188,15 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (!syncGuardRef.current.allowsPersistence()) return
     patchNodeDataRef.current(id, patch)
   }, [id])
+  // Automatic writes (job state, results, derived fields) stay out of undo:
+  // Ctrl+Z must not revert a finished output or a job that is still running.
   const updatePersistedNodeData = useCallback((updater: (currentData: Record<string, unknown>) => Record<string, unknown>) => {
     if (!syncGuardRef.current.allowsPersistence()) return
-    updateNodeDataRef.current(id, updater)
+    updateNodeDataRef.current(id, updater, { undoable: false })
+  }, [id])
+  const patchSystemNodeData = useCallback((patch: Record<string, unknown>) => {
+    if (!syncGuardRef.current.allowsPersistence()) return
+    patchNodeDataRef.current(id, patch, { undoable: false })
   }, [id])
   
   // Prompt text is read from the connected Text node at render and again
@@ -396,8 +402,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (current && !DEFAULT_VIDEO_LABEL.test(current)) return
     const derived = labelFromPrompt(resolvedPrompt.prompt)
     if (!derived || derived === current) return
-    patchPersistedNodeData({ label: derived })
-  }, [data.label, outputUrl, patchPersistedNodeData, resolvedPrompt.prompt])
+    patchSystemNodeData({ label: derived })
+  }, [data.label, outputUrl, patchSystemNodeData, resolvedPrompt.prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -421,10 +427,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     let cancelled = false
     captureVideoThumbnail(outputUrl).then(thumb => {
       if (cancelled || !thumb) return
-      patchPersistedNodeData({ videoThumbnail: thumb, videoThumbnailFor: outputUrl })
+      patchSystemNodeData({ videoThumbnail: thumb, videoThumbnailFor: outputUrl })
     })
     return () => { cancelled = true }
-  }, [data.videoThumbnail, data.videoThumbnailFor, outputUrl, patchPersistedNodeData])
+  }, [data.videoThumbnail, data.videoThumbnailFor, outputUrl, patchSystemNodeData])
 
   // Resume polling only for an active durable job. A failed/completed job can
   // retain a legacy generationId, but must never be rendered as in queue.
@@ -448,13 +454,13 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   // Clear the persisted in-flight job marker when the generation resolves.
   const clearPending = useCallback(() => {
-    patchPersistedNodeData({
+    patchSystemNodeData({
       pendingProvider: undefined,
       pendingProviderModel: undefined,
       pendingFalEndpoint: undefined,
       pendingStartedAt: undefined,
     })
-  }, [patchPersistedNodeData])
+  }, [patchSystemNodeData])
 
   // 10-minute soft timeout. Stops polling and marks the node failed, but
   // does NOT clear generationId — the user can click "Re-check
@@ -952,7 +958,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
       // Persist the in-flight job onto the node so polling can resume
       // after a page refresh. Cleared when the generation resolves.
-      patchPersistedNodeData({
+      patchSystemNodeData({
         generationId: ok[0].generationId,
         generationStatus: ok[0].generationStatus,
         status: ok[0].generationStatus === 'processing' ? 'in_progress' : 'in_queue',
@@ -1074,7 +1080,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       setGenerationId(payload.generation.id)
       setStatus(payload.generation.status === 'queued' ? 'in_queue' : 'in_progress')
       setSubmittedAt(Date.now())
-      patchPersistedNodeData({ generationId: payload.generation.id, generationStatus: payload.generation.status, status: payload.generation.status === 'queued' ? 'in_queue' : 'in_progress', draftMode: false, resolution: '1080p', generationError: null, error: null, submittedAt: Date.now() })
+      patchSystemNodeData({ generationId: payload.generation.id, generationStatus: payload.generation.status, status: payload.generation.status === 'queued' ? 'in_queue' : 'in_progress', draftMode: false, resolution: '1080p', generationError: null, error: null, submittedAt: Date.now() })
     } catch (error) {
       setStatus('failed')
       setError(error instanceof Error ? error.message : 'Draft finalization failed')

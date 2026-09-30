@@ -172,9 +172,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (!syncGuardRef.current.allowsPersistence()) return
     patchNodeDataRef.current(id, patch)
   }, [id])
+  // Automatic writes (job state, results, derived fields) stay out of undo:
+  // Ctrl+Z must not revert a finished output or a job that is still running.
   const updatePersistedNodeData = useCallback((updater: (currentData: Record<string, unknown>) => Record<string, unknown>) => {
     if (!syncGuardRef.current.allowsPersistence()) return
-    updateNodeDataRef.current(id, updater)
+    updateNodeDataRef.current(id, updater, { undoable: false })
+  }, [id])
+  const patchSystemNodeData = useCallback((patch: Record<string, unknown>) => {
+    if (!syncGuardRef.current.allowsPersistence()) return
+    patchNodeDataRef.current(id, patch, { undoable: false })
   }, [id])
   const imageTrust = useImageTrust({
     url: outputUrl,
@@ -184,8 +190,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     enabled: Boolean(selected) && Boolean(outputUrl) && !['submitting', 'in_queue', 'in_progress'].includes(status),
     onCanonicalized: useCallback((canonicalUrl: string, workspaceAssetId: string) => {
       setOutputUrl(canonicalUrl)
-      patchPersistedNodeData({ outputUrl: canonicalUrl, workspaceAssetId })
-    }, [patchPersistedNodeData]),
+      patchSystemNodeData({ outputUrl: canonicalUrl, workspaceAssetId })
+    }, [patchSystemNodeData]),
   })
   
   // Prompt text is read from the connected Text node at render and again
@@ -327,8 +333,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // Sync outputUrl TO node data when it changes (for connected nodes to read)
   useEffect(() => {
     if (!outputUrl || outputUrl === data.outputUrl) return
-    patchPersistedNodeData({ outputUrl })
-  }, [data.outputUrl, outputUrl, patchPersistedNodeData])
+    patchSystemNodeData({ outputUrl })
+  }, [data.outputUrl, outputUrl, patchSystemNodeData])
 
   // Get current model config
   const currentModel = useMemo(() => getModelById(modelId), [modelId])
@@ -402,8 +408,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (current && !DEFAULT_IMAGE_LABEL.test(current)) return
     const derived = labelFromPrompt(resolvedPrompt.prompt)
     if (!derived || derived === current) return
-    patchPersistedNodeData({ label: derived })
-  }, [data.label, outputUrl, patchPersistedNodeData, resolvedPrompt.prompt])
+    patchSystemNodeData({ label: derived })
+  }, [data.label, outputUrl, patchSystemNodeData, resolvedPrompt.prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -425,13 +431,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // (success / failure / cancel) so a future refresh doesn't try to
   // resume a completed job.
   const clearPending = useCallback(() => {
-    patchPersistedNodeData({
+    patchSystemNodeData({
       pendingProvider: undefined,
       pendingProviderModel: undefined,
       pendingFalEndpoint: undefined,
       pendingStartedAt: undefined,
     })
-  }, [patchPersistedNodeData])
+  }, [patchSystemNodeData])
 
   // Poll for status
   const pollStatus = useCallback(async (reqId: string) => {
@@ -880,7 +886,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       setStatus(ok[0].generationStatus === 'processing' ? 'in_progress' : 'in_queue')
       startTimeRef.current = startedAt
 
-      patchPersistedNodeData({
+      patchSystemNodeData({
         generationId: ok[0].generationId,
         generationStatus: ok[0].generationStatus,
         status: ok[0].generationStatus === 'processing' ? 'in_progress' : 'in_queue',

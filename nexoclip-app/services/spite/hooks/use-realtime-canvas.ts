@@ -9,6 +9,7 @@ import { needsDurableGenerationRecovery } from '../lib/durable-generation'
 import {
   createReactFlowBinding,
   LOCAL_REACT_FLOW_ORIGIN,
+  LOCAL_SYSTEM_ORIGIN,
   type RealtimeCanvasBinding,
   type RealtimeCanvasBindingSnapshot,
 } from '../lib/realtime/react-flow-binding'
@@ -450,7 +451,7 @@ export class RealtimeCanvasRoom {
   }
 
   private readonly handleDocumentUpdate = (_update: Uint8Array, origin: unknown) => {
-    const localMutation = origin === LOCAL_REACT_FLOW_ORIGIN || origin instanceof Y.UndoManager
+    const localMutation = origin === LOCAL_REACT_FLOW_ORIGIN || origin === LOCAL_SYSTEM_ORIGIN || origin instanceof Y.UndoManager
     if (!localMutation || this.snapshot.persistenceStatus === 'READ_ONLY') {
       return
     }

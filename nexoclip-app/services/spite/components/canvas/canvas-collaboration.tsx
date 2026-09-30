@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, useRef } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { UseRealtimeCanvasResult } from '@/hooks/use-realtime-canvas'
+import type { NodeWriteOptions } from '@/lib/realtime/react-flow-binding'
 import {
   createInvocationTimeRuntimeControls,
   type CanvasRuntimeControls,
@@ -19,8 +20,8 @@ type CanvasCollaborationValue = UseRealtimeCanvasResult & {
   deleteNodes: (nodeIds: string[]) => void
   deleteEdges: (edgeIds: string[]) => void
   patchNodes: (patches: Array<{ id: string; patch: NodePatch }>) => void
-  patchNodeData: (nodeId: string, patch: NodeDataPatch) => void
-  updateNodeData: (nodeId: string, updater: NodeDataUpdater) => void
+  patchNodeData: (nodeId: string, patch: NodeDataPatch, options?: NodeWriteOptions) => void
+  updateNodeData: (nodeId: string, updater: NodeDataUpdater, options?: NodeWriteOptions) => void
   replaceShot: (nodeId: string, shotId: string) => void
   createNextShot: (nodeId: string) => string | null
 }
@@ -104,13 +105,13 @@ export function CanvasCollaborationProvider({
         }
       })
     },
-    patchNodeData(nodeId, patch) {
+    patchNodeData(nodeId, patch, options) {
       if (!findNode(nodeId)) return
-      runtimeValue.commands.patchNodeData(nodeId, patch)
+      runtimeValue.commands.patchNodeData(nodeId, patch, options)
     },
-    updateNodeData(nodeId, updater) {
+    updateNodeData(nodeId, updater, options) {
       if (!findNode(nodeId)) return
-      runtimeValue.commands.updateNodeData(nodeId, updater)
+      runtimeValue.commands.updateNodeData(nodeId, updater, options)
     },
     replaceShot(nodeId, shotId) {
       if (!findNode(nodeId)) return
