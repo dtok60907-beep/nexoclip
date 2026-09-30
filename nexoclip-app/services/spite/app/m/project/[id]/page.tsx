@@ -9,7 +9,7 @@ import {
   ArrowUUpLeft, CopySimple, Plus, Minus, Sparkle, Question,
 } from '@phosphor-icons/react'
 import { FAL_MODELS, getModelById } from '@/lib/fal-models'
-import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
+import { CREDIT_CONFIRM_THRESHOLD, formatCredits, formatCreditsShort, useGenerationCredits } from '@/lib/generation-credits'
 import { useIsMobile } from '@/components/ui/use-mobile'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { VersionBadge } from '@/components/version-badge'
@@ -164,7 +164,7 @@ export default function FlowThread() {
         : rs[rs.length - 1] || '',
     )
   }, [model])
-  const cost = useMemo(() => estimateGenerationCost(model, { count }), [model, count])
+  const cost = useGenerationCredits({ kind: 'image', modelId: model?.id, count, resolution, aspectRatio: aspect, referenceImages: refs.length })
   const busy = pending > 0
   const uploadingRef = refs.some((r) => r.uploading)
   const decPending = () => setPending((p) => Math.max(0, p - 1))
@@ -282,8 +282,8 @@ export default function FlowThread() {
 
   function generate() {
     if (!prompt.trim() || busy || uploadingRef) return
-    if (cost.isKnown && cost.total > COST_CONFIRM_THRESHOLD_USD) {
-      if (!window.confirm(`This will cost about ${formatUSD(cost.total)}. Generate?`)) return
+    if (cost.isKnown && cost.total > CREDIT_CONFIRM_THRESHOLD) {
+      if (!window.confirm(`This will cost about ${formatCredits(cost.total)}. Generate?`)) return
     }
     const myPrompt = prompt.trim()
     // De-dupe so the same reference can't be sent (or stored) twice, even if it
@@ -485,7 +485,7 @@ export default function FlowThread() {
                 <button onClick={() => setCount((c) => Math.min(MAX_COUNT, c + 1))} disabled={count >= MAX_COUNT} aria-label="More" className="w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground disabled:opacity-30 hover:text-foreground"><Plus size={12} /></button>
               </div>
               {cost.isKnown && (
-                <span className="text-[10px] font-mono text-muted-foreground/55 px-1">~{formatUSD(cost.total)}{count > 1 ? ` · ${count}` : ''}</span>
+                <span className="text-[10px] font-mono text-muted-foreground/55 px-1">~{formatCreditsShort(cost.total)}{count > 1 ? ` · ${count}` : ''}</span>
               )}
             </div>
             <button data-tour="generate" onClick={generate} disabled={busy || uploadingRef || !prompt.trim()} aria-label="Generate"

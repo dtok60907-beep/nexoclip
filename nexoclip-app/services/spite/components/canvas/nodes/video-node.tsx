@@ -12,7 +12,7 @@ import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
 import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
-import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
+import { CREDIT_CONFIRM_THRESHOLD, formatCredits, formatCreditsShort, useGenerationCredits } from '@/lib/generation-credits'
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
 import { findUntrustedReferences } from '@/lib/byteplus-trust'
 import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
@@ -1020,13 +1020,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // window.confirm() when the estimate crosses the safety threshold.
   // Native confirm is intentional: the goal is "you cannot click
   // through without seeing the dollar amount", not aesthetics.
-  const costEstimate = useMemo(
-    () => estimateGenerationCost(currentModel, {
-      count: numVideos,
-      durationSeconds: duration ? parseInt(duration) : undefined,
-    }),
-    [currentModel, numVideos, duration],
-  )
+  const costEstimate = useGenerationCredits({
+    kind: 'video', modelId: currentModel?.id, count: numVideos, resolution: draftMode ? '480p' : resolution,
+    duration, aspectRatio, draft: draftMode, extend: extendMode,
+  })
   const generateTooltip = useMemo(() => {
     if (!generationPersistenceGuard.allowed) return generationPersistenceGuard.message
     if (!resolvedPrompt.connected) return 'Connect a Text node first'
@@ -1040,16 +1037,15 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
     const label = `Generate ${numVideos} video${numVideos === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
-    return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution, duration and model load.`
+    return `${label}\nCost: up to ~${formatCredits(costEstimate.total)} (${formatCredits(costEstimate.perUnit)} each).\nYou are charged the tokens the provider actually used, never more than this.`
   }, [blockedNoExtendVideo, blockedNoFirstFrame, costEstimate, currentModel, generationPersistenceGuard, modelId, numVideos, resolvedPrompt.connected, resolvedPrompt.prompt, upscaleMode])
   const requestGenerate = () => {
     if (blockedNoExtendVideo || submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
-    if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
+    if (costEstimate.isKnown && costEstimate.total >= CREDIT_CONFIRM_THRESHOLD) {
       const msg =
         `You're about to submit ${numVideos} ${currentModel?.name || 'video'} generation${numVideos === 1 ? '' : 's'} ` +
         `to the provider.\n\n` +
-        `Estimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\n` +
-        `Real cost depends on resolution, duration and model load.\n\n` +
+        `Cost: up to ~${formatCredits(costEstimate.total)} (${formatCredits(costEstimate.perUnit)} each).\n\n` +
         `Press OK to confirm and spend this, or Cancel to back out.`
       if (!window.confirm(msg)) return
     }
@@ -1593,7 +1589,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               title={generateTooltip}
             >
               <Sparkle size={12} weight="fill" />
-              <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatUSD(costEstimate.total) : 'Generate'}</span>
+              <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatCreditsShort(costEstimate.total) : 'Generate'}</span>
             </button>
           )}
         </div>
