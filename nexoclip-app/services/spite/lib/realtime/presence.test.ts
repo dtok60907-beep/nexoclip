@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   createLocalPresenceSnapshot,
   createPresenceController,
+  createPresenceSnapshotSync,
   getOrCreateParticipantHint,
   getPresenceColor,
   presenceSnapshotNeedsPublish,
@@ -289,4 +290,32 @@ test('projectRemotePresence drops expired locks using server time but keeps the 
   assert.equal(peers[1]?.name, 'Guest 2')
   assert.equal(peers[1]?.lock, undefined)
   assert.equal(peers[1]?.selection.nodeIds.length, 0)
+})
+
+
+test('presence sync does not recurse when awareness emits update synchronously on every write', () => {
+  // Mirrors y-protocols Awareness: every write emits 'update' synchronously,
+  // even when the value did not change.
+  const listeners: Array<() => void> = []
+  let state: Record<string, unknown> | null = { selection: { nodeIds: [] }, editing: null }
+  let writes = 0
+  const awareness = {
+    getLocalState: () => state,
+    setLocalState: (next: Record<string, unknown> | null) => { writes += 1; state = next; listeners.forEach((fn) => fn()) },
+    setLocalStateField: (key: string, value: unknown) => {
+      writes += 1
+      state = { ...(state ?? {}), [key]: value }
+      listeners.forEach((fn) => fn())
+    },
+  }
+  const controller = createPresenceController({ awareness, participantId: 'p1' })
+  const snapshot = { selection: { nodeIds: ['node-a'] }, editing: { nodeId: 'node-a' } }
+  const sync = createPresenceSnapshotSync({ awareness, controller, getSnapshot: () => snapshot })
+  listeners.push(sync)
+
+  sync()
+
+  assert.ok(writes <= 2, `expected a bounded number of writes, got ${writes}`)
+  assert.deepEqual(state?.selection, { nodeIds: ['node-a'] })
+  assert.deepEqual(state?.editing, { nodeId: 'node-a' })
 })

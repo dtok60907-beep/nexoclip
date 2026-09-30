@@ -161,6 +161,30 @@ export function createLocalPresenceSnapshot(
   }
 }
 
+// Keeps our awareness state in step with the local selection/editing
+// snapshot. Awareness emits 'update' synchronously from inside every write, and
+// this runs on 'update', so it must not re-enter: publishing selection and
+// editing as two writes let the nested call see a half-written state and
+// publish again forever ("Maximum call stack size exceeded").
+export function createPresenceSnapshotSync(options: {
+  awareness: PresenceAwareness
+  controller: { publishSnapshot(snapshot: LocalPresenceSnapshot): void }
+  getSnapshot: () => LocalPresenceSnapshot
+}): () => void {
+  let syncing = false
+  return () => {
+    if (syncing) return
+    syncing = true
+    try {
+      const snapshot = options.getSnapshot()
+      if (!presenceSnapshotNeedsPublish(options.awareness.getLocalState?.(), snapshot)) return
+      options.controller.publishSnapshot(snapshot)
+    } finally {
+      syncing = false
+    }
+  }
+}
+
 export function presenceSnapshotNeedsPublish(
   localState: Record<string, unknown> | null | undefined,
   snapshot: LocalPresenceSnapshot,
@@ -246,6 +270,20 @@ class PresenceController {
     this.writeField('selection', {
       nodeIds: uniqueNodeIds(nodeIds),
     })
+  }
+
+  // One awareness write for both fields, so observers never see selection
+  // updated while editing is still stale.
+  publishSnapshot(snapshot: LocalPresenceSnapshot): void {
+    const selection = { nodeIds: uniqueNodeIds(snapshot.selection.nodeIds) }
+    const editing = snapshot.editing?.nodeId ? { nodeId: snapshot.editing.nodeId } : null
+    const state = this.awareness?.getLocalState?.()
+    if (state && this.awareness?.setLocalState) {
+      this.awareness.setLocalState({ ...state, selection, editing })
+      return
+    }
+    this.writeField('selection', selection)
+    this.writeField('editing', editing)
   }
 
   publishEditing(nodeId: string | null): void {

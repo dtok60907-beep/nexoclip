@@ -42,7 +42,7 @@ import {
   createLocalPresenceSnapshot,
   createPresenceController,
   getOrCreateParticipantHint,
-  presenceSnapshotNeedsPublish,
+  createPresenceSnapshotSync,
   projectRemotePresence,
   type RemotePresencePeer,
 } from '@/lib/realtime/presence'
@@ -357,18 +357,14 @@ function CanvasInner({ projectId }: { projectId: string }) {
       participantId: getOrCreateParticipantHint(),
     })
 
-    const syncPresenceSnapshot = () => {
-      const snapshot = createLocalPresenceSnapshot(
+    const syncPresenceSnapshot = createPresenceSnapshotSync({
+      awareness,
+      controller,
+      getSnapshot: () => createLocalPresenceSnapshot(
         selectedSceneNodeIdsRef.current,
         document.activeElement,
-      )
-      if (!presenceSnapshotNeedsPublish(awareness.getLocalState?.(), snapshot)) {
-        return
-      }
-
-      controller.publishSelection(snapshot.selection.nodeIds)
-      controller.publishEditing(snapshot.editing?.nodeId ?? null)
-    }
+      ),
+    })
 
     presenceControllerRef.current = controller
     controller.publishScene(activeSceneId)
