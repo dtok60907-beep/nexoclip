@@ -83,3 +83,21 @@ test('downloads R2 streams as provider-readable buffers', async () => {
   assert.equal(object.body.toString(), 'hero');
   assert.equal(object.contentType, 'image/jpeg');
 });
+
+test('display download URLs are identical within a cache window and ask R2 for a cacheable response', async () => {
+  const at = (iso) => new R2ObjectStorage({
+    bucket: 'images', publicUrl: 'https://cdn.example.test',
+    accountId: 'account-id', accessKeyId: 'access-key', secretAccessKey: 'secret-key',
+    now: () => new Date(iso), client: {},
+  });
+  const options = { key: 'workspace/a.png', cacheWindowSeconds: 21600, responseCacheControl: 'private,max-age=21600,immutable' };
+  const first = await at('2026-10-01T06:00:01Z').createDownloadUrl(options);
+  const sameWindow = await at('2026-10-01T11:59:59Z').createDownloadUrl(options);
+  const nextWindow = await at('2026-10-01T12:00:00Z').createDownloadUrl(options);
+  assert.equal(first.url, sameWindow.url);
+  assert.notEqual(first.url, nextWindow.url);
+  const params = new URL(first.url).searchParams;
+  assert.equal(params.get('X-Amz-Date'), '20261001T060000Z');
+  assert.equal(params.get('X-Amz-Expires'), '43200');
+  assert.equal(params.get('response-cache-control'), 'private,max-age=21600,immutable');
+});

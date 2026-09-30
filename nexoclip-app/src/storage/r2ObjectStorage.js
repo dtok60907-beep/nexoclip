@@ -70,12 +70,27 @@ export class R2ObjectStorage {
     return `${this.publicUrl}/${key.split('/').map(encodeURIComponent).join('/')}`;
   }
 
-  async createDownloadUrl({ key, expiresInSeconds = 900 }) {
+  // `cacheWindowSeconds` makes the URL stable for that window: the signature
+  // time is rounded down to the window (and the URL stays valid for two
+  // windows), so repeated views produce the identical URL and the browser can
+  // serve the file from cache instead of downloading it again. Objects are
+  // immutable, so `responseCacheControl` lets R2 mark the response cacheable.
+  async createDownloadUrl({ key, expiresInSeconds = 900, cacheWindowSeconds = 0, responseCacheControl = '' }) {
     if (!this.accountId || !this.accessKeyId || !this.secretAccessKey) throw new Error('R2 signing credentials are required');
+    if (cacheWindowSeconds) {
+      if (!Number.isInteger(cacheWindowSeconds) || cacheWindowSeconds < 60 || cacheWindowSeconds * 2 > 604800) {
+        throw new Error('R2 download URL cache window is invalid');
+      }
+      expiresInSeconds = cacheWindowSeconds * 2;
+    }
     if (!Number.isInteger(expiresInSeconds) || expiresInSeconds < 1 || expiresInSeconds > 604800) {
       throw new Error('R2 download URL expiry is invalid');
     }
-    const date = formatDate(this.now());
+    const nowMs = this.now().getTime();
+    const signedAt = cacheWindowSeconds
+      ? new Date(Math.floor(nowMs / (cacheWindowSeconds * 1000)) * cacheWindowSeconds * 1000)
+      : new Date(nowMs);
+    const date = formatDate(signedAt);
     const day = date.slice(0, 8);
     const host = `${this.accountId}.r2.cloudflarestorage.com`;
     const scope = `${day}/auto/s3/aws4_request`;
@@ -86,6 +101,7 @@ export class R2ObjectStorage {
       'X-Amz-Date': date,
       'X-Amz-Expires': String(expiresInSeconds),
       'X-Amz-SignedHeaders': 'host',
+      ...(responseCacheControl ? { 'response-cache-control': responseCacheControl } : {}),
     });
     query.sort();
     const canonicalRequest = ['GET', pathname, query.toString(), `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');

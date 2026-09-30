@@ -10,7 +10,11 @@ type R2ImageHandlerDeps = {
   getR2Client?: typeof getR2Client
   getSignedUrl?: typeof getSignedUrl
   env?: Partial<Pick<NodeJS.ProcessEnv, 'R2_BUCKET_NAME'>>
+  now?: () => number
 }
+
+const DISPLAY_CACHE_WINDOW_SECONDS = 6 * 60 * 60
+const DISPLAY_CACHE_CONTROL = 'private,max-age=21600,immutable'
 
 export function createR2ImageHandler(deps: R2ImageHandlerDeps = {}) {
   const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
@@ -81,14 +85,21 @@ export function createR2ImageHandler(deps: R2ImageHandlerDeps = {}) {
       // 1h expiry: long enough that a <video> paused then scrubbed later
       // won't hit an expired URL mid-playback, short enough to bound the
       // capability if the redirect URL ever leaks.
+      // Sign against the start of a 6-hour window (valid for two windows) so
+      // every view in that window gets the identical URL, and have R2 mark
+      // the object cacheable (uploads are immutable). A fresh signature per
+      // request made the browser download every image again on each canvas
+      // open or refresh.
+      const windowMs = DISPLAY_CACHE_WINDOW_SECONDS * 1000
+      const signingDate = new Date(Math.floor((deps.now?.() ?? Date.now()) / windowMs) * windowMs)
       const presignedUrl = await signUrl(
         r2Client(),
-        new GetObjectCommand({ Bucket: env.R2_BUCKET_NAME!, Key: key }),
-        { expiresIn: 3600 },
+        new GetObjectCommand({ Bucket: env.R2_BUCKET_NAME!, Key: key, ResponseCacheControl: DISPLAY_CACHE_CONTROL }),
+        { expiresIn: DISPLAY_CACHE_WINDOW_SECONDS * 2, signingDate },
       )
       return new NextResponse(null, {
         status: 302,
-        headers: { Location: presignedUrl, 'Cache-Control': 'private, no-store' },
+        headers: { Location: presignedUrl, 'Cache-Control': 'private, max-age=600' },
       })
     }
 

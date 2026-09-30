@@ -188,7 +188,16 @@ export async function deleteWorkspaceAsset(workspaceId, assetId, storage = creat
   }
 }
 
-export async function createAssetDownload(workspaceId, assetId, storage = createStorage()) {
+// Display downloads (canvas/gallery) get a URL that is identical for 6 hours
+// and a cacheable response, so reopening or refreshing a canvas reuses the
+// browser cache instead of downloading every image again. No spaces: SigV4
+// needs %20, which URLSearchParams would encode as "+".
+export const DISPLAY_DOWNLOAD_CACHE = {
+  cacheWindowSeconds: 6 * 60 * 60,
+  responseCacheControl: 'private,max-age=21600,immutable',
+};
+
+export async function createAssetDownload(workspaceId, assetId, storage = createStorage(), downloadOptions = {}) {
   if (!workspaceId) throw new Error('workspace_id is required');
   if (!assetId) throw new Error('asset_id is required');
   const result = await getPool().query(
@@ -197,5 +206,5 @@ export async function createAssetDownload(workspaceId, assetId, storage = create
   );
   const asset = result.rows[0];
   if (!asset) return null;
-  return { asset, download: await storage.createDownloadUrl({ key: asset.storage_key }) };
+  return { asset, download: await storage.createDownloadUrl({ key: asset.storage_key, ...downloadOptions }) };
 }
