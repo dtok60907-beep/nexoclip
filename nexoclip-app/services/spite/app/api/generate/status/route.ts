@@ -45,17 +45,20 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
         return NextResponse.json({ error: 'nodeId and a valid generationId are required' }, { status: 400 })
       }
 
+      // The generation lookup is already scoped to the caller's workspace.
+      // Exporting the whole canvas on every poll (every 2s per open tab) was
+      // the most expensive part of this route, so the document is only read
+      // once the job is terminal and its result has to be written to the node.
+      const generation = await createGenerationClient().status({ userId: user.id, projectId, nodeId, generationId })
+      const patch = createTerminalGenerationPatch(generation)
       const realtime = createRealtimeClient()
-      const document = mobile ? undefined : await realtime.exportDocument({ userId: user.id, projectId })
+      const document = mobile || !patch ? undefined : await realtime.exportDocument({ userId: user.id, projectId })
       const node = document?.projection.nodes.find((candidate) => candidate.id === nodeId)
       const matchesNode = node && (
         node.data.generationId === generationId
         || node.data.lastGenerationId === generationId
       )
-      if (!mobile && !matchesNode) return projectNotFoundResponse()
-
-      const generation = await createGenerationClient().status({ userId: user.id, projectId, nodeId, generationId })
-      const patch = createTerminalGenerationPatch(generation)
+      if (!mobile && patch && !matchesNode) return projectNotFoundResponse()
       if (patch && node && (
         Object.entries(patch).some(([key, value]) => node.data[key] !== value)
         || (['succeeded', 'failed'].includes(generation.status) && typeof node.data.generationId === 'string')

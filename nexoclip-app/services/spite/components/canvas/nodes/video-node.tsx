@@ -16,6 +16,7 @@ import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
 import { findUntrustedReferences } from '@/lib/byteplus-trust'
 import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
+import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -460,7 +461,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // result" to poll again in case fal completed after the timeout
   // window. Resets when the user clicks re-check or triggers a new
   // generation.
-  const TIMEOUT_MS = 10 * 60 * 1000
+  const TIMEOUT_MS = GIVE_UP_AFTER_MS
   const startTimeRef = useRef<number | null>(null)
   // Bumped to force the polling effect to restart on user-initiated re-check.
   const [resumeToken, setResumeToken] = useState(0)
@@ -473,7 +474,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // data so the user can manually re-check.
     if (startTimeRef.current && Date.now() - startTimeRef.current > TIMEOUT_MS) {
       setStatus('failed')
-      setError("Generation took over 10 min — the provider might still finish. Use 'Re-check result' to look again, or 'Cancel' to give up.")
+      setError('Still not finished after 45 minutes. The server may still complete it — use \'Re-check\' before generating again, so you don\'t pay twice.')
       return true
     }
     try {
@@ -546,19 +547,29 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (!generationId || !currentModel) return
     stopRef.current = false
 
+    const startedAt = startTimeRef.current ?? Date.now()
     const poll = async () => {
       if (stopRef.current) return
+      // Hidden tabs don't poll; the visible tab (or the server) reconciles
+      // the result into the shared canvas, and this resumes on focus.
+      if (isHiddenDocument()) return
       const shouldStop = await pollStatus(generationId)
       if (!shouldStop && !stopRef.current) {
-        pollingRef.current = setTimeout(poll, 2000)
+        pollingRef.current = setTimeout(poll, nextPollDelay(Date.now() - startedAt))
       }
     }
+    const resumeWhenVisible = () => {
+      if (isHiddenDocument() || stopRef.current) return
+      if (pollingRef.current) clearTimeout(pollingRef.current)
+      void poll()
+    }
+    document.addEventListener('visibilitychange', resumeWhenVisible)
 
-    // Wait 4 seconds before first poll to let job start processing
-    pollingRef.current = setTimeout(poll, 4000)
+    pollingRef.current = setTimeout(poll, FIRST_POLL_DELAY_MS)
 
     return () => {
       stopRef.current = true
+      document.removeEventListener('visibilitychange', resumeWhenVisible)
       if (pollingRef.current) {
         clearTimeout(pollingRef.current)
       }
