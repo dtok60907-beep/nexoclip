@@ -9,6 +9,7 @@
 // consumer must resolve through here so that can't drift again.
 
 import { withBasePath, withGenerationOutputBasePath } from './base-path'
+import { resolveWorkspaceAssetId, workspaceAssetIdFromUrl } from './byteplus-trust'
 
 type NodeData = Record<string, unknown> | undefined | null
 
@@ -38,6 +39,20 @@ export function resolveNodeMediaUrl(data: NodeData): string | undefined {
     str(d.imageUrl) ??
     str(d.videoThumbnail)
   )
+}
+
+/**
+ * The URL to submit when this node is wired into a generator. Unlike the
+ * display URL, it points at the node's workspace asset whenever it has one —
+ * the same asset Trust for Seedance is recorded against. Sending the legacy
+ * upload URL instead made the worker miss the trust record, so a trusted
+ * photo of a real person still went to BytePlus raw and was rejected.
+ */
+export function resolveNodeReferenceUrl(data: NodeData): string | undefined {
+  const url = resolveNodeMediaUrl(data)
+  if (!data || workspaceAssetIdFromUrl(url)) return url
+  const assetId = resolveWorkspaceAssetId(url, (data as Record<string, unknown>).workspaceAssetId)
+  return assetId ? `/api/assets/${assetId}/download` : url
 }
 
 /** True when the node currently has nothing to hand downstream. */

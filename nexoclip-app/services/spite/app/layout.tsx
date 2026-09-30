@@ -22,6 +22,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'SPITE — AI filmmaking workflows',
   description: 'Open-source node-based canvas for AI filmmaking workflows. Your keys. Your models. Your workflow.',
+  // Browser page translation rewrites text nodes under React's feet, which
+  // crashes the canvas with "insertBefore/removeChild ... not a child of this
+  // node". It's a tool UI, so opt out of translation entirely.
+  other: { google: 'notranslate' },
 }
 
 // Lock zoom so the canvas (and the mobile app) don't pinch/double-tap zoom the
@@ -49,7 +53,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${montserrat.variable} ${inter.variable} ${geistMono.variable} bg-background`} suppressHydrationWarning>
+    <html lang="en" translate="no" className={`notranslate ${montserrat.variable} ${inter.variable} ${geistMono.variable} bg-background`} suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground min-h-screen" suppressHydrationWarning>
         {children}
         <Toaster theme="dark" position="bottom-right" />

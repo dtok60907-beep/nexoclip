@@ -13,7 +13,7 @@ import { Lightbox } from '../lightbox'
 import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
-import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -670,7 +670,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     let deadMediaEdges = 0
     const urlOfSource = (edge: any) => {
       const sourceNode = nodes.find(n => n.id === edge.source)
-      const url = resolveNodeMediaUrl(sourceNode?.data as Record<string, unknown>)
+      const url = resolveNodeReferenceUrl(sourceNode?.data as Record<string, unknown>)
       if (!url) deadMediaEdges++
       return url
     }

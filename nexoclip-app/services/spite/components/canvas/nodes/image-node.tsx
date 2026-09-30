@@ -15,7 +15,7 @@ import { labelFromPrompt, DEFAULT_IMAGE_LABEL } from '@/lib/auto-name'
 import { folderMediaLabel } from '@/lib/canvas-media-label'
 import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
-import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -680,7 +680,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       if (incomingImageEdges.length > 0) {
         for (const imageEdge of incomingImageEdges) {
           const sourceNode = nodes.find(n => n.id === imageEdge.source)
-          const sourceImageUrl = resolveNodeMediaUrl(sourceNode?.data as Record<string, unknown>)
+          const sourceImageUrl = resolveNodeReferenceUrl(sourceNode?.data as Record<string, unknown>)
           if (sourceImageUrl) {
             // Keep EVERY connected image, not just the first. The extras ride
             // along as reference groups below so wiring 3 images in actually

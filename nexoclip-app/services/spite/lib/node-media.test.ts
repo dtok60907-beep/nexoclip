@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveNodeMediaUrl } from './node-media'
+import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from './node-media'
 
 test('prefixes legacy root-relative media URLs with the configured base path', () => {
   process.env.NEXT_PUBLIC_BASE_PATH = '/spite'
@@ -24,4 +24,19 @@ test('leaves already-prefixed and external media URLs unchanged', () => {
   process.env.NEXT_PUBLIC_BASE_PATH = '/spite'
   assert.equal(resolveNodeMediaUrl({ outputUrl: '/spite/api/r2-image/a.png' }), '/spite/api/r2-image/a.png')
   assert.equal(resolveNodeMediaUrl({ outputUrl: 'https://cdn.example/a.png' }), 'https://cdn.example/a.png')
+})
+
+test('reference URL points at the trusted workspace asset instead of the legacy upload URL', () => {
+  assert.equal(
+    resolveNodeReferenceUrl({
+      thumbnail: '/canvas/api/r2-image/uploads/person.png',
+      workspaceAssetId: '06f46de1-0920-47b8-86d9-506383101200',
+    }),
+    '/api/assets/06f46de1-0920-47b8-86d9-506383101200/download',
+  )
+  assert.equal(
+    resolveNodeReferenceUrl({ outputUrl: '/api/assets/45f74b7b-3abd-4c9f-85ea-9e05a7d1df75/download?workspace_id=w' }),
+    '/api/assets/45f74b7b-3abd-4c9f-85ea-9e05a7d1df75/download?workspace_id=w',
+  )
+  assert.equal(resolveNodeReferenceUrl({ thumbnail: 'https://cdn.example/a.png' }), 'https://cdn.example/a.png')
 })
