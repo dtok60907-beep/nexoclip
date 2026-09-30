@@ -15,7 +15,7 @@ test('Canvas workspace assets route reaches the main app before the Spite catch-
   const spite = caddy.indexOf('handle /spite*');
   assert.notEqual(alias, -1);
   assert.ok(alias < spite);
-  assert.match(caddy.slice(alias, spite), /reverse_proxy nexoclip-app:3000/);
+  assert.match(caddy.slice(alias, spite), /reverse_proxy (?:\{\$NEXOCLIP_UPSTREAM:)?nexoclip-app:3000\}?/);
 });
 
 test('Canvas assets use the generation default workspace without sessionStorage coupling', () => {

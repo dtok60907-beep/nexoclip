@@ -58,7 +58,7 @@ test('routes registered Seedance with trusted assets directly without calling Op
   assert.match(calls[0], /ark\.example/);
 });
 
-test('falls back to BytePlus Seedance 2.5 when OpenRouter returns a generic 400', async () => {
+test('sends Seedance 2.5 straight to BytePlus without trying OpenRouter', async () => {
   const calls = [];
   let bytePlusBody;
   const router = createProviderRouter({
@@ -75,7 +75,9 @@ test('falls back to BytePlus Seedance 2.5 when OpenRouter returns a generic 400'
 
   assert.equal(result.provider, 'byteplus');
   assert.equal(bytePlusBody.model, 'dreamina-seedance-2-5-260628');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 1);
+  // BytePlus models are routed straight to BytePlus, never via OpenRouter.
+  assert.ok(!calls.some((url) => String(url).includes('openrouter.ai')));
 });
 
 test('submit posts to the async /tasks endpoint, not /contents/generations', async () => {

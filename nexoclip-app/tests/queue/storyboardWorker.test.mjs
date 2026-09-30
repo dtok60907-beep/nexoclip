@@ -22,6 +22,8 @@ function processorPool(job) {
             if (job.status !== 'queued') return { rows: [] };
             job.status = 'running';
             job.attempt_count += 1;
+            // The real claim query stamps a fencing token on the job.
+            job.claim_token = `claim-${job.attempt_count}`;
             return { rows: [job] };
           }
           return { rows: [] };
@@ -118,6 +120,7 @@ test('pauses BullMQ consumption before closing worker, queue, and pool', async (
     }),
     recoverQueuedGenerations: async () => calls.push('recover'),
     recoverExpired: async () => [],
+    recoverUnreserved: async () => [],
     setInterval: () => ({ unref() {}, clear() {} }),
     clearInterval: () => {},
   });

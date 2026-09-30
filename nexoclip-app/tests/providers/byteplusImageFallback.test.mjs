@@ -10,7 +10,7 @@ test('OpenRouter 400 "no route for model" is retryable, generic 400 is not', () 
   assert.equal(isRetryableProviderError({ status: 400 }), false);
 });
 
-test('falls back to BytePlus Seedream when OpenRouter has no route for the model (400)', async () => {
+test('sends Seedream straight to BytePlus even when OpenRouter would answer 400', async () => {
   const calls = [];
   const router = createProviderRouter({
     env: { OPENROUTER_API_KEY: 'or-key', BYTEPLUS_API_KEY: 'bp-key', BYTEPLUS_BASE_URL: 'https://ark.example/api/v3' },
@@ -26,11 +26,13 @@ test('falls back to BytePlus Seedream when OpenRouter has no route for the model
   const result = await router.generateImage({ model: 'bytedance-seed/seedream-5-0-pro', prompt: 'a cat' });
 
   assert.equal(result.provider, 'byteplus');
-  assert.equal(calls.length, 2);
-  assert.match(calls[1], /ark\.example\/api\/v3\/images\/generations/);
+  assert.equal(calls.length, 1);
+  // BytePlus models are routed straight to BytePlus, never via OpenRouter.
+  assert.ok(!calls.some((url) => String(url).includes('openrouter.ai')));
+  assert.match(calls[0], /ark\.example\/api\/v3\/images\/generations/);
 });
 
-test('falls back to BytePlus on a 400 even when the OpenRouter error message is unrecognized wording', async () => {
+test('sends BytePlus image models straight to BytePlus with the direct model id', async () => {
   const calls = [];
   let bytePlusBody;
   const router = createProviderRouter({
@@ -46,10 +48,12 @@ test('falls back to BytePlus on a 400 even when the OpenRouter error message is 
   const result = await router.generateImage({ model: 'bytedance-seed/seedream-4.5', prompt: 'a cat' });
   assert.equal(result.provider, 'byteplus');
   assert.equal(bytePlusBody.model, 'seedream-4-5-251128');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 1);
+  // BytePlus models are routed straight to BytePlus, never via OpenRouter.
+  assert.ok(!calls.some((url) => String(url).includes('openrouter.ai')));
 });
 
-test('falls back to BytePlus when OpenRouter returns 402 insufficient credits', async () => {
+test('does not depend on OpenRouter credits for BytePlus image models', async () => {
   const calls = [];
   const router = createProviderRouter({
     env: { OPENROUTER_API_KEY: 'or-key', BYTEPLUS_API_KEY: 'bp-key', BYTEPLUS_BASE_URL: 'https://ark.example/api/v3' },
@@ -62,7 +66,9 @@ test('falls back to BytePlus when OpenRouter returns 402 insufficient credits', 
 
   const result = await router.generateImage({ model: 'bytedance-seed/seedream-5-0-pro', prompt: 'a cat' });
   assert.equal(result.provider, 'byteplus');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 1);
+  // BytePlus models are routed straight to BytePlus, never via OpenRouter.
+  assert.ok(!calls.some((url) => String(url).includes('openrouter.ai')));
 });
 
 test('does not fall back on a 402 for a model with no direct-provider mapping', async () => {

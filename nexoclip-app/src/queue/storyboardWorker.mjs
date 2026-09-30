@@ -84,6 +84,7 @@ export async function createStoryboardWorker({
   env = process.env, getPool: loadPool = getPool, closePool: closeDatabasePool = closePool,
   createQueue = createBullMqGenerationQueue, createRuntimeClient = createStoryboardRuntimeClient, Redis = IORedis,
   recoverQueuedGenerations: recover = recoverQueuedGenerations, recoverExpired = recoverExpiredGenerationJobs,
+  recoverUnreserved = recoverUnreservedGenerations,
   releaseCredits = releaseGenerationReservation, settleUnreserved = settleUnreservedGeneration, setInterval: schedule = globalThis.setInterval,
   clearInterval: clearSchedule = globalThis.clearInterval, onError = console.error,
 } = {}) {
@@ -97,7 +98,7 @@ export async function createStoryboardWorker({
     progressCallbackUrl: config.progressCallbackUrl || progress.url, progressToken: config.progressToken,
   });
   const recoverNow = async () => {
-    await recoverUnreservedGenerations(pool);
+    await recoverUnreserved(pool);
     const expired = await recoverExpired(pool);
     for (const job of expired) {
       if (job.status === 'failed') {

@@ -15,6 +15,7 @@ test('accepts the minimum full-stack production environment for realtime deploym
     REALTIME_JWT_SECRET: 'realtime-jwt-secret',
     NEXOCLIP_INTERNAL_URL: 'http://nexoclip:3000',
     NEXT_PUBLIC_REALTIME_URL: '/spite/ws',
+    POSTGRES_PASSWORD: 'a-production-postgres-password-0123',
   }), { ok: true, errors: [] });
 });
 

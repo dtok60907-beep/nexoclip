@@ -51,7 +51,7 @@ test('recovers failed terminal unreserved generations without ledger writes', as
     generationStatus: 'failed',
     estimatedCost: '0',
     reservationLedgerId: null,
-    recoveryCandidates: [{ id: 'g1', workspace_id: 'w1', status: 'failed' }],
+    recoveryCandidates: [{ id: 'g1', workspace_id: 'w1', status: 'failed', reservation_ledger_id: null }],
   });
 
   const [recovered] = await recoverUnreservedGenerations(pool);

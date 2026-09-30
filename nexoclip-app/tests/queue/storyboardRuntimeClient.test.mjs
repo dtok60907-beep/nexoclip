@@ -12,12 +12,15 @@ test('posts only structured worker-owned execution data with the service token',
 
   await client.execute({
     id: 'g1', workspace_id: 'w1', kind: 'vimax_render_video', parameters: { sessionId: 's1', ignored: 'nope' }, prompt: 'ignored',
+    attempt_count: 2, claim_token: 'claim-1',
   });
 
   assert.equal(captured.url, 'http://ai-storyboard:4173/internal/v1/jobs/g1/execute');
   assert.equal(captured.init.headers['X-NexoClip-Runtime-Token'], 'secret');
   assert.deepEqual(JSON.parse(captured.init.body), {
     workspace_id: 'w1', kind: 'vimax_render_video', session_id: 's1', input: {},
+    // Claim fencing: the runtime rejects results from a superseded attempt.
+    attempt: 2, claim_token: 'claim-1',
   });
 });
 
