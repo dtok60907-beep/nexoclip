@@ -198,14 +198,17 @@ test('project untrust uses DELETE against the scoped trust URL', async () => {
   }])
 })
 
-test('image generator and image reference nodes expose trust only while selected', () => {
+test('image generators expose trust while selected; reference nodes always track trust for their border', () => {
   assert.match(imageNodeSource, /useImageTrust/)
   assert.match(referenceNodeSource, /useImageTrust/)
   assert.match(imageNodeSource, /workspaceAssetId: data\.workspaceAssetId/)
   assert.match(referenceNodeSource, /workspaceAssetId: data\.workspaceAssetId/)
   assert.doesNotMatch(referenceNodeSource, /workspaceAssetId: data\.workspaceAssetId \|\| data\.assetId/)
   assert.match(imageNodeSource, /enabled: Boolean\(selected\).*Boolean\(outputUrl\)/)
-  assert.match(referenceNodeSource, /enabled: Boolean\(selected\).*Boolean\(thumbnail\)/)
+  // Reference nodes deliberately check trust even when not selected: their
+  // border shows the trust status for every node on the canvas.
+  assert.match(referenceNodeSource, /enabled: Boolean\(thumbnail\)/)
+  assert.doesNotMatch(referenceNodeSource, /enabled: Boolean\(selected\)/)
   assert.match(nodeToolbarSource, /trustAction/)
   assert.match(nodeToolbarSource, /Trust for Seedance/)
 })

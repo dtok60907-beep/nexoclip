@@ -326,7 +326,7 @@ test('allows Seedance when durable mention metadata has no canonical identity', 
   assert.equal(submitted, true)
 })
 
-test('rejects non-portrait Seedance video settings before queueing', async () => {
+test('accepts landscape Seedance video settings now that every video node has aspect controls', async () => {
   const submissions: unknown[] = []
   let checkedLegacyReferences: string[] = []
   const handler = createGenerateSubmitHandler({
@@ -359,9 +359,9 @@ test('rejects non-portrait Seedance video settings before queueing', async () =>
     },
   }))
 
-  assert.equal(response.status, 400)
-  assert.match((await response.json()).error, /portrait-only/i)
-  assert.deepEqual(submissions, [])
+  assert.equal(response.status, 202)
+  assert.equal(submissions.length, 1)
+  assert.equal((submissions[0] as { input: { parameters: { aspectRatio?: string } } }).input.parameters.aspectRatio, '16:9')
   assert.deepEqual(checkedLegacyReferences, ['/api/r2-image/uploads/nathan.png'])
 })
 

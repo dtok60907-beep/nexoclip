@@ -670,16 +670,21 @@ test('resolveRealtimeWebsocketUrl resolves a configured relative websocket path 
 
 test('resolveRealtimeWebsocketUrl falls back to same-origin websocket path', () => {
   const previous = process.env.NEXT_PUBLIC_REALTIME_URL
+  const previousBasePath = process.env.NEXT_PUBLIC_BASE_PATH
   delete process.env.NEXT_PUBLIC_REALTIME_URL
+  // The fallback follows the configured base path (Canvas is served at /canvas).
+  process.env.NEXT_PUBLIC_BASE_PATH = '/canvas'
 
   try {
     assert.equal(
-      resolveRealtimeWebsocketUrl(new URL('http://localhost:3101/spite')),
-      'ws://localhost:3101/spite/ws',
+      resolveRealtimeWebsocketUrl(new URL('http://localhost:3101/canvas')),
+      'ws://localhost:3101/canvas/ws',
     )
   } finally {
     if (previous === undefined) delete process.env.NEXT_PUBLIC_REALTIME_URL
     else process.env.NEXT_PUBLIC_REALTIME_URL = previous
+    if (previousBasePath === undefined) delete process.env.NEXT_PUBLIC_BASE_PATH
+    else process.env.NEXT_PUBLIC_BASE_PATH = previousBasePath
   }
 })
 
