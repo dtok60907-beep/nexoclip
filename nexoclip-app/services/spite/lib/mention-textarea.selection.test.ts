@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildPastedNodes,
+  nodesToHtml,
   captureCaretOffset,
   serializeEditor,
   serializeRange,
@@ -217,5 +218,15 @@ if (JSDOM) {
     assert.equal(pasted.dataset.workspaceAssetIds, 'ws-front')
     assert.deepEqual(serializeEditor(target), copied)
     source.remove()
+  })
+}
+
+
+if (JSDOM) {
+  test('pasted HTML for insertHTML contains flat text, <br> and chips, escaping markup', () => {
+    const folders = [{ id: 'f1', name: 'alur1', type: 'location' as const, assets: [{ id: 'a1', workspaceAssetId: 'w1', r2_url: '/a.png', type: 'image' as const }] }]
+    const html = nodesToHtml(buildPastedNodes(document, 'a <b> & @alur1\nnext', folders))
+    assert.doesNotMatch(html, /<div|<b>/)
+    assert.match(html, /a &lt;b&gt; &amp; <span[^>]*data-mention="1"[^>]*>alur1<\/span><br>next/)
   })
 }

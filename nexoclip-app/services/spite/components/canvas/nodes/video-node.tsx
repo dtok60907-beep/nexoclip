@@ -1147,9 +1147,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       {/* First frame (blue) - only if model supports image input */}
       {currentModel?.inputTypes.includes('image') && (
         <>
-          <Handle type="target" id="image-in" title="First frame" position={Position.Left} style={{ top: 150, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+          <Handle type="target" id="image-in" title="Image — sent to Seedance as reference image 1 (not a locked first frame)" position={Position.Left} style={{ top: 150, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
           <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="left" top={150} visible />
-          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={150} label="First frame" />
+          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={150} label="Reference 1" />
         </>
       )}
 
@@ -1537,11 +1537,17 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {/* Submitted durable jobs cannot be safely cancelled locally; keep
               their node state aligned with the provider until completion. */}
           {isGenerating ? null : status === 'completed' && draftMode && durableGenerationId ? (
+            // Same size as the Generate button it replaces — the old 9px pill
+            // was easy to miss, so finished drafts looked like they had no
+            // way to render the final video.
             <button
               onClick={finalizeDraft}
-              className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
+              className="flex h-8 min-w-12 items-center justify-center rounded-full bg-amber-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-amber-300"
               title="Render this Draft at 1080p"
-            >Render 1080p</button>
+            >
+              <Sparkle size={12} weight="fill" />
+              <span className="ml-1 text-[11px] font-bold">Render 1080p</span>
+            </button>
           ) : status === 'failed' && generationId ? (
             <button
               onClick={handleRecheck}

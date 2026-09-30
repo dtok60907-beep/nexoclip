@@ -148,6 +148,16 @@ export function serializeRange(range: Range): { text: string; mentions: Mention[
   return serializeEditor(holder)
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+export function nodesToHtml(nodes: Node[]): string {
+  return nodes.map((node) => node.nodeType === Node.TEXT_NODE
+    ? escapeHtml((node as Text).data)
+    : (node as Element).outerHTML).join('')
+}
+
 export function buildPastedNodes(doc: Document, raw: string, folders: MentionFolder[], copiedMentions: Mention[] = []): Node[] {
   const nodes: Node[] = []
   const lines = raw.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').split('\n')
@@ -990,7 +1000,8 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
             e.preventDefault()
             e.clipboardData.setData('text/plain', text)
             e.clipboardData.setData(MENTION_CLIPBOARD_TYPE, JSON.stringify(mentions))
-            range.deleteContents()
+            // Delete through the editing pipeline so the cut can be undone.
+            if (!document.execCommand('delete')) range.deleteContents()
             handleInput()
           }}
           onPaste={(e) => {
@@ -1008,6 +1019,17 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
             }
             const nodes = buildPastedNodes(document, t, folders, copiedMentions)
             if (nodes.length === 0) return
+            // insertHTML goes through the browser's editing pipeline, so the
+            // paste stays on the undo stack (Ctrl+Z). The markup is only flat
+            // text, <br> and chips — never the <div>s insertText produced.
+            const html = nodesToHtml(nodes)
+            if (el.contains(document.activeElement) && document.execCommand('insertHTML', false, html)) {
+              // Browsers may drop contenteditable=false from inserted markup;
+              // keep chips atomic so they can't be typed into.
+              el.querySelectorAll<HTMLElement>('[data-mention="1"]').forEach((chip) => { chip.contentEditable = 'false' })
+              handleInput()
+              return
+            }
             const sel = window.getSelection()
             let range: Range
             if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
