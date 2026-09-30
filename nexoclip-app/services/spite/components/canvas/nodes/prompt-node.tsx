@@ -4,7 +4,7 @@ import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Position, NodeProps, Handle, NodeResizer } from '@xyflow/react'
 import { TextT } from '@phosphor-icons/react'
-import { NodeActionToolbar } from './node-toolbar'
+import { SimpleNodeToolbar } from './node-toolbar'
 import { MentionTextarea, type Mention, type MentionTextareaRef } from '../mention-textarea'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -55,7 +55,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const nodeWidthRef = useRef(nodeWidth)
   const { folders, refresh: refreshFolders } = useProjectFolders(projectId)
   const { patchNodeData, persistenceStatus } = useCanvasCollaboration()
-  const readOnly = persistenceStatus === 'READ_ONLY'
+  const locked = Boolean(data.locked)
+  // Collaboration-degraded read-only and a manual per-node lock both mean
+  // "don't let this node be edited right now" — reusing readOnly for both
+  // means every existing gate below (enterEdit, handleChange, the disabled
+  // textarea) already respects a lock without a second set of checks.
+  const readOnly = persistenceStatus === 'READ_ONLY' || locked
   // Drag-by-default UX: when `editing` is false, an invisible overlay
   // sits on top of the text and absorbs single-clicks so React Flow
   // treats them as a node drag. Double-click anywhere on the overlay
@@ -137,7 +142,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
 
   const handleChange = useCallback((nextText: string, nextMentions: Mention[]) => {
     if (readOnly) {
-      setEditorLockError('Canvas is read-only. Reconnect before editing.')
+      setEditorLockError(locked ? 'This node is locked. Unlock it to edit.' : 'Canvas is read-only. Reconnect before editing.')
       return
     }
     syncGuardRef.current.beginUserEdit()
@@ -226,7 +231,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
 
   const enterEdit = async () => {
     if (readOnly) {
-      setEditorLockError('Canvas is read-only. Reconnect before editing.')
+      setEditorLockError(locked ? 'This node is locked. Unlock it to edit.' : 'Canvas is read-only. Reconnect before editing.')
       return
     }
     if (editing || claimingEditorLock) return
@@ -288,7 +293,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           patchNodeData(id, { width: params.width, height: params.height })
         }}
       />
-      <NodeActionToolbar nodeId={id} selected={selected} />
+      <SimpleNodeToolbar nodeId={id} selected={selected} locked={locked} />
 
       {/* Node label */}
       <div className="absolute -top-6 left-0 text-[10px] font-mono text-muted-foreground/60 whitespace-nowrap pointer-events-none">
@@ -336,7 +341,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           <div
             className="absolute inset-0"
             onDoubleClick={() => { void enterEdit() }}
-            title={claimingEditorLock ? 'Claiming editor lock…' : 'Double-click to edit · drag to move'}
+            title={claimingEditorLock ? 'Claiming editor lock…' : locked ? 'This node is locked' : 'Double-click to edit · drag to move'}
             style={{ cursor: 'grab' }}
             onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.cursor = 'grabbing' }}
             onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.cursor = 'grab' }}

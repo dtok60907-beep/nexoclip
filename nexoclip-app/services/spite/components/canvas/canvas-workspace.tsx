@@ -1167,25 +1167,42 @@ function CanvasInner({ projectId }: { projectId: string }) {
     const selectedIds = new Set(selectedNodeIds)
     return (nodes as Node[]).map((node) => {
       const selected = selectedIds.has(node.id)
-      if (!lockedNodeIds.has(node.id) && node.selected === selected) {
+      // User-applied lock (node.data.locked, toggled from that node's own
+      // toolbar) vs. a remote collaborator's transient drag/edit lock
+      // (lockedNodeIds, from presence) are different things and get
+      // different treatment. Remote lock blocks everything — you don't own
+      // it right now. A user's own lock only guards against accidental
+      // moves/edits: it stays selectable and clickable (otherwise there'd
+      // be no way to reach the toolbar's Unlock button) and still
+      // deletable from that toolbar — just not draggable, and not
+      // removable by an errant Delete-key press while merely browsing.
+      const manuallyLocked = Boolean((node.data as Record<string, unknown> | undefined)?.locked)
+      if (!lockedNodeIds.has(node.id) && !manuallyLocked && node.selected === selected) {
         return node
       }
       const nextNode = node.selected === selected ? node : { ...node, selected }
-      if (!lockedNodeIds.has(node.id)) {
-        return nextNode
+      if (lockedNodeIds.has(node.id)) {
+        return {
+          ...nextNode,
+          draggable: false,
+          selectable: false,
+          connectable: false,
+          deletable: false,
+          // React Flow-level interaction and every nested toolbar/control are
+          // blocked for a remote owner. Realtime document updates still render.
+          style: { ...node.style, pointerEvents: 'none' as const },
+          className: `${node.className ?? ''} ring-2 ring-amber-400/70 ring-offset-1 ring-offset-[#080A0C]`,
+        }
       }
-
-      return {
-        ...nextNode,
-        draggable: false,
-        selectable: false,
-        connectable: false,
-        deletable: false,
-        // React Flow-level interaction and every nested toolbar/control are
-        // blocked for a remote owner. Realtime document updates still render.
-        style: { ...node.style, pointerEvents: 'none' as const },
-        className: `${node.className ?? ''} ring-2 ring-amber-400/70 ring-offset-1 ring-offset-[#080A0C]`,
+      if (manuallyLocked) {
+        return {
+          ...nextNode,
+          draggable: false,
+          deletable: false,
+          className: `${node.className ?? ''} ring-2 ring-slate-400/50 ring-offset-1 ring-offset-[#080A0C]`,
+        }
       }
+      return nextNode
     })
   }, [lockedNodeIds, nodes, selectedNodeIds])
   const selectedSceneNodeIds = useMemo(

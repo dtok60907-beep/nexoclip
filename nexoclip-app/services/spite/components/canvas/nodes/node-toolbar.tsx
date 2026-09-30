@@ -30,6 +30,8 @@ import {
   Columns,
   ShieldCheck,
   CircleNotch,
+  Lock,
+  LockOpen,
 } from '@phosphor-icons/react'
 
 interface NodeActionToolbarProps {
@@ -493,7 +495,7 @@ export function NodeActionToolbar({
   )
 }
 
-function ToolBtn({
+export function ToolBtn({
   icon: Icon,
   label,
   accent,
@@ -558,14 +560,14 @@ function DropdownMenu({ children, onClose }: { children: React.ReactNode; onClos
   )
 }
 
-function MenuItem({ 
-  label, 
-  icon: Icon, 
-  onClick 
-}: { 
+function MenuItem({
+  label,
+  icon: Icon,
+  onClick
+}: {
   label: string
   icon?: React.ElementType
-  onClick?: () => void 
+  onClick?: () => void
 }) {
   return (
     <button
@@ -575,5 +577,43 @@ function MenuItem({
       {Icon && <Icon size={12} className="text-accent" />}
       {label}
     </button>
+  )
+}
+
+// Prompt's toolbar deliberately doesn't reuse NodeActionToolbar — that one
+// carries Run/Quick-connect/Copy/Sort/etc. for generator nodes, none of
+// which apply to a plain text node. Prompt only ever needs to be removed
+// or protected from an accidental drag/edit, so it gets just those two.
+export function SimpleNodeToolbar({
+  nodeId,
+  selected,
+  locked,
+}: {
+  nodeId: string
+  selected?: boolean
+  locked?: boolean
+}) {
+  const { patchNodeData, deleteNodes } = useCanvasCollaboration()
+
+  return (
+    <NodeToolbar isVisible={selected} position={Position.Top} offset={12}>
+      <div
+        className="flex items-center gap-0.5 px-1.5 py-1 rounded-full"
+        style={{
+          background: 'rgba(18,20,24,0.95)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        }}
+      >
+        <ToolBtn icon={Trash} label="Delete" onClick={() => deleteNodes([nodeId])} danger />
+        <ToolBtn
+          icon={locked ? Lock : LockOpen}
+          label={locked ? 'Unlock' : 'Lock'}
+          accent={locked}
+          onClick={() => patchNodeData(nodeId, { locked: !locked })}
+        />
+      </div>
+    </NodeToolbar>
   )
 }
