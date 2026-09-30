@@ -36,6 +36,7 @@ test('video worker injects trusted mapping lookup and environment into only its 
     findBytePlusAssetLink,
     recover: async () => {},
     recoverUnreserved: async () => {},
+    recoverExpired: async () => [],
     createStorage: () => ({ id: 'storage' }),
     createReferenceStorage: () => ({ id: 'references' }),
     schedule: () => ({ unref() {} }),
@@ -45,4 +46,41 @@ test('video worker injects trusted mapping lookup and environment into only its 
   assert.equal(handlerDependencies.env, env);
   assert.equal(handlerDependencies.findBytePlusAssetLink, findBytePlusAssetLink);
   await service.close();
+});
+
+
+test('video worker recovers expired video jobs and refunds the ones it fails', async () => {
+  const calls = [];
+  class Redis { async quit() {} }
+  const service = await createVideoWorker({
+    env: { REDIS_URL: 'redis://test' },
+    Redis,
+    loadPool: () => ({ id: 'pool' }),
+    closeDatabasePool: async () => {},
+    createQueue: () => ({ createWorker() { return { async pause() {}, async close() {} }; }, async close() {} }),
+    createHandler: () => async () => ({}),
+    recover: async (args) => { calls.push(['recover', args.kind]); },
+    recoverUnreserved: async () => {},
+    recoverExpired: async (_pool, options) => {
+      calls.push(['expired', options.kind, options.graceMs > 0, options.staleAfterMs > 0]);
+      return [
+        { id: 'requeued', workspaceId: 'w', status: 'queued', reservationLedgerId: 'l1' },
+        { id: 'reserved', workspaceId: 'w', status: 'failed', reservationLedgerId: 'l2' },
+        { id: 'unreserved', workspaceId: 'w', status: 'failed', reservationLedgerId: null },
+      ];
+    },
+    releaseCredits: async (_pool, args) => { calls.push(['release', args.generationId]); },
+    settleUnreserved: async (_pool, args) => { calls.push(['settle', args.generationId, args.status]); },
+    createStorage: () => ({}),
+    createReferenceStorage: () => ({}),
+    schedule: () => ({ unref() {} }),
+    clearSchedule: () => {},
+  });
+  await service.close();
+  assert.deepEqual(calls, [
+    ['expired', 'video', true, true],
+    ['release', 'reserved'],
+    ['settle', 'unreserved', 'failed'],
+    ['recover', 'video'],
+  ]);
 });

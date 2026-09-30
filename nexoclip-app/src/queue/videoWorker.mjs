@@ -9,7 +9,15 @@ import { persistGenerationResult } from '../services/generationOutputService.js'
 import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
 import { recoverQueuedGenerations, generationQueueName } from './generationQueue.js';
 import { createGenerationProcessor } from './generationWorker.js';
-import { recoverUnreservedGenerations } from '../services/generationCreditSettlementService.js';
+import { recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
+import { recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
+
+// A worker killed mid-job (deploys restart this service) leaves the job
+// 'running'. Recover it once its lease has been expired for a grace period;
+// the handler resumes polling the provider task if one was already created.
+// Jobs whose lease expired hours ago are failed and refunded, not re-run.
+const EXPIRED_GRACE_MS = 2 * 60 * 1000;
+const EXPIRED_STALE_MS = 6 * 60 * 60 * 1000;
 
 export function videoWorkerConfig(env = process.env) {
   if (!env.REDIS_URL) throw new Error('REDIS_URL is required');
@@ -22,6 +30,8 @@ export async function createVideoWorker({
   env = process.env, Redis = IORedis, loadPool = getPool, closeDatabasePool = closePool,
   createQueue = createBullMqGenerationQueue, createHandler = createDefaultSaasVideoHandler,
   recover = recoverQueuedGenerations, recoverUnreserved = recoverUnreservedGenerations,
+  recoverExpired = recoverExpiredGenerationJobs, releaseCredits = releaseGenerationReservation,
+  settleUnreserved = settleUnreservedGeneration,
   persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   findBytePlusAssetLink: findAssetLink = findBytePlusAssetLink,
@@ -31,7 +41,16 @@ export async function createVideoWorker({
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
   const pool = loadPool();
   const queue = createQueue({ Queue, Worker, connection, queueName: generationQueueName('video') });
-  const recoverNow = async () => { await recoverUnreserved(pool); return recover({ pool, queue, kind: 'video' }); };
+  const recoverNow = async () => {
+    await recoverUnreserved(pool);
+    const expired = await recoverExpired(pool, { kind: 'video', graceMs: EXPIRED_GRACE_MS, staleAfterMs: EXPIRED_STALE_MS });
+    for (const job of expired) {
+      if (job.status !== 'failed') continue;
+      if (job.reservationLedgerId === null) await settleUnreserved(pool, { workspaceId: job.workspaceId, generationId: job.id, status: 'failed' });
+      else await releaseCredits(pool, { workspaceId: job.workspaceId, generationId: job.id });
+    }
+    return recover({ pool, queue, kind: 'video' });
+  };
   await recoverNow();
   const interval = schedule(() => recoverNow().catch(onError), 30_000);
   interval.unref?.();

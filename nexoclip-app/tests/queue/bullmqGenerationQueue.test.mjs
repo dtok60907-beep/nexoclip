@@ -59,3 +59,23 @@ test('does not expose a polling dequeue method', () => {
 
   assert.equal('dequeue' in queue, false);
 });
+
+test('re-running a failed delivery for the same attempt makes it runnable again', async () => {
+  let state = 'failed';
+  let retried = null;
+  class FailedQueue {
+    constructor() {}
+    async add() {
+      return {
+        async getState() { return state; },
+        async retry(from) { retried = from; state = 'waiting'; },
+      };
+    }
+    async close() {}
+  }
+  class NoopWorker {}
+  const queue = createBullMqGenerationQueue({ Queue: FailedQueue, Worker: NoopWorker, connection: {}, queueName: 'generation-video' });
+  const delivery = await queue.enqueue({ type: 'generation', generationId: 'job-1' }, { idempotencyKey: 'generation:job-1:attempt:1' });
+  assert.equal(retried, 'failed');
+  assert.deepEqual(delivery, { runnable: true });
+});

@@ -46,7 +46,8 @@ export async function findGeneration(client, workspaceId, generationId) {
     `SELECT ${columns}, COALESCE((
        SELECT jsonb_agg(jsonb_build_object(
          'assetId', a.id, 'filename', a.filename, 'contentType', a.content_type,
-         'storageKey', a.storage_key, 'outputIndex', go.output_index
+         'storageKey', a.storage_key, 'outputIndex', go.output_index,
+         'providerRequestId', go.provider_request_id
        ) ORDER BY go.output_index)
        FROM generation_outputs go
        JOIN assets a ON a.workspace_id = go.workspace_id AND a.id = go.asset_id

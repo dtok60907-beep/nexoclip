@@ -85,7 +85,10 @@ export function createInternalGenerationHandler({
     }
     const generation = await getGeneration(workspace.id, body.generationId, loadStorage());
     if (body.action === 'finalize-draft') {
-      if (!generation || generation.kind !== 'video' || generation.status !== 'succeeded' || !generation.provider_request_id || !/seedance-2\.5/i.test(generation.model || '')) {
+      // Drafts completed before the task id was stored on the job only have it
+      // on their output row.
+      const draftTaskId = generation?.provider_request_id || generation?.outputs?.[0]?.providerRequestId || null;
+      if (!generation || generation.kind !== 'video' || generation.status !== 'succeeded' || !draftTaskId || !/seedance-2\.5/i.test(generation.model || '')) {
         return Response.json({ error: 'A completed Seedance 2.5 draft is required' }, { status: 422 });
       }
       const pool = loadPool();
@@ -93,7 +96,7 @@ export function createInternalGenerationHandler({
         kind: 'video',
         prompt: generation.prompt,
         model: generation.model,
-        parameters: { resolution: '1080p', draftTaskId: generation.provider_request_id },
+        parameters: { resolution: '1080p', draftTaskId },
         idempotencyKey: `draft-final:${generation.id}`,
         projectId: null,
       }, { userId: body.userId, allowLegacyCanvasReferences: true });

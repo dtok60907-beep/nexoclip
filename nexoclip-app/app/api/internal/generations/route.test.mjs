@@ -119,3 +119,25 @@ test('rejects unsupported generation kinds without reserving credits', async () 
   assert.equal(response.status, 400);
   assert.equal(reserved, false);
 });
+
+test('finalizes a draft whose task id is only stored on its output row', async () => {
+  let reserved;
+  const handler = createInternalGenerationHandler({
+    verify: () => true,
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
+    getGeneration: async () => ({
+      id: 'draft-1', kind: 'video', status: 'succeeded', model: 'byteplus/seedance-2.5-unfiltered',
+      prompt: 'p', provider_request_id: null, outputs: [{ assetId: 'a1', providerRequestId: 'cgt-draft' }],
+    }),
+    createStorage: () => ({}),
+    getPool: () => ({}),
+    reserve: async (_pool, _workspaceId, input) => { reserved = input; return { id: 'final-1', kind: 'video' }; },
+    publish: async () => {},
+  });
+
+  const response = await handler(request({ action: 'finalize-draft', userId, projectId, nodeId: 'node-1', generationId: 'draft-1' }));
+
+  assert.equal(response.status, 201);
+  assert.equal(reserved.parameters.draftTaskId, 'cgt-draft');
+  assert.equal(reserved.parameters.resolution, '1080p');
+});

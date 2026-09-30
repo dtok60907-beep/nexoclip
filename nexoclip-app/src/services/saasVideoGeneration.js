@@ -7,6 +7,7 @@ import {
 } from '../repositories/byteplusAssetRepository.js';
 import { isDirectBytePlusSeedance } from '../providers/providerRegistry.js';
 import { resolveReferenceImages } from './saasImageGeneration.js';
+import { recordGenerationProviderRequest } from '../repositories/generationStateRepository.js';
 
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'expired']);
 
@@ -31,9 +32,9 @@ function videoRequest(job, { referenceImages, frameImages, referenceVideos }) {
   };
 }
 
-export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120 }) {
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
-  return async (job) => {
+  const submitToProvider = async (job) => {
     let hasTrustedAsset = false;
     const trustedMappings = [];
     const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
@@ -87,6 +88,24 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const provider = submitted.provider || 'openrouter';
     const providerRequestId = submitted.id || submitted.providerRequestId;
     if (!providerRequestId) throw Object.assign(new Error('Provider returned no video request id'), { code: 'PROVIDER_INVALID_RESPONSE' });
+    return { provider, providerRequestId, usage: submitted.usage || {} };
+  };
+
+  return async (job) => {
+    // A job that already reached the provider (its worker died mid-poll, e.g.
+    // during a deploy) resumes polling that same task instead of submitting
+    // and paying for the generation again.
+    const resumed = job.provider_request_id
+      ? { provider: job.provider || 'byteplus', providerRequestId: job.provider_request_id, usage: {} }
+      : null;
+    const { provider, providerRequestId, usage } = resumed || await submitToProvider(job);
+    if (!resumed && job.claim_token) {
+      try {
+        await recordProviderRequest(pool, { generationId: job.id, claimToken: job.claim_token, provider, providerRequestId });
+      } catch (error) {
+        console.error('[video] could not record provider request id', job.id, error?.message);
+      }
+    }
     let status;
     for (let attempt = 0; attempt < maxPolls; attempt += 1) {
       status = await providerRouter.pollVideo(provider, providerRequestId);
@@ -107,7 +126,7 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const client = await pool.connect();
     try {
       const asset = await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}.mp4`, contentType, sizeBytes: output.buffer.length });
-      return { status: 'succeeded', provider, providerRequestId, outputs: [{ assetId: asset.id }], usage: submitted.usage || {} };
+      return { status: 'succeeded', provider, providerRequestId, outputs: [{ assetId: asset.id }], usage };
     } finally { client.release(); }
   };
 }

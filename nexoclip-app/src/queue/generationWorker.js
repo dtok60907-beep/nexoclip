@@ -26,7 +26,8 @@ async function claimGeneration(pool, generationId, leaseMs = DEFAULT_LEASE_MS) {
               (SELECT max_concurrent FROM workspace_generation_limits l WHERE l.workspace_id = generation_jobs.workspace_id))
        RETURNING id, workspace_id, project_id, kind, status, prompt, model, parameters,
                  estimated_cost, pricing_version_id, reservation_ledger_id, created_at,
-                 updated_at, started_at, attempt_count, max_attempts, claim_token`, 
+                 updated_at, started_at, attempt_count, max_attempts, claim_token,
+                 provider, provider_request_id`, 
       [generationId, leaseMs],
     );
     await client.query('COMMIT');
@@ -88,6 +89,7 @@ export function createGenerationProcessor({
         const completion = {
           workspaceId, generationId: job.id, provider: result.provider || job.provider || provider,
           result: result.result || {}, attempt, claimToken,
+          providerRequestId: result.providerRequestId || null,
         };
         if (persistResult) {
           await persistResult(pool, {

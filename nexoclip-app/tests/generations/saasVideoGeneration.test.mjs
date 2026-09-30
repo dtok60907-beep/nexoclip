@@ -280,3 +280,41 @@ test('durable video handler writes directly when storage has no presigned upload
   assert.equal(puts[0][1].toString(), 'video');
   assert.equal(puts[0][2], 'video/mp4');
 });
+
+function resumableHandler() {
+  const calls = { submitted: 0, polled: [], recorded: [] };
+  const handler = createSaasVideoHandler({
+    pool: { async connect() { return { release() {} }; } },
+    storage: { async put() {} },
+    providerRouter: {
+      async submitVideo() { calls.submitted += 1; return { id: 'cgt-new', provider: 'byteplus' }; },
+      async pollVideo(provider, id) { calls.polled.push([provider, id]); return { status: 'completed' }; },
+      async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
+    },
+    createAsset: async () => ({ id: 'output-1' }),
+    recordProviderRequest: async (_pool, input) => { calls.recorded.push(input); return true; },
+    sleep: async () => {},
+  });
+  return { handler, calls };
+}
+
+test('a submitted video records its provider task id for the current claim', async () => {
+  const { handler, calls } = resumableHandler();
+  const result = await handler({ id: 'job-1', workspace_id: 'w1', model: 'openai/sora', prompt: 'p', parameters: {}, claim_token: 'claim-1' });
+  assert.equal(calls.submitted, 1);
+  assert.deepEqual(calls.recorded, [{ generationId: 'job-1', claimToken: 'claim-1', provider: 'byteplus', providerRequestId: 'cgt-new' }]);
+  assert.equal(result.providerRequestId, 'cgt-new');
+});
+
+test('a recovered video with a provider task resumes polling instead of submitting again', async () => {
+  const { handler, calls } = resumableHandler();
+  const result = await handler({
+    id: 'job-1', workspace_id: 'w1', model: 'openai/sora', prompt: 'p', parameters: {}, claim_token: 'claim-2',
+    provider: 'byteplus', provider_request_id: 'cgt-existing',
+  });
+  assert.equal(calls.submitted, 0);
+  assert.deepEqual(calls.recorded, []);
+  assert.deepEqual(calls.polled, [['byteplus', 'cgt-existing']]);
+  assert.equal(result.providerRequestId, 'cgt-existing');
+  assert.equal(result.status, 'succeeded');
+});
