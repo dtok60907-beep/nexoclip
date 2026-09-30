@@ -1076,3 +1076,40 @@ test('asset delete consults authoritative document when projection lags before r
     deleted_folders: 0,
   })
 })
+
+test('batch extras are accepted while the node tracks job 1 and do not overwrite it', async () => {
+  const submissions: unknown[] = []
+  const patches: unknown[] = []
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: () => (async (strings: TemplateStringsArray) => {
+      const query = strings.join(' ').replace(/\s+/g, ' ').toLowerCase()
+      if (query.includes('select 1 from projects where id =')) return [{ ok: 1 }]
+      throw new Error(`Unhandled SQL: ${strings.join(' ')}`)
+    }) as any,
+    createNexoClipGenerationClient: () => ({
+      submit: async (input) => { submissions.push(input); return { id: `generation-${submissions.length}`, kind: 'video', status: 'queued' } },
+      status: async () => { throw new Error('status should not be called') },
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({
+        projection: canvasWithNode('video-node-1', 'videoGen', { generationId: 'generation-0', generationStatus: 'queued' }, 'Nathan walking'),
+        durableSeq: 1, projectedSeq: 1,
+      }),
+      patchNodeData: async (input: unknown) => { patches.push(input) },
+    }) as any,
+  })
+  const body = {
+    projectId: PROJECT_ID, nodeId: 'video-node-1', kind: 'video', prompt: 'Nathan walking', model: 'seedance-2.5',
+    promptStateKey: mentionStateKey('Nathan walking', []),
+    settings: { aspectRatio: '16:9', duration: '5s', resolution: '720p' },
+  }
+
+  const plain = await handler(makeRequest('http://spite.local/api/generate/submit', { method: 'POST', body }))
+  assert.equal(plain.status, 409)
+
+  const extra = await handler(makeRequest('http://spite.local/api/generate/submit', { method: 'POST', body: { ...body, batchExtra: true, batchIndex: 1 } }))
+  assert.equal(extra.status, 202)
+  assert.equal(submissions.length, 1)
+  assert.deepEqual(patches, [])
+})

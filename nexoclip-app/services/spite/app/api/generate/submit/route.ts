@@ -49,6 +49,11 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
 
       const nodeId = typeof body.nodeId === 'string' ? body.nodeId : undefined
       const mobile = body.mobile === true
+      // Jobs 2..4 of one batch: allowed while the node tracks job 1, and they
+      // must not replace the node's tracked generation (the client puts each
+      // extra job on its own duplicate node).
+      const batchIndex = Number(body.batchIndex)
+      const batchExtra = body.batchExtra === true && Number.isInteger(batchIndex) && batchIndex >= 1 && batchIndex <= 11
       const kind = body.kind === 'image' || body.kind === 'video' ? body.kind : undefined
       const prompt = typeof body.prompt === 'string' ? body.prompt : undefined
       const modelId = typeof body.model === 'string' ? body.model : typeof body.modelId === 'string' ? body.modelId : undefined
@@ -66,7 +71,7 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         const document = await realtime.exportDocument({ userId: user.id, projectId })
         const node = document.projection.nodes.find((candidate) => candidate.id === nodeId)
         if (!node || node.type !== (kind === 'image' ? 'imageGen' : 'videoGen')) return projectNotFoundResponse()
-        if (typeof node.data.generationId === 'string' && ['queued', 'processing', 'running'].includes(String(node.data.generationStatus))) {
+        if (!batchExtra && typeof node.data.generationId === 'string' && ['queued', 'processing', 'running'].includes(String(node.data.generationStatus))) {
           return NextResponse.json({ error: 'This node already has an active generation' }, { status: 409 })
         }
 
@@ -97,7 +102,7 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         nodeId,
         input: { kind, prompt, model, parameters, idempotencyKey: `spite:${projectId}:${nodeId}:${crypto.randomUUID()}` },
       })
-      if (!mobile) {
+      if (!mobile && !batchExtra) {
         await realtime.patchNodeData({
           userId: user.id,
           projectId,

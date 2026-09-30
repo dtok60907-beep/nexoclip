@@ -808,12 +808,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       // calls, plus a single retry on a transient 403 / network blip, makes them
       // read as discrete user actions. The generations still run in parallel on
       // fal afterwards; only these submit calls are spaced out.
-      const submitOnce = async () => {
+      // Extra jobs of a batch are marked so the server accepts them while this
+      // node already tracks the first job (it answered 409 for every extra
+      // before) and doesn't overwrite this node's tracked job with them.
+      const submitOnce = async (batchIndex = 0) => {
         try {
           const res = await fetch(withBasePath('/api/generate/submit'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body,
+            body: batchIndex > 0 ? JSON.stringify({ ...JSON.parse(body), batchExtra: true, batchIndex }) : body,
           })
           const json = await res.json().catch(() => ({}))
           return { ...json, _httpStatus: res.status }
@@ -824,10 +827,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       const results: Array<Awaited<ReturnType<typeof submitOnce>>> = []
       for (let i = 0; i < count; i++) {
         if (i > 0) await new Promise<void>(r => setTimeout(r, 300))
-        let r = await submitOnce()
+        let r = await submitOnce(i)
         if (!r.generationId && (r._httpStatus === 403 || r._httpStatus === 0)) {
           await new Promise<void>(res => setTimeout(res, 700))
-          r = await submitOnce() // one retry for a transient edge rejection
+          r = await submitOnce(i) // one retry for a transient edge rejection
         }
         results.push(r)
       }
