@@ -108,6 +108,7 @@ export function createAssetByUrlRouteHandlers(deps: AssetByUrlRouteDeps = {}) {
                   expires_at = ${expiresAt}
               WHERE project_id = ${String(projectId)}
                 AND r2_url LIKE ${'%' + escapeLike(key)}
+                AND (${Boolean(used_in_canvas)} OR NOT EXISTS (SELECT 1 FROM asset_folder_items WHERE asset_folder_items.asset_id = generation_history.id))
               RETURNING id
             `
           : await sql`
@@ -116,6 +117,7 @@ export function createAssetByUrlRouteHandlers(deps: AssetByUrlRouteDeps = {}) {
                   expires_at = ${expiresAt}
               WHERE project_id = ${String(projectId)}
                 AND r2_url = ${String(url)}
+                AND (${Boolean(used_in_canvas)} OR NOT EXISTS (SELECT 1 FROM asset_folder_items WHERE asset_folder_items.asset_id = generation_history.id))
               RETURNING id
             `
 

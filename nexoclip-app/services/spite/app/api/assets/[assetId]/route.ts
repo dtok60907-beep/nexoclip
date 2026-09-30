@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { getDb } from '@/lib/db'
 import { getAuthenticatedUser } from '@/lib/main-session'
+import { assetExpiresAt as resolveAssetExpiresAt } from '@/lib/retention'
 import {
   assetNotFoundResponse,
   deleteEmptyAssetFolders,
@@ -37,6 +38,7 @@ interface AssetRouteDeps {
   createInternalRealtimeClient?: () => InternalRealtimeClient
   fetchFn?: typeof fetch
   env?: Partial<Pick<NodeJS.ProcessEnv, 'NEXOCLIP_INTERNAL_URL'>>
+  assetExpiresAt?: typeof resolveAssetExpiresAt
 }
 
 export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
@@ -46,6 +48,7 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
   const internalRealtime = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
   const fetchFn = deps.fetchFn ?? fetch
   const env = deps.env ?? process.env
+  const assetExpiresAt = deps.assetExpiresAt ?? resolveAssetExpiresAt
 
   return {
     async GET(
@@ -90,12 +93,24 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
 
         if (used_in_canvas !== undefined) {
           const isProtected = used_in_canvas ?? true
-          const expiresAt = isProtected ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          await sql`
-            UPDATE generation_history
-            SET used_in_canvas = ${isProtected}, expires_at = ${expiresAt}
-            WHERE id = ${assetId} AND project_id = ${asset.project_id}
-          `
+          if (isProtected) {
+            await sql`
+              UPDATE generation_history
+              SET used_in_canvas = true, expires_at = NULL
+              WHERE id = ${assetId} AND project_id = ${asset.project_id}
+            `
+          } else {
+            // Unprotecting used to start a hard-coded 30-day expiry even when
+            // retention is 0 (= never delete), and ignored folder membership:
+            // removing a node could schedule a character's image for deletion.
+            const expiresAt = (await assetExpiresAt())?.toISOString() ?? null
+            await sql`
+              UPDATE generation_history
+              SET used_in_canvas = false, expires_at = ${expiresAt}
+              WHERE id = ${assetId} AND project_id = ${asset.project_id}
+                AND NOT EXISTS (SELECT 1 FROM asset_folder_items WHERE asset_folder_items.asset_id = generation_history.id)
+            `
+          }
         }
 
         if (recovered !== undefined) {

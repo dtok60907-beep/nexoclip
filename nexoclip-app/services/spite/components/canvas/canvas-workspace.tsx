@@ -879,9 +879,19 @@ function CanvasInner({ projectId }: { projectId: string }) {
     })
     setSelectedNodeIds([])
 
+    // Only unprotect assets no remaining node (in any scene) still shows;
+    // the same image is often placed on several nodes.
+    const stillUsed = new Set<string>()
+    for (const node of allNodes) {
+      if (selectedIds.has(node.id)) continue
+      for (const value of [node.data?.assetId, node.data?.thumbnail, node.data?.outputUrl]) {
+        if (typeof value === 'string' && value) stillUsed.add(value)
+      }
+    }
     for (const node of toDelete) {
       const assetId = node.data?.assetId as string | undefined
       const thumbnail = node.data?.thumbnail as string | undefined
+      if ((assetId && stillUsed.has(assetId)) || (!assetId && thumbnail && stillUsed.has(thumbnail))) continue
       if (assetId) {
         fetch(withBasePath(`/api/assets/${assetId}`), {
           method: 'PATCH',

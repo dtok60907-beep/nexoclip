@@ -213,7 +213,7 @@ test('assets/by-url requires projectId and scopes lookup/update to owned project
       return [{ id: 'asset-1' }]
     }
 
-    if (normalized.includes('update generation_history set used_in_canvas = ?') && normalized.includes('expires_at = ?') && normalized.includes('where project_id = ? and r2_url = ? returning id')) {
+    if (normalized.includes('update generation_history set used_in_canvas = ?') && normalized.includes('expires_at = ?') && normalized.includes('where project_id = ? and r2_url = ? and ( ? or not exists (select 1 from asset_folder_items') && normalized.endsWith('returning id')) {
       assert.equal(String(values[2]), OWNER_PROJECT_ID)
       updatedRows += 1
       return [{ id: 'asset-1' }]
@@ -532,4 +532,35 @@ test('auth/check: trusted main session -> 200/authenticated true; legacy spite-o
   assert.deepEqual(await trustedResponse.json(), { authenticated: true })
   assert.equal(legacyResponse.status, 401)
   assert.deepEqual(await legacyResponse.json(), { authenticated: false })
+})
+
+test('unprotecting an asset follows the retention setting and never touches folder assets', async () => {
+  const updates: Array<{ sql: string; values: unknown[] }> = []
+  const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
+    if (normalized.includes('from generation_history g join projects p on p.id::text = g.project_id')) {
+      return [{ id: 'owned-asset', project_id: OWNER_PROJECT_ID, r2_url: '/api/r2-image/a.png' }]
+    }
+    if (normalized.startsWith('update generation_history set used_in_canvas')) {
+      updates.push({ sql: normalized, values })
+      return []
+    }
+    throw new Error(`Unhandled SQL in unprotect test: ${normalized}`)
+  }
+  const patch = (retention: Date | null) => createAssetRouteHandlers({
+    getDb: () => sql as any,
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    assetExpiresAt: async () => retention,
+  }).PATCH(
+    makeRequest('http://spite.local/api/assets/owned-asset', { method: 'PATCH', body: { used_in_canvas: false } }) as any,
+    { params: Promise.resolve({ assetId: 'owned-asset' }) } as any,
+  )
+
+  assert.equal((await patch(null)).status, 200)
+  assert.equal(updates[0].values[0], null, 'retention 0 means never expire')
+  assert.match(updates[0].sql, /not exists \(select 1 from asset_folder_items/)
+
+  const in7Days = new Date('2026-10-08T00:00:00Z')
+  await patch(in7Days)
+  assert.equal(updates[1].values[0], in7Days.toISOString())
 })
