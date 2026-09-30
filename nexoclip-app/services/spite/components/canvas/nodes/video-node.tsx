@@ -642,16 +642,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('in_progress')
         if (result.progress !== undefined) setProgress(result.progress)
         const pct = typeof result.progress === 'number' ? ` (${Math.round(result.progress * 100)}%)` : ''
-        toast.info(`fal is generating this now${pct}. Polling resumed.`, { id: toastId })
+        toast.info(`Still generating${pct}. Checking again automatically.`, { id: toastId })
       } else {
         setStatus('in_queue')
         const posLabel = typeof result.position === 'number' ? ` (queue position ${result.position})` : ''
-        toast.info(`Still in fal's queue${posLabel}. Polling resumed for 10 more minutes.`, { id: toastId })
+        toast.info(`Still queued${posLabel}. Checking again automatically.`, { id: toastId })
       }
       setResumeToken(t => t + 1)
     } catch (err) {
       console.error('[recheck] error:', err)
-      toast.error("Couldn't reach fal — check connection and try again.", { id: toastId })
+      toast.error("Couldn't check the status — check your connection and try again.", { id: toastId })
     }
   }
 
