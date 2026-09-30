@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { Handle, NodeResizer, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { NodeActionToolbar } from './node-toolbar'
+import { GeneratorNodeToolbar } from './node-toolbar'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
@@ -967,12 +967,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         event.stopPropagation()
       }}
     >
-      <NodeActionToolbar
+      <GeneratorNodeToolbar
         nodeId={id}
         selected={selected}
         nodeLabel={(data.label as string) || 'Image Generator'}
         assetUrl={outputUrl || undefined}
         assetType="image"
+        locked={Boolean(data.locked)}
         trustAction={outputUrl ? {
           label: imageTrust.label,
           disabled: imageTrust.disabled,

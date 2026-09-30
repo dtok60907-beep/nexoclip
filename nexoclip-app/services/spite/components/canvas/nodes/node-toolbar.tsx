@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { NodeToolbar, Position, useReactFlow } from '@xyflow/react'
+import { NodeToolbar, Position, useReactFlow, type Node as FlowNode } from '@xyflow/react'
 import { toast } from 'sonner'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import {
@@ -32,6 +32,7 @@ import {
   CircleNotch,
   Lock,
   LockOpen,
+  At,
 } from '@phosphor-icons/react'
 
 interface NodeActionToolbarProps {
@@ -81,6 +82,38 @@ function sanitizeFilename(s: string): string {
   return s.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '-').slice(0, 60) || 'asset'
 }
 
+// Shared by NodeActionToolbar and GeneratorNodeToolbar — same "copy this
+// node" behavior either toolbar exposes it from.
+function duplicateNode(
+  nodeId: string,
+  getNodes: () => FlowNode[],
+  addNodes: (nodes: FlowNode[]) => void,
+) {
+  const nodes = getNodes()
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node) return
+  // The copy references the SAME image (outputUrl / thumbnail / assetId are
+  // copied as-is — no re-upload, no extra storage). But strip shotId and the
+  // active-generation fields, matching the keyboard duplicate: otherwise the
+  // copy hijacks the original's shot tag and latches onto its pending fal
+  // request.
+  const {
+    shotId: _droppedShotId,
+    pendingRequestId: _droppedReq,
+    pendingFalEndpoint: _droppedEndpoint,
+    ...cleanData
+  } = (node.data as Record<string, unknown>) || {}
+  void _droppedShotId; void _droppedReq; void _droppedEndpoint
+  const newNode = {
+    ...node,
+    id: `${node.id}-copy-${Date.now()}`,
+    position: { x: node.position.x + 50, y: node.position.y + 50 },
+    selected: false,
+    data: cleanData,
+  }
+  addNodes([newNode as any])
+}
+
 const QUICK_CONNECT_OPTIONS = [
   { id: 'imageGen', label: 'Image Generator', icon: ImageIcon },
   { id: 'videoGen', label: 'Video Generator', icon: FilmStrip },
@@ -120,30 +153,7 @@ export function NodeActionToolbar({
   }
 
   const handleDuplicate = () => {
-    const nodes = getNodes()
-    const node = nodes.find(n => n.id === nodeId)
-    if (node) {
-      // The copy references the SAME image (outputUrl / thumbnail / assetId are
-      // copied as-is — no re-upload, no extra storage). But strip shotId and the
-      // active-generation fields, matching the keyboard duplicate: otherwise the
-      // copy hijacks the original's shot tag and latches onto its pending fal
-      // request.
-      const {
-        shotId: _droppedShotId,
-        pendingRequestId: _droppedReq,
-        pendingFalEndpoint: _droppedEndpoint,
-        ...cleanData
-      } = (node.data as Record<string, unknown>) || {}
-      void _droppedShotId; void _droppedReq; void _droppedEndpoint
-      const newNode = {
-        ...node,
-        id: `${node.id}-copy-${Date.now()}`,
-        position: { x: node.position.x + 50, y: node.position.y + 50 },
-        selected: false,
-        data: cleanData,
-      }
-      addNodes([newNode as any])
-    }
+    duplicateNode(nodeId, getNodes, addNodes)
     onDuplicate?.()
   }
 
@@ -613,6 +623,133 @@ export function SimpleNodeToolbar({
           accent={locked}
           onClick={() => patchNodeData(nodeId, { locked: !locked })}
         />
+      </div>
+    </NodeToolbar>
+  )
+}
+
+// Image/Video Generator toolbar — a flat row (Expand, Copy, Add-to-folder,
+// Download, Lock, Delete) instead of NodeActionToolbar's fuller menu
+// (Run/Quick-connect/Arrange-grid/Move-to-page), which are dead weight here:
+// none of image-node/video-node/reference-node/compress-node ever actually
+// wire up onRun/onQuickConnect/onMoveToPage, and generation itself runs from
+// a button in the node body, not the toolbar. Kept OUT of NodeActionToolbar
+// itself (rather than trimmed in place) so reference-node and compress-node
+// — which nobody asked to change — keep Quick-connect/Arrange-grid exactly
+// as they are.
+//
+// Two things from the reference mockup this was modeled on (Crop, a
+// favorite/heart toggle) aren't here — both are net-new features (a real
+// crop UI; a favorite flag that needs its own storage/API), not a button
+// this toolbar can just grow. Trust-for-Seedance and Rename didn't fit the
+// mockup's flat row either, but unlike Crop/Heart they already exist and
+// looked too load-bearing to just drop, so they live behind the overflow
+// "…" button instead of disappearing.
+export function GeneratorNodeToolbar({
+  nodeId,
+  selected,
+  nodeLabel,
+  assetUrl,
+  assetType,
+  locked,
+  onAddToFolder,
+  onViewFullscreen,
+  onRename,
+  trustAction,
+}: {
+  nodeId: string
+  selected?: boolean
+  nodeLabel?: string
+  assetUrl?: string
+  assetType?: 'image' | 'video'
+  locked?: boolean
+  onAddToFolder?: (type: 'character' | 'prop' | 'location') => void
+  onViewFullscreen?: () => void
+  onRename?: () => void
+  trustAction?: {
+    label: string
+    disabled: boolean
+    active: boolean
+    processing: boolean
+    onClick: () => void
+  }
+}) {
+  const [addToMenuOpen, setAddToMenuOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const { getNodes } = useReactFlow()
+  const { addNodes, patchNodeData, deleteNodes } = useCanvasCollaboration()
+
+  const hasOverflow = Boolean(trustAction || onRename)
+
+  return (
+    <NodeToolbar isVisible={selected} position={Position.Top} offset={12}>
+      <div
+        className="flex items-center gap-0.5 px-1.5 py-1 rounded-full"
+        style={{
+          background: 'rgba(18,20,24,0.95)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        }}
+      >
+        {assetUrl && onViewFullscreen && (
+          <ToolBtn icon={ArrowsOutSimple} label="Expand" onClick={onViewFullscreen} />
+        )}
+
+        <ToolBtn icon={CopySimple} label="Copy" onClick={() => duplicateNode(nodeId, getNodes, addNodes)} />
+
+        {onAddToFolder && (
+          <div className="relative">
+            <ToolBtn icon={At} label="Add to Character/Location/Prop" onClick={() => setAddToMenuOpen((v) => !v)} />
+            {addToMenuOpen && (
+              <DropdownMenu onClose={() => setAddToMenuOpen(false)}>
+                <MenuItem label="Character" icon={User} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Location" icon={MapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Prop" icon={Package} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
+              </DropdownMenu>
+            )}
+          </div>
+        )}
+
+        {assetUrl && (
+          <ToolBtn
+            icon={DownloadSimple}
+            label="Download"
+            onClick={() => {
+              const ext = assetType === 'video' ? 'mp4' : 'png'
+              downloadAsset(assetUrl, `${sanitizeFilename(nodeLabel || 'asset')}.${ext}`)
+            }}
+          />
+        )}
+
+        <ToolBtn
+          icon={locked ? Lock : LockOpen}
+          label={locked ? 'Unlock' : 'Lock'}
+          accent={locked}
+          onClick={() => patchNodeData(nodeId, { locked: !locked })}
+        />
+
+        <ToolBtn icon={Trash} label="Delete" onClick={() => deleteNodes([nodeId])} danger />
+
+        {hasOverflow && (
+          <div className="relative">
+            <ToolBtn icon={DotsThree} label="More options" onClick={() => setMoreMenuOpen((v) => !v)} />
+            {moreMenuOpen && (
+              <DropdownMenu onClose={() => setMoreMenuOpen(false)}>
+                {trustAction && (
+                  <MenuItem
+                    label={trustAction.label || 'Trust for Seedance'}
+                    icon={trustAction.processing ? CircleNotch : ShieldCheck}
+                    onClick={() => { if (!trustAction.disabled) { trustAction.onClick(); setMoreMenuOpen(false) } }}
+                  />
+                )}
+                {onRename && (
+                  <MenuItem label="Rename" icon={PencilSimple} onClick={() => { onRename(); setMoreMenuOpen(false) }} />
+                )}
+              </DropdownMenu>
+            )}
+          </div>
+        )}
       </div>
     </NodeToolbar>
   )

@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
-import { NodeActionToolbar } from './node-toolbar'
+import { GeneratorNodeToolbar } from './node-toolbar'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
@@ -1045,12 +1045,13 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         event.stopPropagation()
       }}
     >
-      <NodeActionToolbar
+      <GeneratorNodeToolbar
         nodeId={id}
         selected={selected}
         nodeLabel={(data.label as string) || 'Video Generator'}
         assetUrl={outputUrl || undefined}
         assetType="video"
+        locked={Boolean(data.locked)}
         onRename={handleRename}
         onViewFullscreen={outputUrl ? () => setLightboxOpen(true) : undefined}
       />
