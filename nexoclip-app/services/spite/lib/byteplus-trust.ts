@@ -163,3 +163,30 @@ export async function requestBytePlusTrust(
   }
   return { status: payload.status!, error: payload.error && { code: payload.error.code } }
 }
+
+export interface ReferenceTrustCandidate {
+  url: string
+  label: string
+}
+
+// Seedance rejects photos of real people unless they are sent as trusted
+// assets, and it only says so after the job is queued. Check every reference
+// up front so the user can trust it first. A reference that is not a
+// workspace asset can never be sent as trusted, so it counts as untrusted.
+export async function findUntrustedReferences(
+  candidates: ReferenceTrustCandidate[],
+  canvasProjectId: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<string[]> {
+  const unique = new Map<string, string>()
+  for (const candidate of candidates) {
+    if (candidate.url && !unique.has(candidate.url)) unique.set(candidate.url, candidate.label)
+  }
+  const results = await Promise.all([...unique].map(async ([url, label]) => {
+    const assetId = workspaceAssetIdFromUrl(url)
+    if (!assetId) return label
+    const state = await requestBytePlusTrust(assetId, 'GET', fetchFn, canvasProjectId)
+    return state.status === 'active' ? null : label
+  }))
+  return [...new Set(results.filter((label): label is string => Boolean(label)))]
+}

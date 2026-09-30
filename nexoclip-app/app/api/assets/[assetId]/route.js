@@ -15,16 +15,39 @@ function errorResponse(error) {
   }, { status });
 }
 
+// Canvas (Spite) is served under a base path (e.g. /canvas). SPITE_INTERNAL_URL
+// is the bare service origin, so its routes need that base path appended —
+// without it every cleanup call 404'd and every trusted-asset delete failed.
+export function spiteCleanupUrl(localAssetId, env = process.env) {
+  const internal = env.SPITE_INTERNAL_URL?.trim().replace(/\/$/, '');
+  const publicUrl = env.NEXT_PUBLIC_SPITE_URL?.trim() || '';
+  const publicPath = publicUrl.startsWith('/')
+    ? publicUrl
+    : /^https?:\/\//.test(publicUrl) ? new URL(publicUrl).pathname : '';
+  const basePath = (env.SPITE_BASE_PATH?.trim() || publicPath).replace(/\/$/, '');
+  let origin = null;
+  if (internal && /^https?:\/\//.test(internal)) {
+    origin = new URL(internal).pathname.replace(/\/$/, '') ? internal : `${internal}${basePath}`;
+  } else if (/^https?:\/\//.test(publicUrl)) {
+    origin = publicUrl.replace(/\/$/, '');
+  }
+  return origin ? `${origin}/api/assets/${encodeURIComponent(localAssetId)}?cleanup=1` : null;
+}
+
 function deleteWorkspaceAsset(workspaceId, localAssetId, cookie) {
   const provider = { deleteAsset: input => createBytePlusAssetsClient().deleteAsset(input) };
   return deleteTrustedWorkspaceAsset({
     workspaceId, localAssetId, pool: getPool(), storage: createStorage(), bytePlusClient: provider,
     cleanupCanvasReferences: async () => {
-      const spiteUrl = (process.env.SPITE_INTERNAL_URL || process.env.NEXT_PUBLIC_SPITE_URL)?.trim().replace(/\/$/, '');
-      if (!spiteUrl || !/^https?:\/\//.test(spiteUrl)) return { complete: false };
-      const response = await fetch(`${spiteUrl}/api/assets/${encodeURIComponent(localAssetId)}?cleanup=1`, {
-        method: 'DELETE', headers: { cookie: cookie || '' },
+      const url = spiteCleanupUrl(localAssetId);
+      if (!url) {
+        console.error('[asset-delete] Canvas cleanup URL is not configured', localAssetId);
+        return { complete: false };
+      }
+      const response = await fetch(url, {
+        method: 'DELETE', headers: { cookie: cookie || '' }, signal: AbortSignal.timeout(20_000),
       });
+      if (!response.ok) console.error('[asset-delete] Canvas cleanup returned', response.status, localAssetId);
       return { complete: response.ok };
     },
     configuredProjectName: process.env.BYTEPLUS_PROJECT_NAME?.trim() || 'default',

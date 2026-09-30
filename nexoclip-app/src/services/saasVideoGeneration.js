@@ -63,9 +63,15 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
       : undefined;
     const resolution = { workspaceId: job.workspace_id, pool, storage, referenceStorage, resolveWorkspaceAsset };
     const referenceImages = await resolveReferenceImages({ ...resolution, referenceImages: job.parameters?.referenceImages });
-    const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: (job.parameters?.frameImages || []).map((frame) => frame.url) });
+    // Canvas also lists a wired first frame in referenceImages (as image 1, which
+    // the prompt's numbering relies on). Every image is sent to Seedance as a
+    // reference, so resolving the frame again only sent the same picture twice.
+    const referencedUrls = new Set(job.parameters?.referenceImages || []);
+    const keptFrames = (job.parameters?.frameImages || []).filter((frame) => !referencedUrls.has(frame.url));
+    const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: keptFrames.map((frame) => frame.url) });
     const referenceVideos = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceVideos, pool, storage, referenceStorage });
-    const request = videoRequest(job, { referenceImages, frameImages, referenceVideos });
+    const frameJob = { ...job, parameters: { ...job.parameters, frameImages: keptFrames } };
+    const request = videoRequest(frameJob, { referenceImages, frameImages, referenceVideos });
     let submitted;
     try {
       submitted = await providerRouter.submitVideo(hasTrustedAsset ? markTrustedAssetRequest(request) : request);

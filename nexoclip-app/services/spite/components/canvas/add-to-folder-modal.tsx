@@ -43,6 +43,9 @@ interface AddToFolderModalProps {
   projectId: string
   assetId?: string
   assetUrl?: string
+  // The workspace asset the source node already maps to (and may already be
+  // trusted). Reused instead of importing a copy, so Trust carries over.
+  workspaceAssetId?: string
   editFolder?: Folder | null
   // When true, open straight into the "new folder" form instead of the
   // pick-an-existing-folder list. Used by the category panel's "+ New
@@ -66,7 +69,8 @@ const typeIcons = {
   general: Package,
 }
 
-export function AddToFolderModal({ open, onClose, folderType, projectId, assetId, assetUrl, editFolder, defaultNew, onAdded }: AddToFolderModalProps) {
+export function AddToFolderModal({ open, onClose, folderType, projectId, assetId, assetUrl,
+  workspaceAssetId: knownWorkspaceAssetId, editFolder, defaultNew, onAdded }: AddToFolderModalProps) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -116,6 +120,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       // Railway's HTTP service intentionally does not grant browser CORS.
       const canonicalAssetId = workspaceAssetIdFromUrl(assetUrl)
       if (canonicalAssetId) return { id: legacyId, workspaceAssetId: canonicalAssetId, url: assetUrl }
+      if (knownWorkspaceAssetId) return { id: legacyId, workspaceAssetId: knownWorkspaceAssetId, url: assetUrl }
 
       // Route legacy Spite media through its authenticated same-origin import
       // mode; fetching an absolute Railway URL in the browser is blocked by CORS.
@@ -127,7 +132,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       if (assetResolutionRef.current?.promise === promise) assetResolutionRef.current = null
     })
     return promise
-  }, [assetId, assetUrl, projectId])
+  }, [assetId, assetUrl, knownWorkspaceAssetId, projectId])
 
   // Fetch existing folders + available assets — both scoped to the current
   // project. Without the projectId param these endpoints either fall back

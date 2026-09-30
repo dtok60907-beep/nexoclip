@@ -758,7 +758,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       try {
         const payload = JSON.parse(folderData) as {
           folderName?: string
-          assets: { id: string; r2_url: string; type?: string; prompt?: string }[]
+          assets: { id: string; r2_url: string; type?: string; prompt?: string; workspaceAssetId?: string }[]
         }
         const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
         const cols = Math.min(3, Math.max(1, payload.assets.length))
@@ -774,6 +774,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
             data: {
               assetId: asset.id,
               thumbnail: asset.r2_url,
+              // Same workspace asset a folder mention sends, so Trust on this
+              // node covers the mention too.
+              ...(asset.workspaceAssetId ? { workspaceAssetId: asset.workspaceAssetId } : {}),
               label: payload.folderName || asset.prompt || 'Reference',
               mediaType: asset.type === 'video' ? 'video' : 'image',
               // Tag with the currently-active scene so the node shows on
@@ -821,6 +824,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         data: {
           assetId: asset.id,
           thumbnail: asset.r2_url,
+          ...(typeof asset.workspaceAssetId === 'string' ? { workspaceAssetId: asset.workspaceAssetId } : {}),
           label: asset.prompt || 'Reference',
           mediaType: asset.type === 'video' ? 'video' : 'image',
           sceneId: activeSceneId,

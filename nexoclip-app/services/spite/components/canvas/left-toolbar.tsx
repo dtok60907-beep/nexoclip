@@ -104,6 +104,9 @@ interface GeneratedAsset {
   recovered?: boolean
   created_at: string
   byteplus_trust?: BytePlusTrustState
+  // Set when the asset comes from a folder item whose r2_url is still the
+  // legacy Canvas upload URL; identifies the workspace asset it maps to.
+  workspaceAssetId?: string
 }
 
 function TrustForSeedance({
@@ -295,7 +298,7 @@ export function LeftToolbar({
     name: string
     description: string | null
     type: 'character' | 'prop' | 'location' | 'general'
-    assets: { id: string; r2_url: string; type: 'image' | 'video' | 'audio'; prompt: string }[]
+    assets: { id: string; r2_url: string; type: 'image' | 'video' | 'audio'; prompt: string; workspaceAssetId?: string }[]
   }[]>(
     foldersKey,
     (url: string) => {
@@ -358,15 +361,21 @@ export function LeftToolbar({
     let state: BytePlusTrustState
     try {
       if (removingTrust) {
-        const workspaceAssetId = workspaceAssetIdFromUrl(asset.r2_url)
+        const workspaceAssetId = asset.workspaceAssetId || workspaceAssetIdFromUrl(asset.r2_url)
         if (!workspaceAssetId) throw new Error('Trusted asset identity is unavailable')
         state = await requestBytePlusTrust(workspaceAssetId, 'DELETE', fetch, projectId)
         if (state.status === 'failed') throw new Error('Could not remove trusted asset')
       } else {
-        const imported = await importImageForTrust({
-          url: asset.r2_url,
-          filename: `${asset.prompt || 'canvas-image'}.png`,
-        })
+        // Trust the workspace asset this item already maps to (e.g. the one a
+        // folder mention sends). Importing a fresh copy trusted a different
+        // asset than the one generation used, so Seedance still got it raw.
+        const knownAssetId = asset.workspaceAssetId || workspaceAssetIdFromUrl(asset.r2_url)
+        const imported = knownAssetId
+          ? { assetId: knownAssetId, canonicalUrl: asset.r2_url }
+          : await importImageForTrust({
+            url: asset.r2_url,
+            filename: `${asset.prompt || 'canvas-image'}.png`,
+          })
         setTrustState(asset.id, { status: 'processing' })
         if (imported.canonicalUrl !== asset.r2_url) {
           const linked = await fetch(withBasePath(`/api/assets/${encodeURIComponent(asset.id)}`), {
@@ -417,7 +426,7 @@ export function LeftToolbar({
       status: state.status,
     })) return
 
-    const resolvedAssetId = workspaceAssetIdFromUrl(asset!.r2_url)
+    const resolvedAssetId = asset!.workspaceAssetId || workspaceAssetIdFromUrl(asset!.r2_url)
     if (!resolvedAssetId) return
     const providerAssetId = resolvedAssetId
     const localAssetId = asset!.id
@@ -442,18 +451,18 @@ export function LeftToolbar({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [documentVisible, historyOpen, projectId, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
+  }, [documentVisible, historyOpen, projectId, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.workspaceAssetId, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
 
   useEffect(() => {
     const asset = selectedGenAsset
-    const workspaceAssetId = workspaceAssetIdFromUrl(asset?.r2_url)
+    const workspaceAssetId = asset?.workspaceAssetId || workspaceAssetIdFromUrl(asset?.r2_url)
     if (!asset || asset.type !== 'image' || !workspaceAssetId) return
     let cancelled = false
     requestBytePlusTrust(workspaceAssetId, 'GET', fetch, projectId)
       .then(state => { if (!cancelled) setTrustState(asset.id, state) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [projectId, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type])
+  }, [projectId, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.workspaceAssetId, selectedGenAsset?.type])
 
   // Listen for asset status changes (from canvas node deletion)
   useEffect(() => {
@@ -1259,17 +1268,21 @@ export function LeftToolbar({
                           // clicking opens the existing detail panel + delete
                           // flow. Falls back to a basic open if the asset
                           // isn't in this project's loaded history.
-                          const full = generatedAssets.find(g => g.id === a.id)
-                          const isSel = selectedAssetIds.has(a.id)
+                          // Folder items carry the legacy Canvas id; delete and
+                          // Trust must act on the workspace asset it maps to.
+                          const assetKey = a.workspaceAssetId || a.id
+                          const full = generatedAssets.find(g => g.id === assetKey) || generatedAssets.find(g => g.id === a.id)
+                          const isSel = selectedAssetIds.has(assetKey)
                           return (
                             <div
                               key={a.id}
                               role="button"
                               tabIndex={0}
                               onClick={() => {
-                                if (selectMode) toggleAssetSelected(a.id)
+                                if (selectMode) toggleAssetSelected(assetKey)
                                 else setSelectedGenAsset(full || {
-                                  id: a.id,
+                                  id: assetKey,
+                                  workspaceAssetId: a.workspaceAssetId,
                                   type: a.type,
                                   model: '',
                                   prompt: a.prompt || '',
@@ -1283,7 +1296,7 @@ export function LeftToolbar({
                               onDragStart={(e) => {
                                 if (selectMode) { e.preventDefault(); return }
                                 e.dataTransfer.setData('asset', JSON.stringify({
-                                  id: a.id, r2_url: a.r2_url, type: a.type, prompt: a.prompt,
+                                  id: a.id, r2_url: a.r2_url, type: a.type, prompt: a.prompt, workspaceAssetId: a.workspaceAssetId,
                                 }))
                                 e.dataTransfer.effectAllowed = 'copy'
                               }}
@@ -2321,7 +2334,7 @@ export function LeftToolbar({
                             e.dataTransfer.setData('folder-assets', JSON.stringify({
                               folderName: folder.name,
                               assets: folder.assets.map(a => ({
-                                id: a.id, r2_url: a.r2_url, type: a.type, prompt: a.prompt,
+                                id: a.id, r2_url: a.r2_url, type: a.type, prompt: a.prompt, workspaceAssetId: a.workspaceAssetId,
                               })),
                             }))
                             e.dataTransfer.effectAllowed = 'copy'
@@ -2374,7 +2387,7 @@ export function LeftToolbar({
                                 draggable
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData('asset', JSON.stringify({
-                                    id: asset.id, r2_url: asset.r2_url, type: asset.type, prompt: asset.prompt,
+                                    id: asset.id, r2_url: asset.r2_url, type: asset.type, prompt: asset.prompt, workspaceAssetId: asset.workspaceAssetId,
                                   }))
                                   e.dataTransfer.effectAllowed = 'copy'
                                 }}

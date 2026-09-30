@@ -46,3 +46,20 @@ test('workspace asset delete uses the authenticated workspace', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(calls[0], ['workspace-1', 'asset-1']);
 });
+
+test('Canvas cleanup URL includes the Canvas base path', async () => {
+  const { spiteCleanupUrl } = await import('../../app/api/assets/[assetId]/route.js');
+  assert.equal(
+    spiteCleanupUrl('asset-1', { SPITE_INTERNAL_URL: 'http://spite.internal:8080/', NEXT_PUBLIC_SPITE_URL: '/canvas' }),
+    'http://spite.internal:8080/canvas/api/assets/asset-1?cleanup=1',
+  );
+  assert.equal(
+    spiteCleanupUrl('asset-1', { SPITE_INTERNAL_URL: 'http://spite.internal:8080/canvas' }),
+    'http://spite.internal:8080/canvas/api/assets/asset-1?cleanup=1',
+  );
+  assert.equal(
+    spiteCleanupUrl('asset-1', { NEXT_PUBLIC_SPITE_URL: 'https://app.example/canvas' }),
+    'https://app.example/canvas/api/assets/asset-1?cleanup=1',
+  );
+  assert.equal(spiteCleanupUrl('asset-1', { NEXT_PUBLIC_SPITE_URL: '/canvas' }), null);
+});

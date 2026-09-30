@@ -23,6 +23,7 @@ import {
   trustImportSourceUrl,
   workspaceAssetIdFromUrl,
   resolveWorkspaceAssetId,
+  findUntrustedReferences,
 } from '@/lib/byteplus-trust'
 
 test('trust URL targets the unprefixed main app and encodes the asset ID', () => {
@@ -228,7 +229,7 @@ test('both detail layouts wire the shared trust action to the selected asset in-
 
 test('opening a canonical active asset revalidates provider trust instead of trusting cached state', () => {
   const validationEffect = toolbarSource.slice(
-    toolbarSource.indexOf('const workspaceAssetId = workspaceAssetIdFromUrl'),
+    toolbarSource.indexOf('const workspaceAssetId = asset?.workspaceAssetId || workspaceAssetIdFromUrl'),
     toolbarSource.indexOf('// Listen for asset status changes'),
   )
   assert.match(validationEffect, /requestBytePlusTrust\(workspaceAssetId, 'GET', fetch, projectId\)/)
@@ -271,4 +272,20 @@ test('trust responses update the matching list item without requiring an ID in t
     assets[1],
   ])
   assert.equal(updated[1], assets[1])
+})
+
+test('findUntrustedReferences flags inactive and non-workspace references once', async () => {
+  const trusted = '/api/assets/550e8400-e29b-41d4-a716-446655440001/download'
+  const pending = '/api/assets/550e8400-e29b-41d4-a716-446655440002/download'
+  const fetchFn = (async (url: string) => {
+    const status = String(url).includes('446655440001') ? 'active' : 'processing'
+    return new Response(JSON.stringify({ status }), { headers: { 'content-type': 'application/json' } })
+  }) as unknown as typeof fetch
+  const untrusted = await findUntrustedReferences([
+    { url: trusted, label: '@Dewi' },
+    { url: pending, label: '@storyboard' },
+    { url: pending, label: '@storyboard-dup' },
+    { url: '/canvas/api/r2-image/uploads/a.png', label: 'first frame' },
+  ], 'project-1', fetchFn)
+  assert.deepEqual(untrusted, ['@storyboard', 'first frame'])
 })

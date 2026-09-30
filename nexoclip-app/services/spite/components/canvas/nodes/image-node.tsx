@@ -1006,6 +1006,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           folderType={folderType}
           projectId={projectId}
           assetUrl={outputUrl}
+          workspaceAssetId={typeof data.workspaceAssetId === 'string' ? data.workspaceAssetId : undefined}
           onAdded={(folder) => {
             syncGuardRef.current.beginUserEdit()
             patchPersistedNodeData({ label: folderMediaLabel(folder.name) })

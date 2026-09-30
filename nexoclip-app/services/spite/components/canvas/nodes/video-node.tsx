@@ -14,6 +14,7 @@ import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
+import { findUntrustedReferences } from '@/lib/byteplus-trust'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -784,7 +785,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       promptMentions,
       folders,
       currentModel,
-      referenceGroups.length,
+      // The server lists a wired first frame as reference image 1 (then wired
+      // references, then mentions), so mention numbering starts after both.
+      referenceGroups.length + (connectedImageUrl ? 1 : 0),
     )
     referenceGroups.push(...compiled.refGroups)
 
@@ -801,6 +804,25 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         `Remove the @mention / wired references to keep your exact first frame, or remove the first frame to use the references.`,
       )
       setStatus('idle')
+      return
+    }
+
+    // Seedance rejects real-person photos that aren't trusted, but only after
+    // the job is queued. Name the untrusted references and let the user decide.
+    const untrusted = await findUntrustedReferences([
+      ...(connectedImageUrl ? [{ url: connectedImageUrl, label: 'the connected first-frame image' }] : []),
+      ...(connectedEndImageUrl ? [{ url: connectedEndImageUrl, label: 'the connected end-frame image' }] : []),
+      ...referenceGroups.flatMap((group, index) => group.urls.map((url) => ({
+        url,
+        label: 'folderName' in group && group.folderName ? `@${group.folderName}` : `connected reference ${index + 1}`,
+      }))),
+    ], projectId)
+    if (untrusted.length > 0 && !window.confirm(
+      `Not trusted for Seedance: ${untrusted.join(', ')}.\n\n` +
+      'If any of these shows a real person, BytePlus will reject the video. Trust them first (shield icon) and wait until they turn green.\n\nGenerate anyway?',
+    )) {
+      setStatus('idle')
+      setSubmittedAt(undefined)
       return
     }
 
