@@ -303,9 +303,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   }, [data.error, data.generationError, data.generationStatus, durableGenerationId, id])
 
   // Repair durable asset URLs written by pre-fix bundles before rendering.
+  // Covers whichever base path (/spite, and later /canvas) was active when
+  // the stale URL was persisted.
   useEffect(() => {
-    if (typeof data.outputUrl !== 'string' || !data.outputUrl.startsWith('/spite/api/assets/')) return
-    const repaired = data.outputUrl.slice('/spite'.length)
+    const prefix = typeof data.outputUrl === 'string' && data.outputUrl.startsWith('/spite/api/assets/')
+      ? '/spite'
+      : typeof data.outputUrl === 'string' && data.outputUrl.startsWith('/canvas/api/assets/')
+        ? '/canvas'
+        : null
+    if (typeof data.outputUrl !== 'string' || !prefix) return
+    const repaired = data.outputUrl.slice(prefix.length)
     setOutputUrl(repaired)
     updatePersistedNodeData((currentData) => ({
       ...completeGenerationNode(currentData, repaired),

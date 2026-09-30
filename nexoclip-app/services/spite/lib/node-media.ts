@@ -15,8 +15,10 @@ type NodeData = Record<string, unknown> | undefined | null
 function str(v: unknown): string | undefined {
   if (typeof v !== 'string' || v.trim() === '') return undefined
   if (v.startsWith('/api/assets/')) return withGenerationOutputBasePath(v)
-  // Repair generated URLs persisted before the Canvas/app route split.
+  // Repair generated URLs persisted before the Canvas/app route split, or
+  // under whichever base path (/spite, /canvas) was active when they were saved.
   if (v.startsWith('/spite/api/assets/')) return v.slice('/spite'.length)
+  if (v.startsWith('/canvas/api/assets/')) return v.slice('/canvas'.length)
   return v.startsWith('/api/') ? withBasePath(v) : v
 }
 

@@ -43,9 +43,12 @@ export function validateImageGenerationInput(input) {
 }
 
 function validAssetReferences(values, { allowLegacyCanvasReferences = false } = {}) {
+  // The app has been served from /spite and, more recently, /canvas
+  // (NEXT_PUBLIC_BASE_PATH); either prefix may show up on legacy r2-image
+  // reference URLs, so both must be recognized here.
   return Array.isArray(values) && values.every((url) => typeof url === 'string' && (
     /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url)
-    || (allowLegacyCanvasReferences && /^\/(?:spite\/)?api\/r2-image\/.+/.test(url))
+    || (allowLegacyCanvasReferences && /^\/(?:spite\/|canvas\/)?api\/r2-image\/.+/.test(url))
   ));
 }
 

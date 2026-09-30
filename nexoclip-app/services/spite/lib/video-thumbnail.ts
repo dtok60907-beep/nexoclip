@@ -8,7 +8,7 @@
 export function shouldCaptureVideoThumbnail(url: string): boolean {
   try {
     const path = new URL(url, 'https://canvas.invalid').pathname
-    return !/^\/(?:spite\/)?api\/assets\/[^/]+\/download(?:\/|$)/.test(path)
+    return !/^\/(?:spite\/|canvas\/)?api\/assets\/[^/]+\/download(?:\/|$)/.test(path)
   } catch {
     return false
   }

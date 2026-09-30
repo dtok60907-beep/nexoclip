@@ -253,10 +253,16 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     else toast.error(notice.message, { id: toastId })
   }, [data.error, data.generationError, data.generationStatus, durableGenerationId, id])
 
-  // Repair outputs written before durable asset URLs were kept outside /spite.
+  // Repair outputs written before durable asset URLs were kept outside the
+  // app's base path (/spite, and later /canvas).
   useEffect(() => {
-    if (typeof data.outputUrl !== 'string' || !data.outputUrl.startsWith('/spite/api/assets/')) return
-    const repaired = data.outputUrl.slice('/spite'.length)
+    const prefix = typeof data.outputUrl === 'string' && data.outputUrl.startsWith('/spite/api/assets/')
+      ? '/spite'
+      : typeof data.outputUrl === 'string' && data.outputUrl.startsWith('/canvas/api/assets/')
+        ? '/canvas'
+        : null
+    if (typeof data.outputUrl !== 'string' || !prefix) return
+    const repaired = data.outputUrl.slice(prefix.length)
     setOutputUrl(repaired)
     updatePersistedNodeData((currentData) => completeGenerationNode(currentData, repaired))
   }, [data.outputUrl, updatePersistedNodeData])
