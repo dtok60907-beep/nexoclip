@@ -26,7 +26,7 @@ export function reportClientError(error: unknown, context: Record<string, unknow
   try {
     const url = withBasePath('/api/client-error')
     if (!navigator.sendBeacon?.(url, new Blob([payload], { type: 'application/json' }))) {
-      void fetch(url, { method: 'POST', body: payload, headers: { 'Content-Type': 'application/json' }, keepalive: true })
+      fetch(url, { method: 'POST', body: payload, headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {})
     }
   } catch {
     // Reporting must never throw from inside an error handler.

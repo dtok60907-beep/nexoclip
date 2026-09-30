@@ -17,6 +17,14 @@ interface BoundaryState {
   resetKey: unknown
 }
 
+function sameContent(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
+  }
+}
+
 // Without this, a render error in any single node unmounts the whole canvas
 // and Next shows its full-page "This page couldn't load" screen. Containing it
 // to the node keeps the board usable and shows what actually went wrong.
@@ -28,8 +36,14 @@ class NodeErrorBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 
   static getDerivedStateFromProps(props: BoundaryProps, state: BoundaryState): Partial<BoundaryState> | null {
-    if (props.resetKey !== state.resetKey) return { resetKey: props.resetKey, error: null }
-    return null
+    if (props.resetKey === state.resetKey) return null
+    // Every canvas update rebuilds every node's data object, so identity
+    // changed on any edit anywhere: a crashed node re-rendered, crashed and
+    // re-reported on each one. Retry only when this node's data content
+    // actually changed (compared only while crashed, so healthy nodes pay
+    // nothing).
+    if (state.error && sameContent(props.resetKey, state.resetKey)) return { resetKey: props.resetKey }
+    return { resetKey: props.resetKey, error: null }
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
