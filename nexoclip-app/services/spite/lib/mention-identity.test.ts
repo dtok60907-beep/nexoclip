@@ -127,3 +127,14 @@ test('multiple mentions preserve every reference group and slot order', () => {
   assert.match(result.prompt, /exact same object/)
   assert.match(result.prompt, /exact same location/)
 })
+
+test('repeated mentions spell out the identity instruction only once', () => {
+  const result = compileMentionsForModel(
+    '@Nathan enters. @Nathan sits. @Nathan leaves.',
+    [{ folderId: 'nathan', name: 'Nathan', selectedAssetIds: ['legacy-nathan'], selectedWorkspaceAssetIds: ['workspace-nathan'] }],
+    [{ id: 'nathan', name: 'Nathan', type: 'character', assets: [{ id: 'legacy-nathan', workspaceAssetId: 'workspace-nathan', r2_url: '/spite/api/r2-image/nathan.png' }] }],
+    model,
+  )
+  assert.equal(result.prompt.match(/exact same person\/character/g)?.length, 1)
+  assert.match(result.prompt, /reference image 1 sits\. reference image 1 leaves\./)
+})

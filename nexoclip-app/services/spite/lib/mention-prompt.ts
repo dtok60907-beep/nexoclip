@@ -189,6 +189,17 @@ export function compileMentionsForModel(
   }
   const firstFolderId = orderedFolderIds[0]
 
+  // The long "exact same ..., preserve ..." instruction is only spelled out
+  // the first time a folder is mentioned; later mentions reuse the bare
+  // citation. Repeating it on every mention blew long multi-shot prompts past
+  // the provider's 10,000-character limit.
+  const expanded = new Set<string>()
+  const withIdentity = (folderId: string, type: FolderType, reference: string): string => {
+    if (expanded.has(folderId)) return reference
+    expanded.add(folderId)
+    return exactReference(type, reference)
+  }
+
   const citationFor = (folderId: string): string => {
     const group = groupsByFolderId.get(folderId)!
     const name = group.folderName || ''
@@ -201,23 +212,23 @@ export function compileMentionsForModel(
         { length: group.urls.length },
         (_, i) => `${cite}${start + i + 1}`,
       ).join(' ')
-      return exactReference(type, references)
+      return withIdentity(folderId, type, references)
     }
     if (strategy === 'citation-elements') {
       const i = orderedFolderIds.indexOf(folderId)
       const cite = model!.referenceCite
-      return exactReference(type, `${cite}${prefixRefCount + i + 1}`)
+      return withIdentity(folderId, type, `${cite}${prefixRefCount + i + 1}`)
     }
     if (strategy === 'multi') {
       const start = slotStarts.get(folderId)!
       const references = group.urls.length > 1
         ? `reference images ${start + 1}-${start + group.urls.length}`
         : `reference image ${start + 1}`
-      return exactReference(type, references)
+      return withIdentity(folderId, type, references)
     }
     if (strategy === 'single') {
       if (folderId !== firstFolderId) return name
-      return exactReference(type, 'reference image 1')
+      return withIdentity(folderId, type, 'reference image 1')
     }
     return name
   }
