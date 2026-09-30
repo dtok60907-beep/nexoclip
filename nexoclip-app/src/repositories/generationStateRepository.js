@@ -68,14 +68,18 @@ export async function recoverExpiredGenerationJobs(pool, {
 
 export async function completeGenerationJob(pool, { workspaceId, generationId, provider, result = {}, attempt, claimToken, providerRequestId = null }) {
   const [claimedAttempt, token] = fence({ attempt, claimToken });
+  // Only touch provider_request_id when completion knows one; an absent id
+  // must leave the column as it is.
+  const values = [workspaceId, generationId, JSON.stringify(result || {}), provider || null, claimedAttempt, token];
+  if (providerRequestId) values.push(providerRequestId);
   const updated = await pool.query(
     `UPDATE generation_jobs
-     SET result = $3::jsonb, provider = COALESCE($4, provider),
-         provider_request_id = COALESCE(provider_request_id, $7), updated_at = now()
+     SET result = $3::jsonb, provider = COALESCE($4, provider),${providerRequestId ? `
+         provider_request_id = COALESCE(provider_request_id, $7),` : ''} updated_at = now()
      WHERE workspace_id = $1 AND id = $2 AND status = 'running'
        AND attempt_count = $5 AND claim_token = $6
      RETURNING id, workspace_id, status, result, provider, provider_request_id`,
-    [workspaceId, generationId, JSON.stringify(result || {}), provider || null, claimedAttempt, token, providerRequestId || null],
+    values,
   );
   return updated.rows[0] || null;
 }
