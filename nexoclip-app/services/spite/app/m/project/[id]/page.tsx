@@ -91,7 +91,6 @@ export default function FlowThread() {
   const [refs, setRefs] = useState<Ref[]>([])
   const [pending, setPending] = useState(0)
   const [error, setError] = useState('')
-  const [balance, setBalance] = useState<number | null>(null)
 
   // Click-to-expand: a result image opens in a fullscreen lightbox.
   // Esc, backdrop click, or the ✕ closes it.
@@ -113,17 +112,11 @@ export default function FlowThread() {
     if (force || nearBottom()) endRef.current?.scrollIntoView({ block: 'end' })
   }
 
-  const loadBalance = () =>
-    fetch(withBasePath('/api/fal/balance')).then((r) => r.json())
-      .then((d) => setBalance(d?.available && typeof d.balance === 'number' ? d.balance : null))
-      .catch(() => {})
-
   useEffect(() => {
     if (!projectId) return
     fetch(withBasePath(`/api/projects/${projectId}`)).then((r) => (r.ok ? r.json() : null)).then((p) => { if (p?.name) setProjectName(p.name) }).catch(() => {})
     fetch(withBasePath(`/api/assets?projectId=${projectId}`)).then((r) => r.json())
       .then((d) => setAssets(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setLoading(false))
-    loadBalance()
   }, [projectId])
 
   // Land on / stay pinned to the newest item on entry and whenever a generation
@@ -190,20 +183,13 @@ export default function FlowThread() {
       })
       const submitData = await submitRes.json().catch(() => ({}))
       if (!submitRes.ok || !submitData.generationId) {
-        // /api/generate/submit forwards fal's status + text verbatim, so 401/403
-        // here is fal (bad key / exhausted balance), not our host. Show both the
-        // actionable hint and fal's own words.
-        // 401 comes from EITHER our middleware (expired session — body is
-        // exactly "Unauthorized") or fal (bad key). Don't blame the key for a
-        // lapsed session.
-        const sessionExpired =
-          submitRes.status === 401 && /^unauthorized$/i.test(String(submitData.error || '').trim())
+        // Generation runs through NexoClip: 401 is an expired session, 402 is
+        // not enough credits; anything else carries the server's own message.
         const hint =
-          sessionExpired ? 'Session expired — reload and log in again (your API key is fine).'
-          : submitRes.status === 401 ? 'fal rejected the key (invalid or rotated FAL_KEY)'
-          : submitRes.status === 403 ? 'fal refused the request — usually an exhausted balance. Check fal.ai billing.'
+          submitRes.status === 401 ? 'Session expired — reload and log in again.'
+          : submitRes.status === 402 ? 'Not enough credits for this generation.'
           : ''
-        const msg = sessionExpired ? hint : [hint, submitData.error].filter(Boolean).join(' — ')
+        const msg = [hint, submitRes.status === 401 ? '' : submitData.error].filter(Boolean).join(' — ')
         setError(msg || 'Submit failed'); decPending(); return
       }
       const { generationId } = submitData
@@ -226,7 +212,7 @@ export default function FlowThread() {
               body: JSON.stringify({ url, refs: refUrls, projectId }),
             }).catch(() => {})
           }
-          decPending(); loadBalance(); return
+          decPending(); return
         }
         if (sd.generationStatus === 'failed') { setError(sd.error || 'Generation failed'); decPending(); return }
       }
@@ -299,9 +285,6 @@ export default function FlowThread() {
             <span className="text-sm font-mono truncate flex-1">{projectName || 'Project'}</span>
             <button onClick={() => startTour('flow')} aria-label="Take the tour" title="Take the tour"
               className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"><Question size={16} /></button>
-            {balance !== null && (
-              <span className="text-[10px] font-mono text-muted-foreground px-2 py-1 rounded-full border border-white/10">fal {formatUSD(balance)}</span>
-            )}
             <VersionBadge />
           </div>
         </div>
