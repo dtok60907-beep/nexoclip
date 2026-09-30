@@ -34,7 +34,7 @@ test('asset downloads verify ownership then redirect directly to short-lived R2 
   assert.match(downloadRoute, /status: 302/);
   assert.doesNotMatch(downloadRoute, /status: 307/);
   assert.match(downloadRoute, /Location: result\.download\.url/);
-  assert.match(downloadRoute, /private, max-age=300/);
+  assert.match(downloadRoute, /private, max-age=600/);
   assert.doesNotMatch(downloadRoute, /private, no-store/);
   assert.match(downloadRoute, /'Vary': 'Cookie'/);
   assert.doesNotMatch(downloadRoute, /createStorage\(\)\.get/);
