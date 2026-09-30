@@ -248,7 +248,11 @@ function renderInitial(
     const mentionMatch = mentions.find(
       (m) => tagFromName(m.name).toLowerCase() === tag,
     )
+    // Prefer the exact folder the saved mention points at. Matching by name
+    // alone picked whichever same-named folder came first, silently moving
+    // the mention to another folder (and persisting that).
     const folder =
+      (mentionMatch ? folders.find((f) => f.id === mentionMatch.folderId) : undefined) ||
       folders.find((f) => tagFromName(f.name).toLowerCase() === tag) ||
       // Allow rendering a chip for a mention whose folder hasn't been
       // loaded yet — pull the name from the mention list if any matches.
@@ -995,6 +999,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
             top: menuPos ? menuPos.top : -9999,
             visibility: menuPos ? 'visible' : 'hidden',
           }}
+          data-mention-menu
           onMouseDown={(e) => e.stopPropagation()}
         >
           {filteredFolders.length === 0 && (
@@ -1008,6 +1013,10 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
               <button
                 key={f.id}
                 type="button"
+                // Keep focus and the caret in the editor: without this the
+                // click moved focus away, the @query was no longer found and
+                // the chip landed at the end with the typed "@..." left behind.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => { insertChipAtCursor(f, new Set(f.assets.map((a) => a.id))) }}
                 onMouseEnter={() => setHi(i)}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 text-left ${i === hi ? 'bg-white/10' : 'hover:bg-white/5'}`}

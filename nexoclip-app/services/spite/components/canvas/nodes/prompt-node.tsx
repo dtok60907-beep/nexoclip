@@ -216,7 +216,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   useEffect(() => {
     if (!editing) return
     const handleMouse = (e: MouseEvent) => {
-      if (!cardRef.current?.contains(e.target as Node)) setEditing(false)
+      const target = e.target as Node
+      // The @mention menu and chip popover render in a portal outside the
+      // card. React's stopPropagation doesn't stop this document listener
+      // (React also listens on document), so treat them as inside.
+      const inMentionUi = target instanceof Element && Boolean(target.closest('[data-mention-menu],[data-mention-popover]'))
+      if (!cardRef.current?.contains(target) && !inMentionUi) setEditing(false)
     }
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setEditing(false)
