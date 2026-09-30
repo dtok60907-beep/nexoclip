@@ -3,7 +3,8 @@
 import { Position, NodeProps, Handle } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { Image as ImageIcon, UploadSimple, CircleNotch, VideoCamera, SpeakerHigh } from '@phosphor-icons/react'
-import { memo, useState, useEffect, useRef, useCallback } from 'react'
+import { memo, useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
+import { getLocalUploadPreview, subscribeLocalUploadPreviews } from '@/lib/local-upload-previews'
 import { SimpleNodeToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
@@ -20,16 +21,17 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const projectId = (params?.id as string) || ''
   const nodeLock = useNodeOwnershipLock(projectId, id)
   const { createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
-  const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl(data as Record<string, unknown>) || null)
+  const localPreview = useSyncExternalStore(subscribeLocalUploadPreviews, () => getLocalUploadPreview(id), () => undefined)
+  const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl(data as Record<string, unknown>) || localPreview || null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [folderModalOpen, setFolderModalOpen] = useState(false)
   const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
 
   // Sync thumbnail from data prop
   useEffect(() => {
-    const nextThumbnail = resolveNodeMediaUrl(data as Record<string, unknown>) || null
+    const nextThumbnail = resolveNodeMediaUrl(data as Record<string, unknown>) || localPreview || null
     if (nextThumbnail !== thumbnail) setThumbnail(nextThumbnail)
-  }, [data.thumbnail, data.workspaceAssetId, thumbnail])
+  }, [data.thumbnail, data.workspaceAssetId, localPreview, thumbnail])
 
   // Reference nodes used to read/write `selectedShotId` while image and
   // video generator nodes used `shotId`. That field-name split made the

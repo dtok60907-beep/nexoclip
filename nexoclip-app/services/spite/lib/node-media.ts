@@ -15,6 +15,9 @@ type NodeData = Record<string, unknown> | undefined | null
 
 function str(v: unknown): string | undefined {
   if (typeof v !== 'string' || v.trim() === '') return undefined
+  // Old drops stored the uploading tab's blob: preview in the shared canvas;
+  // it can never load anywhere else, so treat it as missing.
+  if (v.startsWith('blob:')) return undefined
   if (v.startsWith('/api/assets/')) return withGenerationOutputBasePath(v)
   // Repair generated URLs persisted before the Canvas/app route split, or
   // under whichever base path (/spite, /canvas) was active when they were saved.

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { MagnifyingGlass, Plus, ArrowLeft, User, MapPin, Package, X, UploadSimple } from '@phosphor-icons/react'
+import { uploadMediaFile } from '@/lib/upload-media'
 
 type FolderType = 'character' | 'prop' | 'location' | 'general'
 
@@ -207,43 +208,9 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     setSelectedAssets(prev => [...prev, { id: tempId, url: tempUrl, isUploading: true }])
 
     try {
-      // 1) Ask the server for a presigned PUT URL. This route is tiny —
-      //    just signing — so it never hits Vercel's body-size limit.
-      const presignRes = await fetch(withBasePath('/api/r2-presign'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type || 'application/octet-stream',
-        }),
-      })
-      if (!presignRes.ok) {
-        const detail = await presignRes.text().catch(() => '')
-        throw new Error(`presign failed: ${presignRes.status} ${detail}`)
-      }
-      const { presignedUrl, proxyUrl } = await presignRes.json() as {
-        presignedUrl: string
-        key: string
-        proxyUrl: string
-      }
-      if (!presignedUrl || !proxyUrl) throw new Error('presign response missing fields')
+      const { url: proxyUrl } = await uploadMediaFile(file, { filename: file.name })
 
-      // 2) PUT the file straight to R2. This bypasses the Vercel
-      //    function entirely, so we're not bound by the 4.5 MB body
-      //    limit that was returning 413s for everything bigger.
-      const putRes = await fetch(presignedUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-        body: file,
-      })
-      if (!putRes.ok) {
-        const detail = await putRes.text().catch(() => '')
-        throw new Error(`R2 PUT failed: ${putRes.status} ${detail}`)
-      }
-
-      // 3) Record the asset (projectId required).
+      // Record the asset (projectId required).
       const isVideo = file.type.startsWith('video/')
       const assetRes = await fetch(withBasePath('/api/assets'), {
         method: 'POST',

@@ -47,3 +47,12 @@ test('display tiles use the thumbnail variant only for workspace asset downloads
   assert.equal(displayThumbnailUrl('/api/assets/abc-123/download?x=1'), '/api/assets/abc-123/download?x=1')
   assert.equal(displayThumbnailUrl(undefined), undefined)
 })
+
+test('blob: previews persisted in shared node data are treated as missing', () => {
+  assert.equal(resolveNodeMediaUrl({ thumbnail: 'blob:https://app.nexoclip.com/abc' }), undefined)
+  assert.equal(resolveNodeMediaUrl({ thumbnail: 'blob:x', imageUrl: '/api/r2-image/uploads/a.png' }), withBasePathForTest('/api/r2-image/uploads/a.png'))
+})
+
+function withBasePathForTest(path: string) {
+  return resolveNodeMediaUrl({ thumbnail: path })
+}

@@ -14,6 +14,7 @@ import { useIsMobile } from '@/components/ui/use-mobile'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { VersionBadge } from '@/components/version-badge'
 import { startTour } from '@/lib/onboarding'
+import { uploadMediaFile } from '@/lib/upload-media'
 import { GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 
 type Asset = {
@@ -175,13 +176,7 @@ export default function FlowThread() {
     setRefs((prev) => [...prev, { id, previewUrl: URL.createObjectURL(file), proxyUrl: null, uploading: true }])
     ;(async () => {
       try {
-        const presignRes = await fetch(withBasePath('/api/r2-presign'), {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, contentType: file.type, prefix: 'refs' }),
-        })
-        const { presignedUrl, proxyUrl } = await presignRes.json()
-        const putRes = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
-        if (!putRes.ok) throw new Error('upload failed')
+        const { url: proxyUrl } = await uploadMediaFile(file, { filename: file.name, prefix: 'refs' })
         setRefs((prev) => prev.map((r) => (r.id === id ? { ...r, proxyUrl, uploading: false } : r)))
       } catch {
         setRefs((prev) => prev.filter((r) => r.id !== id))

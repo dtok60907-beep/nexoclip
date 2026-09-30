@@ -74,6 +74,8 @@ import { CanvasCollaborationProvider } from './canvas-collaboration'
 import { useCanvasCollaboration } from './canvas-collaboration'
 import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
 import { selectLegacyNoteDeletionIds } from '@/lib/legacy-notes'
+import { uploadMediaFile } from '@/lib/upload-media'
+import { setLocalUploadPreview } from '@/lib/local-upload-previews'
 
 // Each node gets its own error boundary so one bad node can't take the whole
 // canvas down with it.
@@ -932,25 +934,14 @@ function CanvasInner({ projectId }: { projectId: string }) {
     const isAudioFile = file.type.startsWith('audio/')
     const tempUrl = URL.createObjectURL(file)
     const mediaType = isAudioFile ? 'audio' : isVideoFile ? 'video' : 'image'
-    n.data = { ...n.data, thumbnail: tempUrl, isUploading: true, mediaType }
+    n.data = { ...n.data, isUploading: true, mediaType }
+    setLocalUploadPreview(n.id, tempUrl)
     commands.createNode(n)
     
     // Proxy every browser upload through the authenticated application route.
     // Browsers never contact R2 directly, so bucket CORS is irrelevant.
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('filename', file.name)
-      const uploadRes = await fetch(withBasePath('/api/r2-upload'), {
-        method: 'POST',
-        body: formData,
-      })
-      if (!uploadRes.ok) {
-        const detail = await uploadRes.text().catch(() => '')
-        throw new Error(`upload failed: ${uploadRes.status} ${detail}`)
-      }
-      const { url } = await uploadRes.json() as { url: string }
-      const proxyUrl = withBasePath(url)
+      const { url: proxyUrl } = await uploadMediaFile(file, { filename: file.name })
 
       // Update node with proxy URL
       commands.patchNodeData(n.id, {
@@ -983,8 +974,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // Asset is now recorded and protected (used_in_canvas = true)
       window.dispatchEvent(new CustomEvent('asset-status-changed'))
 
-      // Revoke temp blob URL
-      URL.revokeObjectURL(tempUrl)
+      // The real URL is in the node now; drop (and revoke) the local preview.
+      setLocalUploadPreview(n.id, null)
     } catch (error) {
       console.error('Failed to upload media:', error)
       // Surface the failure — the previous silent catch left users
@@ -992,8 +983,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // on reload because the blob URL was scoped to the session.
       const msg = error instanceof Error ? error.message : 'Upload failed'
       toast.error(`${mediaType} upload failed: ${msg.split(':')[0]}. Drop again to retry.`)
-      // Keep temp URL if upload fails — user can still work with it
-      // for the current session, but it will not persist.
+      // The local preview stays in this tab for this session only; the
+      // shared node just records the failure.
       commands.patchNodeData(n.id, {
         isUploading: false,
         uploadError: true,

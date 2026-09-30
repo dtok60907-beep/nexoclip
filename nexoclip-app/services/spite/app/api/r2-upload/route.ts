@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getR2Client } from '@/lib/r2-upload'
 import { withBasePath } from '@/lib/base-path'
 
+// The body is buffered in memory before the R2 PUT, so keep this bounded.
+const MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+
 export async function POST(req: NextRequest) {
   console.log('[R2 Upload] Starting upload...')
   try {
@@ -16,6 +19,16 @@ export async function POST(req: NextRequest) {
       console.log('[R2 Upload] No file provided')
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
+    // Media only, with a size cap: this is now the single upload path for
+    // Canvas, folders, the compress node and Flow.
+    if (!/^(image|video|audio)\//.test(file.type || '')) {
+      return NextResponse.json({ error: 'Only image, video and audio files can be uploaded' }, { status: 415 })
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json({ error: `File is too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB)` }, { status: 413 })
+    }
+    // refs/ holds generation reference inputs, which retention may reclaim.
+    const prefix = formData.get('prefix') === 'refs' ? 'refs' : 'uploads'
 
     // Check env vars
     if (!process.env.R2_BUCKET_NAME || !process.env.R2_ACCOUNT_ID) {
@@ -35,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     // Generate unique filename
     const timestamp = Date.now()
-    const key = `uploads/${timestamp}-${safeFilename}`
+    const key = `${prefix}/${timestamp}-${safeFilename}`
     const buffer = await file.arrayBuffer()
 
     console.log('[R2 Upload] Uploading to R2 key:', key)

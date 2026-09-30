@@ -9,6 +9,7 @@ import { NodeActionToolbar } from './node-toolbar'
 import { encodeScaled, autoFitUnderBytes, formatBytes, KLING_MAX_BYTES } from '@/lib/image-compress'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { ResizableNodeFrame } from './resizable-node-frame'
+import { uploadMediaFile } from '@/lib/upload-media'
 
 function CompressNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
@@ -85,15 +86,7 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
   const uploadBlob = useCallback(async (blob: Blob): Promise<string | null> => {
     try {
       const filename = `compressed-${Date.now()}.jpg`
-      const presignRes = await fetch(withBasePath('/api/r2-presign'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, contentType: 'image/jpeg' }),
-      })
-      if (!presignRes.ok) return null
-      const { presignedUrl, proxyUrl } = await presignRes.json() as { presignedUrl: string; proxyUrl: string }
-      const putRes = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: blob })
-      if (!putRes.ok) return null
+      const { url: proxyUrl } = await uploadMediaFile(new Blob([blob], { type: 'image/jpeg' }), { filename })
       await fetch(withBasePath('/api/assets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
