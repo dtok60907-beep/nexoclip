@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   project_id UUID,
   CONSTRAINT generation_jobs_project_workspace_fk
-    FOREIGN KEY (workspace_id, project_id) REFERENCES projects(workspace_id, id) ON DELETE SET NULL (project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
   kind TEXT NOT NULL DEFAULT 'image' CHECK (kind = 'image'),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'canceled')),
   prompt TEXT NOT NULL,

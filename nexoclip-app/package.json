@@ -138,7 +138,7 @@
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.4.1",
     "sharp": "^0.34.3",
-    "studio": "*",
+    "studio": "file:./packages/studio",
     "workflow-builder": "file:./packages/Vibe-Workflow/packages/workflow-builder"
   },
   "devDependencies": {
