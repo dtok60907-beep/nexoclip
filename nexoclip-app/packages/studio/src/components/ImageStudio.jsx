@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "./confirmDialog.jsx";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
@@ -163,7 +164,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
     const tooLarge = files.filter((f) => f.size > MAX_IMAGE_SIZE);
     if (tooLarge.length > 0) {
-      alert(
+      toast.error(
         `The following images are too large (max 10MB): ${tooLarge.map((f) => f.name).join(", ")}`,
       );
       return;
@@ -220,7 +221,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
         }),
       );
     } catch (err) {
-      alert(`Image upload failed: ${err.message}`);
+      toast.error(`Image upload failed: ${err.message}`);
     } finally {
       setUploading(false);
       setLastUploadProgress(0);
@@ -1032,7 +1033,7 @@ export default function ImageStudio({
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
     const tooLarge = files.filter((f) => f.size > MAX_IMAGE_SIZE);
     if (tooLarge.length > 0) {
-      alert(
+      toast.error(
         `The following images are too large (max 10MB): ${tooLarge.map((f) => f.name).join(", ")}`
       );
       return;
@@ -1059,7 +1060,7 @@ export default function ImageStudio({
 
       handleUploadSelect({ urls });
     } catch (err) {
-      alert(`Image upload failed: ${err.message}`);
+      toast.error(`Image upload failed: ${err.message}`);
     } finally {
       setGenerating(false);
     }
@@ -1293,17 +1294,17 @@ export default function ImageStudio({
 
     if (imageMode) {
       if (uploadedImageUrls.length === 0) {
-        alert("Please upload a reference image first.");
+        toast.error("Please upload a reference image first.");
         return;
       }
       const modelInfo = getI2IModelById(selectedModelId);
       if (modelInfo?.swapField && !swapImageUrl) {
-        alert("Please upload a swap face image.");
+        toast.error("Please upload a swap face image.");
         return;
       }
     } else {
       if (!prompt.trim()) {
-        alert("Please enter a prompt to generate an image.");
+        toast.error("Please enter a prompt to generate an image.");
         return;
       }
     }
@@ -1430,9 +1431,9 @@ export default function ImageStudio({
                   <button
                     type="button"
                     title="Delete"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (confirm("Are you sure you want to delete this generated item?")) {
+                      if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                         setLocalHistory(prev => prev.filter((_, i) => i !== idx));
                       }
                     }}
@@ -1461,8 +1462,8 @@ export default function ImageStudio({
                       kind: "delete",
                       label: "Delete",
                       danger: true,
-                      onSelect: () => {
-                        if (confirm("Are you sure you want to delete this generated item?")) {
+                      onSelect: async () => {
+                        if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                           setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
                         }
                       },
