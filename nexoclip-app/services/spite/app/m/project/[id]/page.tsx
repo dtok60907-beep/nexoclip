@@ -13,7 +13,6 @@ import { FAL_MODELS, getModelById } from '@/lib/fal-models'
 import { CREDIT_CONFIRM_THRESHOLD, formatCredits, formatCreditsShort, useGenerationCredits } from '@/lib/generation-credits'
 import { useIsMobile } from '@/components/ui/use-mobile'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
-import { VersionBadge } from '@/components/version-badge'
 import { startTour } from '@/lib/onboarding'
 import { uploadMediaFile } from '@/lib/upload-media'
 import { GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
@@ -340,7 +339,6 @@ export default function FlowThread() {
             <span className="text-sm font-mono truncate flex-1">{projectName || 'Project'}</span>
             <button onClick={() => startTour('flow')} aria-label="Take the tour" title="Take the tour"
               className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"><Question size={16} /></button>
-            <VersionBadge />
           </div>
         </div>
 

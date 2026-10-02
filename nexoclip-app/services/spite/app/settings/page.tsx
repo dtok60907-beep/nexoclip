@@ -11,7 +11,6 @@ import {
   type ConnectorAnimation,
 } from '@/lib/connector-animation'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
-import { VersionBadge } from '@/components/version-badge'
 import { startTour } from '@/lib/onboarding'
 
 export default function SettingsPage() {
@@ -278,7 +277,6 @@ export default function SettingsPage() {
           </Link>
           <h1 className="text-lg font-serif tracking-tight">Settings</h1>
           <div className="ml-auto flex items-center gap-3">
-            <VersionBadge />
             <button
               onClick={() => startTour('settings')}
               className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
