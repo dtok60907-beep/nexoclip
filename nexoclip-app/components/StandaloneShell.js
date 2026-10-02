@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
-import AssetsContent from './AssetsContent';
 import UsageContent from './UsageContent';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
@@ -778,8 +777,8 @@ export default function StandaloneShell({ initialTab, children }) {
         )}
 
         {/* Studio Content */}
-        <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#FCEED1]">
-        {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} /> : activeTab === 'assets' ? <div className="h-full w-full overflow-auto"><AssetsContent /></div> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
+        <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#030303] text-white">
+        {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} /> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
           <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
         {activeTab === 'video' && (
