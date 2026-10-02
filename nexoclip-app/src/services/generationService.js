@@ -61,7 +61,7 @@ export function validateVideoGenerationInput(input, options = {}) {
   if (!prompt) throw new Error('Video generation request is invalid: prompt is empty');
   // @mentions are expanded into long reference sentences before submit, so
   // the length the user sees in the editor can be much shorter than this.
-  if (prompt.length > 15000) throw new Error(`Video generation request is invalid: prompt is too long (${prompt.length}/15000 characters after @mentions are expanded)`);
+  if (prompt.length > 20000) throw new Error(`Video generation request is invalid: prompt is too long (${prompt.length}/20000 characters after @mentions are expanded)`);
   const parameters = {};
   if (supplied.canvasProjectId !== undefined) {
     const canvasProjectId = String(supplied.canvasProjectId).trim();

@@ -25,7 +25,7 @@ export function createGenerationPriceHandler({ price = estimateGenerationCredits
     if (videos) parameters.referenceVideos = Array.from({ length: videos }, () => '');
     const images = Math.min(10, Math.max(0, Number(query.get('referenceImages')) || 0));
     if (images) parameters.referenceImages = Array.from({ length: images }, () => '');
-    const promptLength = Math.min(15000, Math.max(0, Number(query.get('promptLength')) || 0));
+    const promptLength = Math.min(20000, Math.max(0, Number(query.get('promptLength')) || 0));
 
     try {
       const priced = await price({ kind, model, prompt: 'x'.repeat(promptLength), parameters });
