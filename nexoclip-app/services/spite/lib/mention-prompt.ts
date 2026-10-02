@@ -1,6 +1,7 @@
 import type { ModelConfig } from './fal-models'
 
 export type FolderType = 'character' | 'prop' | 'location' | 'general'
+export type MediaKind = 'image' | 'video' | 'audio'
 
 interface MentionInput {
   folderId: string
@@ -13,7 +14,7 @@ interface FolderInput {
   id: string
   name: string
   type: FolderType
-  assets: { id: string; workspaceAssetId?: string; r2_url: string }[]
+  assets: { id: string; workspaceAssetId?: string; r2_url: string; type?: MediaKind | string }[]
 }
 
 // One logical "subject" worth of reference images. For folder mentions
@@ -23,6 +24,8 @@ interface FolderInput {
 // element-based (Kling v3), and flattens them otherwise.
 export interface ReferenceGroup {
   urls: string[]
+  // Media kind of each url (same order). Missing means image.
+  kinds?: MediaKind[]
   workspaceAssetIds: string[]
   folderName?: string
   folderType?: FolderType
@@ -43,7 +46,11 @@ export interface ReferenceGroup {
 //   none              — model has no reference-image support at all.
 //                       Tags become readable folder names so the prompt
 //                       still makes sense; no URLs are sent.
+//   citation-media    — Seedance omni: images, videos, and audio are each
+//                       numbered on their own (@Image N, @Video N, @Audio N)
+//                       and sent as separate reference lists.
 export type RefStrategy =
+  | 'citation-media'
   | 'citation-flat'
   | 'citation-elements'
   | 'multi'
@@ -52,7 +59,10 @@ export type RefStrategy =
 
 export interface CompiledMentions {
   prompt: string
+  // Image references only; videos and audio clips go in their own lists.
   refGroups: ReferenceGroup[]
+  videoUrls: string[]
+  audioUrls: string[]
   strategy: RefStrategy
   // Mentions whose folder no longer exists (only reported once folders have
   // loaded). Generating with them would send images that were deleted.
@@ -80,6 +90,9 @@ function exactReference(type: FolderType, reference: string): string {
 
 export function pickRefStrategy(model: ModelConfig | null | undefined): RefStrategy {
   if (!model) return 'none'
+  // Frame tasks cannot carry references; omni tasks take every kind.
+  if (model.videoTaskMode === 'frame') return 'none'
+  if (model.videoTaskMode === 'omni') return 'citation-media'
   if (model.referenceCite) {
     return model.referenceParam === 'elements' ? 'citation-elements' : 'citation-flat'
   }
@@ -93,6 +106,12 @@ export function pickRefStrategy(model: ModelConfig | null | undefined): RefStrat
   }
   return 'none'
 }
+
+function mediaKind(type: unknown): MediaKind {
+  return type === 'video' || type === 'audio' ? type : 'image'
+}
+
+const CITE: Record<MediaKind, string> = { image: '@Image', video: '@Video', audio: '@Audio' }
 
 function collectGroups(
   prompt: string,
@@ -113,6 +132,7 @@ function collectGroups(
       seen.add(folder.id)
       groupsByFolderId.set(folder.id, {
         urls: canonicalIds.map((assetId) => `/api/assets/${encodeURIComponent(assetId)}/download`),
+        kinds: canonicalIds.map((assetId) => mediaKind(folder.assets.find((asset) => asset.workspaceAssetId === assetId)?.type)),
         workspaceAssetIds: canonicalIds,
         folderName: folder.name,
         folderType: folder.type,
@@ -129,15 +149,17 @@ function collectGroups(
     // Workspace assets are preferred because the worker can resolve their
     // authoritative Trust state. Assets that are not imported/trusted remain
     // valid raw image references rather than blocking the whole mention.
-    const urls = requested
-      .map((asset) => asset.workspaceAssetId
-        ? `/api/assets/${encodeURIComponent(asset.workspaceAssetId)}/download`
-        : asset.r2_url)
-      .filter(Boolean)
-    if (urls.length === 0) return
+    const usable = requested
+      .map((asset) => ({
+        url: asset.workspaceAssetId ? `/api/assets/${encodeURIComponent(asset.workspaceAssetId)}/download` : asset.r2_url,
+        kind: mediaKind(asset.type),
+      }))
+      .filter((asset) => Boolean(asset.url))
+    if (usable.length === 0) return
     seen.add(folder.id)
     groupsByFolderId.set(folder.id, {
-      urls,
+      urls: usable.map((asset) => asset.url),
+      kinds: usable.map((asset) => asset.kind),
       workspaceAssetIds: requested.flatMap((asset) => asset.workspaceAssetId ? [asset.workspaceAssetId] : []),
       folderName: folder.name,
       folderType: folder.type,
@@ -183,7 +205,37 @@ export function compileMentionsForModel(
   prefixRefCount = 0,
 ): CompiledMentions {
   const strategy = pickRefStrategy(model)
-  const { groupsByFolderId, orderedFolderIds } = collectGroups(prompt, mentions, folders)
+  const collected = collectGroups(prompt, mentions, folders)
+  // Keep only the media kinds this model accepts; a folder left empty is
+  // treated like an unmentioned one (its tag stays plain text).
+  const accepts: Record<MediaKind, boolean> = {
+    image: true,
+    video: strategy === 'citation-media' && Boolean(model?.maxReferenceVideos),
+    audio: strategy === 'citation-media' && Boolean(model?.supportsReferenceAudio),
+  }
+  const groupsByFolderId = new Map<string, ReferenceGroup>()
+  for (const [folderId, group] of collected.groupsByFolderId) {
+    const keep = group.urls.map((_, i) => accepts[group.kinds?.[i] ?? 'image'])
+    const urls = group.urls.filter((_, i) => keep[i])
+    if (urls.length === 0) continue
+    groupsByFolderId.set(folderId, { ...group, urls, kinds: (group.kinds ?? group.urls.map(() => 'image' as const)).filter((_, i) => keep[i]) })
+  }
+  const orderedFolderIds = collected.orderedFolderIds.filter((folderId) => groupsByFolderId.has(folderId))
+
+  // citation-media numbers each kind separately, in mention order. Images
+  // start after `prefixRefCount` (wired images that ride first).
+  const mediaCites = new Map<string, string[]>()
+  if (strategy === 'citation-media') {
+    const counters: Record<MediaKind, number> = { image: prefixRefCount, video: 0, audio: 0 }
+    for (const fid of orderedFolderIds) {
+      const group = groupsByFolderId.get(fid)!
+      mediaCites.set(fid, group.urls.map((_, i) => {
+        const kind = group.kinds?.[i] ?? 'image'
+        counters[kind] += 1
+        return `${CITE[kind]}${counters[kind]}`
+      }))
+    }
+  }
 
   // Pre-compute slot starts for citation-flat / multi (slot index = position
   // in the final flat URL array).
@@ -213,6 +265,9 @@ export function compileMentionsForModel(
     const name = group.folderName || ''
     const type = group.folderType || 'general'
 
+    if (strategy === 'citation-media') {
+      return withIdentity(folderId, type, mediaCites.get(folderId)!.join(' '))
+    }
     if (strategy === 'citation-flat') {
       const start = slotStarts.get(folderId)!
       const cite = model!.referenceCite
@@ -260,8 +315,21 @@ export function compileMentionsForModel(
   })
 
   let refGroups: ReferenceGroup[] = []
+  const videoUrls: string[] = []
+  const audioUrls: string[] = []
   if (strategy === 'none') {
     refGroups = []
+  } else if (strategy === 'citation-media') {
+    for (const fid of orderedFolderIds) {
+      const group = groupsByFolderId.get(fid)!
+      const kinds = group.kinds ?? group.urls.map(() => 'image' as const)
+      group.urls.forEach((url, i) => {
+        if (kinds[i] === 'video') videoUrls.push(url)
+        else if (kinds[i] === 'audio') audioUrls.push(url)
+      })
+      const images = group.urls.filter((_, i) => kinds[i] === 'image')
+      if (images.length) refGroups.push({ ...group, urls: images, kinds: images.map(() => 'image' as const) })
+    }
   } else if (strategy === 'single') {
     if (firstFolderId) {
       const first = groupsByFolderId.get(firstFolderId)!
@@ -275,5 +343,5 @@ export function compileMentionsForModel(
     ? []
     : [...new Set(mentions.filter((m) => !folders.some((f) => f.id === m.folderId)).map((m) => m.name))]
 
-  return { prompt: rewritten, refGroups, strategy, missingFolders }
+  return { prompt: rewritten, refGroups, videoUrls, audioUrls, strategy, missingFolders }
 }

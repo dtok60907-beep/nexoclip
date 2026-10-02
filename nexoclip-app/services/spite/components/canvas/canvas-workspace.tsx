@@ -162,7 +162,8 @@ const CONNECTION_RULES: Record<string, string[]> = {
   'prompt-out': ['prompt-in'], // shared text-input handle on Prompt, Image, and Video nodes
   'image-out': ['image-in', 'end-frame-in', 'reference-in'],
   'video-out': ['video-in'],
-  // Audio reference → a video node's reference audio input (Seedance 2.5).
+  // Seedance omni nodes take audio through @mentions; no node renders
+  // audio-in today, so this only keeps older saved edges valid.
   'audio-out': ['audio-in'],
 }
 
