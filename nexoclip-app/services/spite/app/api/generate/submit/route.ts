@@ -169,7 +169,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
     : {}
   const allowed = kind === 'image'
     ? new Set(['aspectRatio', 'resolution', 'quality', 'seed', 'name', 'swap_url'])
-    : new Set(['aspectRatio', 'duration', 'resolution', 'seed', 'videoUrl', 'videoUrls', 'audioUrls', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'omniReferenceTaskType', 'draftTaskId'])
+    : new Set(['aspectRatio', 'duration', 'resolution', 'seed', 'videoUrl', 'videoUrls', 'audioUrls', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'returnLastFrame', 'omniReferenceTaskType', 'draftTaskId'])
   const unsupported = Object.keys(settings).filter((key) => !allowed.has(key))
   if (unsupported.length) {
     throw Object.assign(new Error(`Unsupported durable generation parameters: ${unsupported.join(', ')}`), { status: 400 })
@@ -214,7 +214,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   // Draft, extend, and edit always use adaptive ratio. Normalize stale clients
   // rather than rejecting requests created before the Canvas control was added.
   const parameters: Record<string, unknown> = { aspectRatio: isSeedance25 && (isExtend || isEdit || settings.draft === true) ? 'adaptive' : (requestedRatio || '16:9') }
-  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'omniReferenceTaskType', 'draftTaskId']) {
+  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'returnLastFrame', 'omniReferenceTaskType', 'draftTaskId']) {
     if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
   }
   // 'auto' (-1) lets Seedance pick the length; edit always keeps the source length.

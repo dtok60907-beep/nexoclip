@@ -14,6 +14,7 @@ export interface EffectiveGenerationSettings {
   editMode: boolean
   outputFormat: 'mp4' | 'mov'
   watermark: boolean
+  returnLastFrame: boolean
   count: number
 }
 
@@ -69,6 +70,7 @@ export function resolveGenerationSettings(kind: GenerationKind, data: Record<str
     editMode,
     outputFormat: model?.supportsMov && d.outputFormat === 'mov' ? 'mov' : 'mp4',
     watermark: Boolean(model?.supportsWatermark) && Boolean(d.watermark),
+    returnLastFrame: Boolean(model?.supportsLastFrame) && Boolean(d.returnLastFrame),
     count: Math.max(1, Math.min(4, Number(d[kind === 'video' ? 'numVideos' : 'numImages']) || 1)),
   }
 }
@@ -91,6 +93,7 @@ export function settingsForModelChange(kind: GenerationKind, nextModelId: string
       editMode: model?.supportsEdit ? current.editMode : false,
       outputFormat: model?.supportsMov ? current.outputFormat : 'mp4',
       watermark: model?.supportsWatermark ? current.watermark : false,
+      returnLastFrame: model?.supportsLastFrame ? current.returnLastFrame : false,
     } : {}),
   }
 }

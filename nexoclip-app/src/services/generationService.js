@@ -90,6 +90,7 @@ export function validateVideoGenerationInput(input, options = {}) {
   if (supplied.draft !== undefined && typeof supplied.draft !== 'boolean') throw new Error('Video draft must be boolean');
   if (supplied.generateAudio !== undefined && typeof supplied.generateAudio !== 'boolean') throw new Error('Video generateAudio must be boolean');
   if (supplied.watermark !== undefined && typeof supplied.watermark !== 'boolean') throw new Error('Video watermark must be boolean');
+  if (supplied.returnLastFrame !== undefined && typeof supplied.returnLastFrame !== 'boolean') throw new Error('Video returnLastFrame must be boolean');
   if (taskType !== undefined && !['auto', 'reference', 'edit', 'extend'].includes(taskType)) throw new Error('Video task type is invalid');
   if (supplied.outputFormat !== undefined && !['mp4', 'mov'].includes(supplied.outputFormat)) throw new Error('Video output format is invalid');
   if ((isDraft || isDraftFinal || isExtend || isEdit) && !isSeedance25) throw new Error('Draft, edit, and extend are only supported by Seedance 2.5');
@@ -99,9 +100,10 @@ export function validateVideoGenerationInput(input, options = {}) {
   if ((isExtend || isEdit) && supplied.aspectRatio !== 'adaptive') throw new Error(`Seedance ${taskType} requires adaptive aspect ratio`);
   // Edit keeps the source video's length, so BytePlus only accepts -1.
   if (isEdit && supplied.duration !== undefined && Number(supplied.duration) !== -1) throw new Error('Seedance edit keeps the source video length; duration must be auto (-1)');
-  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
-  // Seedance 2.5 takes up to 30 images + 10 videos + 10 audio clips per request.
-  const limits = { referenceImages: isSeedance25 ? 30 : 10, referenceVideos: 10, referenceAudios: 10 };
+  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'returnLastFrame', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
+  // Seedance 2.5 takes up to 30 images + 10 videos + 10 audio clips per
+  // request; the 2.0 family takes 9 + 3 + 3 (images stay at the older 10).
+  const limits = { referenceImages: isSeedance25 ? 30 : 10, referenceVideos: isSeedance25 ? 10 : 3, referenceAudios: isSeedance25 ? 10 : 3 };
   for (const key of ['referenceImages', 'referenceVideos', 'referenceAudios']) {
     if (supplied[key] !== undefined) {
       if (Array.isArray(supplied[key]) && supplied[key].length > limits[key]) throw new Error(`Video ${key} must be tenant asset references: too many (${supplied[key].length}/${limits[key]})`);

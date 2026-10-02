@@ -186,12 +186,12 @@ test('Seedance omni numbers images, videos, and audio separately and splits them
   assert.deepEqual(result.audioUrls, ['/canvas/api/r2-image/v1.mp3'])
 })
 
-test('Seedance 2.0 omni drops video and audio it cannot take; frame models take no references', () => {
+test('Seedance 2.0 omni takes videos; frame models take no references', () => {
   const folders = [{ id: 'clip', name: 'Clip', type: 'general' as const, assets: [{ id: 'c1', r2_url: '/canvas/api/r2-image/c1.mp4', type: 'video' }] }]
   const mentions = [{ folderId: 'clip', name: 'Clip', selectedAssetIds: [] }]
   const older = compileMentionsForModel('Use @Clip', mentions, folders, getModelById('seedance-2.0'))
-  assert.equal(older.prompt, 'Use @Clip')
-  assert.deepEqual(older.videoUrls, [])
+  assert.match(older.prompt, /@Video1/)
+  assert.deepEqual(older.videoUrls, ['/canvas/api/r2-image/c1.mp4'])
   const frameResult = compileMentionsForModel('Use @Clip', mentions, folders, getModelById('seedance-2.5-frame'))
   assert.equal(frameResult.strategy, 'none')
   assert.deepEqual(frameResult.refGroups, [])

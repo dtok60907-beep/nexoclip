@@ -27,6 +27,7 @@ function videoRequest(job, { referenceImages, frameImages, referenceVideos, refe
     ...(parameters.outputFormat ? { outputFormat: parameters.outputFormat } : {}),
     ...(parameters.generateAudio !== undefined ? { generateAudio: Boolean(parameters.generateAudio) } : {}),
     ...(parameters.watermark !== undefined ? { watermark: Boolean(parameters.watermark) } : {}),
+    ...(parameters.returnLastFrame ? { returnLastFrame: true } : {}),
     ...(parameters.omniReferenceTaskType ? { omniReferenceTaskType: parameters.omniReferenceTaskType } : {}),
     ...(framed.length ? { frameImages: framed } : {}),
     ...(referenceImages.length ? { referenceImages } : {}),
@@ -52,7 +53,7 @@ function providerFailure(status) {
   });
 }
 
-export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest }) {
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
   const submitToProvider = async (job) => {
     let hasTrustedAsset = false;
@@ -118,6 +119,30 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     return { provider, providerRequestId, usage: submitted.usage || {} };
   };
 
+  // The last frame is a bonus output: a failure here is logged and the video
+  // still succeeds.
+  const saveLastFrame = async (job, status, client) => {
+    const url = status?.content?.last_frame_url;
+    if (typeof url !== 'string' || !/^https:\/\//i.test(url)) return null;
+    try {
+      const response = await fetchImpl(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get('content-type')?.startsWith('image/') ? response.headers.get('content-type') : 'image/png';
+      const key = `${job.workspace_id}/${randomUUID()}`;
+      if (typeof storage.createUploadUrl === 'function') {
+        const upload = await storage.createUploadUrl({ key, contentType });
+        await storage.put(upload.url || upload, buffer, contentType);
+      } else {
+        await storage.put(key, buffer, contentType);
+      }
+      return await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}-last-frame.png`, contentType, sizeBytes: buffer.length });
+    } catch (error) {
+      console.error('[video] could not save last frame', job.id, error?.message);
+      return null;
+    }
+  };
+
   return async (job) => {
     // A job that already reached the provider (its worker died mid-poll, e.g.
     // during a deploy) resumes polling that same task instead of submitting
@@ -153,8 +178,12 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const client = await pool.connect();
     try {
       const asset = await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}.mp4`, contentType, sizeBytes: output.buffer.length });
+      const outputs = [{ assetId: asset.id }];
+      // Output 2: the last frame, kept so the next shot can start from it.
+      const lastFrame = job.parameters?.returnLastFrame ? await saveLastFrame(job, status, client) : null;
+      if (lastFrame) outputs.push({ assetId: lastFrame.id });
       // BytePlus reports the billed tokens on the finished task.
-      return { status: 'succeeded', provider, providerRequestId, outputs: [{ assetId: asset.id }], usage: { ...usage, ...(status?.usage && typeof status.usage === 'object' ? status.usage : {}) } };
+      return { status: 'succeeded', provider, providerRequestId, outputs, usage: { ...usage, ...(status?.usage && typeof status.usage === 'object' ? status.usage : {}) } };
     } finally { client.release(); }
   };
 }

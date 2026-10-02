@@ -23,12 +23,18 @@ export function createTerminalGenerationPatch(generation: DurableGeneration): Re
 
   if (generation.status === 'succeeded') {
     const outputUrl = generation.outputs?.find((output) => output.download?.url)?.download?.url
+    // A video job asked for return_last_frame also stores its last frame as
+    // an image output; null clears a previous run's frame.
+    const lastFrameUrl = generation.kind === 'video'
+      ? generation.outputs?.find((output) => output.contentType?.startsWith('image/') && output.download?.url)?.download?.url ?? null
+      : undefined
     if (outputUrl) {
       return {
         lastGenerationId: generation.id,
         generationStatus: 'completed',
         generationError: null,
         outputUrl,
+        ...(lastFrameUrl !== undefined ? { lastFrameUrl } : {}),
         status: 'completed',
         error: null,
       }

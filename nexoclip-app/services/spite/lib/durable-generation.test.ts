@@ -52,3 +52,27 @@ test('marks only non-terminal durable nodes for recovery', () => {
   assert.equal(needsDurableGenerationRecovery({ generationId: 'g1', generationStatus: 'processing' }), true)
   assert.equal(needsDurableGenerationRecovery({ generationId: 'g1', generationStatus: 'completed' }), false)
 })
+
+test('a video with a saved last frame exposes it; one without clears it', () => {
+  const withFrame = createTerminalGenerationPatch({
+    id: 'g1', kind: 'video', status: 'succeeded',
+    outputs: [
+      { assetId: 'v', contentType: 'video/mp4', download: { url: '/api/assets/v/download' } },
+      { assetId: 'f', contentType: 'image/png', download: { url: '/api/assets/f/download' } },
+    ],
+  } as any)
+  assert.equal(withFrame?.outputUrl, '/api/assets/v/download')
+  assert.equal(withFrame?.lastFrameUrl, '/api/assets/f/download')
+
+  const withoutFrame = createTerminalGenerationPatch({
+    id: 'g2', kind: 'video', status: 'succeeded',
+    outputs: [{ assetId: 'v', contentType: 'video/mp4', download: { url: '/api/assets/v/download' } }],
+  } as any)
+  assert.equal(withoutFrame?.lastFrameUrl, null)
+
+  const image = createTerminalGenerationPatch({
+    id: 'g3', kind: 'image', status: 'succeeded',
+    outputs: [{ assetId: 'i', contentType: 'image/png', download: { url: '/api/assets/i/download' } }],
+  } as any)
+  assert.equal(image && 'lastFrameUrl' in image, false)
+})
