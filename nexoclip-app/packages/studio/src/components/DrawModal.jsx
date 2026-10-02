@@ -1,3 +1,5 @@
+import { confirmDialog } from "./confirmDialog.jsx";
+import toast from "react-hot-toast";
 import React, { useState, useEffect, useRef } from "react";
 import { uploadFile, generateI2I } from "../generationClient.js";
 
@@ -836,11 +838,14 @@ export default function DrawModal({
   };
 
   // Clear Canvas (Remove image, drawings, text overlays and reset to setup screen)
-  const handleClearCanvas = () => {
+  const handleClearCanvas = async () => {
     if (
-      confirm(
-        "Clear all drawings, text overlays, and remove the background image?",
-      )
+      await confirmDialog({
+        title: "Clear the canvas?",
+        description: "Removes all drawings, text overlays, and the background image.",
+        confirmLabel: "Clear",
+        destructive: true,
+      })
     ) {
       const canvas = canvasRef.current;
       if (canvas) {
@@ -963,11 +968,11 @@ export default function DrawModal({
         }
       });
 
-      alert("Generations complete!");
+      toast.success("Generations complete!");
       onClose();
     } catch (e) {
       console.error("[DrawModal] Generation failed:", e);
-      alert(`Generation failed: ${e.message}`);
+      toast.error(`Generation failed: ${e.message}`);
     } finally {
       setGenerating(false);
     }
@@ -1781,7 +1786,7 @@ export default function DrawModal({
 
               <button
                 onClick={() =>
-                  alert(
+                  toast(
                     "Draw to Edit: paint directly over an image, insert overlay image/text objects, drag/resize elements, or select and delete specific components.",
                   )
                 }

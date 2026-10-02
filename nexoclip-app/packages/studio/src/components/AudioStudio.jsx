@@ -89,7 +89,7 @@ function AudioFileUploader({ label, value, onChange, apiKey }) {
     if (!file) return;
 
     if (file.size > 20 * 1024 * 1024) {
-      alert("Audio file exceeds 20MB limit.");
+      toast.error("Audio file exceeds 20MB limit.");
       return;
     }
 
@@ -105,7 +105,7 @@ function AudioFileUploader({ label, value, onChange, apiKey }) {
       onChange(url);
     } catch (err) {
       setUploadState(UPLOAD_STATE.IDLE);
-      alert(`Upload failed: ${err.message}`);
+      toast.error(`Upload failed: ${err.message}`);
     } finally {
       setProgress(0);
     }
@@ -602,7 +602,7 @@ export default function AudioStudio({
             .then(url => {
               setParams(prev => ({ ...prev, [key]: url }));
             })
-            .catch(err => alert(`Failed to upload dropped file: ${err.message}`));
+            .catch(err => toast.error(`Failed to upload dropped file: ${err.message}`));
         } else if (firstAudioListField) {
           const [key] = firstAudioListField;
           uploadFile(apiKey, audioFiles[0], () => {})
@@ -613,7 +613,7 @@ export default function AudioStudio({
                 return { ...prev, [key]: currentList };
               });
             })
-            .catch(err => alert(`Failed to upload dropped file: ${err.message}`));
+            .catch(err => toast.error(`Failed to upload dropped file: ${err.message}`));
         }
       }
       onFilesHandled?.();
@@ -639,7 +639,7 @@ export default function AudioStudio({
     if (selectedModel.required) {
       for (const field of selectedModel.required) {
         if (!params[field] || (Array.isArray(params[field]) && params[field].length === 0)) {
-          alert(`Please complete the required field: ${selectedModel.inputs?.[field]?.title || field}`);
+          toast.error(`Please complete the required field: ${selectedModel.inputs?.[field]?.title || field}`);
           return;
         }
       }

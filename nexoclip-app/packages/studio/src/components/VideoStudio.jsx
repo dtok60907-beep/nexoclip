@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "./confirmDialog.jsx";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
@@ -868,7 +869,7 @@ export default function VideoStudio({
   const uploadImageReference = useCallback(
     async (file) => {
       if (file.size > 10 * 1024 * 1024) {
-        alert("Image exceeds 10MB limit.");
+        toast.error("Image exceeds 10MB limit.");
         return;
       }
 
@@ -879,7 +880,7 @@ export default function VideoStudio({
         applyImageReferenceUrl(url);
       } catch (err) {
         console.error("[VideoStudio] Image upload failed:", err);
-        alert(`Image upload failed: ${err.message}`);
+        toast.error(`Image upload failed: ${err.message}`);
       } finally {
         setImageUploading(false);
         setImageProgress(0);
@@ -891,7 +892,7 @@ export default function VideoStudio({
   const processDroppedVideo = useCallback(
     async (file) => {
       if (file.size > 50 * 1024 * 1024) {
-        alert("Video exceeds 50MB limit.");
+        toast.error("Video exceeds 50MB limit.");
         return;
       }
       setVideoUploading(true);
@@ -912,7 +913,7 @@ export default function VideoStudio({
         setPrompt("");
         setPromptDisabled(true);
       } catch (err) {
-        alert(`Video upload failed: ${err.message}`);
+        toast.error(`Video upload failed: ${err.message}`);
       } finally {
         setVideoUploading(false);
         setVideoProgress(0);
@@ -1009,7 +1010,7 @@ export default function VideoStudio({
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      alert("Image exceeds 10MB limit.");
+      toast.error("Image exceeds 10MB limit.");
       return;
     }
     setEndImageUploading(true);
@@ -1020,7 +1021,7 @@ export default function VideoStudio({
       });
       setUploadedEndImageUrl(url);
     } catch (err) {
-      alert(`End frame upload failed: ${err.message}`);
+      toast.error(`End frame upload failed: ${err.message}`);
     } finally {
       setEndImageUploading(false);
       setEndImageProgress(0);
@@ -1035,7 +1036,7 @@ export default function VideoStudio({
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 50 * 1024 * 1024) {
-      alert("Video exceeds 50MB limit.");
+      toast.error("Video exceeds 50MB limit.");
       return;
     }
     setVideoUploading(true);
@@ -1073,7 +1074,7 @@ export default function VideoStudio({
       }
     } catch (err) {
       console.error("[VideoStudio] Video upload failed:", err);
-      alert(`Video upload failed: ${err.message}`);
+      toast.error(`Video upload failed: ${err.message}`);
     } finally {
       setVideoUploading(false);
       setVideoProgress(0);
@@ -1157,20 +1158,20 @@ export default function VideoStudio({
 
     if (v2vMode) {
       if (!uploadedVideoUrl) {
-        alert("Please upload a video first.");
+        toast.error("Please upload a video first.");
         return;
       }
       if (currentModel?.imageField && !uploadedImageUrl) {
-        alert("Please upload a reference image for motion control.");
+        toast.error("Please upload a reference image for motion control.");
         return;
       }
       if (currentModel?.promptRequired && !trimmedPrompt) {
-        alert("Please describe the motion you want.");
+        toast.error("Please describe the motion you want.");
         return;
       }
     } else if (isExtendMode) {
       if (!lastGenerationId) {
-        alert(
+        toast.error(
           "No Seedance 2.0 generation found to extend. Generate a video first.",
         );
         return;
@@ -1179,18 +1180,18 @@ export default function VideoStudio({
       const maxImgs = getMaxImagesForI2VModel(selectedModel);
       if (maxImgs > 2) {
         if (uploadedImageUrls.length === 0) {
-          alert("Please upload at least one reference image first.");
+          toast.error("Please upload at least one reference image first.");
           return;
         }
       } else {
         if (!uploadedImageUrl) {
-          alert("Please upload a start frame image first.");
+          toast.error("Please upload a start frame image first.");
           return;
         }
       }
     } else {
       if (!trimmedPrompt) {
-        alert("Please enter a prompt to generate a video.");
+        toast.error("Please enter a prompt to generate a video.");
         return;
       }
     }
@@ -1525,9 +1526,9 @@ export default function VideoStudio({
                     <button
                       type="button"
                       title="Delete"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        if (confirm("Are you sure you want to delete this generated item?")) {
+                        if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                           setLocalHistory(prev => prev.filter((_, i) => i !== idx));
                         }
                       }}
@@ -1563,8 +1564,8 @@ export default function VideoStudio({
                         kind: "delete",
                         label: "Delete",
                         danger: true,
-                        onSelect: () => {
-                          if (confirm("Are you sure you want to delete this generated item?")) {
+                        onSelect: async () => {
+                          if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                             setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
                           }
                         },

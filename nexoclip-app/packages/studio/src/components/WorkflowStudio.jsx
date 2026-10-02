@@ -1,4 +1,6 @@
 "use client";
+import { confirmDialog } from "./confirmDialog.jsx";
+import toast from "react-hot-toast";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -296,14 +298,14 @@ function WorkflowStudioInner({
   );
 
   const handleDeleteWorkflow = async (wfId) => {
-    if (!confirm("Are you sure you want to delete this workflow?")) return;
+    if (!await confirmDialog({ title: "Delete this workflow?", confirmLabel: "Delete", destructive: true })) return;
     setIsDeletingId(wfId);
     try {
       await deleteWorkflow(apiKey, wfId);
       setWorkflows((prev) => prev.filter((w) => w.id !== wfId));
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Failed to delete workflow");
+      toast.error("Failed to delete workflow");
     } finally {
       setIsDeletingId(null);
     }
@@ -325,7 +327,7 @@ function WorkflowStudioInner({
       setRenamingWorkflow(null);
     } catch (err) {
       console.error("Rename failed:", err);
-      alert("Failed to rename workflow");
+      toast.error("Failed to rename workflow");
     }
   };
 

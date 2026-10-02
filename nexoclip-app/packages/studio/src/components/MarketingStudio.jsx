@@ -1,4 +1,6 @@
 "use client";
+import { confirmDialog } from "./confirmDialog.jsx";
+import toast from "react-hot-toast";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { uploadFile, generateMarketingStudioAd } from "../generationClient.js";
@@ -367,7 +369,7 @@ export default function MarketingStudio({
         try {
           const url = await uploadFile(apiKey, file, (pct) => setUploadProgress(p => ({ ...p, additional: pct })));
           setAdditionalImages(prev => [...prev, url].slice(0, 6));
-        } catch (err) { alert(err.message); }
+        } catch (err) { toast.error(err.message); }
       }
     } else {
       const file = files[0];
@@ -375,14 +377,14 @@ export default function MarketingStudio({
         const url = await uploadFile(apiKey, file, (pct) => setUploadProgress(p => ({ ...p, [target]: pct })));
         if (target === 'product') setProductImage(url);
         else setAvatarImage(url);
-      } catch (err) { alert(err.message); }
+      } catch (err) { toast.error(err.message); }
     }
     setUploadProgress(p => ({ ...p, [target]: 0 }));
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return alert("Please enter an ad script.");
-    if (!productImage) return alert("Please upload a product image.");
+    if (!prompt.trim()) return toast.error("Please enter an ad script.");
+    if (!productImage) return toast.error("Please upload a product image.");
 
     onGenerationStart?.();
     setIsGenerating(true);
@@ -458,9 +460,9 @@ export default function MarketingStudio({
                    <button
                     type="button"
                     title="Delete"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (confirm("Are you sure you want to delete this generated item?")) {
+                      if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                         if (!historyItems) {
                           setLocalHistory(prev => prev.filter(h => h.id !== entry.id));
                         }
@@ -490,8 +492,8 @@ export default function MarketingStudio({
                       kind: "delete",
                       label: "Delete",
                       danger: true,
-                      onSelect: () => {
-                        if (confirm("Are you sure you want to delete this generated item?")) {
+                      onSelect: async () => {
+                        if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                           if (!historyItems) {
                             setLocalHistory((prev) =>
                               prev.filter((item) => item.id !== entry.id),

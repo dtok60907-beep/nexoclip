@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "./confirmDialog.jsx";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
@@ -616,7 +617,7 @@ export default function RecastStudio({
   const handleVideoPick = useCallback(
     async (file) => {
       if (file.size > 50 * 1024 * 1024) {
-        alert("Video exceeds 50MB limit.");
+        toast.error("Video exceeds 50MB limit.");
         return;
       }
       setVideoState(UPLOAD_STATE.UPLOADING);
@@ -635,7 +636,7 @@ export default function RecastStudio({
         });
       } catch (err) {
         setVideoState(UPLOAD_STATE.IDLE);
-        alert(`Video upload failed: ${err.message}`);
+        toast.error(`Video upload failed: ${err.message}`);
       } finally {
         setVideoProgress(0);
       }
@@ -650,7 +651,7 @@ export default function RecastStudio({
   const handleImageUpload = useCallback(
     async (file) => {
       if (file.size > 10 * 1024 * 1024) {
-        alert("Image exceeds 10MB limit.");
+        toast.error("Image exceeds 10MB limit.");
         return;
       }
       setImageState(UPLOAD_STATE.UPLOADING);
@@ -669,7 +670,7 @@ export default function RecastStudio({
         });
       } catch (err) {
         setImageState(UPLOAD_STATE.IDLE);
-        alert(`Image upload failed: ${err.message}`);
+        toast.error(`Image upload failed: ${err.message}`);
       } finally {
         setImageProgress(0);
       }
@@ -722,11 +723,11 @@ export default function RecastStudio({
   // ── Generation ──────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!videoUrl) {
-      alert("Please upload a source video first.");
+      toast.error("Please upload a source video first.");
       return;
     }
     if (!imageUrl) {
-      alert("Please upload a character image first.");
+      toast.error("Please upload a character image first.");
       return;
     }
 
@@ -842,9 +843,9 @@ export default function RecastStudio({
                   <button
                     type="button"
                     title="Delete"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (confirm("Are you sure you want to delete this generated item?")) {
+                      if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                         setInternalHistory(prev => prev.filter((_, i) => i !== idx));
                       }
                     }}
@@ -872,8 +873,8 @@ export default function RecastStudio({
                       kind: "delete",
                       label: "Delete",
                       danger: true,
-                      onSelect: () => {
-                        if (confirm("Are you sure you want to delete this generated item?")) {
+                      onSelect: async () => {
+                        if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                           setInternalHistory((prev) => prev.filter((_, i) => i !== idx));
                         }
                       },

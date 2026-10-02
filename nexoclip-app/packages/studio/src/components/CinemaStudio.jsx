@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "./confirmDialog.jsx";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateSaasImage, uploadFile } from "../generationClient.js";
@@ -912,9 +913,9 @@ export default function CinemaStudio({
                   <button
                     type="button"
                     title="Delete"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (confirm("Are you sure you want to delete this generated item?")) {
+                      if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                         setInternalHistory(prev => prev.filter((_, i) => i !== idx));
                       }
                     }}
@@ -965,8 +966,8 @@ export default function CinemaStudio({
                       kind: "delete",
                       label: "Delete",
                       danger: true,
-                      onSelect: () => {
-                        if (confirm("Are you sure you want to delete this generated item?")) {
+                      onSelect: async () => {
+                        if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
                           setInternalHistory((prev) => prev.filter((_, i) => i !== idx));
                         }
                       },
