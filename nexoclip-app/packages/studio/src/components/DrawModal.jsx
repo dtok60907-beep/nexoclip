@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { uploadFile, generateI2I } from "../generationClient.js";
+import { uploadFile, generateSaasImage } from "../generationClient.js";
 
 export default function DrawModal({
   isOpen,
@@ -938,22 +938,25 @@ export default function DrawModal({
 
       const results = await Promise.all(
         Array.from({ length: batchSize }).map(async () => {
-          const genParams = {
+          return await generateSaasImage({
+            workspace_id: workspaceId,
             model: selectedModel,
             prompt: promptText.trim() || "Edit the image based on the drawing overlay",
-            images_list: [uploadedUrl],
-            aspect_ratio: aspectRatio === "Auto" ? "1:1" : aspectRatio,
-            workspace_id: workspaceId,
-          };
-          return await generateI2I(apiKey, genParams);
+            parameters: {
+              aspectRatio: aspectRatio === "Auto" ? "1:1" : aspectRatio,
+              referenceImages: [uploadedUrl],
+            },
+            idempotencyKey: crypto.randomUUID(),
+          });
         }),
       );
 
       results.forEach((res) => {
-        if (res && res.url) {
+        const outputUrl = res?.url || res?.outputs?.[0]?.url;
+        if (outputUrl) {
           const entry = {
             id: res.id || Math.random().toString(36).substring(7),
-            url: res.url,
+            url: outputUrl,
             prompt: `Draw to Edit with ${selectedModel === "nano-banana-pro-edit" ? "Nano Banana Pro Edit" : "Nano Banana 2 Edit"}`,
             model: selectedModel,
             aspect_ratio: aspectRatio === "Auto" ? "1:1" : aspectRatio,

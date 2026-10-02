@@ -1,6 +1,11 @@
+// POST /api/openrouter/videos is retired (410 ENDPOINT_RETIRED). It submitted paid
+// video jobs to the provider WITHOUT reserving credits. Video generation now goes
+// through the credited POST /api/generations. The GET poll route
+// (videos/[id]/route.js) is intentionally untouched so already-submitted legacy jobs
+// can still be reattached; polling adds no provider spend.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVideoSubmitHandler } from '../../app/api/openrouter/videos/route.js';
+import { createVideoSubmitHandler, POST } from '../../app/api/openrouter/videos/route.js';
 
 function postReq(body) {
   const r = new Request('http://app/api/openrouter/videos', {
@@ -11,82 +16,29 @@ function postReq(body) {
   return r;
 }
 
-test('submitting a video creates a durable video job and returns its id', async () => {
-  let created;
+test('video POST is retired: 410 ENDPOINT_RETIRED and no submit/createJob/tenant call', async () => {
+  const calls = [];
+  const spy = (name) => async () => { calls.push(name); return { id: 'x' }; };
   const handler = createVideoSubmitHandler({
-    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
-    env: { OPENROUTER_API_KEY: 'k' },
-    submitVideo: async () => ({ id: 'or-1', polling_url: 'p', status: 'pending' }),
-    createJob: async ({ workspaceId, kind }) => {
-      created = { workspaceId, kind };
-      return { id: 'job-1', status: 'queued' };
-    },
+    resolveTenant: spy('resolveTenant'), env: { OPENROUTER_API_KEY: 'k' },
+    submitVideo: spy('submitVideo'), createJob: spy('createJob'), updateJobStatus: spy('updateJobStatus'),
   });
   const res = await handler(postReq({ model: 'google/veo-3.1', prompt: 'a cat' }));
-  assert.equal(res.status, 202);
-  const body = await res.json();
-  assert.equal(body.job_id, 'job-1');
-  assert.deepEqual(created, { workspaceId: 'ws-1', kind: 'video' });
+  assert.equal(res.status, 410);
+  assert.deepEqual(await res.json(), { error: 'This endpoint has been retired. Use /api/generations.', code: 'ENDPOINT_RETIRED' });
+  assert.deepEqual(calls, []);
 });
 
-test('extracts a video_url input_reference into referenceVideos for video-to-video submits', async () => {
-  let submittedParams;
-  const handler = createVideoSubmitHandler({
-    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
-    env: { OPENROUTER_API_KEY: 'k' },
-    submitVideo: async (params) => { submittedParams = params; return { id: 'or-1', polling_url: 'p', status: 'pending' }; },
-    createJob: async () => ({ id: 'job-1', status: 'queued' }),
-  });
-  const res = await handler(postReq({
-    model: 'runway/aleph-2',
-    prompt: 'make it night time',
-    input_references: [{ type: 'video_url', video_url: { url: 'https://cdn.example/in.mp4' } }],
-  }));
-  assert.equal(res.status, 202);
-  assert.deepEqual(submittedParams.referenceVideos, ['https://cdn.example/in.mp4']);
-  assert.deepEqual(submittedParams.referenceImages, []);
-});
-
-test('rejects client asset URIs before public video submission', async () => {
-  let submissions = 0;
-  const handler = createVideoSubmitHandler({
-    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
-    submitVideo: async () => { submissions += 1; return { id: 'unsafe' }; },
-  });
-
+test('video POST is retired for video-to-video and asset-reference bodies too', async () => {
+  const handler = createVideoSubmitHandler();
   for (const body of [
-    { model: 'bytedance/seedance-2.5', prompt: 'x', input_references: [{ image_url: { url: 'asset://attacker' } }] },
-    { model: 'bytedance/seedance-2.5', prompt: 'x', frame_images: [{ image_url: { url: ' ASSET://attacker' } }] },
+    { model: 'runway/aleph-2', prompt: 'x', input_references: [{ type: 'video_url', video_url: { url: 'https://cdn.example/in.mp4' } }] },
+    { model: 'bytedance/seedance-2.5', prompt: 'x', input_references: [{ image_url: { url: 'asset://a' } }] },
+    {},
   ]) {
-    const response = await handler(postReq(body));
-    assert.equal(response.status, 400);
-    assert.equal((await response.json()).code, 'INVALID_REFERENCE_IMAGE');
+    const res = await handler(postReq(body));
+    assert.equal(res.status, 410);
+    assert.equal((await res.json()).code, 'ENDPOINT_RETIRED');
   }
-  assert.equal(submissions, 0);
-});
-
-test('stores provider polling metadata and marks the durable video job running', async () => {
-  let createdParams; let updated;
-  const handler = createVideoSubmitHandler({
-    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
-    submitVideo: async () => ({ id: 'provider-1', provider: 'byteplus', polling_url: 'p' }),
-    createJob: async ({ params }) => { createdParams = params; return { id: 'job-1' }; },
-    updateJobStatus: async (args) => { updated = args; },
-  });
-  await handler(postReq({ model: 'seedance', prompt: 'a cat' }));
-  assert.deepEqual(createdParams, { providerId: 'provider-1', provider: 'byteplus', model: 'seedance', prompt: 'a cat' });
-  assert.equal(updated.status, 'running');
-});
-
-test('missing model/prompt is 400 before any job is created', async () => {
-  let calls = 0;
-  const handler = createVideoSubmitHandler({
-    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
-    env: { OPENROUTER_API_KEY: 'k' },
-    submitVideo: async () => ({ id: 'x' }),
-    createJob: async () => { calls += 1; return { id: 'j' }; },
-  });
-  const res = await handler(postReq({ prompt: 'no model' }));
-  assert.equal(res.status, 400);
-  assert.equal(calls, 0);
+  assert.equal((await POST(postReq({}))).status, 410);
 });

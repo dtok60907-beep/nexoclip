@@ -33,3 +33,16 @@ test('returns durable queued job when publication is deferred', async () => {
   assert.equal(response.status, 201);
   assert.equal((await response.json()).generation.id, 'g1');
 });
+
+test('insufficient credits is rejected with a readable message and never publishes to the queue', async () => {
+  let published = 0;
+  const handler = createGenerationsPostHandler({
+    resolveContext: async () => ({ user: { id: 'u1' }, workspace: { id: 'w1', role: 'member' } }),
+    reserve: async () => { throw new Error('Insufficient credits'); },
+    publish: async () => { published += 1; }, pool: {},
+  });
+  const response = await handler(request({ kind: 'image', prompt: 'fox', model: 'google/gemini-3-pro-image' }));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'Insufficient credits');
+  assert.equal(published, 0);
+});

@@ -98,3 +98,14 @@ test('failed generation releases the reservation and timeout refund is idempoten
   assert.equal(result.settlement_status, 'refunded');
   assert.match(refundPool.calls.find(({ text }) => /INSERT INTO credit_ledger/.test(text)).values[3], /refund/);
 });
+
+test('refunding a failed reserved generation twice writes the ledger only once', async () => {
+  const pool = poolFor({ generationStatus: 'failed', estimatedCost: '10' });
+  const first = await refundGenerationReservation(pool, { workspaceId: 'w1', generationId: 'g1' });
+  const second = await refundGenerationReservation(pool, { workspaceId: 'w1', generationId: 'g1' });
+  assert.equal(first.settlement_status, 'refunded');
+  assert.equal(second.settlement_status, 'refunded');
+  const ledgerInserts = pool.calls.filter(({ text }) => /INSERT INTO credit_ledger/.test(text));
+  assert.equal(ledgerInserts.length, 1);
+  assert.equal(ledgerInserts[0].values[1], 10);
+});
