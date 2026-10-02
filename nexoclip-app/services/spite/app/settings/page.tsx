@@ -1,5 +1,6 @@
 'use client'
 
+import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath } from '@/lib/base-path'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -89,12 +90,15 @@ export default function SettingsPage() {
     const aggressive = [a, r].filter((n) => n > 0 && n < 7)
     if (aggressive.length > 0) {
       const minN = Math.min(...aggressive)
-      const ok = window.confirm(
-        `Heads up — a ${minN}-day window is short.\n\n` +
+      const ok = await confirmDialog({
+        title: `A ${minN}-day window is short`,
+        confirmLabel: 'Save',
+        destructive: true,
+        description:
         `Each night the cleanup will permanently delete UNPROTECTED items only ` +
         `(results that are NOT on any canvas, and reference inputs) once they pass ${minN} day${minN === 1 ? '' : 's'}.\n\n` +
         `Anything on a canvas is always kept — it is never touched. Continue?`,
-      )
+      })
       if (!ok) return
     }
     setSavingRetention(true)

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Montserrat, Inter, Geist_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
+import { DialogHost } from '@/components/ui/dialog-host'
 import './globals.css'
 
 const montserrat = Montserrat({
@@ -57,6 +58,7 @@ export default function RootLayout({
       <body className="font-sans antialiased bg-background text-foreground min-h-screen" suppressHydrationWarning>
         {children}
         <Toaster theme="dark" position="bottom-right" />
+        <DialogHost />
       </body>
     </html>
   )

@@ -1,5 +1,6 @@
 'use client'
 
+import { promptDialog } from '@/components/ui/dialog-host'
 import { withBasePath } from '@/lib/base-path'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -42,7 +43,7 @@ export default function MobileProjects() {
   }, [])
 
   async function newProject() {
-    const name = window.prompt('New project name')?.trim()
+    const name = (await promptDialog({ title: 'New project', placeholder: 'Project name', confirmLabel: 'Create' }))?.trim()
     if (!name) return
     setCreating(true)
     try {
