@@ -1460,7 +1460,7 @@ export default function VideoStudio({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex flex-col items-center justify-center bg-[#FCEED1] text-[#110C2A] relative overflow-hidden"
+      className="w-full h-full flex flex-col items-center justify-center bg-app-bg relative overflow-hidden"
     >
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">

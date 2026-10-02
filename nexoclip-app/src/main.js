@@ -10,10 +10,6 @@ const mountedPages = {};
 
 // Router — show/hide instead of destroy
 function navigate(page) {
-  if (page === 'assets') {
-    window.location.href = '/assets';
-    return;
-  }
   if (!contentArea) return;
 
   // Hide all existing pages
