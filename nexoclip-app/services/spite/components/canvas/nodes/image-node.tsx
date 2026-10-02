@@ -145,7 +145,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const [providerModel, setProviderModel] = useState<string | null>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [folderModalOpen, setFolderModalOpen] = useState(false)
-  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
+  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location' | 'general'>('character')
   const [isRenaming, setIsRenaming] = useState(false)
   const [labelDraft, setLabelDraft] = useState('')
   
@@ -415,7 +415,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     setLabelDraft((data.label as string) || '')
     setIsRenaming(true)
   }
-  const handleAddToFolder = (type: 'character' | 'prop' | 'location') => {
+  const handleAddToFolder = (type: 'character' | 'prop' | 'location' | 'general') => {
     setFolderType(type)
     setFolderModalOpen(true)
   }
