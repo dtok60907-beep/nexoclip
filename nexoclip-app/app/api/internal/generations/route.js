@@ -88,7 +88,7 @@ export function createInternalGenerationHandler({
       // Drafts completed before the task id was stored on the job only have it
       // on their output row.
       const draftTaskId = generation?.provider_request_id || generation?.outputs?.[0]?.providerRequestId || null;
-      if (!generation || generation.kind !== 'video' || generation.status !== 'succeeded' || !draftTaskId || !/seedance-2\.5/i.test(generation.model || '')) {
+      if (!generation || generation.kind !== 'video' || generation.status !== 'succeeded' || !draftTaskId || !/seedance-2[.-]5/i.test(generation.model || '')) {
         return Response.json({ error: 'A completed Seedance 2.5 draft is required' }, { status: 422 });
       }
       const pool = loadPool();

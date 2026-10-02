@@ -28,7 +28,7 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
   return {
     ...adapter,
     async generate(params) { return { ...(await adapter.generate(params)), provider: 'byteplus' }; },
-    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, draft, outputFormat, omniReferenceTaskType, draftTaskId, frameImages, referenceImages, referenceVideos } = {}) {
+    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, watermark, draft, outputFormat, omniReferenceTaskType, draftTaskId, frameTask = false, frameImages, referenceImages, referenceVideos, referenceAudios } = {}) {
       // Draft finalization uses only a draft_task content item. BytePlus reuses the
       // original prompt/assets/settings from the draft and rejects them if repeated.
       const content = draftTaskId
@@ -39,16 +39,22 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
       // specified for image contents"); others silently accept it without one. Always
       // sending it is the only combination confirmed to work across model variants.
       if (!draftTaskId) {
-        const images = [
-          ...(referenceImages || []),
-          ...(frameImages || []).map((frame) => frame?.image_url?.url).filter(Boolean),
-        ];
-        for (const image of images) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
+        for (const image of referenceImages || []) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
+        // A first/last-frame task keeps each frame's own role so Seedance pins it
+        // as the opening/closing frame. Mixed with references it is an omni
+        // reference task, where frame roles are not allowed.
+        for (const frame of frameImages || []) {
+          const url = frame?.image_url?.url;
+          if (!url) continue;
+          const role = frameTask && ['first_frame', 'last_frame'].includes(frame.frame_type) ? frame.frame_type : 'reference_image';
+          content.push({ type: 'image_url', role, image_url: { url } });
+        }
         for (const video of referenceVideos || []) content.push({ type: 'video_url', role: 'reference_video', video_url: { url: video } });
+        for (const audio of referenceAudios || []) content.push({ type: 'audio_url', role: 'reference_audio', audio_url: { url: audio } });
       }
       // Video generation is async-task based and lives under /tasks — /contents/generations
       // (used for images) silently accepts the request and returns an empty 200 for video models.
-      const response = await request('/contents/generations/tasks', { method: 'POST', body: JSON.stringify({ model, content, ...(duration !== undefined && !draftTaskId ? { duration } : {}), ...(resolution ? { resolution } : {}), ...(aspectRatio && !draftTaskId ? { ratio: aspectRatio } : {}), ...(generateAudio !== undefined && !draftTaskId ? { generate_audio: generateAudio } : {}), ...(draft !== undefined ? { draft: Boolean(draft) } : {}), ...(outputFormat ? { output_format: outputFormat } : {}), ...(omniReferenceTaskType && !draftTaskId ? { omni_reference_task_type: omniReferenceTaskType } : {}) }) });
+      const response = await request('/contents/generations/tasks', { method: 'POST', body: JSON.stringify({ model, content, ...(duration !== undefined && !draftTaskId ? { duration } : {}), ...(resolution ? { resolution } : {}), ...(aspectRatio && !draftTaskId ? { ratio: aspectRatio } : {}), ...(generateAudio !== undefined && !draftTaskId ? { generate_audio: generateAudio } : {}), ...(draft !== undefined ? { draft: Boolean(draft) } : {}), ...(outputFormat ? { output_format: outputFormat } : {}), ...(watermark !== undefined ? { watermark: Boolean(watermark) } : {}), ...(omniReferenceTaskType && !draftTaskId ? { omni_reference_task_type: omniReferenceTaskType } : {}) }) });
       const payload = await response.json();
       return { ...payload, provider: 'byteplus', polling_url: payload.polling_url || null };
     },

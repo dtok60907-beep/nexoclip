@@ -4,6 +4,7 @@ import { createCreditAccount, insertCreditEntry, lockCreditAccount, updateCredit
 import { findPricingRule } from '../repositories/pricingRepository.js';
 import { estimateCost } from './pricingService.js';
 import { estimateGenerationCredits } from './generationPricing.js';
+import { isFrameTask, isSeedance25Model } from './videoTaskType.js';
 import { findWorkspaceGenerationLimits, countRecentGenerations, countActiveGenerations, sumBudgetGenerations } from '../repositories/generationLimitsRepository.js';
 
 // Canvas model configurations expose these ratios. Validation must not collapse
@@ -70,8 +71,10 @@ export function validateVideoGenerationInput(input, options = {}) {
     }
     parameters.canvasProjectId = canvasProjectId;
   }
-  const isSeedance25 = /seedance-2\.5/i.test(model);
-  const isExtend = supplied.omniReferenceTaskType === 'extend';
+  const isSeedance25 = isSeedance25Model(model);
+  const taskType = supplied.omniReferenceTaskType;
+  const isExtend = taskType === 'extend';
+  const isEdit = taskType === 'edit';
   const isDraft = supplied.draft === true;
   const isDraftFinal = typeof supplied.draftTaskId === 'string' && supplied.draftTaskId.trim().length > 0;
   if (supplied.aspectRatio !== undefined) {
@@ -80,29 +83,44 @@ export function validateVideoGenerationInput(input, options = {}) {
   }
   if (supplied.duration !== undefined) {
     const duration = Number(supplied.duration);
-    const allowsAutoDuration = isSeedance25 && (isExtend || supplied.omniReferenceTaskType === 'edit');
-    if (!Number.isInteger(duration) || (duration !== -1 && (duration < (isSeedance25 ? 4 : 1) || duration > (isSeedance25 ? 30 : 60))) || (duration === -1 && !allowsAutoDuration)) throw new Error('Video duration is invalid');
-    parameters.duration = Number(supplied.duration);
+    // -1 lets Seedance 2.5 pick the length itself (for edit: the source video's length).
+    if (!Number.isInteger(duration) || (duration !== -1 && (duration < (isSeedance25 ? 4 : 1) || duration > (isSeedance25 ? 30 : 60))) || (duration === -1 && !isSeedance25)) throw new Error('Video duration is invalid');
+    parameters.duration = duration;
   }
   if (supplied.draft !== undefined && typeof supplied.draft !== 'boolean') throw new Error('Video draft must be boolean');
   if (supplied.generateAudio !== undefined && typeof supplied.generateAudio !== 'boolean') throw new Error('Video generateAudio must be boolean');
-  if (supplied.omniReferenceTaskType !== undefined && !['auto', 'reference', 'edit', 'extend'].includes(supplied.omniReferenceTaskType)) throw new Error('Video task type is invalid');
-  if ((isDraft || isDraftFinal || isExtend) && !isSeedance25) throw new Error('Draft and extend are only supported by Seedance 2.5');
+  if (supplied.watermark !== undefined && typeof supplied.watermark !== 'boolean') throw new Error('Video watermark must be boolean');
+  if (taskType !== undefined && !['auto', 'reference', 'edit', 'extend'].includes(taskType)) throw new Error('Video task type is invalid');
+  if (supplied.outputFormat !== undefined && !['mp4', 'mov'].includes(supplied.outputFormat)) throw new Error('Video output format is invalid');
+  if ((isDraft || isDraftFinal || isExtend || isEdit) && !isSeedance25) throw new Error('Draft, edit, and extend are only supported by Seedance 2.5');
+  if (supplied.outputFormat === 'mov' && !isSeedance25) throw new Error('mov output is only supported by Seedance 2.5');
   if (isDraft && supplied.resolution !== '480p') throw new Error('Draft mode requires 480p');
   if (isDraftFinal && supplied.resolution !== '1080p') throw new Error('Draft finalization requires 1080p');
-  if (isExtend && supplied.aspectRatio !== 'adaptive') throw new Error('Seedance extend requires adaptive aspect ratio');
-  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
-  for (const key of ['referenceImages', 'referenceVideos']) {
+  if ((isExtend || isEdit) && supplied.aspectRatio !== 'adaptive') throw new Error(`Seedance ${taskType} requires adaptive aspect ratio`);
+  // Edit keeps the source video's length, so BytePlus only accepts -1.
+  if (isEdit && supplied.duration !== undefined && Number(supplied.duration) !== -1) throw new Error('Seedance edit keeps the source video length; duration must be auto (-1)');
+  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
+  // Seedance 2.5 takes up to 30 images + 10 videos + 10 audio clips per request.
+  const limits = { referenceImages: isSeedance25 ? 30 : 10, referenceVideos: 10, referenceAudios: 10 };
+  for (const key of ['referenceImages', 'referenceVideos', 'referenceAudios']) {
     if (supplied[key] !== undefined) {
-      if (Array.isArray(supplied[key]) && supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references: too many (${supplied[key].length}/10)`);
+      if (Array.isArray(supplied[key]) && supplied[key].length > limits[key]) throw new Error(`Video ${key} must be tenant asset references: too many (${supplied[key].length}/${limits[key]})`);
       if (!validAssetReferences(supplied[key], options)) throw new Error(`Video ${key} must be tenant asset references`);
       parameters[key] = supplied[key];
     }
+  }
+  if ((isExtend || isEdit) && !(parameters.referenceVideos || []).length) throw new Error(`Seedance ${taskType} requires a source video`);
+  // Only Seedance 2.5 accepts audio as the sole reference; older models need an image or video with it.
+  if ((parameters.referenceAudios || []).length && !isSeedance25 && !(parameters.referenceImages || []).length && !(parameters.referenceVideos || []).length) {
+    throw new Error('Audio references need an image or video reference on this model');
   }
   if (supplied.frameImages !== undefined) {
     if (!Array.isArray(supplied.frameImages) || supplied.frameImages.length > 2 || !supplied.frameImages.every((frame) => validAssetReferences([frame?.url], options) && ['first_frame', 'last_frame'].includes(frame.frameType))) throw new Error('Video frame images must be tenant asset references');
     parameters.frameImages = supplied.frameImages;
   }
+  // Seedance 2.5 first/last-frame tasks follow the first frame's shape and
+  // reject any fixed ratio (async TaskTypeConstraint), so normalize instead.
+  if (isSeedance25 && isFrameTask(parameters)) parameters.aspectRatio = 'adaptive';
   return { kind: 'video', prompt, model, parameters };
 }
 

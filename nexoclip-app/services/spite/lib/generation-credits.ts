@@ -19,7 +19,9 @@ export type CreditPriceInput = {
   aspectRatio?: string
   draft?: boolean
   extend?: boolean
+  edit?: boolean
   referenceImages?: number
+  referenceVideos?: number
   promptLength?: number
 }
 
@@ -41,11 +43,14 @@ export function creditPriceQuery(input: CreditPriceInput): string | null {
   const query = new URLSearchParams({ kind: input.kind, model })
   if (input.resolution) query.set('resolution', input.resolution)
   if (input.aspectRatio) query.set('aspectRatio', input.aspectRatio)
-  const duration = Number.parseInt(String(input.duration ?? ''), 10)
+  // 'auto' is priced as -1, which reserves for the model's longest output.
+  const duration = input.duration === 'auto' || input.edit ? -1 : Number.parseInt(String(input.duration ?? ''), 10)
   if (Number.isInteger(duration)) query.set('duration', String(duration))
   if (input.draft) query.set('draft', '1')
-  if (input.extend) query.set('omniReferenceTaskType', 'extend')
+  if (input.edit) query.set('omniReferenceTaskType', 'edit')
+  else if (input.extend) query.set('omniReferenceTaskType', 'extend')
   if (input.referenceImages) query.set('referenceImages', String(input.referenceImages))
+  if (input.referenceVideos) query.set('referenceVideos', String(input.referenceVideos))
   // Bucketed so typing in the prompt does not refetch on every keystroke.
   if (input.promptLength) query.set('promptLength', String(Math.ceil(input.promptLength / 1000) * 1000))
   return query.toString()

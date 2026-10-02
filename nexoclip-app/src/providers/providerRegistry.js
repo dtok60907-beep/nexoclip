@@ -96,7 +96,12 @@ export function resolveDirectProviderModel(mapping, env = process.env) {
 }
 
 export function isDirectBytePlusSeedance(model, env = process.env) {
-  if (typeof model !== 'string' || !DIRECT_BYTEPLUS_SEEDANCE_MODELS.has(model.trim())) return false;
+  if (typeof model !== 'string') return false;
+  // Canvas sends `${provider}/${providerModel}` (e.g. byteplus/dreamina-seedance-2-5-260628),
+  // which is the same model as the bare id in the set.
+  const normalized = model.trim();
+  const bare = normalized.toLowerCase().startsWith('byteplus/') ? normalized.slice('byteplus/'.length) : normalized;
+  if (!DIRECT_BYTEPLUS_SEEDANCE_MODELS.has(normalized) && !DIRECT_BYTEPLUS_SEEDANCE_MODELS.has(bare)) return false;
   const mapping = getDirectProvider(model);
   if (mapping?.provider !== 'byteplus') return false;
   resolveDirectProviderModel(mapping, env);

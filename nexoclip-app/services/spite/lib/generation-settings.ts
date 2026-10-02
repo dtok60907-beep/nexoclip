@@ -11,6 +11,9 @@ export interface EffectiveGenerationSettings {
   enableAudio: boolean
   draftMode: boolean
   extendMode: boolean
+  editMode: boolean
+  outputFormat: 'mp4' | 'mov'
+  watermark: boolean
   count: number
 }
 
@@ -19,8 +22,16 @@ const DEFAULT_MODEL: Record<GenerationKind, string> = {
   video: 'seedance-2.0',
 }
 
-export function clampVideoDurationSeconds(value: unknown): number {
-  return Math.min(30, Math.max(5, Number.parseInt(String(value || '5'), 10) || 5))
+export const AUTO_DURATION = 'auto'
+
+export function clampVideoDurationSeconds(value: unknown, min = 5): number {
+  return Math.min(30, Math.max(min, Number.parseInt(String(value || '5'), 10) || 5))
+}
+
+// Shortest duration the model lists (Seedance 2.5 goes down to 4s).
+export function minVideoDurationSeconds(model: ModelConfig | undefined): number {
+  const seconds = (model?.durations || []).map((value) => Number.parseInt(value, 10)).filter(Number.isFinite)
+  return seconds.length ? Math.min(5, ...seconds) : 5
 }
 
 function text(value: unknown): string {
@@ -39,9 +50,12 @@ export function resolveGenerationSettings(kind: GenerationKind, data: Record<str
   const modelId = model?.id || requestedModelId
   const aspectRatio = text(d.aspectRatio) || model?.defaultAspectRatio || (kind === 'video' ? '16:9' : '1:1')
   const resolution = text(d.resolution) || model?.defaultResolution || ''
-  const duration = kind === 'video'
-    ? `${clampVideoDurationSeconds(text(d.duration) || model?.defaultDuration)}s`
-    : ''
+  const editMode = kind === 'video' && Boolean(model?.supportsEdit) && Boolean(d.editMode)
+  // Edit always keeps the source video's length, so it is always auto.
+  const autoDuration = kind === 'video' && Boolean(model?.supportsAutoDuration) && (editMode || text(d.duration) === AUTO_DURATION)
+  const duration = kind !== 'video' ? ''
+    : autoDuration ? AUTO_DURATION
+    : `${clampVideoDurationSeconds(text(d.duration) || model?.defaultDuration, minVideoDurationSeconds(model))}s`
   const supportsAudio = kind === 'video' && Boolean(model?.supportsAudio)
   return {
     modelId,
@@ -51,7 +65,10 @@ export function resolveGenerationSettings(kind: GenerationKind, data: Record<str
     duration,
     enableAudio: supportsAudio ? ((d.enableAudio as boolean | undefined) ?? true) : false,
     draftMode: Boolean(model?.supportsDraft) && Boolean(d.draftMode),
-    extendMode: Boolean(model?.supportsExtend) && Boolean(d.extendMode),
+    extendMode: Boolean(model?.supportsExtend) && Boolean(d.extendMode) && !editMode,
+    editMode,
+    outputFormat: model?.supportsMov && d.outputFormat === 'mov' ? 'mov' : 'mp4',
+    watermark: Boolean(model?.supportsWatermark) && Boolean(d.watermark),
     count: Math.max(1, Math.min(4, Number(d[kind === 'video' ? 'numVideos' : 'numImages']) || 1)),
   }
 }
@@ -71,6 +88,9 @@ export function settingsForModelChange(kind: GenerationKind, nextModelId: string
       enableAudio: model?.supportsAudio ? current.enableAudio : false,
       draftMode: model?.supportsDraft ? current.draftMode : false,
       extendMode: model?.supportsExtend ? current.extendMode : false,
+      editMode: model?.supportsEdit ? current.editMode : false,
+      outputFormat: model?.supportsMov ? current.outputFormat : 'mp4',
+      watermark: model?.supportsWatermark ? current.watermark : false,
     } : {}),
   }
 }

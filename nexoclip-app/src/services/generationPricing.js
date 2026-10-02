@@ -50,8 +50,10 @@ const VIDEO_PIXELS = { '480p': 864 * 480, '720p': 1120 * 832, '1080p': 1920 * 10
 const VIDEO_FPS = 24;
 // Input video length is not known before the provider reads it; reserve for
 // the longest accepted reference and settle at the reported usage.
+// Seedance 2.5 doubles both limits to 30s (input total and auto output length).
 const ASSUMED_INPUT_VIDEO_SECONDS = 15;
 const ASSUMED_AUTO_DURATION_SECONDS = 15;
+const SEEDANCE_25_MAX_SECONDS = 30;
 const DEFAULT_VIDEO_SECONDS = 5;
 
 export function isSeedanceModel(model) {
@@ -65,7 +67,7 @@ function normalizedResolution(value) {
 
 function videoInputs(parameters = {}) {
   return (Array.isArray(parameters.referenceVideos) && parameters.referenceVideos.length > 0)
-    || parameters.omniReferenceTaskType === 'extend';
+    || parameters.omniReferenceTaskType === 'extend' || parameters.omniReferenceTaskType === 'edit';
 }
 
 // USD per million tokens for this job.
@@ -84,17 +86,18 @@ function billedResolution(parameters = {}) {
   return parameters.draft === true ? '480p' : normalizedResolution(parameters.resolution);
 }
 
-export function estimateSeedanceTokens(parameters = {}) {
+export function estimateSeedanceTokens(parameters = {}, model = '') {
+  const isSeedance25 = /seedance-2[.-]5/.test(String(model));
   const duration = Number(parameters.duration);
-  const outputSeconds = duration === -1 ? ASSUMED_AUTO_DURATION_SECONDS : (Number.isFinite(duration) && duration > 0 ? duration : DEFAULT_VIDEO_SECONDS);
-  const inputSeconds = videoInputs(parameters) && !parameters.draftTaskId ? ASSUMED_INPUT_VIDEO_SECONDS : 0;
+  const outputSeconds = duration === -1 ? (isSeedance25 ? SEEDANCE_25_MAX_SECONDS : ASSUMED_AUTO_DURATION_SECONDS) : (Number.isFinite(duration) && duration > 0 ? duration : DEFAULT_VIDEO_SECONDS);
+  const inputSeconds = videoInputs(parameters) && !parameters.draftTaskId ? (isSeedance25 ? SEEDANCE_25_MAX_SECONDS : ASSUMED_INPUT_VIDEO_SECONDS) : 0;
   return Math.ceil(((inputSeconds + outputSeconds) * VIDEO_PIXELS[billedResolution(parameters)] * VIDEO_FPS) / 1024);
 }
 
 export function estimateVideoCostUsd({ model, parameters = {} }) {
   const rate = seedanceRatePerMillion(model, parameters);
   if (rate === null) return null;
-  return (estimateSeedanceTokens(parameters) * rate) / 1e6;
+  return (estimateSeedanceTokens(parameters, model) * rate) / 1e6;
 }
 
 export function actualVideoCostUsd({ model, parameters = {} }, usage = {}) {

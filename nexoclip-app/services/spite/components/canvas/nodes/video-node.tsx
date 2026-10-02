@@ -3,7 +3,7 @@
 import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { Position, NodeResizer, NodeProps, Handle, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { useParams } from 'next/navigation'
-import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play } from '@phosphor-icons/react'
+import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play, MusicNotes } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { GeneratorNodeToolbar } from './node-toolbar'
@@ -134,6 +134,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [enableAudio, setEnableAudio] = useState((data.enableAudio as boolean | undefined) ?? true)
   const [draftMode, setDraftMode] = useState((data.draftMode as boolean) || false)
   const [extendMode, setExtendMode] = useState((data.extendMode as boolean) || false)
+  const [editMode, setEditMode] = useState((data.editMode as boolean) || false)
+  const [outputFormat, setOutputFormat] = useState<'mp4' | 'mov'>(data.outputFormat === 'mov' ? 'mov' : 'mp4')
+  const [watermark, setWatermark] = useState((data.watermark as boolean) || false)
   const [enableLoop, setEnableLoop] = useState((data.enableLoop as boolean) || false)
   // Kling 2.6 voice IDs — up to 2, comma-separated in the input box.
   // User pastes IDs they generated from fal's create-voice endpoint;
@@ -257,6 +260,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setEnableAudio(effective.enableAudio)
     setDraftMode(effective.draftMode)
     setExtendMode(effective.extendMode)
+    setEditMode(effective.editMode)
+    setOutputFormat(effective.outputFormat)
+    setWatermark(effective.watermark)
     setEnableLoop((data.enableLoop as boolean) || false)
     setVoiceIds((data.voiceIds as string) || '')
     setNumVideos((data.numVideos as number) || 1)
@@ -270,7 +276,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.draftMode, data.extendMode, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.draftMode, data.extendMode, data.editMode, data.outputFormat, data.watermark, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
 
   useEffect(() => {
     if (outputUrl && outputUrl !== announcedOutputRef.current) {
@@ -340,7 +346,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // confusing fal validation failure.
   const refsRequireFirstFrame = !!currentModel?.referenceParam && currentModel.referenceParam === 'elements' && !currentModel.referenceModel
   const blockedNoFirstFrame = refsRequireFirstFrame && hasConnectedReferences && !hasConnectedFirstFrame
-  const blockedNoExtendVideo = extendMode && !hasConnectedVideoInput
+  // Extend and edit both work on a connected source video.
+  const blockedNoExtendVideo = (extendMode || editMode) && !hasConnectedVideoInput
 
   // Reset settings when the USER picks a new model. Skip the initial mount
   // so saved settings on a reloaded or duplicated node aren't immediately
@@ -684,8 +691,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     let connectedImageUrl: string | null = null
     let connectedEndImageUrl: string | null = null
     let connectedReferenceUrls: string[] = []
-    let connectedVideoUrl: string | null = null
-    let connectedAudioUrl: string | null = null
+    let connectedVideoUrls: string[] = []
+    let connectedAudioUrls: string[] = []
 
     // Every media input resolves through the shared helper so no field a node
     // might store its URL under is missed. A cord that resolves to nothing is
@@ -748,32 +755,25 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         .map(e => urlOfSource(e))
         .filter((u): u is string => !!u)
 
-      // Get video URL from connected video source node
-      if (incomingVideoEdges.length > 0) {
-        const videoEdge = incomingVideoEdges[0]
-        const sourceNode = nodes.find(n => n.id === videoEdge.source)
-        const sourceVideoUrl = (sourceNode?.data?.outputUrl || sourceNode?.data?.thumbnail) as string | undefined
-        if (sourceVideoUrl) {
-          connectedVideoUrl = sourceVideoUrl
-        }
+      // Source videos, in wiring order (@Video 1, @Video 2, ...). Models
+      // without multi-video support use only the first one.
+      const sourceUrl = (edge: any, fields: Array<'outputUrl' | 'thumbnail'>) => {
+        const sourceNode = nodes.find(n => n.id === edge.source)
+        return fields.map((field) => sourceNode?.data?.[field]).find((url): url is string => typeof url === 'string' && url.length > 0)
       }
+      connectedVideoUrls = incomingVideoEdges
+        .map(edge => sourceUrl(edge, ['outputUrl', 'thumbnail']))
+        .filter((url): url is string => !!url)
+        .slice(0, currentModel?.maxReferenceVideos || 1)
 
-      // Connected audio (Kling 2.6 only). Matches audio-in handle or
-      // any edge whose source is the audio-out handle on an audio
-      // reference node. Server-side will auto-create voice_id via fal.
-      const incomingAudioEdges = edges.filter(
-        edge => edge.target === id && (
-          edge.targetHandle === 'audio-in' ||
-          edge.sourceHandle === 'audio-out'
-        )
-      )
-      if (incomingAudioEdges.length > 0) {
-        const audioEdge = incomingAudioEdges[0]
-        const sourceNode = nodes.find(n => n.id === audioEdge.source)
-        const sourceAudioUrl = (sourceNode?.data?.thumbnail || sourceNode?.data?.outputUrl) as string | undefined
-        if (sourceAudioUrl) {
-          connectedAudioUrl = sourceAudioUrl
-        }
+      // Reference audio clips (Seedance 2.5): wired into audio-in, or any
+      // edge from an audio reference node's audio-out handle.
+      if (currentModel?.supportsReferenceAudio) {
+        connectedAudioUrls = edges
+          .filter(edge => edge.target === id && (edge.targetHandle === 'audio-in' || edge.sourceHandle === 'audio-out'))
+          .map(edge => sourceUrl(edge, ['thumbnail', 'outputUrl']))
+          .filter((url): url is string => !!url)
+          .slice(0, currentModel.maxReferenceAudios || 1)
       }
     } catch (error) {
       console.error('Error reading connected media:', error)
@@ -873,14 +873,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         endImageUrl: connectedEndImageUrl,
         referenceGroups: referenceGroups.length ? referenceGroups : undefined,
         settings: {
-          aspectRatio: extendMode ? 'adaptive' : aspectRatio,
-          duration,
+          aspectRatio: extendMode || editMode ? 'adaptive' : aspectRatio,
+          duration: editMode ? 'auto' : duration,
           resolution: draftMode ? '480p' : resolution,
           draft: currentModel?.supportsDraft ? draftMode : undefined,
           // The audio toggle was never sent, so it had no effect on output.
           generateAudio: currentModel?.supportsAudio ? enableAudio : undefined,
-          omniReferenceTaskType: currentModel?.supportsExtend && extendMode ? 'extend' : undefined,
-          videoUrl: connectedVideoUrl || undefined,
+          omniReferenceTaskType: currentModel?.supportsEdit && editMode ? 'edit' : currentModel?.supportsExtend && extendMode ? 'extend' : undefined,
+          videoUrl: connectedVideoUrls[0],
+          videoUrls: connectedVideoUrls.length > 1 ? connectedVideoUrls : undefined,
+          audioUrls: connectedAudioUrls.length ? connectedAudioUrls : undefined,
+          outputFormat: currentModel?.supportsMov && outputFormat === 'mov' ? 'mov' : undefined,
+          watermark: currentModel?.supportsWatermark && watermark ? true : undefined,
         },
       })
 
@@ -1022,7 +1026,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // through without seeing the dollar amount", not aesthetics.
   const costEstimate = useGenerationCredits({
     kind: 'video', modelId: currentModel?.id, count: numVideos, resolution: draftMode ? '480p' : resolution,
-    duration, aspectRatio, draft: draftMode, extend: extendMode,
+    duration, aspectRatio, draft: draftMode, extend: extendMode, edit: editMode,
   })
   const generateTooltip = useMemo(() => {
     if (!generationPersistenceGuard.allowed) return generationPersistenceGuard.message
@@ -1033,7 +1037,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return `${currentModel?.name} needs a first frame when references are connected — wire an image into the blue First frame handle.`
     }
     if (blockedNoExtendVideo) {
-      return 'Extend requires a connected source video — wire a video node into the green Source video handle.'
+      return `${editMode ? 'Edit' : 'Extend'} requires a connected source video — wire a video node into the green Source video handle.`
     }
     const label = `Generate ${numVideos} video${numVideos === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
@@ -1084,7 +1088,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   }
 
   const modelOptions = VIDEO_MODELS.map(m => ({ value: m.id, label: m.name }))
-  const durationOptions = currentModel?.durations?.map(d => ({ value: d, label: d })) || []
+  const durationOptions = [
+    ...(currentModel?.supportsAutoDuration ? [{ value: 'auto', label: 'auto' }] : []),
+    ...(currentModel?.durations?.map(d => ({ value: d, label: d })) || []),
+  ]
   const resolutionOptions = currentModel?.resolutions?.map(r => ({ value: r, label: r })) || []
 
   return (
@@ -1206,6 +1213,15 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         </>
       )}
 
+      {/* Reference audio (violet) - models that take audio references */}
+      {currentModel?.supportsReferenceAudio && (
+        <>
+          <Handle type="target" id="audio-in" title="Reference audio" position={Position.Left} style={{ top: 360, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+          <HandleIcon icon={MusicNotes} color="rgba(167,139,250,0.9)" position="left" top={360} visible />
+          <ConnectedInputs nodeId={id} handleId="audio-in" side="left" top={360} label="Reference audio" />
+        </>
+      )}
+
       {/* Video output - always shown */}
       <Handle type="source" id="video-out" position={Position.Right} style={{ top: 150, right: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
       <HandleIcon icon={FilmStrip} color="rgba(74,222,128,0.8)" position="right" top={150} visible />
@@ -1316,7 +1332,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {!error && blockedNoExtendVideo && (
             <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
               <span className="text-[9px] font-mono text-amber-300">
-                Extend membutuhkan video sumber. Hubungkan video ke handle Source video terlebih dahulu.
+                {editMode ? 'Edit' : 'Extend'} membutuhkan video sumber. Hubungkan video ke handle Source video terlebih dahulu.
               </span>
             </div>
           )}
@@ -1466,7 +1482,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   setAspectRatio(value)
                   patchPersistedNodeData({ aspectRatio: value })
                 }}
-                disabled={isGenerating || draftMode || extendMode}
+                disabled={isGenerating || draftMode || extendMode || editMode}
               />
             )}
 
@@ -1481,7 +1497,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   setDuration(value)
                   patchPersistedNodeData({ duration: value })
                 }}
-                disabled={isGenerating}
+                disabled={isGenerating || editMode}
               />
             )}
             
@@ -1493,9 +1509,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   setDraftMode(next)
                   if (next) {
                     setExtendMode(false)
+                    setEditMode(false)
                     setAspectRatio('adaptive')
                   }
-                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
+                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode, editMode: next ? false : editMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
                 }}
                 disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${draftMode ? 'bg-amber-500/25 text-amber-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
@@ -1511,14 +1528,35 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   setExtendMode(next)
                   if (next) {
                     setDraftMode(false)
+                    setEditMode(false)
                     setAspectRatio('adaptive')
                   }
-                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
+                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode, editMode: next ? false : editMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
                 }}
                 disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${extendMode ? 'bg-emerald-500/25 text-emerald-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
                 title="Extend a connected source video with Seedance 2.5"
               >Extend
+              </button>
+            )}
+            {currentModel?.supportsEdit && (
+              <button
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  const next = !editMode
+                  setEditMode(next)
+                  if (next) {
+                    setDraftMode(false)
+                    setExtendMode(false)
+                    setAspectRatio('adaptive')
+                    setDuration('auto')
+                  }
+                  patchPersistedNodeData({ editMode: next, draftMode: next ? false : draftMode, extendMode: next ? false : extendMode, ...(next ? { aspectRatio: 'adaptive', duration: 'auto' } : {}) })
+                }}
+                disabled={isGenerating}
+                className={`px-2 h-6 rounded-md text-[10px] font-mono ${editMode ? 'bg-sky-500/25 text-sky-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                title="Edit a connected 4–30s source video with Seedance 2.5 (add / remove / replace …). Keeps its ratio and length."
+              >Edit
               </button>
             )}
 

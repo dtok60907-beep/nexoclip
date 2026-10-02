@@ -274,3 +274,28 @@ test('downloadContent reads the single-object content shape and fetches the pre-
   assert.equal(result.contentType, 'video/mp4');
   assert.equal(result.buffer.length, 3);
 });
+
+test('a frame task sends first_frame / last_frame roles, references stay reference_image', async () => {
+  let body;
+  const adapter = createBytePlusAdapter({ apiKey: 'k', baseUrl: 'https://ark.example/api/v3', fetch: async (_url, options) => { body = JSON.parse(options.body); return jsonResponse({ id: 'cgt-1' }); } });
+  const frames = [
+    { type: 'image_url', image_url: { url: 'https://img/first.png' }, frame_type: 'first_frame' },
+    { type: 'image_url', image_url: { url: 'https://img/last.png' }, frame_type: 'last_frame' },
+  ];
+
+  await adapter.submit({ model: 'm', prompt: 'p', frameTask: true, frameImages: frames, aspectRatio: 'adaptive' });
+  assert.deepEqual(body.content.slice(1).map((part) => part.role), ['first_frame', 'last_frame']);
+
+  await adapter.submit({ model: 'm', prompt: 'p', frameImages: frames, referenceImages: ['https://img/ref.png'] });
+  assert.deepEqual(body.content.slice(1).map((part) => part.role), ['reference_image', 'reference_image', 'reference_image']);
+});
+
+test('reference audio is sent as an audio_url part and watermark is forwarded', async () => {
+  let body;
+  const adapter = createBytePlusAdapter({ apiKey: 'k', baseUrl: 'https://ark.example/api/v3', fetch: async (_url, options) => { body = JSON.parse(options.body); return jsonResponse({ id: 'cgt-1' }); } });
+
+  await adapter.submit({ model: 'm', prompt: 'p', referenceAudios: ['https://a/voice.mp3'], watermark: false });
+
+  assert.deepEqual(body.content[1], { type: 'audio_url', role: 'reference_audio', audio_url: { url: 'https://a/voice.mp3' } });
+  assert.equal(body.watermark, false);
+});
