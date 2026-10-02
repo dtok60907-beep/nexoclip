@@ -6,7 +6,7 @@ import {
   markBytePlusAssetLinkStale as markStoredBytePlusAssetLinkStale,
 } from '../repositories/byteplusAssetRepository.js';
 import { isDirectBytePlusSeedance } from '../providers/providerRegistry.js';
-import { resolveReferenceImages } from './saasImageGeneration.js';
+import { resolveReferenceImages, resolveReferenceMedia } from './saasImageGeneration.js';
 import { recordGenerationProviderRequest } from '../repositories/generationStateRepository.js';
 import { extraReferenceImages, isFrameTask } from './videoTaskType.js';
 
@@ -95,8 +95,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
       : (parameters.frameImages || []).filter((frame) => !referencedUrls.has(frame.url));
     const referenceImages = await resolveReferenceImages({ ...resolution, referenceImages: frameTask ? extraReferenceImages(parameters) : parameters.referenceImages });
     const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: keptFrames.map((frame) => frame.url) });
-    const referenceVideos = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: parameters.referenceVideos, pool, storage, referenceStorage });
-    const referenceAudios = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: parameters.referenceAudios, pool, storage, referenceStorage });
+    const referenceVideos = await resolveReferenceMedia({ workspaceId: job.workspace_id, references: parameters.referenceVideos, kind: 'video', pool, storage, referenceStorage });
+    const referenceAudios = await resolveReferenceMedia({ workspaceId: job.workspace_id, references: parameters.referenceAudios, kind: 'audio', pool, storage, referenceStorage });
     const frameJob = { ...job, parameters: { ...parameters, frameImages: keptFrames } };
     const request = videoRequest(frameJob, { referenceImages, frameImages, referenceVideos, referenceAudios });
     if (frameTask) request.frameTask = true;

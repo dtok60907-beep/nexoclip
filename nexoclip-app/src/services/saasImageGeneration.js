@@ -54,6 +54,56 @@ export async function resolveReferenceImages({ workspaceId, referenceImages, poo
   }));
 }
 
+// Seedance only takes reference videos as URLs (or BytePlus asset ids), not
+// base64, and inlining a 200MB clip would blow the 64MB request limit. Hand the
+// provider a short-lived pre-signed HTTPS URL instead. Audio may fall back to
+// base64 when storage cannot sign a public URL (local development storage).
+const MEDIA_URL_TTL_SECONDS = 24 * 60 * 60;
+
+function mediaUnavailableError() {
+  return Object.assign(new Error('Reference video storage cannot produce a public URL'), {
+    code: 'REFERENCE_MEDIA_NOT_PUBLIC',
+    publicMessage: 'Reference videos need public object storage (R2) so Seedance can download them. This environment stores assets locally.',
+  });
+}
+
+async function signedHttpsUrl(storage, key) {
+  try {
+    const download = await storage.createDownloadUrl({ key, expiresInSeconds: MEDIA_URL_TTL_SECONDS });
+    const url = download?.url || download;
+    return typeof url === 'string' && new URL(url).protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveReferenceMedia({ workspaceId, references, kind, pool, storage, referenceStorage = storage }) {
+  if (!references?.length) return [];
+  return Promise.all(references.map(async (reference) => {
+    if (typeof reference !== 'string' || /^\s*asset:\/\//i.test(reference)) throw Object.assign(new Error('Invalid asset reference'), { code: 'INVALID_REFERENCE_IMAGE' });
+    if (/^https:\/\//i.test(reference)) return reference;
+    const legacyKey = legacyR2Key(reference);
+    let url = null;
+    if (legacyKey) {
+      url = await signedHttpsUrl(referenceStorage, legacyKey);
+    } else {
+      const assetId = reference.match(/^\/api\/assets\/([^/]+)\/download(?:\?|$)/)?.[1];
+      if (!assetId) throw Object.assign(new Error('Invalid asset reference'), { code: 'INVALID_REFERENCE_IMAGE' });
+      const result = await pool.query(
+        'SELECT storage_key, content_type FROM assets WHERE workspace_id = $1 AND id = $2 LIMIT 1',
+        [workspaceId, assetId],
+      );
+      const asset = result.rows[0];
+      if (!asset) throw Object.assign(new Error('Reference asset not found'), { code: 'REFERENCE_ASSET_NOT_FOUND' });
+      url = await signedHttpsUrl(storage, asset.storage_key);
+    }
+    if (url) return url;
+    if (kind === 'video') throw mediaUnavailableError();
+    const [inline] = await resolveReferenceImages({ workspaceId, referenceImages: [reference], pool, storage, referenceStorage });
+    return inline;
+  }));
+}
+
 function imageRequest(job, referenceImages) {
   const parameters = job.parameters || {};
   return {
