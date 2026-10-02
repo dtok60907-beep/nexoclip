@@ -23,9 +23,11 @@ export async function transitionGenerationJob(pool, { workspaceId, generationId,
 // forever. Expired jobs are re-queued so another worker picks them up; jobs
 // whose lease ran out long ago are failed instead of silently re-run (and
 // re-billed) days later. `graceMs` keeps a still-alive worker that is just
-// finishing from racing its own recovery.
+// finishing from racing its own recovery. `requeue: false` (image jobs, whose
+// provider call may already have been made and paid) fails every expired job
+// instead of re-queueing it.
 export async function recoverExpiredGenerationJobs(pool, {
-  now = new Date().toISOString(), kind = null, graceMs = 0, staleAfterMs = null,
+  now = new Date().toISOString(), kind = null, graceMs = 0, staleAfterMs = null, requeue = true,
 } = {}) {
   const nowMs = new Date(now).getTime();
   const cutoff = new Date(nowMs - graceMs).toISOString();
@@ -43,7 +45,7 @@ export async function recoverExpiredGenerationJobs(pool, {
     const recovered = [];
     for (const job of expired.rows) {
       const stale = staleBefore !== null && new Date(job.timeout_at).getTime() <= new Date(staleBefore).getTime();
-      const exhausted = stale || Number(job.attempt_count) >= Number(job.max_attempts);
+      const exhausted = stale || !requeue || Number(job.attempt_count) >= Number(job.max_attempts);
       await client.query(
         stale
           ? `UPDATE generation_jobs SET status = 'failed', error = '{"code":"GENERATION_LEASE_STALE"}'::jsonb,
@@ -52,7 +54,7 @@ export async function recoverExpiredGenerationJobs(pool, {
           : exhausted
           ? `UPDATE generation_jobs SET status = 'failed', error = '{"code":"GENERATION_LEASE_EXPIRED"}'::jsonb,
                timeout_at = NULL, claim_token = NULL, queue_published_at = NULL, queue_claimed_at = NULL, finished_at = now(), updated_at = now()
-             WHERE id = $1 AND workspace_id = $2 AND attempt_count >= max_attempts`
+             WHERE id = $1 AND workspace_id = $2${requeue ? ' AND attempt_count >= max_attempts' : ''}`
           : `UPDATE generation_jobs SET status = 'queued', error = '{"code":"GENERATION_LEASE_EXPIRED","retryable":true}'::jsonb,
                timeout_at = NULL, claim_token = NULL, queue_published_at = NULL, queue_claimed_at = NULL, next_attempt_at = now(), updated_at = now()
              WHERE id = $1 AND workspace_id = $2`,
