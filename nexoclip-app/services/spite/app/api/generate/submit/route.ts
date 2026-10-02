@@ -167,7 +167,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
     : {}
   const allowed = kind === 'image'
     ? new Set(['aspectRatio', 'resolution', 'quality', 'seed', 'name', 'swap_url'])
-    : new Set(['aspectRatio', 'duration', 'resolution', 'seed', 'videoUrl', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId'])
+    : new Set(['aspectRatio', 'duration', 'resolution', 'seed', 'videoUrl', 'videoUrls', 'audioUrls', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'omniReferenceTaskType', 'draftTaskId'])
   const unsupported = Object.keys(settings).filter((key) => !allowed.has(key))
   if (unsupported.length) {
     throw Object.assign(new Error(`Unsupported durable generation parameters: ${unsupported.join(', ')}`), { status: 400 })
@@ -188,20 +188,20 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
     typeof body.referenceImageUrl === 'string' ? { url: body.referenceImageUrl, frameType: 'first_frame' } : undefined,
     typeof body.endImageUrl === 'string' ? { url: body.endImageUrl, frameType: 'last_frame' } : undefined,
   ].filter(Boolean)
-  const videoUrl = typeof settings.videoUrl === 'string' ? settings.videoUrl : undefined
-  const tenantReferences = [...referenceImages, ...frameImages.map((frame) => frame!.url), ...(videoUrl ? [videoUrl] : [])]
+  const stringList = (value: unknown) => Array.isArray(value) ? value.filter((url): url is string => typeof url === 'string' && url.length > 0) : []
+  // `videoUrl` is the single source video older clients send.
+  const videoUrls = [...new Set([...(typeof settings.videoUrl === 'string' ? [settings.videoUrl] : []), ...stringList(settings.videoUrls)])]
+  const audioUrls = [...new Set(stringList(settings.audioUrls))]
+  const tenantReferences = [...referenceImages, ...frameImages.map((frame) => frame!.url), ...videoUrls, ...audioUrls]
   if (tenantReferences.some((url) => !/^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url) && !isLegacyCanvasReference(url))) {
     throw Object.assign(new Error('Video references must be tenant assets or owned Canvas references'), { status: 400 })
   }
   const isSeedance25 = typeof body.model === 'string' && body.model.includes('seedance-2.5')
   const isExtend = settings.omniReferenceTaskType === 'extend'
+  const isEdit = settings.omniReferenceTaskType === 'edit'
   const requestedRatio = typeof settings.aspectRatio === 'string' ? settings.aspectRatio : ''
-  if (isSeedance25) {
-    // Draft and extend always use adaptive ratio. Normalize stale clients rather
-    // than rejecting requests created before the Canvas control was added.
-  }
-  if (isExtend && !videoUrl) {
-    throw Object.assign(new Error('Seedance extend requires one source video.'), { status: 400 })
+  if ((isExtend || isEdit) && videoUrls.length === 0) {
+    throw Object.assign(new Error(`Seedance ${isEdit ? 'edit' : 'extend'} requires a source video.`), { status: 400 })
   }
   if (settings.draft === true && (!isSeedance25 || settings.resolution !== '480p')) {
     throw Object.assign(new Error('Draft mode is only supported for Seedance 2.5 at 480p.'), { status: 400 })
@@ -209,13 +209,18 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (settings.draftTaskId && (!isSeedance25 || settings.resolution !== '1080p')) {
     throw Object.assign(new Error('Draft finalization requires Seedance 2.5 at 1080p.'), { status: 400 })
   }
-  const parameters: Record<string, unknown> = { aspectRatio: isSeedance25 && (isExtend || settings.draft === true) ? 'adaptive' : (requestedRatio || '16:9') }
-  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'omniReferenceTaskType', 'draftTaskId']) {
+  // Draft, extend, and edit always use adaptive ratio. Normalize stale clients
+  // rather than rejecting requests created before the Canvas control was added.
+  const parameters: Record<string, unknown> = { aspectRatio: isSeedance25 && (isExtend || isEdit || settings.draft === true) ? 'adaptive' : (requestedRatio || '16:9') }
+  for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'omniReferenceTaskType', 'draftTaskId']) {
     if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
   }
-  if (settings.duration !== undefined) parameters.duration = Number.parseInt(String(settings.duration), 10)
+  // 'auto' (-1) lets Seedance pick the length; edit always keeps the source length.
+  if (isSeedance25 && (isEdit || settings.duration === 'auto')) parameters.duration = -1
+  else if (settings.duration !== undefined) parameters.duration = Number.parseInt(String(settings.duration), 10)
   if (referenceImages.length) parameters.referenceImages = referenceImages
-  if (videoUrl) parameters.referenceVideos = [videoUrl]
+  if (videoUrls.length) parameters.referenceVideos = videoUrls
+  if (audioUrls.length) parameters.referenceAudios = audioUrls
   if (frameImages.length) parameters.frameImages = frameImages
   return parameters
 }

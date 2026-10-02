@@ -1137,3 +1137,56 @@ test('finished mobile (Flow) results are recorded to history; canvas polls are n
   await handler(makeRequest(`http://spite.local/api/generate/status?projectId=${PROJECT_ID}&nodeId=node-1&generationId=g9`))
   assert.equal(recorded.length, 1)
 })
+
+async function submitSeedance25Video(settings: Record<string, unknown>) {
+  const submissions: Array<{ input: { parameters: Record<string, unknown> } }> = []
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: ownedProjectSql,
+    createNexoClipGenerationClient: () => ({
+      submit: async (input: any) => { submissions.push(input); return { id: 'generation-video-25', kind: 'video', status: 'queued' } },
+      status: async () => { throw new Error('status should not be called') },
+    }) as any,
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('video-node-25', 'videoGen', {}, 'remove the car'), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+  })
+  const response = await handler(makeRequest('http://spite.local/api/generate/submit', {
+    method: 'POST',
+    body: { projectId: PROJECT_ID, nodeId: 'video-node-25', kind: 'video', prompt: 'remove the car', model: 'seedance-2.5', settings },
+  }))
+  return { response, parameters: submissions[0]?.input.parameters }
+}
+
+test('Seedance 2.5 edit is sent with adaptive ratio, auto duration, and every source video', async () => {
+  const { response, parameters } = await submitSeedance25Video({
+    omniReferenceTaskType: 'edit', aspectRatio: '16:9', duration: '10s',
+    videoUrl: '/api/assets/v1/download', videoUrls: ['/api/assets/v1/download', '/api/assets/v2/download'],
+  })
+  assert.equal(response.status, 202)
+  assert.equal(parameters?.aspectRatio, 'adaptive')
+  assert.equal(parameters?.duration, -1)
+  assert.deepEqual(parameters?.referenceVideos, ['/api/assets/v1/download', '/api/assets/v2/download'])
+})
+
+test('Seedance 2.5 edit without a source video is rejected', async () => {
+  const { response } = await submitSeedance25Video({ omniReferenceTaskType: 'edit' })
+  assert.equal(response.status, 400)
+})
+
+test('Seedance 2.5 auto duration, audio references, mov, and watermark reach NexoClip', async () => {
+  const { response, parameters } = await submitSeedance25Video({
+    duration: 'auto', audioUrls: ['/api/assets/a1/download'], outputFormat: 'mov', watermark: true,
+  })
+  assert.equal(response.status, 202)
+  assert.equal(parameters?.duration, -1)
+  assert.deepEqual(parameters?.referenceAudios, ['/api/assets/a1/download'])
+  assert.equal(parameters?.outputFormat, 'mov')
+  assert.equal(parameters?.watermark, true)
+})
+
+test('audio references must be tenant assets', async () => {
+  const { response } = await submitSeedance25Video({ audioUrls: ['https://evil.example/a.mp3'] })
+  assert.equal(response.status, 400)
+})

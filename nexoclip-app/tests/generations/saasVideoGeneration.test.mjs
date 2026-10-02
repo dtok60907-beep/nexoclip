@@ -318,3 +318,61 @@ test('a recovered video with a provider task resumes polling instead of submitti
   assert.equal(result.providerRequestId, 'cgt-existing');
   assert.equal(result.status, 'succeeded');
 });
+
+test('a wired first/last frame with no other references is sent as a frame task', async () => {
+  const setup = trustedHandler();
+
+  // Canvas also lists the first frame among referenceImages.
+  const request = await runTrusted(setup, {
+    frameImages: [
+      { url: assetUrl('frame-1'), frameType: 'first_frame' },
+      { url: assetUrl('frame-2'), frameType: 'last_frame' },
+    ],
+    referenceImages: [assetUrl('frame-1')],
+  });
+
+  assert.equal(request.frameTask, true);
+  assert.equal(request.referenceImages, undefined);
+  assert.deepEqual(request.frameImages.map((frame) => frame.frame_type), ['first_frame', 'last_frame']);
+});
+
+test('frames mixed with other references stay an omni-reference task', async () => {
+  const setup = trustedHandler();
+
+  const request = await runTrusted(setup, {
+    frameImages: [{ url: assetUrl('frame-1'), frameType: 'first_frame' }],
+    referenceImages: [assetUrl('frame-1'), assetUrl('reference-1')],
+  });
+
+  assert.equal(request.frameTask, undefined);
+  assert.equal(request.referenceImages.length, 2);
+  assert.equal(request.frameImages, undefined);
+});
+
+test('reference audio clips and watermark reach the provider request', async () => {
+  const setup = trustedHandler();
+
+  const request = await runTrusted(setup, { referenceAudios: [assetUrl('audio-1')], watermark: true });
+
+  assert.equal(request.referenceAudios.length, 1);
+  assert.equal(request.watermark, true);
+});
+
+test('a Seedance task-type failure surfaces an actionable public message', async () => {
+  const handler = createSaasVideoHandler({
+    pool: { async query() { return { rows: [] }; }, async connect() { return { release() {} }; } },
+    storage: { async put() {} },
+    providerRouter: {
+      async submitVideo() { return { id: 'provider-job', provider: 'byteplus' }; },
+      async pollVideo() { return { status: 'failed', error: 'mismatch', error_code: 'InvalidParameter.TaskTypeMismatch' }; },
+    },
+    sleep: async () => {},
+  });
+
+  await assert.rejects(
+    handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'bytedance/seedance-2.5', prompt: 'hello', parameters: {} }),
+    (error) => error.code === 'PROVIDER_GENERATION_FAILED'
+      && error.providerErrorCode === 'InvalidParameter.TaskTypeMismatch'
+      && /mode/i.test(error.publicMessage),
+  );
+});

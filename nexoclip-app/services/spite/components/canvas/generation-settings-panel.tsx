@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CaretDown, Check, FilmStrip, Image as ImageIcon, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
 import { getImageModels, getVideoModels } from '@/lib/fal-models'
-import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
+import { AUTO_DURATION, minVideoDurationSeconds, resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 
 type SettingsNode = {
   id: string
@@ -41,15 +41,21 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
   const currentModel = effective.model || models[0]
   const resolution = effective.resolution
   const ratio = effective.aspectRatio
+  const autoDuration = effective.duration === AUTO_DURATION
   const duration = Number.parseInt(effective.duration, 10) || 5
   const batch = effective.count
   const audio = effective.enableAudio
   const draft = effective.draftMode
   const extend = effective.extendMode
+  const edit = effective.editMode
+  const mov = effective.outputFormat === 'mov'
+  const watermark = effective.watermark
 
   if (!node || !currentModel || (node.type !== 'imageGen' && node.type !== 'videoGen')) return null
 
   const patch = (values: Record<string, unknown>) => onPatch(node.id, values)
+  const minDuration = minVideoDurationSeconds(currentModel)
+  const toggle = (label: string, on: boolean, onClick: () => void, title?: string) => <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-2.5 text-[13px] font-bold" title={title}><span>{label}</span><button onClick={onClick} className={`h-6 w-11 rounded-full p-0.5 transition-colors ${on ? 'bg-[#25d32c]' : 'bg-zinc-700'}`} aria-pressed={on}><span className={`block h-5 w-5 rounded-full bg-white transition-transform ${on ? 'translate-x-5' : ''}`} /></button></div>
   const visibleModels = models.filter(model => `${model.name} ${model.description}`.toLowerCase().includes(search.toLowerCase()))
   const selectModel = (nextId: string) => {
     patch(settingsForModelChange(isVideo ? 'video' : 'image', nextId, node.data))
@@ -96,13 +102,17 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
           })}
         </div>
 
-        {isVideo ? <div className="rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-3"><div className="mb-2 flex items-center justify-between text-[13px] font-bold"><span>Duration</span><span>{duration}s</span></div><input type="range" min={5} max={30} step={1} value={duration} onChange={event => patch({ duration: `${event.target.value}s` })} className="h-1.5 w-full cursor-ew-resize accent-[#d8ff05]" /><div className="mt-1 flex justify-between text-[9px] text-slate-500"><span>5s</span><span>30s</span></div></div> : null}
+        {isVideo ? <div className="rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-3"><div className="mb-2 flex items-center justify-between text-[13px] font-bold"><span>Duration</span><span className="flex items-center gap-2">{currentModel.supportsAutoDuration ? <button disabled={edit} onClick={() => patch({ duration: autoDuration ? `${duration}s` : AUTO_DURATION })} title={edit ? 'Edit keeps the source video length' : 'Let the model pick the length'} className={`rounded-md px-1.5 py-0.5 text-[10px] ${autoDuration ? 'bg-[#d8ff05]/20 text-[#d8ff05]' : 'bg-white/[0.06] text-slate-400'}`}>Auto</button> : null}<span>{autoDuration ? 'auto' : `${duration}s`}</span></span></div><input type="range" min={minDuration} max={30} step={1} value={duration} disabled={autoDuration} onChange={event => patch({ duration: `${event.target.value}s` })} className={`h-1.5 w-full cursor-ew-resize accent-[#d8ff05] ${autoDuration ? 'opacity-40' : ''}`} /><div className="mt-1 flex justify-between text-[9px] text-slate-500"><span>{minDuration}s</span><span>30s</span></div></div> : null}
 
         <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-3 text-[13px] font-bold"><span>Batch size</span><div className="flex items-center gap-3"><button onClick={() => patch({ [isVideo ? 'numVideos' : 'numImages']: Math.max(1, batch - 1) })} className="text-slate-400 hover:text-white">−</button><span>{batch}/4</span><button onClick={() => patch({ [isVideo ? 'numVideos' : 'numImages']: Math.min(4, batch + 1) })} className="text-slate-400 hover:text-white">＋</button></div></div>
 
         {isVideo && currentModel.supportsAudio ? <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-2.5 text-[13px] font-bold"><span>Generate Audio</span><button onClick={() => patch({ enableAudio: !audio })} className={`h-6 w-11 rounded-full p-0.5 transition-colors ${audio ? 'bg-[#25d32c]' : 'bg-zinc-700'}`} aria-pressed={audio}><span className={`block h-5 w-5 rounded-full bg-white transition-transform ${audio ? 'translate-x-5' : ''}`} /></button></div> : null}
 
-        {isVideo && (currentModel.supportsDraft || currentModel.supportsExtend) ? <div className="grid grid-cols-2 gap-2">{currentModel.supportsDraft ? <button onClick={() => patch({ draftMode: !draft, extendMode: false, ...(!draft ? { aspectRatio: 'adaptive', resolution: '480p' } : {}) })} className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${draft ? 'border-amber-400/40 bg-amber-500/20 text-amber-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Draft mode</button> : <div />}{currentModel.supportsExtend ? <button onClick={() => patch({ extendMode: !extend, draftMode: false, ...(!extend ? { aspectRatio: 'adaptive' } : {}) })} className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${extend ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Extend mode</button> : null}</div> : null}
+        {isVideo && (currentModel.supportsDraft || currentModel.supportsExtend || currentModel.supportsEdit) ? <div className="grid grid-cols-3 gap-2">{currentModel.supportsDraft ? <button onClick={() => patch({ draftMode: !draft, extendMode: false, editMode: false, ...(!draft ? { aspectRatio: 'adaptive', resolution: '480p' } : {}) })} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold ${draft ? 'border-amber-400/40 bg-amber-500/20 text-amber-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Draft</button> : <div />}{currentModel.supportsExtend ? <button onClick={() => patch({ extendMode: !extend, draftMode: false, editMode: false, ...(!extend ? { aspectRatio: 'adaptive' } : {}) })} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold ${extend ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Extend</button> : <div />}{currentModel.supportsEdit ? <button title="Edit a connected 4–30s source video (add / remove / replace …). Keeps its ratio and length." onClick={() => patch({ editMode: !edit, draftMode: false, extendMode: false, ...(!edit ? { aspectRatio: 'adaptive', duration: AUTO_DURATION } : {}) })} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold ${edit ? 'border-sky-400/40 bg-sky-500/20 text-sky-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Edit</button> : null}</div> : null}
+
+        {isVideo && currentModel.supportsMov ? toggle('Output .mov', mov, () => patch({ outputFormat: mov ? 'mp4' : 'mov' }), 'High color precision (H.264 yuv444p + PCM). Recommended for edit/extend; some players cannot play it.') : null}
+
+        {isVideo && currentModel.supportsWatermark ? toggle('AI watermark', watermark, () => patch({ watermark: !watermark }), 'Adds an "AI generated" mark to the lower-right corner') : null}
       </div>
     </aside>
   )

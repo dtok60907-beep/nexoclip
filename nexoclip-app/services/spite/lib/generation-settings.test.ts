@@ -34,8 +34,29 @@ test('changing model keeps supported toggles and resets the rest to model defaul
   })
   assert.deepEqual(patch, {
     modelId: 'seedance-2.0', aspectRatio: '16:9', resolution: '720p', duration: '5s',
-    enableAudio: false, draftMode: false, extendMode: false,
+    enableAudio: false, draftMode: false, extendMode: false, editMode: false, outputFormat: 'mp4', watermark: false,
   })
+})
+
+test('Seedance 2.5 offers 4s and auto duration, older models clamp to 5s', () => {
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.5', duration: '4s' }).duration, '4s')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.5', duration: 'auto' }).duration, 'auto')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', duration: 'auto' }).duration, '5s')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', duration: '4s' }).duration, '5s')
+})
+
+test('edit mode forces auto duration and replaces extend', () => {
+  const settings = resolveGenerationSettings('video', { modelId: 'seedance-2.5', editMode: true, extendMode: true, duration: '10s' })
+  assert.equal(settings.editMode, true)
+  assert.equal(settings.extendMode, false)
+  assert.equal(settings.duration, 'auto')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', editMode: true }).editMode, false)
+})
+
+test('mov output and watermark only apply to models that support them', () => {
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.5', outputFormat: 'mov', watermark: true }).outputFormat, 'mov')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', outputFormat: 'mov' }).outputFormat, 'mp4')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', watermark: true }).watermark, false)
 })
 
 test('image settings fall back to the image model defaults', () => {

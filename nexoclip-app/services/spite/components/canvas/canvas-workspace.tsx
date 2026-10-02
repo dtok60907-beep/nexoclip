@@ -162,9 +162,7 @@ const CONNECTION_RULES: Record<string, string[]> = {
   'prompt-out': ['prompt-in'], // shared text-input handle on Prompt, Image, and Video nodes
   'image-out': ['image-in', 'end-frame-in', 'reference-in'],
   'video-out': ['video-in'],
-  // Audio reference → Kling 2.6 voice input. Without this the audio-out
-  // handle had no allowed target, so the edge was rejected and the whole
-  // voice-cloning flow was unreachable.
+  // Audio reference → a video node's reference audio input (Seedance 2.5).
   'audio-out': ['audio-in'],
 }
 
@@ -179,7 +177,7 @@ const HANDLE_NAMES: Record<string, string> = {
   'video-out': 'Video output',
   'video-in': 'Video input',
   'audio-out': 'Audio output',
-  'audio-in': 'Voice reference audio',
+  'audio-in': 'Reference audio',
 }
 
 // Validate connection rules

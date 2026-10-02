@@ -71,3 +71,8 @@ test('classifies only registered Seedance models and configured aliases', () => 
   assert.equal(isDirectBytePlusSeedance('byteplus/seedance-future', {}), false);
   assert.equal(isDirectBytePlusSeedance('byteplus/not-a-registered-model', {}), false);
 });
+
+test('the Canvas byteplus/-prefixed Seedance ids use trusted BytePlus assets', () => {
+  assert.equal(isDirectBytePlusSeedance('byteplus/dreamina-seedance-2-5-260628', {}), true);
+  assert.equal(isDirectBytePlusSeedance('byteplus/dreamina-seedance-2-0-260128', {}), true);
+});

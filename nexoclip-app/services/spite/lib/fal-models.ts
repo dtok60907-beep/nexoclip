@@ -12,6 +12,15 @@ export interface ModelConfig {
   inputTypes: InputType[]
   supportsDraft?: boolean
   supportsExtend?: boolean
+  supportsEdit?: boolean
+  // Duration -1: the model picks the length (edit: the source video's length).
+  supportsAutoDuration?: boolean
+  supportsReferenceAudio?: boolean
+  supportsMov?: boolean
+  supportsWatermark?: boolean
+  // Most source videos / audio clips one request accepts.
+  maxReferenceVideos?: number
+  maxReferenceAudios?: number
   aspectRatios: string[]
   durations?: string[]
   resolutions?: string[]
@@ -71,22 +80,30 @@ export const IMAGE_MODELS: ModelConfig[] = [
   image('seedream-5-lite-unfiltered', 'Seedream 5.0 Lite Unfiltered', 'byteplus', 'ep-20260907150433-zg8fr', SEEDREAM_RATIOS, ['1K', '2K', '4K'], '1:1', '2K'),
 ]
 
+const SEEDANCE_25_FEATURES: Partial<ModelConfig> = {
+  supportsDraft: true,
+  supportsExtend: true,
+  supportsEdit: true,
+  supportsAutoDuration: true,
+  supportsReferenceAudio: true,
+  supportsMov: true,
+  supportsWatermark: true,
+  maxReferenceVideos: 10,
+  maxReferenceAudios: 10,
+  inputTypes: ['text', 'image', 'video'],
+  aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'],
+}
+
 export const VIDEO_MODELS: ModelConfig[] = [
   video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s']),
   video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s']),
   {
     ...video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
-    supportsDraft: true,
-    supportsExtend: true,
-    inputTypes: ['text', 'image', 'video'],
-    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'],
+    ...SEEDANCE_25_FEATURES,
   },
   {
     ...video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
-    supportsDraft: true,
-    supportsExtend: true,
-    inputTypes: ['text', 'image', 'video'],
-    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'],
+    ...SEEDANCE_25_FEATURES,
   },
 ]
 
