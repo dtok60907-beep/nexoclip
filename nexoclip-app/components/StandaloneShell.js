@@ -545,7 +545,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
   return (
     <div 
-      className="nexoclip-studio-shell h-screen bg-[#FFF6DE] flex flex-col overflow-hidden text-[#110C2A] relative"
+      className="h-screen bg-[#030303] flex flex-col overflow-hidden text-white relative"
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -553,9 +553,9 @@ export default function StandaloneShell({ initialTab, children }) {
     >
       {/* Drag Overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-[100] bg-[#A175FF]/10 backdrop-blur-md border-4 border-dashed border-[#A175FF]/50 flex items-center justify-center pointer-events-none transition-all duration-300">
-          <div className="bg-white/90 p-8 rounded-[32px] border border-white shadow-2xl flex flex-col items-center gap-4 scale-110 animate-pulse">
-            <div className="w-20 h-20 bg-[#A175FF] rounded-[24px] flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] bg-[#22d3ee]/10 backdrop-blur-md border-4 border-dashed border-[#22d3ee]/50 flex items-center justify-center pointer-events-none transition-all duration-300">
+          <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 scale-110 animate-pulse">
+            <div className="w-20 h-20 bg-[#22d3ee] rounded-2xl flex items-center justify-center">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
@@ -594,7 +594,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
       {/* Header */}
       {isHeaderVisible && (
-        <header className="flex-shrink-0 h-16 border-b border-[#110C2A]/[0.08] flex items-center justify-between px-4 bg-[#FFF6DE]/90 backdrop-blur-xl z-50 gap-4">
+        <header className="flex-shrink-0 h-14 border-b border-white/[0.05] flex items-center justify-between px-4 bg-[#0a0a0b]/80 backdrop-blur-md z-50 gap-4">
           {/* Left: Mobile menu toggle + Logo + Desktop Sidebar Toggle */}
           <div className="flex items-center gap-3">
             {/* Mobile drawer toggle */}
@@ -614,7 +614,7 @@ export default function StandaloneShell({ initialTab, children }) {
             <div className="hidden md:block relative group">
               <button
                 onClick={toggleSidebar}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-[#110C2A]/[0.05] hover:bg-[#A175FF]/15 text-[#110C2A]/60 hover:text-[#110C2A] transition-colors border border-[#110C2A]/[0.08]"
+                className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors border border-white/5"
                 aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
                 <svg
@@ -639,7 +639,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
             {/* Logo & Title */}
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-[#A175FF] rounded-[14px] flex items-center justify-center shadow-lg shadow-[#A175FF]/25">
+              <div className="w-8 h-8 bg-[#22d3ee] rounded-lg flex items-center justify-center shadow-lg shadow-[#22d3ee]/20">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
@@ -651,7 +651,7 @@ export default function StandaloneShell({ initialTab, children }) {
           </div>
 
           {/* Active Tab Breadcrumb Badge */}
-          <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 border border-[#110C2A]/[0.08] text-xs text-[#110C2A]/60 shadow-sm">
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.05] text-xs text-white/60">
             <span className="w-1.5 h-1.5 rounded-full bg-[#22d3ee]" />
             <span className="font-medium text-white/80">
               {TABS.find(t => t.id === activeTab)?.label || 'Studio'}
@@ -661,8 +661,8 @@ export default function StandaloneShell({ initialTab, children }) {
           {/* Right: Actions */}
           <div className="flex-shrink-0 flex items-center gap-3">
             <button onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
-              <span className="text-[#A175FF]">◈</span>
-              <span className="text-xs font-bold text-[#110C2A]/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
+              <span className="text-cyan-300">◈</span>
+              <span className="text-xs font-bold text-white/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
             </button>
 
             <JobListPanel />
@@ -685,7 +685,7 @@ export default function StandaloneShell({ initialTab, children }) {
         {isHeaderVisible && (
           <aside
             className={`
-              fixed top-16 bottom-0 left-0 md:static md:h-full z-30 bg-[#FCEED1]/95 backdrop-blur-xl border-r border-[#110C2A]/[0.08] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
+              fixed top-14 bottom-0 left-0 md:static md:h-full z-30 bg-[#0a0a0b]/95 backdrop-blur-md border-r border-white/[0.06] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
               ${isMobileOpen ? 'translate-x-0 w-60 z-50' : '-translate-x-full md:translate-x-0'}
               ${isSidebarCollapsed ? 'md:w-16' : 'md:w-52'}
             `}
