@@ -107,8 +107,14 @@ export function pickRefStrategy(model: ModelConfig | null | undefined): RefStrat
   return 'none'
 }
 
-function mediaKind(type: unknown): MediaKind {
-  return type === 'video' || type === 'audio' ? type : 'image'
+// Folder rows carry their media type, but videos added before the folder
+// modal knew about media types were recorded as images; trust the file
+// extension over an 'image' label.
+function mediaKind(type: unknown, url?: string): MediaKind {
+  if (type === 'video' || type === 'audio') return type
+  if (url && /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)) return 'video'
+  if (url && /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(url)) return 'audio'
+  return 'image'
 }
 
 const CITE: Record<MediaKind, string> = { image: '@Image', video: '@Video', audio: '@Audio' }
@@ -132,7 +138,10 @@ function collectGroups(
       seen.add(folder.id)
       groupsByFolderId.set(folder.id, {
         urls: canonicalIds.map((assetId) => `/api/assets/${encodeURIComponent(assetId)}/download`),
-        kinds: canonicalIds.map((assetId) => mediaKind(folder.assets.find((asset) => asset.workspaceAssetId === assetId)?.type)),
+        kinds: canonicalIds.map((assetId) => {
+          const asset = folder.assets.find((candidate) => candidate.workspaceAssetId === assetId)
+          return mediaKind(asset?.type, asset?.r2_url)
+        }),
         workspaceAssetIds: canonicalIds,
         folderName: folder.name,
         folderType: folder.type,
@@ -152,7 +161,7 @@ function collectGroups(
     const usable = requested
       .map((asset) => ({
         url: asset.workspaceAssetId ? `/api/assets/${encodeURIComponent(asset.workspaceAssetId)}/download` : asset.r2_url,
-        kind: mediaKind(asset.type),
+        kind: mediaKind(asset.type, asset.r2_url),
       }))
       .filter((asset) => Boolean(asset.url))
     if (usable.length === 0) return
