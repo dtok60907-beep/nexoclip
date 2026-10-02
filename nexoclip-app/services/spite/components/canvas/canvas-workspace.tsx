@@ -62,6 +62,11 @@ import { CommentNode } from './nodes/comment-node'
 import { StickyNoteNode } from './nodes/sticky-note-node'
 import { TextLabelNode } from './nodes/text-label-node'
 import { GroupFrameNode } from './nodes/group-frame-node'
+import { TableNode } from './nodes/table-node'
+import { DrawingNode, ERASER_ATTRIBUTE } from './nodes/drawing-node'
+import { PenOverlay } from './pen-overlay'
+import { PEN_COLORS, PEN_WIDTHS } from '@/lib/drawing-path'
+import { createTableData } from '@/lib/table-data'
 import { GROUP_TYPE, isLockedByGroup, parentsFirst, planDrop, remapParents, withGroupMembers, type GroupableNode } from '@/lib/canvas-groups'
 import { ChatPanel } from './chat-panel'
 import { CursorChatInput } from './cursor-chat-input'
@@ -99,13 +104,17 @@ const NODE_TYPES: NodeTypes = {
   stickyNote: withNodeErrorBoundary(StickyNoteNode),
   textLabel: withNodeErrorBoundary(TextLabelNode),
   [GROUP_TYPE]: withNodeErrorBoundary(GroupFrameNode),
+  tableNode: withNodeErrorBoundary(TableNode),
+  drawing: withNodeErrorBoundary(DrawingNode),
 }
 
 // Tools that place a board object where the canvas is clicked.
-const PLACEMENT_TOOLS: Partial<Record<CanvasTool, { type: string; label: string; offset: { x: number; y: number }; data?: Record<string, unknown> }>> = {
-  comment: { type: 'comment', label: 'Comment', offset: { x: 18, y: 34 }, data: { resolved: false } },
-  note: { type: 'stickyNote', label: 'Sticky note', offset: { x: 0, y: 0 }, data: { color: 'yellow' } },
-  text: { type: 'textLabel', label: 'Text', offset: { x: 4, y: 14 }, data: { size: 'm' } },
+const PLACEMENT_TOOLS: Partial<Record<CanvasTool, { type: string; label: string; offset: { x: number; y: number }; data?: () => Record<string, unknown> }>> = {
+  comment: { type: 'comment', label: 'Comment', offset: { x: 18, y: 34 }, data: () => ({ resolved: false }) },
+  note: { type: 'stickyNote', label: 'Sticky note', offset: { x: 0, y: 0 }, data: () => ({ color: 'yellow' }) },
+  text: { type: 'textLabel', label: 'Text', offset: { x: 4, y: 14 }, data: () => ({ size: 'm' }) },
+  // Fresh row/column ids for every table.
+  table: { type: 'tableNode', label: 'Table', offset: { x: 0, y: 0 }, data: () => createTableData() },
 }
 
 const EDGE_TYPES: EdgeTypes = {
@@ -367,6 +376,23 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const [activeTool, setActiveTool] = useState<CanvasTool>('select')
   // Resolved comment pins stay out of the way unless asked for.
   const [showResolvedComments, setShowResolvedComments] = useState(false)
+  // Pen color and width, remembered per browser.
+  const [pen, setPen] = useState<{ color: string; width: number }>(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('spite:pen') || 'null') as { color?: unknown; width?: unknown } | null
+      return {
+        color: typeof saved?.color === 'string' && (PEN_COLORS as readonly string[]).includes(saved.color) ? saved.color : PEN_COLORS[0],
+        width: typeof saved?.width === 'number' && (PEN_WIDTHS as readonly number[]).includes(saved.width) ? saved.width : PEN_WIDTHS[1],
+      }
+    } catch {
+      return { color: PEN_COLORS[0], width: PEN_WIDTHS[1] }
+    }
+  })
+  const choosePen = (next: Partial<{ color: string; width: number }>) => setPen((current) => {
+    const value = { ...current, ...next }
+    try { window.localStorage.setItem('spite:pen', JSON.stringify(value)) } catch { /* storage blocked */ }
+    return value
+  })
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1124,7 +1150,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
       if (e.key === 'Escape') {
         setContextMenu(null)
-        setActiveTool((tool) => (PLACEMENT_TOOLS[tool] ? 'select' : tool))
+        setActiveTool((tool) => (PLACEMENT_TOOLS[tool] || tool === 'pen' || tool === 'eraser' ? 'select' : tool))
       }
       // C / N / T: comment, sticky note, text (plain keys only; Ctrl+C/N/T
       // keep their copy / add-node meanings).
@@ -1132,6 +1158,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
         if (key === 'c') setActiveTool('comment')
         if (key === 'n') setActiveTool('note')
         if (key === 't') setActiveTool('text')
+        if (key === 'p') setActiveTool('pen')
+        if (key === 'e') setActiveTool('eraser')
       }
     }
 
@@ -1476,6 +1504,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       />
 
       <div
+        {...(activeTool === 'eraser' ? { [ERASER_ATTRIBUTE]: '' } : {})}
         className="flex-1 relative"
         ref={flowRef}
         onDragOver={handleDragOver}
@@ -1537,7 +1566,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 if (placement) {
                   if (allowDocumentMutation && currentUser) {
                     const position = screenToFlowPosition({ x: event.clientX - placement.offset.x, y: event.clientY - placement.offset.y })
-                    commands.createNode(makeNode(placement.type, position, placement.label, activeSceneId, { createdBy: currentUser.id, ...placement.data }))
+                    commands.createNode(makeNode(placement.type, position, placement.label, activeSceneId, { createdBy: currentUser.id, ...placement.data?.() }))
                   }
                   setActiveTool('select')
                   return
@@ -1557,7 +1586,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
               }}
               nodeTypes={NODE_TYPES}
               onContextMenu={onContextMenu}
-              selectionOnDrag
+              // Box selection only with the cursor tool, so the eraser can
+              // sweep across strokes.
+              selectionOnDrag={activeTool === 'select'}
               selectionMode={SelectionMode.Partial}
               panOnDrag={activeTool === 'hand' ? true : [1, 2]}
               panOnScroll
@@ -1569,7 +1600,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               className="spite-react-flow"
               style={{
                 background: '#0c0d12',
-                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' || PLACEMENT_TOOLS[activeTool] ? 'crosshair' : 'default'
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' || activeTool === 'pen' || PLACEMENT_TOOLS[activeTool] ? 'crosshair' : activeTool === 'eraser' ? 'cell' : 'default'
               }}
               proOptions={{ hideAttribution: true }}
               // Keep nodes mounted while they are off-screen. Generator polling,
@@ -1613,6 +1644,55 @@ function CanvasInner({ projectId }: { projectId: string }) {
           nodes={sceneNodes}
           viewport={viewport}
         />
+        {activeTool === 'pen' && !readOnly ? (
+          <PenOverlay
+            color={pen.color}
+            strokeWidth={pen.width}
+            onStroke={(stroke) => {
+              const node = makeNode('drawing', stroke.position, 'Drawing', activeSceneId, {
+                createdBy: currentUser?.id,
+                width: stroke.width,
+                height: stroke.height,
+                path: stroke.path,
+                color: stroke.color,
+                strokeWidth: stroke.strokeWidth,
+              })
+              // Only the stroke itself takes clicks; empty space inside its
+              // box passes through to whatever is underneath.
+              commands.createNode({ ...node, style: { pointerEvents: 'none' } } as never)
+            }}
+          />
+        ) : null}
+        {activeTool === 'pen' && !readOnly ? (
+          <div className="pointer-events-none absolute bottom-[76px] left-1/2 z-30 -translate-x-1/2">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/[0.1] bg-[#12141c]/95 px-3 py-1.5 shadow-xl backdrop-blur-xl" aria-label="Pen settings">
+              {PEN_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => choosePen({ color })}
+                  aria-label={`Pen color ${color}`}
+                  aria-pressed={pen.color === color}
+                  className={`h-5 w-5 rounded-full border ${pen.color === color ? 'border-white ring-2 ring-white/40' : 'border-black/40'}`}
+                  style={{ background: color }}
+                />
+              ))}
+              <div className="mx-1 h-4 w-px bg-white/10" />
+              {PEN_WIDTHS.map((width) => (
+                <button
+                  key={width}
+                  type="button"
+                  onClick={() => choosePen({ width })}
+                  aria-label={`Pen width ${width}`}
+                  aria-pressed={pen.width === width}
+                  className={`flex h-6 w-6 items-center justify-center rounded-md ${pen.width === width ? 'bg-white/15' : 'hover:bg-white/10'}`}
+                >
+                  <span className="rounded-full bg-slate-200" style={{ width: width + 2, height: width + 2 }} />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <CursorChatInput
           enabled={!readOnly}
           participantId={localParticipantId}
@@ -1655,7 +1735,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         <ViewportPersistor projectId={projectId} />
         {(() => {
           // Selection actions: group 2+ nodes, or ungroup selected frames.
-          if (readOnly) return null
+          if (readOnly || activeTool !== 'select') return null
           const selected = sceneNodes.filter((node) => node.selected)
           const frames = selected.filter((node) => node.type === GROUP_TYPE)
           const groupable = selected.filter((node) => node.type !== GROUP_TYPE)
