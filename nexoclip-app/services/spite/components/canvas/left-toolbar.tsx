@@ -1766,7 +1766,7 @@ export function LeftToolbar({
                               <div className="flex gap-1 mb-1.5">
                                 {folder.assets.slice(0, 2).map((asset, i) => (
                                   <div key={i} className="w-8 h-8 rounded bg-white/5 overflow-hidden">
-                                    <img src={asset.r2_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                                    <AssetThumb url={asset.r2_url} type={asset.type === 'video' || asset.type === 'audio' ? asset.type : 'image'} audioIconSize={12} />
                                   </div>
                                 ))}
                                 {folder.assets.length === 0 && (
@@ -1807,7 +1807,7 @@ export function LeftToolbar({
                               <div className="flex gap-1 mb-1.5">
                                 {folder.assets.slice(0, 2).map((asset, i) => (
                                   <div key={i} className="w-8 h-8 rounded bg-white/5 overflow-hidden">
-                                    <img src={asset.r2_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                                    <AssetThumb url={asset.r2_url} type={asset.type === 'video' || asset.type === 'audio' ? asset.type : 'image'} audioIconSize={12} />
                                   </div>
                                 ))}
                                 {folder.assets.length === 0 && (
@@ -1848,7 +1848,7 @@ export function LeftToolbar({
                               <div className="flex gap-1 mb-1.5">
                                 {folder.assets.slice(0, 2).map((asset, i) => (
                                   <div key={i} className="w-8 h-8 rounded bg-white/5 overflow-hidden">
-                                    <img src={asset.r2_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                                    <AssetThumb url={asset.r2_url} type={asset.type === 'video' || asset.type === 'audio' ? asset.type : 'image'} audioIconSize={12} />
                                   </div>
                                 ))}
                                 {folder.assets.length === 0 && (

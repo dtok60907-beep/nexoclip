@@ -65,3 +65,11 @@ test('image settings fall back to the image model defaults', () => {
   assert.ok(settings.aspectRatio.length > 0)
   assert.equal(settings.enableAudio, false)
 })
+
+test('Seedance 2.5 Frame defaults to adaptive and has no omni-only modes', () => {
+  const settings = resolveGenerationSettings('video', { modelId: 'seedance-2.5-frame', extendMode: true, editMode: true })
+  assert.equal(settings.aspectRatio, 'adaptive')
+  assert.equal(settings.extendMode, false)
+  assert.equal(settings.editMode, false)
+  assert.equal(settings.model?.videoTaskMode, 'frame')
+})

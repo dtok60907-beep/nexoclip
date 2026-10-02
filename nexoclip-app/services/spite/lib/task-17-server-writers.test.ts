@@ -1190,3 +1190,33 @@ test('audio references must be tenant assets', async () => {
   const { response } = await submitSeedance25Video({ audioUrls: ['https://evil.example/a.mp3'] })
   assert.equal(response.status, 400)
 })
+
+test('legacy Canvas video and audio references are ownership-checked like images', async () => {
+  let checked: string[] = []
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: () => (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const query = strings.join(' ').replace(/\s+/g, ' ').toLowerCase()
+      if (query.includes('select 1 from projects where id =')) return [{ ok: 1 }]
+      if (query.includes('count(distinct')) { checked = values.find(Array.isArray) as string[]; return [{ owned_count: 0 }] }
+      throw new Error(`Unhandled SQL: ${strings.join(' ')}`)
+    }) as any,
+    createNexoClipGenerationClient: () => ({
+      submit: async () => { throw new Error('must not submit unowned references') },
+      status: async () => { throw new Error('status should not be called') },
+    }) as any,
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('video-node-legacy', 'videoGen', {}, 'extend it'), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+  })
+  const response = await handler(makeRequest('http://spite.local/api/generate/submit', {
+    method: 'POST',
+    body: {
+      projectId: PROJECT_ID, nodeId: 'video-node-legacy', kind: 'video', prompt: 'extend it', model: 'seedance-2.5',
+      settings: { omniReferenceTaskType: 'extend', videoUrl: '/canvas/api/r2-image/uploads/clip.mp4', audioUrls: ['/canvas/api/r2-image/uploads/voice.mp3'] },
+    },
+  }))
+  assert.equal(response.status, 404)
+  assert.deepEqual(checked.sort(), ['/api/r2-image/uploads/clip.mp4', '/api/r2-image/uploads/voice.mp3'])
+})

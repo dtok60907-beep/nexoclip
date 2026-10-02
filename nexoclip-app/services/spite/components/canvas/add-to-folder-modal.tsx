@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { MagnifyingGlass, Plus, ArrowLeft, User, MapPin, Package, X, UploadSimple } from '@phosphor-icons/react'
 import { uploadMediaFile } from '@/lib/upload-media'
+import { AssetThumb } from '@/components/canvas/asset-thumb'
 
 type FolderType = 'character' | 'prop' | 'location' | 'general'
 
@@ -21,7 +22,27 @@ interface AssetItem {
   // ID used by thumbnails and existing folders during migration.
   workspaceAssetId?: string
   url: string
+  type?: MediaType
   isUploading?: boolean
+}
+
+// Folders hold images, videos, and audio clips (Seedance omni @mentions send
+// each kind as its own reference list).
+type MediaType = 'image' | 'video' | 'audio'
+const MEDIA_ACCEPT = 'image/*,video/*,audio/*'
+
+function mediaTypeOfFile(file: File): MediaType | null {
+  if (file.type.startsWith('image/')) return 'image'
+  if (file.type.startsWith('video/')) return 'video'
+  if (file.type.startsWith('audio/')) return 'audio'
+  return null
+}
+
+function mediaTypeOf(url: string, type?: string): MediaType {
+  if (type === 'image' || type === 'video' || type === 'audio') return type
+  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)) return 'video'
+  if (/\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(url)) return 'audio'
+  return 'image'
 }
 
 interface Folder {
@@ -81,7 +102,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([])
   const [creating, setCreating] = useState(false)
   const [showAssetPicker, setShowAssetPicker] = useState(false)
-  const [availableAssets, setAvailableAssets] = useState<{ id: string; r2_url: string; prompt: string }[]>([])
+  const [availableAssets, setAvailableAssets] = useState<{ id: string; r2_url: string; prompt: string; type?: string }[]>([])
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   // Counter-based drag tracking. Each dragenter increments, each
   // dragleave decrements. We only flip isDraggingOver off when the
@@ -160,7 +181,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       setShowNewForm(true)
       setNewName(editFolder.name)
       setNewDescription(editFolder.description || '')
-      setSelectedAssets(editFolder.assets.map(a => ({ id: a.id, url: a.r2_url })))
+      setSelectedAssets(editFolder.assets.map(a => ({ id: a.id, url: a.r2_url, type: mediaTypeOf(a.r2_url, a.type) })))
       return
     }
     // Category panel's "+ New Character/Prop/…" buttons set defaultNew so
@@ -205,17 +226,17 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     const tempUrl = URL.createObjectURL(file)
 
     // Add placeholder immediately
-    setSelectedAssets(prev => [...prev, { id: tempId, url: tempUrl, isUploading: true }])
+    const type = mediaTypeOfFile(file) ?? 'image'
+    setSelectedAssets(prev => [...prev, { id: tempId, url: tempUrl, type, isUploading: true }])
 
     try {
       const { url: proxyUrl } = await uploadMediaFile(file, { filename: file.name })
 
       // Record the asset (projectId required).
-      const isVideo = file.type.startsWith('video/')
       const assetRes = await fetch(withBasePath('/api/assets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: proxyUrl, type: isVideo ? 'video' : 'image', filename: file.name, projectId }),
+        body: JSON.stringify({ url: proxyUrl, type, filename: file.name, projectId }),
       })
       if (!assetRes.ok) throw new Error(`assets POST returned ${assetRes.status}`)
       const assetData = await assetRes.json()
@@ -225,10 +246,10 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       // thumbnail via cookie auth), and free the temp blob.
       URL.revokeObjectURL(tempUrl)
       setSelectedAssets(prev => prev.map(a =>
-        a.id === tempId ? { id: assetData.id, url: proxyUrl, isUploading: false } : a
+        a.id === tempId ? { id: assetData.id, url: proxyUrl, type, isUploading: false } : a
       ))
-      setAvailableAssets(prev => [...prev, { id: assetData.id, r2_url: proxyUrl, prompt: file.name }])
-      return { id: assetData.id, url: proxyUrl }
+      setAvailableAssets(prev => [...prev, { id: assetData.id, r2_url: proxyUrl, prompt: file.name, type }])
+      return { id: assetData.id, url: proxyUrl, type }
     } catch (err: any) {
       console.error('[folder-modal] Upload failed:', err)
       URL.revokeObjectURL(tempUrl)
@@ -239,7 +260,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
   }, [projectId])
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
-    const media = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
+    const media = Array.from(files).filter(f => mediaTypeOfFile(f) !== null)
     for (const file of media) {
       await uploadFile(file)
     }
@@ -379,9 +400,9 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     }
   }
 
-  const handleAddFromPicker = (asset: { id: string; r2_url: string }) => {
+  const handleAddFromPicker = (asset: { id: string; r2_url: string; type?: string }) => {
     if (!selectedAssets.find(a => a.id === asset.id)) {
-      setSelectedAssets(prev => [...prev, { id: asset.id, url: asset.r2_url }])
+      setSelectedAssets(prev => [...prev, { id: asset.id, url: asset.r2_url, type: mediaTypeOf(asset.r2_url, asset.type) }])
     }
     setShowAssetPicker(false)
   }
@@ -571,7 +592,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={MEDIA_ACCEPT}
                       multiple
                       className="hidden"
                       onChange={e => e.target.files && handleFiles(e.target.files)}
@@ -598,7 +619,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                   {/* Selected assets */}
                   {selectedAssets.map(asset => (
                     <div key={asset.id} className="relative w-16 h-16 rounded-lg overflow-hidden bg-white/5 group shrink-0">
-                      <img src={asset.url} alt="" className={`w-full h-full object-cover ${asset.isUploading ? 'opacity-50' : ''}`} />
+                      <div className={`w-full h-full ${asset.isUploading ? 'opacity-50' : ''}`}><AssetThumb url={asset.url} type={mediaTypeOf(asset.url, asset.type)} audioIconSize={18} /></div>
                       {asset.isUploading && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                           <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -638,7 +659,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                     <input
                       ref={pickerFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={MEDIA_ACCEPT}
                       multiple
                       className="hidden"
                       onChange={e => { if (e.target.files) { handleFiles(e.target.files); setShowAssetPicker(false) } }}
@@ -653,7 +674,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                             onClick={() => handleAddFromPicker(asset)}
                             className="aspect-square rounded overflow-hidden bg-white/5 hover:ring-2 hover:ring-accent transition-all"
                           >
-                            <img src={asset.r2_url} alt="" className="w-full h-full object-cover" />
+                            <AssetThumb url={asset.r2_url} type={mediaTypeOf(asset.r2_url, asset.type)} audioIconSize={18} />
                           </button>
                         ))}
                       {availableAssets.filter(a => !selectedAssets.find(s => s.id === a.id)).length === 0 && (
@@ -757,7 +778,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                         <div className="flex gap-1 shrink-0">
                           {folder.assets.slice(0, 2).map((asset, i) => (
                             <div key={i} className="w-10 h-10 rounded bg-white/5 overflow-hidden">
-                              <img src={asset.r2_url} alt="" className="w-full h-full object-cover" />
+                              <AssetThumb url={asset.r2_url} type={mediaTypeOf(asset.r2_url, asset.type)} audioIconSize={14} />
                             </div>
                           ))}
                           {folder.assets.length === 0 && (

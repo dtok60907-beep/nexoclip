@@ -162,3 +162,37 @@ test('mentions of deleted folders are reported once folders have loaded', () => 
   assert.deepEqual(compileMentionsForModel('@Kept @Gone', mentions, folders, model).missingFolders, ['Gone'])
   assert.deepEqual(compileMentionsForModel('@Kept @Gone', mentions, [], model).missingFolders, [])
 })
+
+test('Seedance omni numbers images, videos, and audio separately and splits them out', () => {
+  const omniModel = getModelById('seedance-2.5')
+  const result = compileMentionsForModel(
+    'Extend @Clip with @Hero, voice @Voice',
+    [
+      { folderId: 'clip', name: 'Clip', selectedAssetIds: [] },
+      { folderId: 'hero', name: 'Hero', selectedAssetIds: [] },
+      { folderId: 'voice', name: 'Voice', selectedAssetIds: [] },
+    ],
+    [
+      { id: 'clip', name: 'Clip', type: 'general', assets: [{ id: 'c1', r2_url: '/canvas/api/r2-image/c1.mp4', type: 'video' }] },
+      { id: 'hero', name: 'Hero', type: 'character', assets: [{ id: 'h1', r2_url: '/canvas/api/r2-image/h1.png', type: 'image' }, { id: 'h2', r2_url: '/canvas/api/r2-image/h2.png', type: 'image' }] },
+      { id: 'voice', name: 'Voice', type: 'general', assets: [{ id: 'v1', r2_url: '/canvas/api/r2-image/v1.mp3', type: 'audio' }] },
+    ],
+    omniModel,
+  )
+  assert.equal(result.strategy, 'citation-media')
+  assert.match(result.prompt, /^Extend the exact same subject shown in @Video1,.* with .*@Image1 @Image2,.* voice .*@Audio1,/)
+  assert.deepEqual(result.refGroups.map((group) => group.urls), [['/canvas/api/r2-image/h1.png', '/canvas/api/r2-image/h2.png']])
+  assert.deepEqual(result.videoUrls, ['/canvas/api/r2-image/c1.mp4'])
+  assert.deepEqual(result.audioUrls, ['/canvas/api/r2-image/v1.mp3'])
+})
+
+test('Seedance 2.0 omni drops video and audio it cannot take; frame models take no references', () => {
+  const folders = [{ id: 'clip', name: 'Clip', type: 'general' as const, assets: [{ id: 'c1', r2_url: '/canvas/api/r2-image/c1.mp4', type: 'video' }] }]
+  const mentions = [{ folderId: 'clip', name: 'Clip', selectedAssetIds: [] }]
+  const older = compileMentionsForModel('Use @Clip', mentions, folders, getModelById('seedance-2.0'))
+  assert.equal(older.prompt, 'Use @Clip')
+  assert.deepEqual(older.videoUrls, [])
+  const frameResult = compileMentionsForModel('Use @Clip', mentions, folders, getModelById('seedance-2.5-frame'))
+  assert.equal(frameResult.strategy, 'none')
+  assert.deepEqual(frameResult.refGroups, [])
+})

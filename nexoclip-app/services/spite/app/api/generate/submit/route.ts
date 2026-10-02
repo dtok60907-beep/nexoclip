@@ -84,7 +84,9 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         }
       }
 
-      const references = collectReferences(body)
+      // Omni source videos and audio clips arrive as @mention folder URLs too,
+      // so they go through the same ownership check as images.
+      const references = [...collectReferences(body), ...collectMediaReferences(body)]
       const legacyReferences = references.filter(isLegacyCanvasReference)
       if (legacyReferences.length && !(await projectOwnsLegacyReferences(sql, projectId, legacyReferences))) {
         return assetNotFoundResponse()
@@ -254,6 +256,18 @@ function collectReferences(body: Record<string, unknown>): string[] {
       : []),
   ]
   return [...new Set(references.filter((value): value is string => typeof value === 'string' && value.length > 0))]
+}
+
+function collectMediaReferences(body: Record<string, unknown>): string[] {
+  const settings = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings)
+    ? body.settings as Record<string, unknown>
+    : {}
+  const values = [
+    settings.videoUrl,
+    ...(Array.isArray(settings.videoUrls) ? settings.videoUrls : []),
+    ...(Array.isArray(settings.audioUrls) ? settings.audioUrls : []),
+  ]
+  return [...new Set(values.filter((value): value is string => typeof value === 'string' && value.length > 0))]
 }
 
 const POST_HANDLER = createGenerateSubmitHandler()

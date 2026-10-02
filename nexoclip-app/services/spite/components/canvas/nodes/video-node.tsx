@@ -3,7 +3,7 @@
 import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { Position, NodeResizer, NodeProps, Handle, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { useParams } from 'next/navigation'
-import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play, MusicNotes } from '@phosphor-icons/react'
+import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { GeneratorNodeToolbar } from './node-toolbar'
@@ -211,8 +211,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   // Check connection states fresh on each render
   let hasConnectedFirstFrame = false
-  let hasConnectedReferences = false
-  let hasConnectedVideoInput = false
+  // Media edges drawn before the Omni/Frame split; omni nodes ignore them.
+  let hasMediaEdges = false
   try {
     const edges = getEdges()
     const allIncomingEdges = edges.filter(edge => edge.target === id)
@@ -220,8 +220,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       e.targetHandle === 'image-in' ||
       (e.sourceHandle === 'image-out' && e.targetHandle !== 'end-frame-in' && e.targetHandle !== 'reference-in' && e.targetHandle !== 'video-in')
     )
-    hasConnectedReferences = allIncomingEdges.some(e => e.targetHandle === 'reference-in')
-    hasConnectedVideoInput = allIncomingEdges.some(e => e.targetHandle === 'video-in')
+    hasMediaEdges = allIncomingEdges.some(e => e.targetHandle !== 'prompt-in')
   } catch { /* ignore */ }
 
   // Get current model config
@@ -344,10 +343,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // first frame. Block generation (with a clear message) when refs are
   // connected but no first frame, so the user gets a helpful error not a
   // confusing fal validation failure.
-  const refsRequireFirstFrame = !!currentModel?.referenceParam && currentModel.referenceParam === 'elements' && !currentModel.referenceModel
-  const blockedNoFirstFrame = refsRequireFirstFrame && hasConnectedReferences && !hasConnectedFirstFrame
-  // Extend and edit both work on a connected source video.
-  const blockedNoExtendVideo = (extendMode || editMode) && !hasConnectedVideoInput
+  // Frame models pin a wired first frame; omni models take every reference
+  // (images, videos, audio) through @mentions and have no media handles.
+  const isFrameModel = currentModel?.videoTaskMode === 'frame'
+  const blockedNoFirstFrame = isFrameModel && !hasConnectedFirstFrame
+  const mentionedMedia = useMemo(
+    () => isFrameModel ? null : compileMentionsForModel(resolvedPrompt.prompt || '', resolvedPrompt.mentions || [], folders, currentModel),
+    [currentModel, folders, isFrameModel, resolvedPrompt.mentions, resolvedPrompt.prompt],
+  )
+  // Extend and edit both work on a source video @mentioned in the prompt.
+  const blockedNoExtendVideo = (extendMode || editMode) && !mentionedMedia?.videoUrls.length
 
   // Reset settings when the USER picks a new model. Skip the initial mount
   // so saved settings on a reloaded or duplicated node aren't immediately
@@ -691,8 +696,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     let connectedImageUrl: string | null = null
     let connectedEndImageUrl: string | null = null
     let connectedReferenceUrls: string[] = []
-    let connectedVideoUrls: string[] = []
-    let connectedAudioUrls: string[] = []
 
     // Every media input resolves through the shared helper so no field a node
     // might store its URL under is missed. A cord that resolves to nothing is
@@ -730,51 +733,22 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         )
       )
 
-      // Get connected video input (from video-in handle or video-out source handle)
-      const incomingVideoEdges = edges.filter(
-        edge => edge.target === id && (
-          edge.targetHandle === 'video-in' ||
-          edge.sourceHandle === 'video-out'  // Also check source handle
-        )
-      )
-
       // Get image URL from connected first-frame source node
-      if (incomingImageEdges.length > 0) {
+      if (isFrameModel && incomingImageEdges.length > 0) {
         const url = urlOfSource(incomingImageEdges[0])
         if (url) connectedImageUrl = url
       }
 
       // Get end-frame URL
-      if (incomingEndFrameEdges.length > 0) {
+      if (isFrameModel && incomingEndFrameEdges.length > 0) {
         const url = urlOfSource(incomingEndFrameEdges[0])
         if (url) connectedEndImageUrl = url
       }
 
-      // Collect all connected reference image URLs
-      connectedReferenceUrls = incomingReferenceEdges
-        .map(e => urlOfSource(e))
-        .filter((u): u is string => !!u)
-
-      // Source videos, in wiring order (@Video 1, @Video 2, ...). Models
-      // without multi-video support use only the first one.
-      const sourceUrl = (edge: any, fields: Array<'outputUrl' | 'thumbnail'>) => {
-        const sourceNode = nodes.find(n => n.id === edge.source)
-        return fields.map((field) => sourceNode?.data?.[field]).find((url): url is string => typeof url === 'string' && url.length > 0)
-      }
-      connectedVideoUrls = incomingVideoEdges
-        .map(edge => sourceUrl(edge, ['outputUrl', 'thumbnail']))
-        .filter((url): url is string => !!url)
-        .slice(0, currentModel?.maxReferenceVideos || 1)
-
-      // Reference audio clips (Seedance 2.5): wired into audio-in, or any
-      // edge from an audio reference node's audio-out handle.
-      if (currentModel?.supportsReferenceAudio) {
-        connectedAudioUrls = edges
-          .filter(edge => edge.target === id && (edge.targetHandle === 'audio-in' || edge.sourceHandle === 'audio-out'))
-          .map(edge => sourceUrl(edge, ['thumbnail', 'outputUrl']))
-          .filter((url): url is string => !!url)
-          .slice(0, currentModel.maxReferenceAudios || 1)
-      }
+      // Wired references only exist on models with a reference handle.
+      connectedReferenceUrls = currentModel?.referenceParam
+        ? incomingReferenceEdges.map(e => urlOfSource(e)).filter((u): u is string => !!u)
+        : []
     } catch (error) {
       console.error('Error reading connected media:', error)
     }
@@ -813,6 +787,23 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       referenceGroups.length + (connectedImageUrl ? 1 : 0),
     )
     referenceGroups.push(...compiled.refGroups)
+    // Omni source videos and audio clips come from @mentions, numbered
+    // @Video N / @Audio N in mention order.
+    const connectedVideoUrls = compiled.videoUrls.slice(0, currentModel.maxReferenceVideos || 0)
+    const connectedAudioUrls = compiled.audioUrls.slice(0, currentModel.maxReferenceAudios || 0)
+
+    if (isFrameModel && !connectedImageUrl) {
+      setError('Frame mode needs a first frame — wire an image into the blue First frame handle.')
+      setStatus('idle')
+      setSubmittedAt(undefined)
+      return
+    }
+    if ((extendMode || editMode) && connectedVideoUrls.length === 0) {
+      setError(`${editMode ? 'Edit' : 'Extend'} needs a source video — @mention a folder that contains the video.`)
+      setStatus('idle')
+      setSubmittedAt(undefined)
+      return
+    }
 
     // Models whose references go to a SEPARATE endpoint (Seedance 2.0's
     // reference-to-video) cannot also take a first/end frame — fal's
@@ -1034,10 +1025,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (!resolvedPrompt.prompt) return 'Enter text in the connected Text node'
     if (!currentModel) return 'Generate video'
     if (blockedNoFirstFrame) {
-      return `${currentModel?.name} needs a first frame when references are connected — wire an image into the blue First frame handle.`
+      return `${currentModel?.name} needs a first frame — wire an image into the blue First frame handle.`
     }
     if (blockedNoExtendVideo) {
-      return `${editMode ? 'Edit' : 'Extend'} requires a connected source video — wire a video node into the green Source video handle.`
+      return `${editMode ? 'Edit' : 'Extend'} needs a source video — @mention a folder that contains the video.`
     }
     const label = `Generate ${numVideos} video${numVideos === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
@@ -1177,16 +1168,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" position="left" top={80} visible />
 
       {/* First frame (blue) - only if model supports image input */}
-      {currentModel?.inputTypes.includes('image') && (
+      {isFrameModel && (
         <>
-          <Handle type="target" id="image-in" title="Image — sent to Seedance as reference image 1 (not a locked first frame)" position={Position.Left} style={{ top: 150, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+          <Handle type="target" id="image-in" title="First frame (required) — the video opens on this exact image" position={Position.Left} style={{ top: 150, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
           <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="left" top={150} visible />
-          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={150} label="Reference 1" />
+          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={150} label="First frame" />
         </>
       )}
 
-      {/* End frame (amber) - video models that support a last frame */}
-      {currentModel?.category === 'video' && !currentModel.id.startsWith('minimax') && (
+      {/* End frame (amber) - optional last frame for frame models */}
+      {isFrameModel && (
         <>
           <Handle type="target" id="end-frame-in" title="End frame" position={Position.Left} style={{ top: 200, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
           <HandleIcon icon={ImageIcon} color="rgba(251,191,36,0.9)" position="left" top={200} visible />
@@ -1201,24 +1192,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           <Handle type="target" id="reference-in" title="Reference image(s)" position={Position.Left} style={{ top: 250, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
           <HandleIcon icon={ImageIcon} color="rgba(236,72,153,0.9)" position="left" top={250} visible />
           <ConnectedInputs nodeId={id} handleId="reference-in" side="left" top={250} label="References" />
-        </>
-      )}
-
-      {/* Video input (green) - only if model supports video-to-video */}
-      {currentModel?.inputTypes.includes('video') && (
-        <>
-          <Handle type="target" id="video-in" title="Source video" position={Position.Left} style={{ top: 310, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-          <HandleIcon icon={FilmStrip} color="rgba(74,222,128,0.8)" position="left" top={310} visible />
-          <ConnectedInputs nodeId={id} handleId="video-in" side="left" top={310} label="Source video" />
-        </>
-      )}
-
-      {/* Reference audio (violet) - models that take audio references */}
-      {currentModel?.supportsReferenceAudio && (
-        <>
-          <Handle type="target" id="audio-in" title="Reference audio" position={Position.Left} style={{ top: 360, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-          <HandleIcon icon={MusicNotes} color="rgba(167,139,250,0.9)" position="left" top={360} visible />
-          <ConnectedInputs nodeId={id} handleId="audio-in" side="left" top={360} label="Reference audio" />
         </>
       )}
 
@@ -1332,7 +1305,15 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {!error && blockedNoExtendVideo && (
             <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
               <span className="text-[9px] font-mono text-amber-300">
-                {editMode ? 'Edit' : 'Extend'} membutuhkan video sumber. Hubungkan video ke handle Source video terlebih dahulu.
+                {editMode ? 'Edit' : 'Extend'} membutuhkan video sumber. @mention folder yang berisi video tersebut.
+              </span>
+            </div>
+          )}
+
+          {!error && !isFrameModel && hasMediaEdges && (
+            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
+              <span className="text-[9px] font-mono text-amber-300">
+                Edge gambar/video/audio diabaikan di mode Omni. Pakai @mention folder, atau ganti ke model · Frame untuk first/last frame.
               </span>
             </div>
           )}
@@ -1340,7 +1321,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {!error && blockedNoFirstFrame && (
             <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
               <span className="text-[9px] font-mono text-amber-300">
-                {currentModel?.name} needs a first frame when references are connected. Wire an image into the blue handle.
+                Mode Frame butuh first frame. Hubungkan gambar ke handle biru (First frame).
               </span>
             </div>
           )}

@@ -10,6 +10,9 @@ export interface ModelConfig {
   falModel: string // Kept as a UI compatibility alias; contains no fal endpoint.
   category: ModelCategory
   inputTypes: InputType[]
+  // Seedance task family: 'omni' takes every reference through @mentions and
+  // has no media handles; 'frame' pins a wired first (and optional last) frame.
+  videoTaskMode?: 'omni' | 'frame'
   supportsDraft?: boolean
   supportsExtend?: boolean
   supportsEdit?: boolean
@@ -80,31 +83,59 @@ export const IMAGE_MODELS: ModelConfig[] = [
   image('seedream-5-lite-unfiltered', 'Seedream 5.0 Lite Unfiltered', 'byteplus', 'ep-20260907150433-zg8fr', SEEDREAM_RATIOS, ['1K', '2K', '4K'], '1:1', '2K'),
 ]
 
-const SEEDANCE_25_FEATURES: Partial<ModelConfig> = {
+const SEEDANCE_25_DURATIONS = Array.from({ length: 27 }, (_, i) => `${i + 4}s`)
+
+// Shared by both Seedance 2.5 task families.
+const SEEDANCE_25_COMMON: Partial<ModelConfig> = {
   supportsDraft: true,
-  supportsExtend: true,
-  supportsEdit: true,
   supportsAutoDuration: true,
-  supportsReferenceAudio: true,
   supportsMov: true,
   supportsWatermark: true,
-  maxReferenceVideos: 10,
-  maxReferenceAudios: 10,
-  inputTypes: ['text', 'image', 'video'],
   aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'],
 }
 
+const SEEDANCE_25_OMNI: Partial<ModelConfig> = {
+  ...SEEDANCE_25_COMMON,
+  videoTaskMode: 'omni',
+  supportsExtend: true,
+  supportsEdit: true,
+  supportsReferenceAudio: true,
+  maxReferenceVideos: 10,
+  maxReferenceAudios: 10,
+  inputTypes: ['text', 'image', 'video'],
+}
+
+// First/last-frame tasks follow the first frame's shape, so only adaptive.
+const SEEDANCE_25_FRAME: Partial<ModelConfig> = {
+  ...SEEDANCE_25_COMMON,
+  videoTaskMode: 'frame',
+  inputTypes: ['text', 'image'],
+  aspectRatios: ['adaptive'],
+  defaultAspectRatio: 'adaptive',
+}
+
+const omni = (model: ModelConfig, extra: Partial<ModelConfig> = {}): ModelConfig => ({
+  ...model, videoTaskMode: 'omni', name: `${model.name} · Omni`, description: `${model.name} with @mention references (images, videos, audio)`, ...extra,
+})
+const frame = (model: ModelConfig, extra: Partial<ModelConfig> = {}): ModelConfig => ({
+  ...model, id: `${model.id}-frame`, videoTaskMode: 'frame', name: `${model.name} · Frame`, description: `${model.name} from a wired first (and optional last) frame`, ...extra,
+})
+
+const SEEDANCE_20 = video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s'])
+const SEEDANCE_20_UNFILTERED = video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s'])
+const SEEDANCE_25 = video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
+const SEEDANCE_25_UNFILTERED = video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
+
+// The omni entry keeps each model's original id so existing nodes stay valid.
 export const VIDEO_MODELS: ModelConfig[] = [
-  video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s']),
-  video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s']),
-  {
-    ...video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
-    ...SEEDANCE_25_FEATURES,
-  },
-  {
-    ...video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
-    ...SEEDANCE_25_FEATURES,
-  },
+  omni(SEEDANCE_20),
+  frame(SEEDANCE_20),
+  omni(SEEDANCE_20_UNFILTERED),
+  frame(SEEDANCE_20_UNFILTERED),
+  omni(SEEDANCE_25, SEEDANCE_25_OMNI),
+  frame(SEEDANCE_25, SEEDANCE_25_FRAME),
+  omni(SEEDANCE_25_UNFILTERED, SEEDANCE_25_OMNI),
+  frame(SEEDANCE_25_UNFILTERED, SEEDANCE_25_FRAME),
 ]
 
 export const FAL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS]
