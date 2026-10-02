@@ -11,8 +11,11 @@ const jobs = read('../components/canvas/jobs-panel.tsx')
 test('dark controls remove Sand and Notes while preserving current features', () => {
   assert.doesNotMatch(toolbar, /--sand-/)
   assert.doesNotMatch(toolbar, /id:\s*'note'/)
-  assert.doesNotMatch(workspace, /NoteNode|activeTool === 'note'|note:\s*NoteNode/)
+  // The removed `note` node type stays gone (LegacyNoteCleanup deletes it);
+  // sticky notes are a separate `stickyNote` type.
+  assert.doesNotMatch(workspace, /\bNoteNode\b|\bnote:\s*withNodeErrorBoundary/)
   assert.equal(existsSync(new URL('../components/canvas/nodes/note-node.tsx', import.meta.url)), false)
+  assert.match(workspace, /stickyNote:\s*withNodeErrorBoundary\(StickyNoteNode\)/)
   assert.match(workspace, /uploadedMediaLabel\(file\.name\)/)
   assert.match(mention, /placeMentionMenu/)
 

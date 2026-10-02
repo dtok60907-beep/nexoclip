@@ -59,6 +59,10 @@ import { nodeHasNoMedia } from '@/lib/node-media'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { JobsPanel } from './jobs-panel'
 import { CommentNode } from './nodes/comment-node'
+import { StickyNoteNode } from './nodes/sticky-note-node'
+import { TextLabelNode } from './nodes/text-label-node'
+import { GroupFrameNode } from './nodes/group-frame-node'
+import { GROUP_TYPE, isLockedByGroup, parentsFirst, planDrop, remapParents, withGroupMembers, type GroupableNode } from '@/lib/canvas-groups'
 import { ChatPanel } from './chat-panel'
 import { CursorChatInput } from './cursor-chat-input'
 import { useCanvasChat } from '@/hooks/use-canvas-chat'
@@ -76,7 +80,7 @@ import { PromptNode } from './nodes/prompt-node'
 import { ReferenceNode } from './nodes/reference-node'
 import { CompressNode } from './nodes/compress-node'
 import { RealtimePresenceOverlay } from './realtime-presence'
-import { CanvasCollaborationProvider } from './canvas-collaboration'
+import { CanvasCollaborationProvider, deleteNodesWithGroups, groupNodesWithCommands, ungroupNodesWithCommands } from './canvas-collaboration'
 import { useCanvasCollaboration } from './canvas-collaboration'
 import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
 import { selectLegacyNoteDeletionIds } from '@/lib/legacy-notes'
@@ -92,6 +96,16 @@ const NODE_TYPES: NodeTypes = {
   reference: withNodeErrorBoundary(ReferenceNode),
   compress: withNodeErrorBoundary(CompressNode),
   comment: withNodeErrorBoundary(CommentNode),
+  stickyNote: withNodeErrorBoundary(StickyNoteNode),
+  textLabel: withNodeErrorBoundary(TextLabelNode),
+  [GROUP_TYPE]: withNodeErrorBoundary(GroupFrameNode),
+}
+
+// Tools that place a board object where the canvas is clicked.
+const PLACEMENT_TOOLS: Partial<Record<CanvasTool, { type: string; label: string; offset: { x: number; y: number }; data?: Record<string, unknown> }>> = {
+  comment: { type: 'comment', label: 'Comment', offset: { x: 18, y: 34 }, data: { resolved: false } },
+  note: { type: 'stickyNote', label: 'Sticky note', offset: { x: 0, y: 0 }, data: { color: 'yellow' } },
+  text: { type: 'textLabel', label: 'Text', offset: { x: 4, y: 14 }, data: { size: 'm' } },
 }
 
 const EDGE_TYPES: EdgeTypes = {
@@ -897,11 +911,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
 
     const toDelete = allNodes.filter((node) => selectedIds.has(node.id))
-    commands.batch(({ deleteNode }) => {
-      for (const nodeId of selectedIds) {
-        deleteNode(nodeId)
-      }
-    })
+    // Deleting a group frame releases its members in place.
+    deleteNodesWithGroups(commands, allNodes, [...selectedIds])
     setSelectedNodeIds([])
 
     // Only unprotect assets no remaining node (in any scene) still shows;
@@ -939,11 +950,34 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   const duplicateSelected = useCallback(() => {
     if (!allowDocumentMutation || selectedNodeIds.length === 0) return
-    const duplicateIds = commands.duplicateNodes(selectedNodeIds)
+    // Duplicating a group frame duplicates its members with it.
+    const duplicateIds = commands.duplicateNodes(withGroupMembers(selectedNodeIds, allNodes as GroupableNode[]))
     if (duplicateIds.length > 0) {
       setSelectedNodeIds(duplicateIds)
     }
-  }, [allowDocumentMutation, commands, selectedNodeIds])
+  }, [allNodes, allowDocumentMutation, commands, selectedNodeIds])
+
+  // Paste copied nodes: group members keep their (relative) place in the
+  // pasted copy of their frame; everything else is offset by 40px.
+  const pasteClipboardNodes = useCallback(() => {
+    const idMap = new Map(clipboardNodes.map((node) => [node.id, makeId()]))
+    const existingIds = new Set(allNodes.map((node) => node.id))
+    const copies = remapParents(clipboardNodes.map((node) => {
+      const parentCopied = Boolean(node.parentId && idMap.has(node.parentId))
+      return {
+        ...node,
+        id: idMap.get(node.id)!,
+        position: parentCopied ? node.position : { x: node.position.x + 40, y: node.position.y + 40 },
+        data: { ...(node.data as Record<string, unknown>) },
+      }
+    }), idMap, existingIds)
+    commands.batch(({ createNode }) => {
+      for (const copy of parentsFirst(copies)) {
+        createNode(copy)
+      }
+    })
+    setSelectedNodeIds(copies.map((node) => node.id))
+  }, [allNodes, commands])
 
   // Paste image file as reference node - uploads to R2 for persistence
   const pasteImageFile = useCallback(async (file: File, pos?: { x: number; y: number }) => {
@@ -1054,14 +1088,14 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // Edit shortcuts
       if (plainCtrl && key === 'c') {
         e.preventDefault()
-        const selectedIds = new Set(selectedNodeIds)
+        const selectedIds = new Set(withGroupMembers(selectedNodeIds, nodes as GroupableNode[]))
         clipboardNodes = nodes
           .filter((node) => selectedIds.has(node.id))
           .map((node) => ({ ...node, data: { ...(node.data as Record<string, unknown>) } }))
       }
       if (plainCtrl && key === 'x') {
         e.preventDefault()
-        const selectedIds = new Set(selectedNodeIds)
+        const selectedIds = new Set(withGroupMembers(selectedNodeIds, nodes as GroupableNode[]))
         clipboardNodes = nodes
           .filter((node) => selectedIds.has(node.id))
           .map((node) => ({ ...node, data: { ...(node.data as Record<string, unknown>) } }))
@@ -1069,20 +1103,18 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }
       // Ctrl+V for internal node clipboard — image paste is handled by onPaste
       if (allowDocumentMutation && plainCtrl && key === 'v' && clipboardNodes.length) {
-        const copies = clipboardNodes.map((node) => ({
-          ...node,
-          id: makeId(),
-          position: { x: node.position.x + 40, y: node.position.y + 40 },
-          data: { ...(node.data as Record<string, unknown>) },
-        }))
-        commands.batch(({ createNode }) => {
-          for (const copy of copies) {
-            createNode(copy)
-          }
-        })
-        setSelectedNodeIds(copies.map((node) => node.id))
+        pasteClipboardNodes()
       }
       if (plainCtrl && key === 'd') { e.preventDefault(); duplicateSelected() }
+      // Ctrl+G groups the selection; Ctrl+Shift+G ungroups selected frames.
+      if (allowDocumentMutation && ctrl && !e.altKey && key === 'g') {
+        e.preventDefault()
+        if (e.shiftKey) ungroupNodesWithCommands(commands, allNodes, selectedNodeIds)
+        else {
+          const frameId = groupNodesWithCommands(commands, allNodes, selectedNodeIds)
+          if (frameId) setSelectedNodeIds([frameId])
+        }
+      }
 
       // Delete — only the dedicated Delete key (NOT Backspace). Backspace
       // is too easy to hit by accident while editing prompts and was
@@ -1092,10 +1124,15 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
       if (e.key === 'Escape') {
         setContextMenu(null)
-        setActiveTool((tool) => (tool === 'comment' ? 'select' : tool))
+        setActiveTool((tool) => (PLACEMENT_TOOLS[tool] ? 'select' : tool))
       }
-      // C: comment tool (plain key only; Ctrl+C stays copy).
-      if (key === 'c' && !ctrl && !e.altKey && !e.shiftKey && allowDocumentMutation) setActiveTool('comment')
+      // C / N / T: comment, sticky note, text (plain keys only; Ctrl+C/N/T
+      // keep their copy / add-node meanings).
+      if (!ctrl && !e.altKey && !e.shiftKey && allowDocumentMutation) {
+        if (key === 'c') setActiveTool('comment')
+        if (key === 'n') setActiveTool('note')
+        if (key === 't') setActiveTool('text')
+      }
     }
 
     // Paste — image from system clipboard takes priority; falls back to node clipboard
@@ -1112,18 +1149,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // No image in clipboard — paste copied nodes if any
       if (allowDocumentMutation && clipboardNodes.length) {
         e.preventDefault()
-        const copies = clipboardNodes.map((node) => ({
-          ...node,
-          id: makeId(),
-          position: { x: node.position.x + 40, y: node.position.y + 40 },
-          data: { ...(node.data as Record<string, unknown>) },
-        }))
-        commands.batch(({ createNode }) => {
-          for (const copy of copies) {
-            createNode(copy)
-          }
-        })
-        setSelectedNodeIds(copies.map((node) => node.id))
+        pasteClipboardNodes()
       }
     }
 
@@ -1133,7 +1159,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('paste', onPaste)
     }
-  }, [addNode, allowDocumentMutation, commands, deleteSelected, duplicateSelected, nodes, pasteImageFile, redo, selectedNodeIds, undo])
+  }, [addNode, allNodes, allowDocumentMutation, commands, deleteSelected, duplicateSelected, nodes, pasteClipboardNodes, pasteImageFile, redo, selectedNodeIds, undo])
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -1198,10 +1224,23 @@ function CanvasInner({ projectId }: { projectId: string }) {
     presenceControllerRef.current?.startDragLock(node.id)
   }, [])
 
-  const onNodeDragStop = useCallback(() => {
+  const onNodeDragStop = useCallback((_event: unknown, _node: Node, draggedNodes: Node[]) => {
     setDragGuides({ vertical: [], horizontal: [] })
     presenceControllerRef.current?.stopDragLock()
-  }, [])
+    // A node dropped inside a group frame joins it; one dragged out leaves.
+    if (!allowDocumentMutation) return
+    const latest = getNodes() as unknown as GroupableNode[]
+    const changes = (draggedNodes ?? [])
+      .map((dragged) => {
+        const current = latest.find((candidate) => candidate.id === dragged.id)
+        return current ? planDrop(current, latest) : null
+      })
+      .filter((change): change is NonNullable<typeof change> => change !== null)
+    if (changes.length === 0) return
+    commands.batch(({ patchNode }) => {
+      for (const change of changes) patchNode(change.id, { parentId: change.parentId, position: change.position } as never)
+    })
+  }, [allowDocumentMutation, commands, getNodes])
 
   const handlePresencePointerMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     presenceControllerRef.current?.publishCursor(
@@ -1218,7 +1257,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // React Flow to re-diff the whole graph each time).
   const sceneNodes = useMemo(() => {
     const selectedIds = new Set(selectedNodeIds)
-    return (nodes as Node[]).map((rawNode) => {
+    const nodesById = new Map((nodes as Node[]).map((node) => [node.id, node as unknown as GroupableNode]))
+    // React Flow needs a group frame before its members in the array.
+    return parentsFirst(nodes as Node[]).map((rawNode) => {
       if (rawNode.type === 'comment' && !showResolvedComments && (rawNode.data as Record<string, unknown> | undefined)?.resolved === true) {
         return rawNode.hidden ? rawNode : { ...rawNode, hidden: true }
       }
@@ -1235,7 +1276,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // be no way to reach the toolbar's Unlock button) and still
       // deletable from that toolbar — just not draggable, and not
       // removable by an errant Delete-key press while merely browsing.
+      // A locked group frame locks every member too.
       const manuallyLocked = Boolean((node.data as Record<string, unknown> | undefined)?.locked)
+        || isLockedByGroup(node as unknown as GroupableNode, nodesById)
       if (!lockedNodeIds.has(node.id) && !manuallyLocked && node.selected === selected) {
         return node
       }
@@ -1487,12 +1530,14 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 presenceControllerRef.current?.startDragLock(node.id)
               }}
               onPaneClick={(event) => {
-                // Comment tool: drop a pin where the user clicked, then go
-                // back to the cursor so the next click selects as usual.
-                if (activeTool === 'comment') {
+                // Placement tools (comment, note, text): drop the object where
+                // the user clicked, then go back to the cursor so the next
+                // click selects as usual.
+                const placement = PLACEMENT_TOOLS[activeTool]
+                if (placement) {
                   if (allowDocumentMutation && currentUser) {
-                    const position = screenToFlowPosition({ x: event.clientX - 18, y: event.clientY - 34 })
-                    commands.createNode(makeNode('comment', position, 'Comment', activeSceneId, { createdBy: currentUser.id, resolved: false }))
+                    const position = screenToFlowPosition({ x: event.clientX - placement.offset.x, y: event.clientY - placement.offset.y })
+                    commands.createNode(makeNode(placement.type, position, placement.label, activeSceneId, { createdBy: currentUser.id, ...placement.data }))
                   }
                   setActiveTool('select')
                   return
@@ -1524,7 +1569,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               className="spite-react-flow"
               style={{
                 background: '#0c0d12',
-                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' || activeTool === 'comment' ? 'crosshair' : 'default'
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' || PLACEMENT_TOOLS[activeTool] ? 'crosshair' : 'default'
               }}
               proOptions={{ hideAttribution: true }}
               // Keep nodes mounted while they are off-screen. Generator polling,
@@ -1608,6 +1653,43 @@ function CanvasInner({ projectId }: { projectId: string }) {
         )}
 
         <ViewportPersistor projectId={projectId} />
+        {(() => {
+          // Selection actions: group 2+ nodes, or ungroup selected frames.
+          if (readOnly) return null
+          const selected = sceneNodes.filter((node) => node.selected)
+          const frames = selected.filter((node) => node.type === GROUP_TYPE)
+          const groupable = selected.filter((node) => node.type !== GROUP_TYPE)
+          if (groupable.length < 2 && frames.length === 0) return null
+          return (
+            <div className="pointer-events-none absolute bottom-[76px] left-1/2 z-30 -translate-x-1/2">
+              <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/[0.1] bg-[#12141c]/95 p-1 shadow-xl backdrop-blur-xl">
+                {groupable.length >= 2 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const frameId = groupNodesWithCommands(commands, allNodes, groupable.map((node) => node.id))
+                      if (frameId) setSelectedNodeIds([frameId])
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/[0.08]"
+                    title="Group selection (Ctrl+G)"
+                  >
+                    Group {groupable.length} nodes
+                  </button>
+                ) : null}
+                {frames.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => ungroupNodesWithCommands(commands, allNodes, frames.map((node) => node.id))}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/[0.08]"
+                    title="Ungroup (Ctrl+Shift+G)"
+                  >
+                    Ungroup
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )
+        })()}
         <BottomBar
           page={scenes.findIndex(s => s.id === activeSceneId) + 1}
           onRecenter={handleRecenter}

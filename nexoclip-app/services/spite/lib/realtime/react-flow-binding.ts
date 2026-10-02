@@ -386,15 +386,27 @@ export function createReactFlowBinding(
         (edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target),
       )
 
+      for (const node of nodesToDuplicate) {
+        const nextId = options.createId?.() ?? createItemId('node')
+        idMap.set(node.id, nextId)
+        createdIds.push(nextId)
+      }
       runLocalTransaction(doc, () => {
-        for (const node of nodesToDuplicate) {
-          const nextId = options.createId?.() ?? createItemId('node')
-          idMap.set(node.id, nextId)
-          createdIds.push(nextId)
+        // Parents first, so a duplicated group frame exists before its members.
+        const ordered = [
+          ...nodesToDuplicate.filter((node) => nodesToDuplicate.some((child) => (child as { parentId?: string }).parentId === node.id)),
+          ...nodesToDuplicate.filter((node) => !nodesToDuplicate.some((child) => (child as { parentId?: string }).parentId === node.id)),
+        ]
+        for (const node of ordered) {
+          const parentId = (node as { parentId?: string }).parentId
+          // A member duplicated with its frame joins the frame's copy; its
+          // position is relative, so only top-level nodes are offset.
+          const copiedParent = parentId ? idMap.get(parentId) : undefined
           upsertNodeRecord(doc, {
             ...normalizeNode(node as NodeInput, currentSceneId()),
-            id: nextId,
-            position: {
+            id: idMap.get(node.id)!,
+            ...(copiedParent ? { parentId: copiedParent } : {}),
+            position: copiedParent ? node.position : {
               x: node.position.x + duplicateOffset.x,
               y: node.position.y + duplicateOffset.y,
             },
