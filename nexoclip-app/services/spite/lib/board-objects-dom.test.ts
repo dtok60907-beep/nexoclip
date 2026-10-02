@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom'
 // Sticky notes and text labels must never navigate or crash (the removed
 // Notes did, on delete). Render each inside React Flow, edit it, delete it
 // through the toolbar, and check nothing but the collaborative delete ran.
-test('sticky notes, text labels, and group frames delete without navigating or crashing', async () => {
+test('sticky notes, text labels, group frames, and tables delete without navigating or crashing', async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://canvas.test/canvas/project/p1', pretendToBeVisual: true })
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })
   ;(globalThis as Record<string, unknown>).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }
@@ -22,7 +22,8 @@ test('sticky notes, text labels, and group frames delete without navigating or c
   const { StickyNoteNode } = await import('../components/canvas/nodes/sticky-note-node')
   const { TextLabelNode } = await import('../components/canvas/nodes/text-label-node')
   const { GroupFrameNode } = await import('../components/canvas/nodes/group-frame-node')
-  const nodeTypes = { stickyNote: withNodeErrorBoundary(StickyNoteNode), textLabel: withNodeErrorBoundary(TextLabelNode), groupFrame: withNodeErrorBoundary(GroupFrameNode) }
+  const { TableNode } = await import('../components/canvas/nodes/table-node')
+  const nodeTypes = { stickyNote: withNodeErrorBoundary(StickyNoteNode), textLabel: withNodeErrorBoundary(TextLabelNode), groupFrame: withNodeErrorBoundary(GroupFrameNode), tableNode: withNodeErrorBoundary(TableNode) }
 
   const deleted: string[] = []
   const patches: Array<[string, Record<string, unknown>]> = []
@@ -47,6 +48,7 @@ test('sticky notes, text labels, and group frames delete without navigating or c
       ['stickyNote', { text: 'hello', color: 'yellow' }],
       ['textLabel', { text: 'Title', size: 'l' }],
       ['groupFrame', { label: 'Storyboard', width: 400, height: 300 }],
+      ['tableNode', { columnIds: ['c1', 'c2'], rowIds: ['r1'], 'head:c1': 'Shot', 'head:c2': 'Prompt', 'cell:r1:c1': '1' }],
     ] as const) {
       const nodeId = `${type}-1`
       await act(async () => {
@@ -55,7 +57,12 @@ test('sticky notes, text labels, and group frames delete without navigating or c
             React.createElement('div', { style: { width: 800, height: 600 } },
               React.createElement(ReactFlow, { nodeTypes, width: 800, height: 600, nodes: [{ id: nodeId, type, position: { x: 0, y: 0 }, width: 220, height: 200, selected: true, data: nodeData }], edges: [] })) })))
       })
-      assert.match(document.body.textContent || '', type === 'stickyNote' ? /hello/ : type === 'textLabel' ? /Title/ : /Storyboard/)
+      if (type === 'tableNode') {
+        const values = Array.from(document.querySelectorAll('.react-flow textarea')).map((cell) => (cell as HTMLTextAreaElement).value)
+        assert.deepEqual(values, ['Shot', 'Prompt', '1', ''])
+      } else {
+        assert.match(document.body.textContent || '', type === 'stickyNote' ? /hello/ : type === 'textLabel' ? /Title/ : /Storyboard/)
+      }
       for (const button of Array.from(document.querySelectorAll('.react-flow button'))) {
         assert.equal(button.getAttribute('type'), 'button', `${type}: button "${button.getAttribute('aria-label') || button.textContent}" must not submit`)
       }

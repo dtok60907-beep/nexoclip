@@ -9,6 +9,7 @@ import {
   ClockCounterClockwise,
   CornersOut,
   Cursor,
+  Eraser,
   FilmSlate,
   Folder,
   Hand,
@@ -17,8 +18,10 @@ import {
   Minus,
   NoteBlank,
   Package,
+  PencilSimple,
   Plus,
   Scissors,
+  Table,
   Target,
   TextAa,
   TextT,
@@ -27,7 +30,7 @@ import {
 } from '@phosphor-icons/react'
 import { useReactFlow, useViewport } from '@xyflow/react'
 
-export type CanvasTool = 'select' | 'hand' | 'cut' | 'comment' | 'note' | 'text'
+export type CanvasTool = 'select' | 'hand' | 'cut' | 'comment' | 'note' | 'text' | 'table' | 'pen' | 'eraser'
 type AssetAction = 'history' | 'upload' | 'characters' | 'props' | 'locations' | 'general'
 
 interface BottomBarProps {
@@ -82,6 +85,9 @@ export function BottomBar({
     { id: 'comment', icon: ChatTeardropDots, label: 'Comment — click to drop a pin (C)' },
     { id: 'note', icon: NoteBlank, label: 'Sticky note — click to place (N)' },
     { id: 'text', icon: TextAa, label: 'Text — click to place (T)' },
+    { id: 'table', icon: Table, label: 'Table — click to place' },
+    { id: 'pen', icon: PencilSimple, label: 'Pen — draw on the canvas (P)' },
+    { id: 'eraser', icon: Eraser, label: 'Eraser — sweep across strokes to delete them (E)' },
   ]
 
   return (
