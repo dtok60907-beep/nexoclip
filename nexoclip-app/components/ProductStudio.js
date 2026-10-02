@@ -154,12 +154,35 @@ export default function ProductStudio({
       if (data.images && data.images.length > 0) {
         setSelectedImage(data.images[0]);
       }
-      setActivePopover(null);
+      if (data.images && data.images.length > 0) {
+        setActivePopover(null);
+      }
     } catch (err) {
       setExtractError(err.message || 'Terjadi kesalahan saat memproses tautan marketplace');
     } finally {
       setIsExtracting(false);
     }
+  };
+
+  // Handler unggah file gambar lokal langsung
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      setSelectedImage(dataUrl);
+      setProductData({
+        platform: 'Foto Produk',
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        price: null,
+        images: [dataUrl],
+      });
+      setActivePopover(null);
+      setExtractError('');
+    };
+    reader.readAsDataURL(file);
   };
 
   // Handler generate photoshoot AI via BytePlus
@@ -274,6 +297,7 @@ export default function ProductStudio({
                           navigator.clipboard.writeText(entry.url);
                           alert("Link gambar berhasil disalin!");
                         }}
+                        style={{ color: '#ffffff' }}
                         className="p-2 bg-black/70 backdrop-blur-md rounded-full text-white hover:bg-[#A175FF] transition-all border border-white/10"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -287,7 +311,8 @@ export default function ProductStudio({
                         rel="noreferrer"
                         title="Download HD"
                         onClick={(e) => e.stopPropagation()}
-                        className="p-2 bg-black/70 backdrop-blur-md rounded-full text-white hover:bg-[#22d3ee] hover:text-black transition-all border border-white/10"
+                        style={{ color: '#000000' }}
+                        className="p-2 bg-[#22d3ee] backdrop-blur-md rounded-full text-black hover:bg-cyan-300 transition-all border border-white/10"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
@@ -443,6 +468,7 @@ export default function ProductStudio({
                 type="button"
                 onClick={() => handleExtract(customPrompt)}
                 disabled={isExtracting}
+                style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
                 className="text-xs font-bold text-white bg-[#A175FF] hover:bg-[#8e5af8] px-3 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
               >
                 {isExtracting ? 'Mengekstrak...' : 'Ekstrak Produk ➔'}
@@ -475,18 +501,18 @@ export default function ProductStudio({
               {/* Popover / Modal for Marketplace URL */}
               {activePopover === 'linkModal' && (
                 <div
-                  className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#FFF6DE]/98 rounded-[24px] p-4 shadow-[0_20px_50px_rgba(17,12,42,0.22)] border border-[#110C2A]/10 backdrop-blur-2xl w-[90vw] sm:w-[450px] animate-fade-in"
+                  className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#FFF6DE] rounded-[24px] p-5 shadow-[0_22px_55px_rgba(17,12,42,0.24)] border border-[#110C2A]/15 backdrop-blur-2xl w-[92vw] sm:w-[480px] animate-fade-in text-[#110C2A]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between pb-3 border-b border-[#110C2A]/10">
-                    <h3 className="text-sm font-bold text-[#110C2A] flex items-center gap-1.5">
-                      <span>🛍️</span>
-                      <span>Link Marketplace / Foto Produk</span>
+                    <h3 className="text-sm font-extrabold text-[#110C2A] flex items-center gap-2">
+                      <span className="text-base">🛍️</span>
+                      <span>Link Marketplace / Unggah Foto Produk</span>
                     </h3>
                     <button
                       type="button"
                       onClick={() => setActivePopover(null)}
-                      className="text-[#110C2A]/40 hover:text-[#110C2A] text-lg leading-none"
+                      className="w-7 h-7 rounded-full bg-white/60 hover:bg-[#110C2A]/10 text-[#110C2A] text-base flex items-center justify-center leading-none transition-colors"
                     >
                       ×
                     </button>
@@ -498,7 +524,7 @@ export default function ProductStudio({
                       e.preventDefault();
                       handleExtract();
                     }}
-                    className="mt-3 flex flex-col gap-2.5"
+                    className="mt-4 flex flex-col gap-3"
                   >
                     <div className="flex gap-2">
                       <input
@@ -506,29 +532,62 @@ export default function ProductStudio({
                         placeholder="Tempel link Tokopedia, Shopee, TikTok Shop..."
                         value={marketplaceUrl}
                         onChange={(e) => setMarketplaceUrl(e.target.value)}
-                        className="flex-1 rounded-xl border border-[#110C2A]/15 bg-white px-3 py-2 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 focus:outline-none focus:ring-2 focus:ring-[#A175FF]"
+                        className="flex-1 rounded-xl border border-[#110C2A]/20 bg-white px-3.5 py-2.5 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 focus:outline-none focus:ring-2 focus:ring-[#A175FF] shadow-inner"
                       />
+                      {/* AMBIL FOTO BUTTON - High contrast vibrant purple with pure white text */}
                       <button
                         type="submit"
                         disabled={isExtracting || !marketplaceUrl.trim()}
-                        className="px-4 py-2 bg-[#110C2A] text-white hover:bg-black rounded-xl text-xs font-bold transition-all disabled:opacity-50 shrink-0"
+                        style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
+                        className="px-5 py-2.5 rounded-xl text-xs font-black shadow-md shadow-[#A175FF]/30 hover:brightness-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5"
                       >
-                        {isExtracting ? 'Ekstrak...' : 'Ambil Foto'}
+                        {isExtracting ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+                            <span style={{ color: '#ffffff' }}>Mengekstrak...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🔍</span>
+                            <span style={{ color: '#ffffff' }}>Ambil Foto</span>
+                          </>
+                        )}
                       </button>
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-[#110C2A]/50 font-medium">Didukung:</span>
                       {['Tokopedia', 'Shopee', 'TikTok Shop', 'Amazon'].map((plat) => (
-                        <span key={plat} className="text-[10px] px-2 py-0.5 rounded-full bg-[#110C2A]/5 text-[#110C2A]/60">
+                        <span key={plat} className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 border border-[#110C2A]/10 text-[#110C2A]/70 font-medium">
                           {plat}
                         </span>
                       ))}
                     </div>
 
+                    {/* Quick Direct Upload / Fallback Button */}
+                    <div className="mt-1 pt-3 border-t border-[#110C2A]/10 flex flex-col gap-2">
+                      <label className="cursor-pointer w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#A175FF]/10 border border-[#110C2A]/15 text-[#110C2A] text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]">
+                        <span>📁</span>
+                        <span>Atau Unggah Foto Produk Dari Komputer</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
                     {extractError && (
-                      <p className="text-[11px] text-amber-700 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-                        {extractError}
-                      </p>
+                      <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-500/15 p-3 rounded-xl border border-amber-500/30 flex flex-col gap-1.5">
+                        <div className="flex items-start gap-1.5 font-bold">
+                          <span>⚠️</span>
+                          <span>{extractError}</span>
+                        </div>
+                        <span className="text-[10px] text-amber-800/80">
+                          Tip: Anda bisa mengklik tombol <b>"Unggah Foto Produk Dari Komputer"</b> di atas untuk langsung memilih foto produk Anda.
+                        </span>
+                      </div>
                     )}
                   </form>
 
@@ -548,8 +607,8 @@ export default function ProductStudio({
                             }}
                             className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
                               selectedImage === img
-                                ? 'border-[#A175FF] ring-2 ring-[#A175FF]/30 scale-105'
-                                : 'border-transparent hover:border-[#110C2A]/20'
+                                ? 'border-[#A175FF] ring-2 ring-[#A175FF]/40 scale-105 shadow-md'
+                                : 'border-transparent hover:border-[#110C2A]/30'
                             }`}
                           >
                             <img src={img} alt="" className="w-full h-full object-cover" />
@@ -795,6 +854,7 @@ export default function ProductStudio({
                     navigator.clipboard.writeText(fullscreenImage.url);
                     alert('Link foto berhasil disalin!');
                   }}
+                  style={{ color: '#ffffff' }}
                   className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors"
                 >
                   Salin Link
@@ -803,6 +863,7 @@ export default function ProductStudio({
                   href={fullscreenImage.url}
                   target="_blank"
                   rel="noreferrer"
+                  style={{ color: '#000000' }}
                   className="px-5 py-2 rounded-xl bg-[#22d3ee] hover:bg-[#06b6d4] text-black text-xs font-black transition-colors"
                 >
                   Download HD
