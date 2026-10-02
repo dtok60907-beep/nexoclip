@@ -419,3 +419,33 @@ test('a reference video on storage without public URLs fails with a clear messag
   await setup.run({ referenceAudios: [assetUrl('voice')] });
   assert.match(setup.submitted[0].referenceAudios[0], /^data:audio\/mpeg;base64,/);
 });
+
+function lastFrameHandler({ lastFrameUrl, fetchOk = true }) {
+  const assets = [];
+  const handler = createSaasVideoHandler({
+    pool: { async query() { return { rows: [] }; }, async connect() { return { release() {} }; } },
+    storage: { async put() {} },
+    providerRouter: {
+      async submitVideo() { return { id: 'provider-job', provider: 'byteplus' }; },
+      async pollVideo() { return { status: 'completed', content: { video_url: 'https://tos/v.mp4', last_frame_url: lastFrameUrl } }; },
+      async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
+    },
+    fetch: async () => ({ ok: fetchOk, status: fetchOk ? 200 : 403, headers: { get: () => 'image/png' }, arrayBuffer: async () => new ArrayBuffer(4) }),
+    createAsset: async (_client, input) => { assets.push(input); return { id: `asset-${assets.length}` }; },
+    sleep: async () => {},
+  });
+  return { assets, run: (parameters) => handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'bytedance/seedance-2.5', prompt: 'p', parameters }) };
+}
+
+test('returnLastFrame saves the last frame as a second, image output', async () => {
+  const setup = lastFrameHandler({ lastFrameUrl: 'https://tos/last.png' });
+  const result = await setup.run({ returnLastFrame: true });
+  assert.deepEqual(result.outputs, [{ assetId: 'asset-1' }, { assetId: 'asset-2' }]);
+  assert.equal(setup.assets[1].contentType, 'image/png');
+});
+
+test('a last frame that cannot be downloaded does not fail the video', async () => {
+  const setup = lastFrameHandler({ lastFrameUrl: 'https://tos/last.png', fetchOk: false });
+  const result = await setup.run({ returnLastFrame: true });
+  assert.deepEqual(result.outputs, [{ assetId: 'asset-1' }]);
+});

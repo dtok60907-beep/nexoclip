@@ -28,7 +28,7 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
   return {
     ...adapter,
     async generate(params) { return { ...(await adapter.generate(params)), provider: 'byteplus' }; },
-    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, watermark, draft, outputFormat, omniReferenceTaskType, draftTaskId, frameTask = false, frameImages, referenceImages, referenceVideos, referenceAudios } = {}) {
+    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, watermark, returnLastFrame, draft, outputFormat, omniReferenceTaskType, draftTaskId, frameTask = false, frameImages, referenceImages, referenceVideos, referenceAudios } = {}) {
       // Draft finalization uses only a draft_task content item. BytePlus reuses the
       // original prompt/assets/settings from the draft and rejects them if repeated.
       const content = draftTaskId
@@ -54,7 +54,7 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
       }
       // Video generation is async-task based and lives under /tasks — /contents/generations
       // (used for images) silently accepts the request and returns an empty 200 for video models.
-      const response = await request('/contents/generations/tasks', { method: 'POST', body: JSON.stringify({ model, content, ...(duration !== undefined && !draftTaskId ? { duration } : {}), ...(resolution ? { resolution } : {}), ...(aspectRatio && !draftTaskId ? { ratio: aspectRatio } : {}), ...(generateAudio !== undefined && !draftTaskId ? { generate_audio: generateAudio } : {}), ...(draft !== undefined ? { draft: Boolean(draft) } : {}), ...(outputFormat ? { output_format: outputFormat } : {}), ...(watermark !== undefined ? { watermark: Boolean(watermark) } : {}), ...(omniReferenceTaskType && !draftTaskId ? { omni_reference_task_type: omniReferenceTaskType } : {}) }) });
+      const response = await request('/contents/generations/tasks', { method: 'POST', body: JSON.stringify({ model, content, ...(duration !== undefined && !draftTaskId ? { duration } : {}), ...(resolution ? { resolution } : {}), ...(aspectRatio && !draftTaskId ? { ratio: aspectRatio } : {}), ...(generateAudio !== undefined && !draftTaskId ? { generate_audio: generateAudio } : {}), ...(draft !== undefined ? { draft: Boolean(draft) } : {}), ...(outputFormat ? { output_format: outputFormat } : {}), ...(watermark !== undefined ? { watermark: Boolean(watermark) } : {}), ...(returnLastFrame ? { return_last_frame: true } : {}), ...(omniReferenceTaskType && !draftTaskId ? { omni_reference_task_type: omniReferenceTaskType } : {}) }) });
       const payload = await response.json();
       return { ...payload, provider: 'byteplus', polling_url: payload.polling_url || null };
     },

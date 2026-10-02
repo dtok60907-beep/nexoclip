@@ -17,7 +17,7 @@ export type DurableGeneration = {
   status: 'queued' | 'running' | 'processing' | 'succeeded' | 'failed'
   result?: Record<string, unknown> | null
   error?: { message?: string } | null
-  outputs?: Array<{ assetId: string; download?: { url: string }; url?: string }>
+  outputs?: Array<{ assetId: string; contentType?: string; download?: { url: string }; url?: string }>
   providerRequestId?: string
 }
 

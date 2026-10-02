@@ -19,6 +19,7 @@ import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generat
 import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
+import { probeMediaDuration, referenceDurationError } from '@/lib/media-duration'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
@@ -137,6 +138,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [editMode, setEditMode] = useState((data.editMode as boolean) || false)
   const [outputFormat, setOutputFormat] = useState<'mp4' | 'mov'>(data.outputFormat === 'mov' ? 'mov' : 'mp4')
   const [watermark, setWatermark] = useState((data.watermark as boolean) || false)
+  const [returnLastFrame, setReturnLastFrame] = useState((data.returnLastFrame as boolean) || false)
   const [enableLoop, setEnableLoop] = useState((data.enableLoop as boolean) || false)
   // Kling 2.6 voice IDs — up to 2, comma-separated in the input box.
   // User pastes IDs they generated from fal's create-voice endpoint;
@@ -262,6 +264,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setEditMode(effective.editMode)
     setOutputFormat(effective.outputFormat)
     setWatermark(effective.watermark)
+    setReturnLastFrame(effective.returnLastFrame)
     setEnableLoop((data.enableLoop as boolean) || false)
     setVoiceIds((data.voiceIds as string) || '')
     setNumVideos((data.numVideos as number) || 1)
@@ -275,7 +278,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.draftMode, data.extendMode, data.editMode, data.outputFormat, data.watermark, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.draftMode, data.extendMode, data.editMode, data.outputFormat, data.watermark, data.returnLastFrame, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
 
   useEffect(() => {
     if (outputUrl && outputUrl !== announcedOutputRef.current) {
@@ -523,6 +526,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           setGenerationId(null)
           updatePersistedNodeData((currentData) => ({
             ...completeGenerationNode(currentData, completedUrl),
+            lastFrameUrl: typeof result.lastFrameUrl === 'string' ? result.lastFrameUrl : null,
             ...(currentData.draftMode ? { lastGenerationId: reqId } : {}),
             generationId: undefined,
           }))
@@ -804,6 +808,22 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       setSubmittedAt(undefined)
       return
     }
+    // Seedance rejects clips outside its length limits only after the job is
+    // queued; read their lengths now and stop before paying.
+    if (connectedVideoUrls.length || connectedAudioUrls.length) {
+      const playable = (url: string) => resolveNodeMediaUrl({ outputUrl: url }) || url
+      const [videoSeconds, audioSeconds] = await Promise.all([
+        Promise.all(connectedVideoUrls.map(url => probeMediaDuration(playable(url), 'video'))),
+        Promise.all(connectedAudioUrls.map(url => probeMediaDuration(playable(url), 'audio'))),
+      ])
+      const durationError = referenceDurationError({ model: currentModel, editMode, videoSeconds, audioSeconds })
+      if (durationError) {
+        setError(durationError)
+        setStatus('idle')
+        setSubmittedAt(undefined)
+        return
+      }
+    }
 
     // Models whose references go to a SEPARATE endpoint (Seedance 2.0's
     // reference-to-video) cannot also take a first/end frame — fal's
@@ -840,13 +860,31 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         label: 'folderName' in group && group.folderName ? `@${group.folderName}` : `connected reference ${index + 1}`,
       }))),
     ], projectId)
-    if (untrusted.length > 0 && !window.confirm(
-      `Not trusted for Seedance: ${untrusted.join(', ')}.\n\n` +
-      'If any of these shows a real person, BytePlus will reject the video. Trust them first (shield icon) and wait until they turn green.\n\nGenerate anyway?',
+    // Trust only exists for images, so reference videos and audio can never be
+    // trusted. Say so once per browser session instead of on every generate.
+    const MEDIA_TRUST_ACK = 'seedance-media-trust-ack'
+    let mediaAcknowledged = false
+    try { mediaAcknowledged = window.sessionStorage.getItem(MEDIA_TRUST_ACK) === '1' } catch { /* storage blocked */ }
+    const untrustableMedia = mediaAcknowledged ? [] : [
+      ...(connectedVideoUrls.length ? [`${connectedVideoUrls.length} reference video${connectedVideoUrls.length === 1 ? '' : 's'}`] : []),
+      ...(connectedAudioUrls.length ? [`${connectedAudioUrls.length} audio clip${connectedAudioUrls.length === 1 ? '' : 's'}`] : []),
+    ]
+    if ((untrusted.length > 0 || untrustableMedia.length > 0) && !window.confirm(
+      (untrusted.length > 0
+        ? `Not trusted for Seedance: ${untrusted.join(', ')}.\n\n` +
+          'If any of these shows a real person, BytePlus will reject the video. Trust them first (shield icon) and wait until they turn green.\n\n'
+        : '') +
+      (untrustableMedia.length > 0
+        ? `This request sends ${untrustableMedia.join(' and ')}. Only images can be trusted, so if a video shows a real person's face, BytePlus will reject the job.\n\n`
+        : '') +
+      'Generate anyway?',
     )) {
       setStatus('idle')
       setSubmittedAt(undefined)
       return
+    }
+    if (untrustableMedia.length > 0) {
+      try { window.sessionStorage.setItem(MEDIA_TRUST_ACK, '1') } catch { /* storage blocked */ }
     }
 
     try {
@@ -876,6 +914,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           audioUrls: connectedAudioUrls.length ? connectedAudioUrls : undefined,
           outputFormat: currentModel?.supportsMov && outputFormat === 'mov' ? 'mov' : undefined,
           watermark: currentModel?.supportsWatermark && watermark ? true : undefined,
+          returnLastFrame: currentModel?.supportsLastFrame && returnLastFrame ? true : undefined,
         },
       })
 
@@ -1056,6 +1095,39 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const feedbackFrameStyle = feedbackState.isRegenerating || feedbackState.isFailedRegeneration ? feedbackState.frameStyle : {}
 
   // Build options from current model's config
+  // Continue from this video's saved last frame: a reference node holding the
+  // frame, wired into a new Frame-mode video node of the same model family.
+  const lastFrameUrl = typeof data.lastFrameUrl === 'string' && data.lastFrameUrl ? data.lastFrameUrl : null
+  const frameModelId = currentModel?.videoTaskMode === 'frame'
+    ? currentModel.id
+    : getModelById(`${currentModel?.id}-frame`)?.id
+  const createNextShotFromLastFrame = () => {
+    if (!lastFrameUrl || !frameModelId) return
+    const self = getNodes().find(nd => nd.id === id)
+    const x = self?.position?.x ?? 0
+    const y = self?.position?.y ?? 0
+    const stamp = Date.now()
+    const refId = `ref-lastframe-${stamp}`
+    const nextId = `${id}-next-${stamp}`
+    const sceneId = (data.sceneId as string | undefined)
+    const frameSettings = resolveGenerationSettings('video', { modelId: frameModelId })
+    addNodes([
+      {
+        id: refId, type: 'reference', position: { x: x + 420, y: y + 40 },
+        data: { thumbnail: lastFrameUrl, mediaType: 'image', label: 'Last frame', ...(sceneId ? { sceneId } : {}) },
+      },
+      {
+        id: nextId, type: 'videoGen', position: { x: x + 760, y },
+        data: {
+          label: 'Next shot', modelId: frameModelId, aspectRatio: frameSettings.aspectRatio, resolution, duration,
+          enableAudio, returnLastFrame: true, ...(sceneId ? { sceneId } : {}),
+        },
+      },
+    ] as any)
+    addEdges([{ id: `${refId}-${nextId}`, source: refId, sourceHandle: 'image-out', target: nextId, targetHandle: 'image-in' }] as any)
+    toast.success('Next shot created — connect a Text node and generate.')
+  }
+
   const finalizeDraft = async () => {
     const draftGenerationId = (data.lastGenerationId as string | undefined) || durableGenerationId
     if (!draftGenerationId || !draftMode || status !== 'completed') return
@@ -1592,6 +1664,26 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <Sparkle size={12} weight="fill" />
               <span className="ml-1 text-[11px] font-bold">Render 1080p</span>
             </button>
+          ) : status === 'completed' && lastFrameUrl && frameModelId && !draftMode ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={createNextShotFromLastFrame}
+                className="flex h-8 items-center justify-center rounded-full bg-sky-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-sky-300"
+                title="Start a new Frame-mode shot from this video's last frame"
+              >
+                <Plus size={12} weight="bold" />
+                <span className="ml-1 text-[11px] font-bold">Next shot</span>
+              </button>
+              <button
+                onClick={requestGenerate}
+                disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
+                className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                title={generateTooltip}
+              >
+                <Sparkle size={12} weight="fill" />
+                <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatCreditsShort(costEstimate.total) : 'Generate'}</span>
+              </button>
+            </div>
           ) : status === 'failed' && generationId ? (
             <button
               onClick={handleRecheck}

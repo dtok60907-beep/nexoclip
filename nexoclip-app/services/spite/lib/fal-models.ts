@@ -21,6 +21,8 @@ export interface ModelConfig {
   supportsReferenceAudio?: boolean
   supportsMov?: boolean
   supportsWatermark?: boolean
+  // return_last_frame: keep the final frame to start the next shot from.
+  supportsLastFrame?: boolean
   // Most source videos / audio clips one request accepts.
   maxReferenceVideos?: number
   maxReferenceAudios?: number
@@ -55,7 +57,7 @@ const video = (
   id, name, provider: 'byteplus', providerModel, falModel: providerModel,
   category: 'video', inputTypes: ['text', 'image'], imageParam: 'image_urls',
   aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
-  resolutions, durations, supportsAudio: true, defaultAspectRatio: '16:9',
+  resolutions, durations, supportsAudio: true, supportsLastFrame: true, defaultAspectRatio: '16:9',
   // 720p when offered: nodes now send this default explicitly (it used to be
   // left to the provider), and 1080p costs roughly twice the tokens.
   defaultDuration: '5s', defaultResolution: resolutions.includes('720p') ? '720p' : resolutions[0],
@@ -126,11 +128,20 @@ const SEEDANCE_20_UNFILTERED = video('seedance-2.0-unfiltered', 'Seedance 2.0 Un
 const SEEDANCE_25 = video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
 const SEEDANCE_25_UNFILTERED = video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
 
+// Seedance 2.0 omni: 3 videos + 3 audio clips; audio needs an image or video
+// alongside it (the server rejects audio-only requests for 2.0).
+const SEEDANCE_20_OMNI: Partial<ModelConfig> = {
+  supportsReferenceAudio: true,
+  maxReferenceVideos: 3,
+  maxReferenceAudios: 3,
+  inputTypes: ['text', 'image', 'video'],
+}
+
 // The omni entry keeps each model's original id so existing nodes stay valid.
 export const VIDEO_MODELS: ModelConfig[] = [
-  omni(SEEDANCE_20),
+  omni(SEEDANCE_20, SEEDANCE_20_OMNI),
   frame(SEEDANCE_20),
-  omni(SEEDANCE_20_UNFILTERED),
+  omni(SEEDANCE_20_UNFILTERED, SEEDANCE_20_OMNI),
   frame(SEEDANCE_20_UNFILTERED),
   omni(SEEDANCE_25, SEEDANCE_25_OMNI),
   frame(SEEDANCE_25, SEEDANCE_25_FRAME),

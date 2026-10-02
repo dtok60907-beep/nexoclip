@@ -299,3 +299,12 @@ test('reference audio is sent as an audio_url part and watermark is forwarded', 
   assert.deepEqual(body.content[1], { type: 'audio_url', role: 'reference_audio', audio_url: { url: 'https://a/voice.mp3' } });
   assert.equal(body.watermark, false);
 });
+
+test('return_last_frame is requested only when asked', async () => {
+  let body;
+  const adapter = createBytePlusAdapter({ apiKey: 'k', baseUrl: 'https://ark.example/api/v3', fetch: async (_url, options) => { body = JSON.parse(options.body); return jsonResponse({ id: 'cgt-1' }); } });
+  await adapter.submit({ model: 'm', prompt: 'p', returnLastFrame: true });
+  assert.equal(body.return_last_frame, true);
+  await adapter.submit({ model: 'm', prompt: 'p' });
+  assert.equal(body.return_last_frame, undefined);
+});

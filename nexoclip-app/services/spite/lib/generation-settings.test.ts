@@ -34,7 +34,7 @@ test('changing model keeps supported toggles and resets the rest to model defaul
   })
   assert.deepEqual(patch, {
     modelId: 'seedance-2.0', aspectRatio: '16:9', resolution: '720p', duration: '5s',
-    enableAudio: false, draftMode: false, extendMode: false, editMode: false, outputFormat: 'mp4', watermark: false,
+    enableAudio: false, draftMode: false, extendMode: false, editMode: false, outputFormat: 'mp4', watermark: false, returnLastFrame: false,
   })
 })
 

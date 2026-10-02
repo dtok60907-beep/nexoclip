@@ -95,3 +95,12 @@ test('mov output and watermark are validated', () => {
   assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: 'bytedance/seedance-2.0', parameters: { outputFormat: 'mov' } }), /mov/);
   assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: CANVAS_SEEDANCE_25, parameters: { watermark: 'yes' } }), /watermark/);
 });
+
+test('Seedance 2.0 takes up to 3 reference videos and 3 audio clips', () => {
+  const refs = (count) => Array.from({ length: count }, (_, i) => `/api/assets/m${i}/download`);
+  const run = (parameters) => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: 'byteplus/dreamina-seedance-2-0-260128', parameters });
+  assert.equal(run({ referenceVideos: refs(3) }).parameters.referenceVideos.length, 3);
+  assert.throws(() => run({ referenceVideos: refs(4) }), /too many/);
+  assert.throws(() => run({ referenceVideos: refs(1), referenceAudios: refs(4) }), /too many/);
+  assert.equal(run({ returnLastFrame: true }).parameters.returnLastFrame, true);
+});

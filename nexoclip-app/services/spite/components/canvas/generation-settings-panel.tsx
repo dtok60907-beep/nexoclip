@@ -50,6 +50,7 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
   const edit = effective.editMode
   const mov = effective.outputFormat === 'mov'
   const watermark = effective.watermark
+  const lastFrame = effective.returnLastFrame
 
   if (!node || !currentModel || (node.type !== 'imageGen' && node.type !== 'videoGen')) return null
 
@@ -111,6 +112,8 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
         {isVideo && (currentModel.supportsDraft || currentModel.supportsExtend || currentModel.supportsEdit) ? <div className="grid grid-cols-3 gap-2">{currentModel.supportsDraft ? <button onClick={() => patch({ draftMode: !draft, extendMode: false, editMode: false, ...(!draft ? { aspectRatio: 'adaptive', resolution: '480p' } : {}) })} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold ${draft ? 'border-amber-400/40 bg-amber-500/20 text-amber-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Draft</button> : <div />}{currentModel.supportsExtend ? <button onClick={() => patch({ extendMode: !extend, draftMode: false, editMode: false, ...(!extend ? { aspectRatio: 'adaptive' } : {}) })} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold ${extend ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Extend</button> : <div />}{currentModel.supportsEdit ? <button title="Edit a connected 4–30s source video (add / remove / replace …). Keeps its ratio and length." onClick={() => patch({ editMode: !edit, draftMode: false, extendMode: false, ...(!edit ? { aspectRatio: 'adaptive', duration: AUTO_DURATION } : {}) })} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold ${edit ? 'border-sky-400/40 bg-sky-500/20 text-sky-200' : 'border-white/[0.1] bg-[#202328] text-slate-300'}`}>Edit</button> : null}</div> : null}
 
         {isVideo && currentModel.supportsMov ? toggle('Output .mov', mov, () => patch({ outputFormat: mov ? 'mp4' : 'mov' }), 'High color precision (H.264 yuv444p + PCM). Recommended for edit/extend; some players cannot play it.') : null}
+
+        {isVideo && currentModel.supportsLastFrame ? toggle('Keep last frame', lastFrame, () => patch({ returnLastFrame: !lastFrame }), 'Save the final frame so the next shot can start from it (Next shot button on the node)') : null}
 
         {isVideo && currentModel.supportsWatermark ? toggle('AI watermark', watermark, () => patch({ watermark: !watermark }), 'Adds an "AI generated" mark to the lower-right corner') : null}
       </div>
