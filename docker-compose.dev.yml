@@ -1,0 +1,36 @@
+# Docker Compose for local development dependencies (Postgres + Redis)
+# Run: docker compose -f docker-compose.dev.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexoclip-dev-postgres
+    environment:
+      POSTGRES_DB: nexoclip
+      POSTGRES_USER: nexoclip
+      POSTGRES_PASSWORD: nexoclip_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - nexoclip-dev-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexoclip -d nexoclip"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexoclip-dev-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - nexoclip-dev-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  nexoclip-dev-postgres-data:
+  nexoclip-dev-redis-data:

@@ -7,6 +7,7 @@ import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import AssetsContent from './AssetsContent';
 import UsageContent from './UsageContent';
+import ProductStudio from './ProductStudio';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
@@ -40,6 +41,17 @@ const TABS = [
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
         <circle cx="8.5" cy="8.5" r="1.5"/>
         <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    )
+  },
+  {
+    id: 'product-studio',
+    label: 'Product Studio',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+        <path d="M3 6h18"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
       </svg>
     )
   },
@@ -782,6 +794,16 @@ export default function StandaloneShell({ initialTab, children }) {
         {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} /> : activeTab === 'assets' ? <div className="h-full w-full overflow-auto"><AssetsContent /></div> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
           <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
+                {activeTab === 'product-studio' && (
+          <div className="h-full w-full">
+            <ProductStudio
+              onGenerationStart={makeGenerationStartCallback('product-studio')}
+              onGenerationEnd={makeGenerationEndCallback('product-studio')}
+              onGenerationComplete={makeSuccessCallback('product-studio')}
+              onGenerationError={makeErrorCallback('product-studio')}
+            />
+          </div>
+        )}
         {activeTab === 'video' && (
           <div className="h-full w-full">
             <VideoStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
