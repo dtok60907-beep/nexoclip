@@ -81,6 +81,8 @@ export type RealtimeCanvasCommands = Pick<
 
 export type UseRealtimeCanvasResult = RealtimeCanvasRoomSnapshot & {
   awareness: AwarenessLike | null
+  // The shared document, for features stored beside the canvas maps (chat).
+  doc: Y.Doc | null
   commands: RealtimeCanvasCommands
   undo: () => void
   redo: () => void
@@ -124,6 +126,7 @@ const EMPTY_RESULT: UseRealtimeCanvasResult = {
   peers: [],
   persistenceStatus: 'SYNCED',
   awareness: null,
+  doc: null,
   commands: EMPTY_COMMANDS,
   undo: () => {},
   redo: () => {},
@@ -165,6 +168,7 @@ export function useRealtimeCanvas(
   return {
     ...snapshot,
     awareness: room.provider.awareness,
+    doc: room.doc,
     commands: room.commands,
     undo: room.undo,
     redo: room.redo,

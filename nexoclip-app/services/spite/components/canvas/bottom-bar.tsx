@@ -4,6 +4,8 @@ import {
   ArrowClockwise,
   ArrowCounterClockwise,
   ArrowsOut,
+  ChatTeardropDots,
+  CheckCircle,
   ClockCounterClockwise,
   CornersOut,
   Cursor,
@@ -23,7 +25,7 @@ import {
 } from '@phosphor-icons/react'
 import { useReactFlow, useViewport } from '@xyflow/react'
 
-type CanvasTool = 'select' | 'hand' | 'cut'
+export type CanvasTool = 'select' | 'hand' | 'cut' | 'comment'
 type AssetAction = 'history' | 'upload' | 'characters' | 'props' | 'locations' | 'general'
 
 interface BottomBarProps {
@@ -37,6 +39,8 @@ interface BottomBarProps {
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  showResolvedComments?: boolean
+  onToggleResolvedComments?: () => void
 }
 
 function ZoomReadout() {
@@ -66,11 +70,14 @@ export function BottomBar({
   onRedo,
   canUndo = true,
   canRedo = true,
+  showResolvedComments = false,
+  onToggleResolvedComments,
 }: BottomBarProps) {
   const tools: { id: CanvasTool; icon: typeof Cursor; label: string }[] = [
     { id: 'select', icon: Cursor, label: 'Cursor — interact with nodes' },
     { id: 'hand', icon: Hand, label: 'Hand — pan canvas only' },
     { id: 'cut', icon: Scissors, label: 'Cut connections' },
+    { id: 'comment', icon: ChatTeardropDots, label: 'Comment — click to drop a pin (C)' },
   ]
 
   return (
@@ -82,6 +89,17 @@ export function BottomBar({
               <Icon size={16} weight={activeTool === id ? 'fill' : 'regular'} />
             </button>
           ))}
+
+          <button
+            type="button"
+            onClick={onToggleResolvedComments}
+            aria-pressed={showResolvedComments}
+            className={`${buttonClass} ${showResolvedComments ? 'text-emerald-300' : ''}`}
+            title={showResolvedComments ? 'Hide resolved comments' : 'Show resolved comments'}
+            aria-label={showResolvedComments ? 'Hide resolved comments' : 'Show resolved comments'}
+          >
+            <CheckCircle size={16} weight={showResolvedComments ? 'fill' : 'regular'} />
+          </button>
 
           <div className="mx-1 h-5 w-px shrink-0 bg-white/10" />
           <button onClick={() => onAddNode?.('prompt')} className={buttonClass} title="Add Prompt"><TextT size={16} /></button>

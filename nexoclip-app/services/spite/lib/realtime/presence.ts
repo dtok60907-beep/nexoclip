@@ -1,3 +1,5 @@
+import { readCursorChat, type CursorChatState } from './cursor-chat'
+
 export type PresenceStorage = {
   getItem: (key: string) => string | null
   setItem: (key: string, value: string) => void
@@ -59,6 +61,7 @@ export type PresencePeer = {
   lock?: unknown
   sceneId?: unknown
   deviceId?: unknown
+  cursorChat?: unknown
 }
 
 export type RemotePresencePeer = {
@@ -74,6 +77,8 @@ export type RemotePresencePeer = {
   // Shared by every tab of the same browser; used to tell "my other tab"
   // apart from another person.
   deviceId?: string
+  // Cursor message to show under this peer's cursor right now.
+  cursorChat?: { text: string; open: boolean }
 }
 
 export type PresenceControllerOptions = {
@@ -154,6 +159,7 @@ export function projectRemotePresence(
       lock,
       sceneId: readSceneId(peer.sceneId),
       deviceId: typeof peer.deviceId === 'string' && peer.deviceId ? peer.deviceId : undefined,
+      cursorChat: readCursorChat(peer.cursorChat, now),
     }
   })
 }
@@ -278,6 +284,11 @@ class PresenceController {
         this.writeCursor(nextCursor)
       }
     }, waitMs)
+  }
+
+  // Cursor message typed after `/`; null clears it.
+  publishCursorChat(state: CursorChatState | null): void {
+    this.writeField('cursorChat', state)
   }
 
   publishSelection(nodeIds: string[]): void {
