@@ -9,7 +9,6 @@ import { NewProjectCard } from './new-project-card'
 import { SearchBar } from './search-bar'
 import { DashboardHero } from './dashboard-hero'
 import { OnboardingTour } from './onboarding/use-onboarding-tour'
-import { VersionBadge } from './version-badge'
 import { startTour } from '@/lib/onboarding'
 
 interface Project {
@@ -112,12 +111,6 @@ export function ProjectsDashboard() {
                 <SearchBar value={search} onChange={setSearch} />
               </div>
 
-              {/* Build marker. The tour is triggered from "Panduan Singkat"
-                  in the section header below instead of duplicating an
-                  icon-only entry point here. */}
-              <div className="shrink-0 flex items-center justify-end gap-2">
-                <VersionBadge />
-              </div>
             </div>
           </div>
         </header>

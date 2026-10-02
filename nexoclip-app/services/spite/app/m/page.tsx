@@ -5,7 +5,6 @@ import { withBasePath } from '@/lib/base-path'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus } from '@phosphor-icons/react'
-import { VersionBadge } from '@/components/version-badge'
 
 type Project = {
   id: string
@@ -64,7 +63,6 @@ export default function MobileProjects() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-mono tracking-wide">Projects</h1>
-          <VersionBadge />
         </div>
         <button
           onClick={newProject}
