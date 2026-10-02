@@ -33,6 +33,7 @@ import {
   Lock,
   LockOpen,
   At,
+  Folder,
 } from '@phosphor-icons/react'
 
 interface NodeActionToolbarProps {
@@ -43,7 +44,7 @@ interface NodeActionToolbarProps {
   onDuplicate?: () => void
   onMoveToPage?: (page: number) => void
   onQuickConnect?: (nodeType: string) => void
-  onAddToFolder?: (type: 'character' | 'prop' | 'location') => void
+  onAddToFolder?: (type: 'character' | 'prop' | 'location' | 'general') => void
   onRename?: () => void
   onViewFullscreen?: () => void
   assetId?: string
@@ -467,6 +468,11 @@ export function NodeActionToolbar({
                         icon={Package} 
                         onClick={() => { onAddToFolder?.('prop'); setMoreMenuOpen(false); setAddToMenuOpen(false) }} 
                       />
+                      <MenuItem 
+                        label="General" 
+                        icon={Folder} 
+                        onClick={() => { onAddToFolder?.('general'); setMoreMenuOpen(false); setAddToMenuOpen(false) }} 
+                      />
                     </div>
                   )}
                 </div>
@@ -611,7 +617,7 @@ export function SimpleNodeToolbar({
     processing: boolean
     onClick: () => void
   }
-  onAddToFolder?: (type: 'character' | 'prop' | 'location') => void
+  onAddToFolder?: (type: 'character' | 'prop' | 'location' | 'general') => void
 }) {
   const { patchNodeData, deleteNodes } = useCanvasCollaboration()
   const [addToMenuOpen, setAddToMenuOpen] = useState(false)
@@ -642,6 +648,7 @@ export function SimpleNodeToolbar({
                 <MenuItem label="Character" icon={User} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
                 <MenuItem label="Location" icon={MapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
                 <MenuItem label="Prop" icon={Package} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
+                <MenuItem label="General" icon={Folder} onClick={() => { onAddToFolder('general'); setAddToMenuOpen(false) }} />
               </DropdownMenu>
             )}
           </div>
@@ -696,7 +703,7 @@ export function GeneratorNodeToolbar({
   assetUrl?: string
   assetType?: 'image' | 'video'
   locked?: boolean
-  onAddToFolder?: (type: 'character' | 'prop' | 'location') => void
+  onAddToFolder?: (type: 'character' | 'prop' | 'location' | 'general') => void
   onViewFullscreen?: () => void
   onRename?: () => void
   trustAction?: {
@@ -739,6 +746,7 @@ export function GeneratorNodeToolbar({
                 <MenuItem label="Character" icon={User} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
                 <MenuItem label="Location" icon={MapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
                 <MenuItem label="Prop" icon={Package} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
+                <MenuItem label="General" icon={Folder} onClick={() => { onAddToFolder('general'); setAddToMenuOpen(false) }} />
               </DropdownMenu>
             )}
           </div>

@@ -25,7 +25,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl(data as Record<string, unknown>) || localPreview || null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [folderModalOpen, setFolderModalOpen] = useState(false)
-  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
+  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location' | 'general'>('character')
 
   // Sync thumbnail from data prop
   useEffect(() => {
@@ -100,7 +100,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     createNextShot(id)
   }
 
-  const handleAddToFolder = async (type: 'character' | 'prop' | 'location') => {
+  const handleAddToFolder = async (type: 'character' | 'prop' | 'location' | 'general') => {
     if (!(await nodeLock.claim())) return
     setFolderType(type)
     setFolderModalOpen(true)
