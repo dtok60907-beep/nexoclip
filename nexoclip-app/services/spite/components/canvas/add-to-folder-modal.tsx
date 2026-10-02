@@ -172,13 +172,19 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     fetch(withBasePath(`/api/folders?type=${folderType}&projectId=${projectId}`))
       .then(r => r.json())
       .then(data => setFolders(Array.isArray(data) ? data : []))
-      .catch(console.error)
+      .catch((error) => {
+        console.error(error)
+        toast.error("Couldn't load folders — close and reopen to retry.", { id: 'folder-modal-folders' })
+      })
       .finally(() => setLoading(false))
 
     fetch(withBasePath(`/api/assets?projectId=${projectId}`))
       .then(r => r.json())
       .then(data => setAvailableAssets(Array.isArray(data) ? data : []))
-      .catch(console.error)
+      .catch((error) => {
+        console.error(error)
+        toast.error("Couldn't load project assets for the picker.", { id: 'folder-modal-assets' })
+      })
   }, [open, folderType, projectId])
 
   // Initialize form

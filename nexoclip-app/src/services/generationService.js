@@ -35,7 +35,9 @@ export function validateImageGenerationInput(input) {
   const model = String(input?.model || '').trim();
   const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
   const aspectRatio = String(supplied.aspectRatio || input?.aspectRatio || '1:1').trim();
-  if (!prompt || prompt.length > 10000) throw new Error('Generation prompt is required');
+  if (!prompt) throw new Error('Generation prompt is required');
+  // @mentions are expanded into long reference sentences before submit.
+  if (prompt.length > 10000) throw new Error(`Generation prompt is too long (${prompt.length}/10000 characters after @mentions are expanded)`);
   if (!model || model.length > 120) throw new Error('Generation model is required');
   if (!aspectRatios.has(aspectRatio)) throw new Error('Aspect ratio is invalid');
   const parameters = { aspectRatio };

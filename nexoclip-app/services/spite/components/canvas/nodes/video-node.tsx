@@ -18,6 +18,7 @@ import { findUntrustedReferences } from '@/lib/byteplus-trust'
 import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
+import { MAX_VIDEO_PROMPT_CHARS } from '@/lib/prompt-limits'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { probeMediaDuration, referenceDurationError } from '@/lib/media-duration'
 import { useProjectFolders } from '@/hooks/use-project-folders'
@@ -156,6 +157,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [status, setStatus] = useState<GenerationStatus>('idle')
   const [progress, setProgress] = useState<number | undefined>()
   const [error, setError] = useState<string | null>(null)
+  // Errors from an action in this session also go to a toast: the node's
+  // error strip can sit under its control bar. Syncing a stored error from
+  // node data calls setError directly, so a reload doesn't replay toasts.
+  // Poll failures use the generation's terminal toast id, so the toast the
+  // durable status effect raises for the same job replaces it.
+  const reportError = (message: string, toastId = `${id}-error`, tone: 'error' | 'warning' = 'error') => {
+    setError(message)
+    if (tone === 'warning') toast.warning(message, { id: toastId, duration: 10000 })
+    else toast.error(message, { id: toastId })
+  }
   const [outputUrl, setOutputUrl] = useState<string | null>(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
   const [generationId, setGenerationId] = useState<string | null>(null)
   // Timestamp of the most recent submission. Powers the relative-age
@@ -495,7 +506,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // data so the user can manually re-check.
     if (startTimeRef.current && Date.now() - startTimeRef.current > TIMEOUT_MS) {
       setStatus('failed')
-      setError('Still not finished after 45 minutes. The server may still complete it — use \'Re-check\' before generating again, so you don\'t pay twice.')
+      reportError('Still not finished after 45 minutes. The server may still complete it — use \'Re-check\' before generating again, so you don\'t pay twice.', `${id}-${reqId}-terminal`, 'warning')
       return true
     }
     try {
@@ -510,7 +521,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
       if (result.error) {
         setStatus('failed')
-        setError(result.error)
+        reportError(result.error, `${id}-${reqId}-terminal`)
         clearPending()
         return true
       }
@@ -533,7 +544,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           clearPending()
         } else {
           setStatus('failed')
-          setError('Provider completed without a video URL')
+          reportError('Provider completed without a video URL', `${id}-${reqId}-terminal`)
           clearPending()
         }
         return true
@@ -541,7 +552,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
       if (result.generationStatus === 'failed') {
         setStatus('failed')
-        setError(result.error || 'Generation failed')
+        reportError(result.error || 'Generation failed', `${id}-${reqId}-terminal`)
         clearPending()
         return true
       }
@@ -691,10 +702,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     const { connected, prompt: compiledPrompt, mentions: promptMentions } = resolveIncomingPrompt(id, getNodes(), getEdges())
     // Early stops: shown in the node and as a toast, since the node's error
     // strip can be covered by its control bar.
-    const blockEarly = (message: string) => {
-      setError(message)
-      toast.error(message, { id: `${id}-blocked` })
-    }
+    const blockEarly = (message: string) => reportError(message, `${id}-blocked`)
     if (!connected) {
       blockEarly('Connect a Text node first')
       return
@@ -806,8 +814,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // can sit under the node's control bar, so every stop also raises a toast.
     const stopBeforeSubmit = (message: string | null) => {
       if (message) {
-        setError(message)
-        toast.error(message, { id: `${id}-blocked` })
+        reportError(message, `${id}-blocked`)
       } else {
         toast.info('Generation cancelled — nothing was charged.', { id: `${id}-blocked` })
       }
@@ -815,6 +822,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       setSubmittedAt(undefined)
     }
 
+    // Same limit the server enforces; @mentions expand into long reference
+    // sentences, so the editor text can look much shorter than this.
+    if (compiled.prompt.length > MAX_VIDEO_PROMPT_CHARS) {
+      stopBeforeSubmit(`Prompt is too long: ${compiled.prompt.length.toLocaleString()}/${MAX_VIDEO_PROMPT_CHARS.toLocaleString()} characters after @mentions are expanded. Shorten it or mention fewer folders.`)
+      return
+    }
     if (isFrameModel && !connectedImageUrl) {
       stopBeforeSubmit('Frame mode needs a first frame — wire an image into the blue First frame handle.')
       return
@@ -1155,7 +1168,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       patchSystemNodeData({ generationId: payload.generation.id, generationStatus: payload.generation.status, status: payload.generation.status === 'queued' ? 'in_queue' : 'in_progress', draftMode: false, resolution: '1080p', generationError: null, error: null, submittedAt: Date.now() })
     } catch (error) {
       setStatus('failed')
-      setError(error instanceof Error ? error.message : 'Draft finalization failed')
+      reportError(error instanceof Error ? error.message : 'Draft finalization failed')
     }
   }
 

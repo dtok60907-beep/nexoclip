@@ -538,9 +538,12 @@ export function LeftToolbar({
         const newAsset = await response.json()
         const updatedAssets = [...assets, newAsset]
         onAssetsChange?.(updatedAssets)
+      } else {
+        toast.error(`Upload failed (HTTP ${response.status}) — try again.`)
       }
     } catch (error) {
       console.error('Upload error:', error)
+      toast.error('Upload failed — check your connection and try again.')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -557,9 +560,13 @@ export function LeftToolbar({
       if (response.ok) {
         const updatedAssets = assets.filter(a => a.id !== asset.id)
         onAssetsChange?.(updatedAssets)
+      } else {
+        const body = await response.json().catch(() => ({})) as { error?: string }
+        toast.error(body.error || `Delete failed (HTTP ${response.status}).`)
       }
     } catch (error) {
       console.error('Delete error:', error)
+      toast.error('Delete failed — check your connection and try again.')
     }
   }
 

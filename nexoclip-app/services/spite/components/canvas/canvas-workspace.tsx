@@ -406,7 +406,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
           setAssets(loadedAssets)
         }
       } catch (error) {
-        if (!cancelled) console.error('Error loading data:', error)
+        if (!cancelled) {
+          console.error('Error loading data:', error)
+          toast.error("Couldn't load this project's assets — refresh to try again.", { id: 'canvas-load-assets' })
+        }
       }
     }
     // Asset library is not needed to paint the graph. Defer it so the initial
@@ -811,6 +814,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         return
       } catch (error) {
         console.error('Folder drop error:', error)
+        toast.error("Couldn't add that folder to the canvas — try dropping it again.")
       }
     }
 
@@ -849,6 +853,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }).catch(() => {})
     } catch (error) {
       console.error('Drop error:', error)
+      toast.error("Couldn't add that asset to the canvas — try dropping it again.")
     }
   }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 

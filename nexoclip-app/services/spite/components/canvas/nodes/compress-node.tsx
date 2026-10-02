@@ -1,5 +1,6 @@
 'use client'
 
+import { toast } from 'sonner'
 import { withBasePath } from '@/lib/base-path'
 import { Position, NodeProps, Handle, useReactFlow, useStore } from '@xyflow/react'
 import { useParams } from 'next/navigation'
@@ -79,9 +80,10 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
     } catch (err) {
       console.error('[compress] failed to load source:', err)
       setErrorMsg('Could not read that image. Try uploading it into the node directly.')
+      toast.error('Could not read that image. Try uploading it into the node directly.', { id: `${id}-compress` })
       return null
     }
-  }, [uploadedFile, connectedUrl])
+  }, [id, uploadedFile, connectedUrl])
 
   const uploadBlob = useCallback(async (blob: Blob): Promise<string | null> => {
     try {
@@ -122,7 +124,7 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
       setResultDims({ width, height })
       setStatus('saving')
       const proxyUrl = await uploadBlob(blob)
-      if (!proxyUrl) { setStatus('error'); setErrorMsg('Save failed — adjust to retry.'); return }
+      if (!proxyUrl) { setStatus('error'); setErrorMsg('Save failed — adjust to retry.'); toast.error('Compressed image could not be saved — adjust to retry.', { id: `${id}-compress` }); return }
       patchNodeData(id, {
         outputUrl: proxyUrl,
         thumbnail: proxyUrl,
@@ -135,6 +137,7 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
     } catch (err) {
       console.error('[compress] compress/save failed:', err)
       setStatus('error'); setErrorMsg('Compression failed.')
+      toast.error('Compression failed.', { id: `${id}-compress` })
     }
   }, [id, loadBitmap, patchNodeData, quality, scalePct, sourceKey, uploadBlob])
 
