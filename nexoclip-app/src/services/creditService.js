@@ -6,6 +6,11 @@ import {
   updateCreditBalance,
 } from '../repositories/creditRepository.js';
 
+// 402 so routes surface a top-up prompt instead of a generic 400.
+export function insufficientCreditsError() {
+  return Object.assign(new Error('Insufficient credits'), { code: 'INSUFFICIENT_CREDITS', status: 402 });
+}
+
 export async function appendCreditEntryInTransaction(client, { workspaceId, amount, reason, idempotencyKey, metadata = {} }) {
   if (!workspaceId || !idempotencyKey || !reason || !Number.isFinite(amount) || amount === 0) {
     throw new Error('Credit entry is invalid');
@@ -18,7 +23,7 @@ export async function appendCreditEntryInTransaction(client, { workspaceId, amou
   const account = await lockCreditAccount(client, workspaceId);
   const balance = Number(account.balance);
   const nextBalance = balance + amount;
-  if (nextBalance < 0) throw new Error('Insufficient credits');
+  if (nextBalance < 0) throw insufficientCreditsError();
 
   await updateCreditBalance(client, workspaceId, nextBalance);
   return insertCreditEntry(client, {

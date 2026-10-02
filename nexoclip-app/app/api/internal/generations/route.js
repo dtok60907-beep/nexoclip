@@ -107,6 +107,7 @@ export function createInternalGenerationHandler({
     if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
     return Response.json({ generation: canvasGeneration(generation, workspace.id) });
     } catch (error) {
+      if (error?.status === 402) return Response.json({ error: error.message, code: error.code }, { status: 402 });
       logError({
         event: 'internal_generation_request_failed',
         errorName: error?.name || 'Error',

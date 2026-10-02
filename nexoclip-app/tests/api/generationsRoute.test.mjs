@@ -35,14 +35,27 @@ test('returns durable queued job when publication is deferred', async () => {
 });
 
 test('insufficient credits is rejected with a readable message and never publishes to the queue', async () => {
+  const { insufficientCreditsError } = await import('../../src/services/creditService.js');
   let published = 0;
   const handler = createGenerationsPostHandler({
     resolveContext: async () => ({ user: { id: 'u1' }, workspace: { id: 'w1', role: 'member' } }),
-    reserve: async () => { throw new Error('Insufficient credits'); },
+    reserve: async () => { throw insufficientCreditsError(); },
     publish: async () => { published += 1; }, pool: {},
   });
   const response = await handler(request({ kind: 'image', prompt: 'fox', model: 'google/gemini-3-pro-image' }));
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 402);
   assert.equal((await response.json()).error, 'Insufficient credits');
   assert.equal(published, 0);
+});
+
+test('returns 402 INSUFFICIENT_CREDITS with the original message when the balance is too low', async () => {
+  const { insufficientCreditsError } = await import('../../src/services/creditService.js');
+  const handler = createGenerationsPostHandler({
+    resolveContext: async () => ({ user: { id: 'u1' }, workspace: { id: 'w1', role: 'member' } }),
+    reserve: async () => { throw insufficientCreditsError(); },
+    publish: async () => {}, pool: {},
+  });
+  const response = await handler(request({ prompt: 'fox', model: 'model-1' }));
+  assert.equal(response.status, 402);
+  assert.deepEqual(await response.json(), { error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' });
 });

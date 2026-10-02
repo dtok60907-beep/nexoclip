@@ -141,3 +141,20 @@ test('finalizes a draft whose task id is only stored on its output row', async (
   assert.equal(reserved.parameters.draftTaskId, 'cgt-draft');
   assert.equal(reserved.parameters.resolution, '1080p');
 });
+
+test('returns 402 with the credit message instead of a 500 when the workspace cannot afford the job', async () => {
+  const { insufficientCreditsError } = await import('../../../../src/services/creditService.js');
+  const handler = createInternalGenerationHandler({
+    verify: () => true,
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
+    reserve: async () => { throw insufficientCreditsError(); },
+    getPool: () => ({}),
+    logError: () => {},
+  });
+  const response = await handler(request({
+    action: 'submit', userId, projectId, nodeId: 'node-1',
+    input: { kind: 'image', prompt: 'red kite', model: 'google/gemini-image', parameters: {}, idempotencyKey: 'spite:project-1:node-1:nonce-2' },
+  }));
+  assert.equal(response.status, 402);
+  assert.deepEqual(await response.json(), { error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' });
+});
