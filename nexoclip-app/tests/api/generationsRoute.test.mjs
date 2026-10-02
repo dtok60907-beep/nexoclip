@@ -33,3 +33,15 @@ test('returns durable queued job when publication is deferred', async () => {
   assert.equal(response.status, 201);
   assert.equal((await response.json()).generation.id, 'g1');
 });
+
+test('returns 402 INSUFFICIENT_CREDITS with the original message when the balance is too low', async () => {
+  const { insufficientCreditsError } = await import('../../src/services/creditService.js');
+  const handler = createGenerationsPostHandler({
+    resolveContext: async () => ({ user: { id: 'u1' }, workspace: { id: 'w1', role: 'member' } }),
+    reserve: async () => { throw insufficientCreditsError(); },
+    publish: async () => {}, pool: {},
+  });
+  const response = await handler(request({ prompt: 'fox', model: 'model-1' }));
+  assert.equal(response.status, 402);
+  assert.deepEqual(await response.json(), { error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' });
+});

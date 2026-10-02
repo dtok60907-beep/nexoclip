@@ -3,6 +3,7 @@ import { createImageGeneration, createVimaxGeneration, findGeneration, findGener
 import { createCreditAccount, insertCreditEntry, lockCreditAccount, updateCreditBalance } from '../repositories/creditRepository.js';
 import { findPricingRule } from '../repositories/pricingRepository.js';
 import { estimateCost } from './pricingService.js';
+import { insufficientCreditsError } from './creditService.js';
 import { estimateGenerationCredits } from './generationPricing.js';
 import { findWorkspaceGenerationLimits, countRecentGenerations, countActiveGenerations, sumBudgetGenerations } from '../repositories/generationLimitsRepository.js';
 
@@ -181,7 +182,7 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
     const account = await lockCreditAccount(client, workspaceId);
     const balance = Number(account.balance);
     const cost = Number(estimate.amount);
-    if (balance < cost) throw new Error('Insufficient credits');
+    if (balance < cost) throw insufficientCreditsError();
     const nextBalance = balance - cost;
     await updateCreditBalance(client, workspaceId, nextBalance);
     const ledger = await insertCreditEntry(client, {
@@ -219,7 +220,7 @@ export async function createVimaxGenerationJobWithReservation(pool, workspaceId,
       await createCreditAccount(client, workspaceId);
       const account = await lockCreditAccount(client, workspaceId);
       const balance = Number(account.balance);
-      if (balance < cost) throw new Error('Insufficient credits');
+      if (balance < cost) throw insufficientCreditsError();
       const nextBalance = balance - cost;
       await updateCreditBalance(client, workspaceId, nextBalance);
       ledger = await insertCreditEntry(client, {

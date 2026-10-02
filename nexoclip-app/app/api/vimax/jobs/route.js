@@ -32,7 +32,7 @@ async function publishReservedGeneration({ pool }) {
 function errorResponse(error) {
   const status = Number(error?.status);
   if (Number.isInteger(status) && status >= 400 && status < 500) {
-    return Response.json({ error: error.message }, { status });
+    return Response.json({ error: error.message, code: error.code }, { status });
   }
   return Response.json({ error: 'Unable to create storyboard generation' }, { status: 500 });
 }
