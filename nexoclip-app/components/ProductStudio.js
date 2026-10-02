@@ -413,12 +413,13 @@ export default function ProductStudio({
                     >
                       Download HD
                     </a>
-                    <a
-                      href="/canvas"
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard.writeText(result.url); alert("URL gambar berhasil disalin!"); }}
                       className="flex-1 text-center py-2 px-3 rounded-xl bg-[#A175FF]/15 hover:bg-[#A175FF]/25 text-[#6c3df4] text-xs font-bold transition-colors"
                     >
-                      Buka di Canvas ➔
-                    </a>
+                      Salin Link
+                    </button>
                   </div>
                 </div>
               ))}
