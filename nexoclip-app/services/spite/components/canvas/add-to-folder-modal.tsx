@@ -1,5 +1,6 @@
 'use client'
 
+import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath } from '@/lib/base-path'
 import { importImageForTrust, workspaceAssetIdFromUrl } from '@/lib/byteplus-trust'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -710,7 +711,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                     onClick={async () => {
                       if (!editFolder) return
                       const noun = typeLabels[editFolder.type].toLowerCase()
-                      if (!window.confirm(`Delete the ${noun} "${editFolder.name}"? Assets inside stay in the library.`)) return
+                      if (!await confirmDialog({ title: `Delete the ${noun} "${editFolder.name}"?`, description: 'Assets inside stay in the library.', confirmLabel: 'Delete', destructive: true })) return
                       try {
                         const res = await fetch(withBasePath(`/api/folders/${editFolder.id}`), { method: 'DELETE' })
                         if (!res.ok) throw new Error(`HTTP ${res.status}`)

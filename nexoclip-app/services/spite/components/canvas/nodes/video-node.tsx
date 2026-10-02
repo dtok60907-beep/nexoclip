@@ -1,5 +1,6 @@
 'use client'
 
+import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { Position, NodeResizer, NodeProps, Handle, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { useParams } from 'next/navigation'
@@ -892,8 +893,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       ...(connectedVideoUrls.length ? [`${connectedVideoUrls.length} reference video${connectedVideoUrls.length === 1 ? '' : 's'}`] : []),
       ...(connectedAudioUrls.length ? [`${connectedAudioUrls.length} audio clip${connectedAudioUrls.length === 1 ? '' : 's'}`] : []),
     ]
-    if ((untrusted.length > 0 || untrustableMedia.length > 0) && !window.confirm(
-      (untrusted.length > 0
+    if ((untrusted.length > 0 || untrustableMedia.length > 0) && !await confirmDialog({
+      title: untrusted.length > 0 ? 'Untrusted references' : 'Video and audio cannot be trusted',
+      confirmLabel: 'Generate anyway',
+      description: (untrusted.length > 0
         ? `Not trusted for Seedance: ${untrusted.join(', ')}.\n\n` +
           'If any of these shows a real person, BytePlus will reject the video. Trust them first (shield icon) and wait until they turn green.\n\n'
         : '') +
@@ -901,7 +904,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         ? `This request sends ${untrustableMedia.join(' and ')}. Only images can be trusted, so if a video shows a real person's face, BytePlus will reject the job.\n\n`
         : '') +
       'Generate anyway?',
-    )) {
+    })) {
       stopBeforeSubmit(null)
       return
     }
@@ -1072,10 +1075,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   // Cost-aware generate wrapper. Estimates the fal charge for the
   // current model × batch count × duration, surfaces it in the
-  // button tooltip, and gates handleGenerate behind a blocking
-  // window.confirm() when the estimate crosses the safety threshold.
-  // Native confirm is intentional: the goal is "you cannot click
-  // through without seeing the dollar amount", not aesthetics.
+  // button tooltip, and gates handleGenerate behind a modal confirm
+  // dialog when the estimate crosses the safety threshold, so you cannot
+  // click through without seeing the amount.
   const costEstimate = useGenerationCredits({
     kind: 'video', modelId: currentModel?.id, count: numVideos, resolution: draftMode ? '480p' : resolution,
     duration, aspectRatio, draft: draftMode, extend: extendMode, edit: editMode,
@@ -1095,7 +1097,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
     return `${label}\nCost: up to ~${formatCredits(costEstimate.total)} (${formatCredits(costEstimate.perUnit)} each).\nYou are charged the tokens the provider actually used, never more than this.`
   }, [blockedNoExtendVideo, blockedNoFirstFrame, costEstimate, currentModel, generationPersistenceGuard, modelId, numVideos, resolvedPrompt.connected, resolvedPrompt.prompt, upscaleMode])
-  const requestGenerate = () => {
+  const requestGenerate = async () => {
     if (blockedNoExtendVideo || submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
     if (costEstimate.isKnown && costEstimate.total >= CREDIT_CONFIRM_THRESHOLD) {
       const msg =
@@ -1103,7 +1105,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         `to the provider.\n\n` +
         `Cost: up to ~${formatCredits(costEstimate.total)} (${formatCredits(costEstimate.perUnit)} each).\n\n` +
         `Press OK to confirm and spend this, or Cancel to back out.`
-      if (!window.confirm(msg)) return
+      // Held while the dialog is open so a second click can't queue another.
+      submitInFlightRef.current = true
+      const confirmed = await confirmDialog({ title: 'Confirm generation cost', description: msg.replace('Press OK to confirm and spend this, or Cancel to back out.', '').trim(), confirmLabel: 'Generate', destructive: true })
+      submitInFlightRef.current = false
+      if (!confirmed) return
     }
     submitInFlightRef.current = true
     void handleGenerate().finally(() => {

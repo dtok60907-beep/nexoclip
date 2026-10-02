@@ -1,5 +1,6 @@
 'use client'
 
+import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath } from '@/lib/base-path'
 import { workspaceAssetDeleteUrl } from '@/lib/workspace-asset-delete'
 import {
@@ -1233,7 +1234,7 @@ export function LeftToolbar({
                             </button>
                             <button
                               onClick={async () => {
-                                if (!window.confirm(`Delete the ${typeLabel.toLowerCase()} "${activeFolder.name}"? Assets inside stay in the library.`)) return
+                                if (!await confirmDialog({ title: `Delete the ${typeLabel.toLowerCase()} "${activeFolder.name}"?`, description: 'Assets inside stay in the library.', confirmLabel: 'Delete', destructive: true })) return
                                 try {
                                   const res = await fetch(withBasePath(`/api/folders/${activeFolder.id}`), { method: 'DELETE' })
                                   if (!res.ok) throw new Error(`HTTP ${res.status}`)

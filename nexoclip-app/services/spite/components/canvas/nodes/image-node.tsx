@@ -1,5 +1,6 @@
 'use client'
 
+import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
@@ -963,10 +964,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
   // Cost-aware generate wrapper. Estimates the fal charge for the
   // current model × batch count, shows it in the button tooltip, and
-  // gates handleGenerate behind a native window.confirm() when the
-  // estimate crosses CREDIT_CONFIRM_THRESHOLD. Native confirm is
-  // intentionally blocking + unmissable — this is a money-loss safety
-  // gate, not a delight feature.
+  // gates handleGenerate behind a modal confirm dialog when the
+  // estimate crosses CREDIT_CONFIRM_THRESHOLD — a money-loss safety gate
+  // that cannot be clicked through without seeing the amount.
   const costEstimate = useGenerationCredits({
     kind: 'image', modelId: currentModel?.id, count: numImages, resolution, aspectRatio,
     promptLength: resolvedPrompt.prompt?.length,
@@ -980,7 +980,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
     return `${label}\nCost: ~${formatCredits(costEstimate.total)} (${formatCredits(costEstimate.perUnit)} each).\nYou are charged what the provider actually used, never more than this.`
   }, [currentModel, numImages, costEstimate, generationPersistenceGuard, resolvedPrompt.connected, resolvedPrompt.prompt])
-  const requestGenerate = () => {
+  const requestGenerate = async () => {
     if (submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
     if (costEstimate.isKnown && costEstimate.total >= CREDIT_CONFIRM_THRESHOLD) {
       const msg =
@@ -988,7 +988,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         `to the provider.\n\n` +
         `Cost: ~${formatCredits(costEstimate.total)} (${formatCredits(costEstimate.perUnit)} each).\n\n` +
         `Press OK to confirm and spend this, or Cancel to back out.`
-      if (!window.confirm(msg)) return
+      // Held while the dialog is open so a second click can't queue another.
+      submitInFlightRef.current = true
+      const confirmed = await confirmDialog({ title: 'Confirm generation cost', description: msg.replace('Press OK to confirm and spend this, or Cancel to back out.', '').trim(), confirmLabel: 'Generate', destructive: true })
+      submitInFlightRef.current = false
+      if (!confirmed) return
     }
     submitInFlightRef.current = true
     void handleGenerate().finally(() => {

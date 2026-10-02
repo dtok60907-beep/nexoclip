@@ -1,5 +1,6 @@
 'use client'
 
+import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath } from '@/lib/base-path'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
@@ -275,10 +276,11 @@ export default function FlowThread() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  function generate() {
+  async function generate() {
     if (!prompt.trim() || busy || uploadingRef) return
     if (cost.isKnown && cost.total > CREDIT_CONFIRM_THRESHOLD) {
-      if (!window.confirm(`This will cost about ${formatCredits(cost.total)}. Generate?`)) return
+      const confirmed = await confirmDialog({ title: 'Confirm generation cost', description: `This will cost about ${formatCredits(cost.total)}.`, confirmLabel: 'Generate', destructive: true })
+      if (!confirmed) return
     }
     const myPrompt = prompt.trim()
     // De-dupe so the same reference can't be sent (or stored) twice, even if it
