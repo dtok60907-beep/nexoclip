@@ -899,3 +899,19 @@ test('snapshots keep unchanged node objects so only edited nodes re-render', () 
   assert.equal(binding.getSnapshot().nodes, after.nodes, 'a no-op write keeps the same nodes array')
   binding.destroy()
 })
+
+test('duplicating a group frame with its members repoints the members at the copy', () => {
+  const doc = new Y.Doc()
+  let nextId = 0
+  const binding = createReactFlowBinding(doc, { createId: () => `copy-${++nextId}` })
+  binding.createNode({ id: 'frame', type: 'groupFrame', position: { x: 100, y: 100 }, data: { label: 'G' } })
+  binding.createNode({ id: 'child', type: 'prompt', position: { x: 20, y: 40 }, parentId: 'frame', data: {} } as never)
+
+  const copyIds = new Set(binding.duplicateNodes(['frame', 'child']))
+  const nodes = binding.getSnapshot().allNodes as Array<{ id: string; type?: string; parentId?: string; position: { x: number; y: number } }>
+  const frameCopy = nodes.find((node) => copyIds.has(node.id) && node.type === 'groupFrame')!
+  const childCopy = nodes.find((node) => copyIds.has(node.id) && node.type === 'prompt')!
+  assert.equal(childCopy.parentId, frameCopy.id)
+  assert.deepEqual(childCopy.position, { x: 20, y: 40 }, 'relative member position is kept')
+  assert.deepEqual(frameCopy.position, { x: 140, y: 140 }, 'the frame copy is offset')
+})

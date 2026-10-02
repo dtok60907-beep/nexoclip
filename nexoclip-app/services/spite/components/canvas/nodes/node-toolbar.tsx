@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NodeToolbar, Position, useReactFlow, type Node as FlowNode } from '@xyflow/react'
 import { toast } from 'sonner'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -287,7 +287,7 @@ export function NodeActionToolbar({
         <div className="relative">
           <div className="flex items-center">
             <ToolBtn icon={Play} label="Run" accent onClick={onRun} />
-            <button
+            <button type="button"
               onClick={() => { setRunMenuOpen(!runMenuOpen); setConnectMenuOpen(false); setCopyMenuOpen(false) }}
               className="flex items-center justify-center w-4 h-6 text-accent hover:text-accent-foreground transition-colors"
             >
@@ -309,7 +309,7 @@ export function NodeActionToolbar({
         <div className="relative">
           <div className="flex items-center">
             <ToolBtn icon={Wrench} label="Quick connect" />
-            <button
+            <button type="button"
               onClick={() => { setConnectMenuOpen(!connectMenuOpen); setRunMenuOpen(false); setCopyMenuOpen(false) }}
               className="flex items-center justify-center w-4 h-6 text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -339,7 +339,7 @@ export function NodeActionToolbar({
         <div className="relative">
           <div className="flex items-center">
             <ToolBtn icon={CopySimple} label="Copy" onClick={handleDuplicate} />
-            <button
+            <button type="button"
               onClick={() => { setCopyMenuOpen(!copyMenuOpen); setRunMenuOpen(false); setConnectMenuOpen(false) }}
               className="flex items-center justify-center w-4 h-6 text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -363,7 +363,7 @@ export function NodeActionToolbar({
               label="Arrange selected in a grid"
               onClick={() => handleArrangeGrid('auto')}
             />
-            <button
+            <button type="button"
               onClick={() => {
                 setSortMenuOpen(!sortMenuOpen)
                 setRunMenuOpen(false)
@@ -435,7 +435,7 @@ export function NodeActionToolbar({
               {/* Add to submenu - only show if we have an asset */}
               {(assetId || assetUrl) && (
                 <div className="relative">
-                  <button
+                  <button type="button"
                     onMouseEnter={() => setAddToMenuOpen(true)}
                     className="flex items-center justify-between w-full px-3 py-1.5 text-left text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
                   >
@@ -529,7 +529,7 @@ export function ToolBtn({
   onClick?: () => void
 }) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       title={label}
       aria-label={label}
@@ -586,7 +586,7 @@ function MenuItem({
   onClick?: () => void
 }) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
     >
@@ -606,10 +606,13 @@ export function SimpleNodeToolbar({
   locked,
   trustAction,
   onAddToFolder,
+  children,
 }: {
   nodeId: string
   selected?: boolean
   locked?: boolean
+  // Node-specific controls (e.g. a sticky note's colors), shown after Lock.
+  children?: ReactNode
   trustAction?: {
     label: string
     disabled: boolean
@@ -640,6 +643,7 @@ export function SimpleNodeToolbar({
           accent={locked}
           onClick={() => patchNodeData(nodeId, { locked: !locked })}
         />
+        {children}
         {onAddToFolder && (
           <div className="relative">
             <ToolBtn icon={At} label="Add to Character/Location/Prop" onClick={() => setAddToMenuOpen((v) => !v)} />

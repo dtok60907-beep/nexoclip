@@ -15,17 +15,19 @@ import {
   ImageSquare,
   MapPin,
   Minus,
+  NoteBlank,
   Package,
   Plus,
   Scissors,
   Target,
+  TextAa,
   TextT,
   UploadSimple,
   User,
 } from '@phosphor-icons/react'
 import { useReactFlow, useViewport } from '@xyflow/react'
 
-export type CanvasTool = 'select' | 'hand' | 'cut' | 'comment'
+export type CanvasTool = 'select' | 'hand' | 'cut' | 'comment' | 'note' | 'text'
 type AssetAction = 'history' | 'upload' | 'characters' | 'props' | 'locations' | 'general'
 
 interface BottomBarProps {
@@ -78,6 +80,8 @@ export function BottomBar({
     { id: 'hand', icon: Hand, label: 'Hand — pan canvas only' },
     { id: 'cut', icon: Scissors, label: 'Cut connections' },
     { id: 'comment', icon: ChatTeardropDots, label: 'Comment — click to drop a pin (C)' },
+    { id: 'note', icon: NoteBlank, label: 'Sticky note — click to place (N)' },
+    { id: 'text', icon: TextAa, label: 'Text — click to place (T)' },
   ]
 
   return (

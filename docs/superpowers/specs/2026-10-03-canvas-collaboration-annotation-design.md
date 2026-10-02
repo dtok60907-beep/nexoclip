@@ -103,7 +103,11 @@ part in generation; they annotate and organize the board.
   members move with the frame.
 - Dragging a node into / out of a frame adds / removes it.
 - Frame toolbar: rename, color, lock (locks the frame and every member).
-- Deleting a frame asks whether to keep or delete its members.
+- Deleting a frame (Delete key or toolbar) keeps its members in place; the
+  frame toolbar's **With contents** button deletes the frame and its members.
+- Copying or duplicating a frame copies its members into the new frame.
+- Sticky notes use the `stickyNote` type; the removed `note` type stays
+  auto-deleted by `LegacyNoteCleanup`.
 
 ### 7. Tables
 
