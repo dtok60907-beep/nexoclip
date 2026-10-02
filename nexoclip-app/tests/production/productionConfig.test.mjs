@@ -7,8 +7,6 @@ test('accepts the minimum full-stack production environment for realtime deploym
     NODE_ENV: 'production',
     DATABASE_URL_NEXOCLIP: 'postgres://user:pass@db.example/nexoclip',
     DATABASE_URL_SPITE: 'postgres://user:pass@db.example/spite',
-    MUAPI_API_KEY: 'server-only-key',
-    MUAPI_BASE_URL: 'https://api.muapi.ai',
     LOCAL_OBJECT_STORAGE_SECRET: 'long-production-secret',
     CANVAS_AUTH_URL: 'http://spite-realtime:3007/internal/authorize',
     CANVAS_AUTH_HMAC_SECRET: 'canvas-hmac-secret',
@@ -31,7 +29,7 @@ test('rejects missing realtime secrets and public database credentials without e
 
   assert.equal(result.ok, false);
   const joined = result.errors.join('\n');
-  assert.match(joined, /MUAPI_BASE_URL/);
+  assert.doesNotMatch(joined, /MUAPI/);
   assert.match(joined, /CANVAS_AUTH_URL/);
   assert.match(joined, /CANVAS_AUTH_HMAC_SECRET/);
   assert.match(joined, /REALTIME_JWT_SECRET/);

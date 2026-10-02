@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 
 const MUAPI_BASE = 'https://api.muapi.ai';
 
@@ -11,24 +11,15 @@ function normalizeClientKey(request) {
     return headerKey;
 }
 
-// Reads may fall back to the platform's server-only MuAPI key so a keyless (SaaS)
-// browser can still open and view workflows in the builder. Writes and execution
-// must NOT fall back — those belong in the metered generations pipeline, so they
-// keep requiring an explicit client key.
-function resolveApiKey(request, { allowServerFallback }) {
-    return normalizeClientKey(request)
-        || (allowServerFallback ? (process.env.MUAPI_API_KEY || null) : null);
-}
-
-// Execution consumes MuAPI credits and must not silently run on the platform key —
-// it belongs in the metered generations pipeline. Authoring (create/update/delete a
-// workflow definition) is free, so those writes may use the server key like reads do.
-function isExecutionPath(path) {
-    return path.includes('api-execute') || /\/node\/[^/]+\/run$/.test(path);
+// BYOK only: the platform MUAPI_API_KEY is never used here. Only a valid
+// client-supplied x-api-key is forwarded.
+function resolveApiKey(request) {
+    return normalizeClientKey(request);
 }
 
 function cleanHeaders(request) {
     const headers = new Headers(request.headers);
+    headers.delete('x-api-key'); // re-added by the caller only when the client sent a real key
     headers.delete('host');
     headers.delete('connection');
     headers.delete('cookie'); // CRITICAL: Stop forwarding browser cookies to MuAPI to avoid auth conflicts
@@ -45,8 +36,7 @@ export async function GET(request, { params }) {
 
     const headers = cleanHeaders(request);
 
-    // Reads: allow the server-only platform key so keyless browsers can load workflows.
-    const apiKey = resolveApiKey(request, { allowServerFallback: true });
+    const apiKey = resolveApiKey(request);
     // NOTE: apiKey is intentionally NOT logged here to prevent credential leakage (CWE-200)
     if (apiKey) headers.set('x-api-key', apiKey);
 
@@ -75,7 +65,7 @@ export async function POST(request, { params }) {
 
     const headers = cleanHeaders(request);
 
-    const apiKey = resolveApiKey(request, { allowServerFallback: !isExecutionPath(path) });
+    const apiKey = resolveApiKey(request);
     // NOTE: credential logging removed for security (CWE-200)
     if (apiKey) headers.set('x-api-key', apiKey);
 
@@ -110,7 +100,7 @@ export async function DELETE(request, { params }) {
 
     const headers = cleanHeaders(request);
 
-    const apiKey = resolveApiKey(request, { allowServerFallback: !isExecutionPath(path) });
+    const apiKey = resolveApiKey(request);
     if (apiKey) headers.set('x-api-key', apiKey);
 
     try {
@@ -135,7 +125,7 @@ export async function PUT(request, { params }) {
 
     const headers = cleanHeaders(request);
 
-    const apiKey = resolveApiKey(request, { allowServerFallback: !isExecutionPath(path) });
+    const apiKey = resolveApiKey(request);
     if (apiKey) headers.set('x-api-key', apiKey);
 
     try {
