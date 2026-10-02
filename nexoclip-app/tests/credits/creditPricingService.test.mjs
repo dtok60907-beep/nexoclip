@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { costUsdToCredits, grantOnboardingCredits } from '../../src/services/creditPricingService.js';
+import { costUsdToCredits, grantOnboardingCredits, ONBOARDING_GRANT_CREDITS } from '../../src/services/creditPricingService.js';
 
 test('converts provider USD to credits rounded up to one decimal', () => {
   assert.equal(costUsdToCredits(0), 0);
@@ -9,21 +9,22 @@ test('converts provider USD to credits rounded up to one decimal', () => {
   assert.equal(costUsdToCredits(1), 100);
 });
 
-test('grants a workspace 10,000 onboarding credits with an idempotent key', async () => {
+test('grants a workspace 300 onboarding credits with an idempotent key', async () => {
+  assert.equal(ONBOARDING_GRANT_CREDITS, 300);
   const calls = [];
   const client = { async query(text, values) {
     calls.push({text, values});
     if (/INSERT INTO credit_accounts/.test(text)) return {rows: [{workspace_id: 'w1', balance: '0'}]};
     if (/FROM credit_ledger/.test(text)) return {rows: []};
     if (/FOR UPDATE/.test(text)) return {rows: [{workspace_id: 'w1', balance: '0'}]};
-    if (/UPDATE credit_accounts/.test(text)) return {rows: [{workspace_id: 'w1', balance: '10000'}]};
-    if (/INSERT INTO credit_ledger/.test(text)) return {rows: [{id: 'onboarding-1', amount: '10000'}]};
+    if (/UPDATE credit_accounts/.test(text)) return {rows: [{workspace_id: 'w1', balance: '300'}]};
+    if (/INSERT INTO credit_ledger/.test(text)) return {rows: [{id: 'onboarding-1', amount: '300'}]};
     return {rows: []};
   }, release() {}};
   const entry = await grantOnboardingCredits({connect: async () => client}, {workspaceId: 'w1'});
   assert.equal(entry.id, 'onboarding-1');
   const ledger = calls.find(({text}) => /INSERT INTO credit_ledger/.test(text));
-  assert.deepEqual(ledger.values.slice(0, 5), ['w1', 10000, 10000, 'onboarding_grant', 'onboarding:w1']);
+  assert.deepEqual(ledger.values.slice(0, 5), ['w1', 300, 300, 'onboarding_grant', 'onboarding:w1']);
 });
 
 test('rejects invalid provider costs', () => {

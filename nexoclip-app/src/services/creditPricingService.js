@@ -2,6 +2,7 @@ import { appendCreditEntry, appendCreditEntryInTransaction } from './creditServi
 
 const CREDITS_PER_USD = 100;
 const CREDIT_PRECISION = 10;
+export const ONBOARDING_GRANT_CREDITS = 300;
 
 export function costUsdToCredits(costUsd) {
   const cost = Number(costUsd);
@@ -12,10 +13,10 @@ export function costUsdToCredits(costUsd) {
 
 const onboardingEntry = (workspaceId) => ({
   workspaceId,
-  amount: 10000,
+  amount: ONBOARDING_GRANT_CREDITS,
   reason: 'onboarding_grant',
   idempotencyKey: `onboarding:${workspaceId}`,
-  metadata: { credits: 10000 },
+  metadata: { credits: ONBOARDING_GRANT_CREDITS },
 });
 
 export function grantOnboardingCredits(pool, { workspaceId }) {
