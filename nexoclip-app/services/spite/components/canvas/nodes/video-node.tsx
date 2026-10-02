@@ -689,12 +689,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
     const { connected, prompt: compiledPrompt, mentions: promptMentions } = resolveIncomingPrompt(id, getNodes(), getEdges())
+    // Early stops: shown in the node and as a toast, since the node's error
+    // strip can be covered by its control bar.
+    const blockEarly = (message: string) => {
+      setError(message)
+      toast.error(message, { id: `${id}-blocked` })
+    }
     if (!connected) {
-      setError('Connect a Text node first')
+      blockEarly('Connect a Text node first')
       return
     }
     if (!compiledPrompt) {
-      setError('Enter text in the connected Text node')
+      blockEarly('Enter text in the connected Text node')
       return
     }
     let connectedImageUrl: string | null = null
@@ -760,7 +766,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // Failsafe: a media cord is attached but its source has nothing yet, so that
     // input would be silently dropped. Refuse rather than burn a paid render.
     if (deadMediaEdges > 0) {
-      setError(
+      blockEarly(
         deadMediaEdges === 1
           ? 'A connected node has no image/video yet — generate or upload it first (that input would be ignored).'
           : `${deadMediaEdges} connected nodes have no image/video yet — generate or upload them first (those inputs would be ignored).`,
@@ -769,7 +775,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
 
     if (!currentModel) {
-      setError('Please select a model')
+      blockEarly('Please select a model')
       return
     }
 
@@ -796,16 +802,25 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     const connectedVideoUrls = compiled.videoUrls.slice(0, currentModel.maxReferenceVideos || 0)
     const connectedAudioUrls = compiled.audioUrls.slice(0, currentModel.maxReferenceAudios || 0)
 
-    if (isFrameModel && !connectedImageUrl) {
-      setError('Frame mode needs a first frame — wire an image into the blue First frame handle.')
+    // A request stopped before submit must say why. The in-node error strip
+    // can sit under the node's control bar, so every stop also raises a toast.
+    const stopBeforeSubmit = (message: string | null) => {
+      if (message) {
+        setError(message)
+        toast.error(message, { id: `${id}-blocked` })
+      } else {
+        toast.info('Generation cancelled — nothing was charged.', { id: `${id}-blocked` })
+      }
       setStatus('idle')
       setSubmittedAt(undefined)
+    }
+
+    if (isFrameModel && !connectedImageUrl) {
+      stopBeforeSubmit('Frame mode needs a first frame — wire an image into the blue First frame handle.')
       return
     }
     if ((extendMode || editMode) && connectedVideoUrls.length === 0) {
-      setError(`${editMode ? 'Edit' : 'Extend'} needs a source video — @mention a folder that contains the video.`)
-      setStatus('idle')
-      setSubmittedAt(undefined)
+      stopBeforeSubmit(`${editMode ? 'Edit' : 'Extend'} needs a source video — @mention a folder that contains the video.`)
       return
     }
     // Seedance rejects clips outside its length limits only after the job is
@@ -818,9 +833,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       ])
       const durationError = referenceDurationError({ model: currentModel, editMode, videoSeconds, audioSeconds })
       if (durationError) {
-        setError(durationError)
-        setStatus('idle')
-        setSubmittedAt(undefined)
+        stopBeforeSubmit(durationError)
         return
       }
     }
@@ -833,20 +846,17 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // frame got treated as a reference." Catch it here and make the user choose
     // instead of burning a generation on the wrong inputs.
     if (currentModel.referenceModel && (connectedImageUrl || connectedEndImageUrl) && referenceGroups.length > 0) {
-      setError(
+      stopBeforeSubmit(
         `${currentModel.name} can't use a first/end frame and reference images at the same time — they're separate modes. ` +
         `Remove the @mention / wired references to keep your exact first frame, or remove the first frame to use the references.`,
       )
-      setStatus('idle')
       return
     }
 
     if (compiled.missingFolders.length > 0) {
       // A mentioned folder was deleted: its images are gone, so the provider
       // would get dead references. Say which ones instead of failing later.
-      setError(`Folder ${compiled.missingFolders.map((name) => `@${name}`).join(', ')} no longer exists. Remove it from the prompt or pick another folder.`)
-      setStatus('idle')
-      setSubmittedAt(undefined)
+      stopBeforeSubmit(`Folder ${compiled.missingFolders.map((name) => `@${name}`).join(', ')} no longer exists. Remove it from the prompt or pick another folder.`)
       return
     }
 
@@ -879,8 +889,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         : '') +
       'Generate anyway?',
     )) {
-      setStatus('idle')
-      setSubmittedAt(undefined)
+      stopBeforeSubmit(null)
       return
     }
     if (untrustableMedia.length > 0) {
