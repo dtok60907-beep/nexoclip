@@ -13,8 +13,11 @@ import { AddToFolderModal } from '../add-to-folder-modal'
 import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { ResizableNodeFrame } from './resizable-node-frame'
+import { fitMediaNodeSize, shouldAutoSizeMediaNode } from '@/lib/media-node-size'
 import { useImageTrust } from '@/hooks/use-image-trust'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
+
+const REFERENCE_NODE_BOUNDS = { minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }
 
 function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
@@ -48,6 +51,15 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     undefined
   const isTaggedToShot = !!selectedShotId
   const isUploading = data.isUploading as boolean
+  // Size the node to the uploaded media's shape (a tall photo was cropped by
+  // the fixed 320×260 frame). Only the durable URL counts, so the local
+  // upload preview doesn't size the node twice.
+  const durableMediaUrl = typeof data.thumbnail === 'string' ? data.thumbnail : ''
+  const fitToMedia = useCallback((naturalWidth: number, naturalHeight: number) => {
+    if (!durableMediaUrl || !shouldAutoSizeMediaNode(data, durableMediaUrl)) return
+    const size = fitMediaNodeSize(naturalWidth, naturalHeight, REFERENCE_NODE_BOUNDS)
+    if (size) patchNodeData(id, { ...size, autoSizedFor: durableMediaUrl })
+  }, [data, durableMediaUrl, id, patchNodeData])
   const isAudio = (data.mediaType as string) === 'audio' || /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(thumbnail || '')
   const isVideo = !isAudio && ((data.mediaType as string) === 'video' || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(thumbnail || ''))
   const imageTrust = useImageTrust({
@@ -111,7 +123,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
       nodeId={id}
       data={data}
       defaultSize={{ width: 320, height: 260 }}
-      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
+      bounds={REFERENCE_NODE_BOUNDS}
       className="group"
       claimLock={nodeLock.claim}
       releaseLock={nodeLock.release}
@@ -226,6 +238,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
                 controls
                 playsInline
                 preload="metadata"
+                onLoadedMetadata={(event) => fitToMedia(event.currentTarget.videoWidth, event.currentTarget.videoHeight)}
                 controlsList="nofullscreen"
                 onDoubleClick={(e) => {
                   // Suppress the browser's native fullscreen on the video controls.
@@ -235,7 +248,14 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
                 }}
               />
             ) : (
-              <img src={displayThumbnailUrl(thumbnail)} alt="" className="w-full h-auto block cursor-zoom-in" loading="lazy" decoding="async" />
+              <img
+                src={displayThumbnailUrl(thumbnail)}
+                alt=""
+                className="w-full h-auto block cursor-zoom-in"
+                loading="lazy"
+                decoding="async"
+                onLoad={(event) => fitToMedia(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
+              />
             )}
             {isUploading && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">

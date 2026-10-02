@@ -88,7 +88,8 @@ export function ResizableNodeFrame({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-    patchNodeData(nodeId, sizeRef.current)
+    // A hand-picked size stops the node following its media's shape.
+    patchNodeData(nodeId, { ...sizeRef.current, autoSizedFor: null })
     releaseLock?.()
   }
 
