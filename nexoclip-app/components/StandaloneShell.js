@@ -9,7 +9,7 @@ import AssetsContent from './AssetsContent';
 import UsageContent from './UsageContent';
 import ProductStudio from './ProductStudio';
 // Default tab is kept static so the first paint of /studio has no loading flash.
-import { ImageStudio } from 'studio';
+// ImageStudio is lazy-loaded to prevent SSR errors on Node runtime
 
 const StudioLoading = () => (
   <div className="h-full w-full bg-black flex items-center justify-center text-white/20">Loading Studio...</div>
@@ -21,6 +21,7 @@ const studioLazy = (name) => dynamic(() => import('studio').then(mod => mod[name
   loading: StudioLoading,
 });
 
+const ImageStudio = studioLazy('ImageStudio');
 const VideoStudio = studioLazy('VideoStudio');
 const VibeMotionStudio = studioLazy('VibeMotionStudio');
 const LipSyncStudio = studioLazy('LipSyncStudio');
