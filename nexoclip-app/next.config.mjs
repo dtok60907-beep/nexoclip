@@ -17,8 +17,7 @@ const nextConfig = {
     return config;
   },
   async rewrites() {
-    const spiteUrl = process.env.SPITE_INTERNAL_URL;
-    if (!spiteUrl) return [];
+    const spiteUrl = process.env.SPITE_INTERNAL_URL || 'http://spite:3005';
     return {
       beforeFiles: [
         { source: '/canvas', destination: `${spiteUrl}/canvas` },
