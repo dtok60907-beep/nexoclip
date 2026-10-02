@@ -237,10 +237,19 @@ export default function ProductStudio({
 
       setGeneratedResults((prev) => [...formattedOutputs, ...prev]);
 
-      if (onGenerationComplete) onGenerationComplete(outputs);
+      if (onGenerationComplete && outputs.length > 0) {
+        onGenerationComplete({
+          url: outputs[0]?.url,
+          model: selectedModel.id,
+          prompt: customPrompt.trim(),
+          type: 'image',
+        });
+      }
     } catch (err) {
-      setGenerateError(err.message || 'Gagal membuat foto produk dengan BytePlus');
-      if (onGenerationError) onGenerationError(err);
+      const errMsg = typeof err === 'string' ? err : (err?.message || 'Gagal membuat foto produk dengan BytePlus');
+      console.error('[ProductStudio] Generation failed:', errMsg);
+      setGenerateError(errMsg);
+      if (onGenerationError) onGenerationError(errMsg);
     } finally {
       setIsGenerating(false);
       if (onGenerationEnd) onGenerationEnd();

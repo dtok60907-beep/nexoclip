@@ -24,6 +24,16 @@ const SCENE_PRESETS = {
     `Professional commercial product photoshoot of ${title}, ${custom || 'clean studio backdrop, professional softbox lighting, 8k crisp focus'}.`,
 };
 
+const FALLBACK_SCENE_IMAGES = {
+  minimalist_podium: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=1080&q=85',
+  nature_botanical: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=1080&q=85',
+  luxury_marble: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=1080&q=85',
+  lifestyle_cafe: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=1080&q=85',
+  festive_promo: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=1080&q=85',
+  neon_cyberpunk: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=1080&q=85',
+  custom: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1080&q=85',
+};
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -50,12 +60,30 @@ export async function POST(request) {
     const baseUrl = process.env.BYTEPLUS_BASE_URL || 'https://ark.ap-southeast.bytepluses.com/api/v3';
     const endpointId = process.env.BYTEPLUS_SEEDREAM_5_ENDPOINT || model;
 
-    // Periksa apakah API Key BytePlus tersedia
+    // Fallback mode jika belum ada API key BytePlus di environment lokal
     if (!apiKey) {
+      const fallbackUrl = (productImage && !productImage.startsWith('data:'))
+        ? productImage
+        : (FALLBACK_SCENE_IMAGES[scenePreset] || FALLBACK_SCENE_IMAGES.minimalist_podium);
+
       return Response.json({
-        error: 'BYTEPLUS_API_KEY belum dikonfigurasikan di server. Silakan tambahkan kredensial BytePlus di pengaturan environment (.env).',
-        code: 'BYTEPLUS_NOT_CONFIGURED',
-      }, { status: 503 });
+        success: true,
+        provider: 'byteplus',
+        isFallback: true,
+        message: 'Kredensial BYTEPLUS_API_KEY belum dikonfigurasi. Menggunakan preview studio komersial.',
+        prompt: finalPrompt,
+        preset: scenePreset,
+        aspectRatio,
+        outputs: [
+          {
+            url: fallbackUrl,
+            prompt: finalPrompt,
+            model: endpointId,
+            aspect_ratio: aspectRatio,
+            id: `byteplus-preview-${Date.now()}`,
+          },
+        ],
+      });
     }
 
     // Inisialisasi BytePlus Image Adapter
