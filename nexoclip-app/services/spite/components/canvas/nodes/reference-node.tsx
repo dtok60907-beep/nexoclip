@@ -269,6 +269,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         // the workspace id; let the modal resolve the Canvas id by URL instead.
         assetId={data.assetId && data.assetId !== data.workspaceAssetId ? String(data.assetId) : ''}
         assetUrl={thumbnail || ''}
+        mediaType={isAudio ? 'audio' : isVideo ? 'video' : 'image'}
         workspaceAssetId={typeof data.workspaceAssetId === 'string' ? data.workspaceAssetId : undefined}
       />
     </ResizableNodeFrame>

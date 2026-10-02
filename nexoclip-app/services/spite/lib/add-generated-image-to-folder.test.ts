@@ -31,7 +31,7 @@ test('legacy generated images use the same-origin import helper instead of direc
 test('canonical workspace images skip cross-origin byte downloads when added to a folder', () => {
   assert.match(folderModal, /workspaceAssetIdFromUrl/)
   assert.match(folderModal, /const canonicalAssetId = workspaceAssetIdFromUrl\(assetUrl\)/)
-  assert.match(folderModal, /if \(canonicalAssetId\) return \{ id: legacyId, workspaceAssetId: canonicalAssetId, url: assetUrl \}/)
+  assert.match(folderModal, /if \(canonicalAssetId\) return \{ id: legacyId, workspaceAssetId: canonicalAssetId, url: assetUrl(, type: assetMediaType)? \}/)
 })
 
 test('canonical import replaces the matching legacy selection', () => {

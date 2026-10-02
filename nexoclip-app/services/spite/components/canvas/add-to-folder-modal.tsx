@@ -65,6 +65,10 @@ interface AddToFolderModalProps {
   projectId: string
   assetId?: string
   assetUrl?: string
+  // Kind of the asset at assetUrl. Videos and audio are registered with
+  // their own type (so @mentions send them as @Video / @Audio) and skip the
+  // image-only Trust import.
+  mediaType?: MediaType
   // The workspace asset the source node already maps to (and may already be
   // trusted). Reused instead of importing a copy, so Trust carries over.
   workspaceAssetId?: string
@@ -91,7 +95,7 @@ const typeIcons = {
   general: Package,
 }
 
-export function AddToFolderModal({ open, onClose, folderType, projectId, assetId, assetUrl,
+export function AddToFolderModal({ open, onClose, folderType, projectId, assetId, assetUrl, mediaType: sourceMediaType,
   workspaceAssetId: knownWorkspaceAssetId, editFolder, defaultNew, onAdded }: AddToFolderModalProps) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,6 +123,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     const key = `${projectId}:${assetUrl}`
     if (assetResolutionRef.current?.key === key) return assetResolutionRef.current.promise
 
+    const assetMediaType = sourceMediaType ?? mediaTypeOf(assetUrl)
     const promise = (async () => {
       let legacyId = assetId
       if (!legacyId) {
@@ -130,7 +135,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       if (!legacyId) {
         const registration = await fetch(withBasePath('/api/assets'), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: assetUrl, type: 'image', filename: 'Generated image', projectId }),
+          body: JSON.stringify({ url: assetUrl, type: assetMediaType, filename: assetMediaType === 'image' ? 'Generated image' : `Reference ${assetMediaType}`, projectId }),
         })
         if (!registration.ok) throw new Error(`asset registration returned ${registration.status}`)
         legacyId = (await registration.json())?.id
@@ -141,8 +146,10 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       // asset. Reuse that identity instead of downloading it cross-origin;
       // Railway's HTTP service intentionally does not grant browser CORS.
       const canonicalAssetId = workspaceAssetIdFromUrl(assetUrl)
-      if (canonicalAssetId) return { id: legacyId, workspaceAssetId: canonicalAssetId, url: assetUrl }
-      if (knownWorkspaceAssetId) return { id: legacyId, workspaceAssetId: knownWorkspaceAssetId, url: assetUrl }
+      if (canonicalAssetId) return { id: legacyId, workspaceAssetId: canonicalAssetId, url: assetUrl, type: assetMediaType }
+      if (knownWorkspaceAssetId) return { id: legacyId, workspaceAssetId: knownWorkspaceAssetId, url: assetUrl, type: assetMediaType }
+      // Trust is image-only; a video or audio clip is sent by its own URL.
+      if (assetMediaType !== 'image') return { id: legacyId, url: assetUrl, type: assetMediaType }
 
       // Route legacy Spite media through its authenticated same-origin import
       // mode; fetching an absolute Railway URL in the browser is blocked by CORS.
@@ -154,7 +161,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       if (assetResolutionRef.current?.promise === promise) assetResolutionRef.current = null
     })
     return promise
-  }, [assetId, assetUrl, knownWorkspaceAssetId, projectId])
+  }, [assetId, assetUrl, knownWorkspaceAssetId, projectId, sourceMediaType])
 
   // Fetch existing folders + available assets — both scoped to the current
   // project. Without the projectId param these endpoints either fall back
@@ -190,7 +197,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       setShowNewForm(true)
     }
     if (assetId && assetUrl) {
-      setSelectedAssets([{ id: assetId, url: assetUrl }])
+      setSelectedAssets([{ id: assetId, url: assetUrl, type: sourceMediaType ?? mediaTypeOf(assetUrl) }])
       return
     }
     // Generated durable outputs live in the main asset store. Register a

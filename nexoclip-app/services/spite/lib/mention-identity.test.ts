@@ -196,3 +196,14 @@ test('Seedance 2.0 omni takes videos; frame models take no references', () => {
   assert.equal(frameResult.strategy, 'none')
   assert.deepEqual(frameResult.refGroups, [])
 })
+
+test('a video recorded as an image in a folder is still sent as a video', () => {
+  const result = compileMentionsForModel(
+    'Extend @Klip',
+    [{ folderId: 'klip', name: 'Klip', selectedAssetIds: [] }],
+    [{ id: 'klip', name: 'Klip', type: 'general', assets: [{ id: 'k1', r2_url: '/canvas/api/r2-image/uploads/klip.mp4', type: 'image' }] }],
+    getModelById('seedance-2.5'),
+  )
+  assert.deepEqual(result.videoUrls, ['/canvas/api/r2-image/uploads/klip.mp4'])
+  assert.match(result.prompt, /@Video1/)
+})
