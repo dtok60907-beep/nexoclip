@@ -376,3 +376,46 @@ test('a Seedance task-type failure surfaces an actionable public message', async
       && /mode/i.test(error.publicMessage),
   );
 });
+
+function mediaHandler({ signedUrl }) {
+  const submitted = [];
+  const handler = createSaasVideoHandler({
+    pool: {
+      async query() { return { rows: [{ storage_key: 'clip-key', content_type: 'video/mp4' }] }; },
+      async connect() { return { release() {} }; },
+    },
+    storage: {
+      async createDownloadUrl({ key }) { return { url: signedUrl ? `${signedUrl}/${key}` : `local://download?key=${key}` }; },
+      async get() { return { body: Buffer.from('media'), contentType: 'audio/mpeg' }; },
+      async put() {},
+    },
+    providerRouter: {
+      async submitVideo(request) { submitted.push(request); return { id: 'provider-job', provider: 'byteplus' }; },
+      async pollVideo() { return { status: 'completed' }; },
+      async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
+    },
+    createAsset: async () => ({ id: 'output-1' }),
+    sleep: async () => {},
+  });
+  return { submitted, run: (parameters) => handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'bytedance/seedance-2.5', prompt: 'extend', parameters }) };
+}
+
+test('reference videos and audio are sent as pre-signed HTTPS URLs, not base64', async () => {
+  const setup = mediaHandler({ signedUrl: 'https://r2.example/signed' });
+
+  await setup.run({ referenceVideos: [assetUrl('clip')], referenceAudios: [assetUrl('voice')] });
+
+  assert.deepEqual(setup.submitted[0].referenceVideos, ['https://r2.example/signed/clip-key']);
+  assert.deepEqual(setup.submitted[0].referenceAudios, ['https://r2.example/signed/clip-key']);
+});
+
+test('a reference video on storage without public URLs fails with a clear message; audio falls back to base64', async () => {
+  const setup = mediaHandler({ signedUrl: null });
+
+  await assert.rejects(
+    setup.run({ referenceVideos: [assetUrl('clip')] }),
+    (error) => error.code === 'REFERENCE_MEDIA_NOT_PUBLIC' && /public object storage/.test(error.publicMessage),
+  );
+  await setup.run({ referenceAudios: [assetUrl('voice')] });
+  assert.match(setup.submitted[0].referenceAudios[0], /^data:audio\/mpeg;base64,/);
+});
