@@ -104,3 +104,9 @@ test('Seedance 2.0 takes up to 3 reference videos and 3 audio clips', () => {
   assert.throws(() => run({ referenceVideos: refs(1), referenceAudios: refs(4) }), /too many/);
   assert.equal(run({ returnLastFrame: true }).parameters.returnLastFrame, true);
 });
+
+test('an oversized image prompt says it is too long, not missing', async () => {
+  const { validateImageGenerationInput } = await import('../../src/services/generationService.js');
+  assert.throws(() => validateImageGenerationInput({ prompt: 'x'.repeat(10001), model: 'm' }), /too long \(10001\/10000/);
+  assert.throws(() => validateImageGenerationInput({ prompt: '', model: 'm' }), /required/);
+});

@@ -19,6 +19,7 @@ import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
 import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
+import { MAX_IMAGE_PROMPT_CHARS } from '@/lib/prompt-limits'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useImageTrust } from '@/hooks/use-image-trust'
@@ -134,6 +135,16 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const [status, setStatus] = useState<GenerationStatus>('idle')
   const [progress, setProgress] = useState<number | undefined>()
   const [error, setError] = useState<string | null>(null)
+  // Errors from an action in this session also go to a toast: the node's
+  // error strip can sit under its control bar. Syncing a stored error from
+  // node data calls setError directly, so a reload doesn't replay toasts.
+  // Poll failures use the generation's terminal toast id, so the toast the
+  // durable status effect raises for the same job replaces it.
+  const reportError = (message: string, toastId = `${id}-error`, tone: 'error' | 'warning' = 'error') => {
+    setError(message)
+    if (tone === 'warning') toast.warning(message, { id: toastId, duration: 10000 })
+    else toast.error(message, { id: toastId })
+  }
   const [outputUrl, setOutputUrl] = useState<string | null>(resolveNodeMediaUrl(data as Record<string, unknown>) || null)
   const [generationId, setGenerationId] = useState<string | null>(null)
   // Timestamp of the most recent submission. Powers the relative-age
@@ -447,7 +458,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     // user can re-check via the "Re-check" button.
     if (startTimeRef.current && Date.now() - startTimeRef.current > TIMEOUT_MS) {
       setStatus('failed')
-      setError('Still not finished after 45 minutes. The server may still complete it — use \'Re-check\' before generating again, so you don\'t pay twice.')
+      reportError('Still not finished after 45 minutes. The server may still complete it — use \'Re-check\' before generating again, so you don\'t pay twice.', `${id}-${reqId}-terminal`, 'warning')
       return true
     }
     try {
@@ -462,7 +473,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
       if (result.error) {
         setStatus('failed')
-        setError(result.error)
+        reportError(result.error, `${id}-${reqId}-terminal`)
         clearPending()
         return true
       }
@@ -516,7 +527,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           }
         } else {
           setStatus('failed')
-          setError('Provider completed without an image URL')
+          reportError('Provider completed without an image URL', `${id}-${reqId}-terminal`)
           clearPending()
         }
         return true
@@ -524,7 +535,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
       if (result.generationStatus === 'failed') {
         setStatus('failed')
-        setError(result.error || 'Generation failed')
+        reportError(result.error || 'Generation failed', `${id}-${reqId}-terminal`)
         clearPending()
         return true
       }
@@ -674,11 +685,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     }
     const { connected, prompt: compiledPrompt, mentions: promptMentions } = resolveIncomingPrompt(id, getNodes(), getEdges())
     if (!connected) {
-      setError('Connect a Text node first')
+      reportError('Connect a Text node first')
       return
     }
     if (!compiledPrompt) {
-      setError('Enter text in the connected Text node')
+      reportError('Enter text in the connected Text node')
       return
     }
     let connectedImageUrl: string | null = null
@@ -724,7 +735,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     // the reference would be silently dropped. Refuse rather than burn a paid
     // generation that ignores it.
     if (deadImageEdges > 0) {
-      setError(
+      reportError(
         deadImageEdges === 1
           ? 'A connected image node has no image yet — generate or upload it first (the reference would be ignored).'
           : `${deadImageEdges} connected image nodes have no image yet — generate or upload them first (those references would be ignored).`,
@@ -733,7 +744,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     }
 
     if (!currentModel) {
-      setError('Please select a model')
+      reportError('Please select a model')
       return
     }
 
@@ -768,7 +779,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (compiled.missingFolders.length > 0) {
       // A mentioned folder was deleted: its images are gone, so the provider
       // would get dead references. Say which ones instead of failing later.
-      setError(`Folder ${compiled.missingFolders.map((name) => `@${name}`).join(', ')} no longer exists. Remove it from the prompt or pick another folder.`)
+      reportError(`Folder ${compiled.missingFolders.map((name) => `@${name}`).join(', ')} no longer exists. Remove it from the prompt or pick another folder.`)
+      setStatus('idle')
+      setSubmittedAt(undefined)
+      return
+    }
+    // Same limit the server enforces; @mentions expand into long reference
+    // sentences, so the editor text can look much shorter than this.
+    if (compiled.prompt.length > MAX_IMAGE_PROMPT_CHARS) {
+      reportError(`Prompt is too long: ${compiled.prompt.length.toLocaleString()}/${MAX_IMAGE_PROMPT_CHARS.toLocaleString()} characters after @mentions are expanded. Shorten it or mention fewer folders.`)
       setStatus('idle')
       setSubmittedAt(undefined)
       return
