@@ -99,7 +99,6 @@ test('failed generation releases the reservation and timeout refund is idempoten
   assert.match(refundPool.calls.find(({ text }) => /INSERT INTO credit_ledger/.test(text)).values[3], /refund/);
 });
 
-<<<<<<< HEAD
 test('refunding a failed reserved generation twice writes the ledger only once', async () => {
   const pool = poolFor({ generationStatus: 'failed', estimatedCost: '10' });
   const first = await refundGenerationReservation(pool, { workspaceId: 'w1', generationId: 'g1' });
