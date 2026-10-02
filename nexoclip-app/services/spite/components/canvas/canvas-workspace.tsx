@@ -31,6 +31,7 @@ import {
   type XYPosition,
 } from '@xyflow/react'
 import { bufferDragChanges, createDragBufferState } from '@/lib/drag-position-buffer'
+import { createMeasurementCache, recordMeasurements, withMeasurements, type Measured } from '@/lib/node-measurements'
 import { ScissorsEdge } from './edges/scissors-edge'
 import { withNodeErrorBoundary } from './node-error-boundary'
 import {
@@ -438,8 +439,13 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [nodes])
 
   const dragBufferRef = useRef(createDragBufferState())
+  const measuredSizesRef = useRef(new Map<string, Measured>())
+  const measuredNodeCacheRef = useRef(createMeasurementCache())
   const [dragOverlay, setDragOverlay] = useState<ReadonlyMap<string, XYPosition>>(() => new Map())
   const onNodesChange = useCallback((changes: NodeChange[]) => {
+    // Sizes React Flow measured, restored onto nodes rebuilt from the
+    // document (see lib/node-measurements.ts).
+    recordMeasurements(measuredSizesRef.current, changes)
     const selectChanges = changes.filter((change) => change.type === 'select')
     if (selectChanges.length > 0) {
       const visibleNodeIds = new Set(nodes.map((node) => node.id))
@@ -1194,8 +1200,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // React Flow to re-diff the whole graph each time).
   const sceneNodes = useMemo(() => {
     const selectedIds = new Set(selectedNodeIds)
-    return (nodes as Node[]).map((documentNode) => {
-      const dragPosition = dragOverlay.get(documentNode.id)
+    return (nodes as Node[]).map((rawNode) => {
+      const dragPosition = dragOverlay.get(rawNode.id)
+      const documentNode = withMeasurements(rawNode, measuredSizesRef.current, measuredNodeCacheRef.current, Boolean(dragPosition))
       const node = dragPosition ? { ...documentNode, position: dragPosition } : documentNode
       const selected = selectedIds.has(node.id)
       // User-applied lock (node.data.locked, toggled from that node's own
