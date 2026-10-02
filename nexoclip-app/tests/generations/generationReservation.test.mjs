@@ -114,3 +114,23 @@ test('reserves the per-model price instead of the flat rule when the model is pr
   const ledger = pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text));
   assert.ok(ledger.values.includes(-5.2), `reservation ledger values: ${JSON.stringify(ledger.values)}`);
 });
+
+test('rejects an unpriced video before opening a transaction or reserving credits', async () => {
+  const pool = poolFor({ balance: '1000' });
+  await assert.rejects(
+    createImageGenerationJobWithReservation(pool, 'w1', {
+      kind: 'video', prompt: 'fox', model: 'veo-3', idempotencyKey: 'video-unpriced', operation: 'video_generation',
+    }, { userId: 'u1', priceGeneration: async () => null }),
+    (error) => error.code === 'UNPRICED_MODEL' && error.status === 422,
+  );
+  assert.equal(pool.calls.length, 0);
+});
+
+test('reserves a priced Seedance video normally', async () => {
+  const pool = poolFor({ balance: '1000', pricing: { pricingVersion: { id: 'pv1', version: 3 }, rule: { operation: 'video_generation', unit: 'job', unitPrice: '10.000000' } } });
+  await createImageGenerationJobWithReservation(pool, 'w1', {
+    kind: 'video', prompt: 'fox', model: 'seedance-2.0', idempotencyKey: 'video-seedance', operation: 'video_generation',
+  }, { userId: 'u1', priceGeneration: async () => ({ usd: 0.5, credits: 65 }) });
+  const ledger = pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text));
+  assert.ok(ledger.values.includes(-65), `reservation ledger values: ${JSON.stringify(ledger.values)}`);
+});

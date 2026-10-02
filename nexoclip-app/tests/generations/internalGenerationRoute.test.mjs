@@ -43,3 +43,27 @@ test('publishes a successfully reserved internal image generation', async () => 
   assert.deepEqual(reservations[0][3], { userId, allowLegacyCanvasReferences: true });
   assert.deepEqual(published, [{ pool: { id: 'pool' }, kind: 'image' }]);
 });
+
+test('rejects an unpriced Canvas video without publishing it', async () => {
+  let published = false;
+  const handler = createInternalGenerationHandler({
+    verify: () => true,
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
+    getPool: () => ({ id: 'pool' }),
+    reserve: async () => { throw Object.assign(new Error('Video model "veo-3" is not available yet. Please choose a Seedance model.'), { code: 'UNPRICED_MODEL', status: 422 }); },
+    publish: async () => { published = true; },
+    logError: () => {},
+  });
+  const response = await handler(new Request('http://app/api/internal/generations', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      action: 'submit', userId, projectId, nodeId: 'node-1', timestamp: 1, nonce: 'nonce', signature: 'signature',
+      input: { kind: 'video', prompt: 'fox', model: 'veo-3', idempotencyKey: 'key-unpriced' },
+    }),
+  }));
+  assert.equal(response.status, 422);
+  assert.deepEqual(await response.json(), {
+    error: 'Video model "veo-3" is not available yet. Please choose a Seedance model.', code: 'UNPRICED_MODEL',
+  });
+  assert.equal(published, false);
+});

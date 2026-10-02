@@ -3508,7 +3508,7 @@ export const getAspectRatiosForModel = (modelId) => {
 // ==========================================
 // Text-to-Video Models
 // ==========================================
-export const t2vModels = [
+const allT2vModels = [
   {
     "id": "seedance-lite-t2v",
     "name": "Seedance Lite",
@@ -7994,6 +7994,11 @@ export const t2vModels = [
   }
 ];
 
+// Only these Seedance families have complete server-side rates. Keep every
+// other paid video model out of Studio pickers until its pricing is configured.
+const isAvailableVideoModel = (model) => /seedance-2[.-](0|5)|seedance-v2\.0|seedance-1-5-pro|seedance-1-0-pro/i.test(String(model?.id || ''));
+export const t2vModels = allT2vModels.filter(isAvailableVideoModel);
+
 export const getVideoModelById = (id) => t2vModels.find(m => m.id === id);
 
 export const getAspectRatiosForVideoModel = (modelId) => {
@@ -11342,7 +11347,7 @@ export const i2iModels = [
 ];
 
 // Auto-generated from schema_data.json — Image to Video models
-export const i2vModels = [
+const allI2vModels = [
   {
     "id": "ai-video-effects",
     "name": "AI Video Effects",
@@ -19728,6 +19733,8 @@ export const i2vModels = [
   }
 ];
 
+export const i2vModels = allI2vModels.filter(isAvailableVideoModel);
+
 export const getI2IModelById = (id) => i2iModels.find(m => m.id === id);
 
 export const openRouterT2IModels = t2iModels.filter((model) => OPENROUTER_IMAGE_MODEL_MAP[model.id]);
@@ -19852,7 +19859,7 @@ export const getMaxImagesForI2IModel = (modelId) => {
 };
 
 // ─── Video-to-Video models ────────────────────────────────────────────────────
-export const v2vModels = [
+const allV2vModels = [
   {
     "id": "video-watermark-remover",
     "name": "AI Video Watermark Remover",
@@ -20260,7 +20267,7 @@ export const v2vModels = [
     "provider_name": "Kling AI"
   }
 ];
-export const openRouterV2VModels = v2vModels.filter((model) => OPENROUTER_V2V_MODEL_MAP[model.id]);
+export const openRouterV2VModels = allV2vModels.filter((model) => OPENROUTER_V2V_MODEL_MAP[model.id]);
 
 // ─── LipSync / Speech-to-Video models ────────────────────────────────────────
 // Image-based: portrait image + audio → talking video
@@ -20477,6 +20484,15 @@ export const lipsyncModels = [
     }
   }
 ];
+
+export const v2vModels = allV2vModels.filter(isAvailableVideoModel);
+// Exposed for product/support inventory and regression tests; this list is not
+// rendered in any picker.
+export const unavailableVideoModelIds = Object.freeze([...new Set([
+  ...allT2vModels,
+  ...allI2vModels,
+  ...allV2vModels,
+].filter((model) => !isAvailableVideoModel(model)).map((model) => model.id))]);
 
 export const getLipSyncModelById = (id) => lipsyncModels.find(m => m.id === id);
 

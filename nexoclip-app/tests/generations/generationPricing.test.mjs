@@ -47,6 +47,10 @@ test('Seedream uses BytePlus per-image prices, never OpenRouter', async () => {
   assert.equal(priced.credits, 5.2);
   const pro2k = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-5.0-pro-unfiltered', prompt: 'x', parameters: { resolution: '2K' } }, { fetchImpl, env: {} });
   assert.equal(pro2k.credits, 11.7);
+  const unfiltered45 = await estimateGenerationCredits({ kind: 'image', model: 'ep-20260907150312-xx7gf', prompt: 'x', parameters: {} }, { fetchImpl, env: {} });
+  const unfiltered5Lite = await estimateGenerationCredits({ kind: 'image', model: 'ep-20260907150433-zg8fr', prompt: 'x', parameters: {} }, { fetchImpl, env: {} });
+  assert.equal(unfiltered45.credits, 5.2);
+  assert.equal(unfiltered5Lite.credits, 4.6);
   assert.equal(fetched, false);
 });
 

@@ -115,7 +115,8 @@ export function createInternalGenerationHandler({
       });
       return Response.json({
         error: error?.message || 'Internal generation request failed',
-      }, { status: 500 });
+        code: error?.code,
+      }, { status: error?.status || 500 });
     }
   };
 }

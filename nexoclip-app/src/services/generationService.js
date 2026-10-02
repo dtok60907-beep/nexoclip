@@ -132,6 +132,14 @@ function admissionError(code, message, status) {
   return Object.assign(new Error(message), { code, status });
 }
 
+function unpricedVideoError(model) {
+  return admissionError(
+    'UNPRICED_MODEL',
+    `Video model "${model}" is not available yet. Please choose a Seedance model.`,
+    422,
+  );
+}
+
 function monthStart() {
   const date = new Date();
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -159,13 +167,17 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
   const validated = input?.kind === 'video' ? validateVideoGenerationInput(input, { allowLegacyCanvasReferences }) : validateImageGenerationInput(input);
   // Priced per model/resolution/duration before the transaction: it may
   // fetch live OpenRouter prices and must not hold row locks meanwhile.
-  // Unknown models fall back to the flat pricing rule below.
+  // Images without a model price retain the legacy pricing-rule fallback.
+  // Video must never do that: an unknown video price would undercharge a paid
+  // provider call, so it is unavailable until a complete price is configured.
   let modelPrice = null;
   try {
     modelPrice = await priceGeneration({ kind: validated.kind === 'video' ? 'video' : 'image', ...validated });
   } catch (error) {
+    if (validated.kind === 'video') throw unpricedVideoError(validated.model);
     console.error('[pricing] model price unavailable, using flat rule', validated.model, error?.message);
   }
+  if (validated.kind === 'video' && !modelPrice) throw unpricedVideoError(validated.model);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

@@ -112,6 +112,11 @@ const SEEDREAM_PRICES = [
   { match: /seedream-5-0-flash/, low: 0.018 },
   { match: /seedream-5-0(-lite)?|seedream-5\.0-lite/, low: 0.035 },
   { match: /seedream-4[.-]5/, low: 0.04 },
+  // Dedicated BytePlus endpoint IDs used by the Studio's two unfiltered
+  // Seedream variants. They do not include the family name, so without these
+  // entries they incorrectly fell back to the legacy 2.5-credit image rule.
+  { match: /ep-20260907150312-xx7gf/, low: 0.04 },
+  { match: /ep-20260907150433-zg8fr/, low: 0.035 },
   { match: /seedream-4-0/, low: 0.03 },
   { match: /seededit-3-0/, low: 0.03 },
   { match: /seedream-3/, low: 0.03 },
