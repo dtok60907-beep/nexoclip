@@ -14,6 +14,8 @@ import {
   findUserByEmail,
 } from '../repositories/userRepository.js';
 import { grantOnboardingCreditsInTransaction } from './creditPricingService.js';
+import { insertDefaultGenerationLimits } from '../repositories/generationLimitsRepository.js';
+import { DEFAULT_WORKSPACE_GENERATION_LIMITS } from './generationLimitDefaults.js';
 
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 30;
 
@@ -63,6 +65,7 @@ export async function registerUser({ email, password, displayName, workspaceName
       workspaceSlug: `${slugify(name)}-${cryptoRandomSuffix()}`,
     });
     const session = await createSessionForClient(client, user.id);
+    await insertDefaultGenerationLimits(client, workspace.id, DEFAULT_WORKSPACE_GENERATION_LIMITS);
     await grantOnboardingCreditsInTransaction(client, { workspaceId: workspace.id });
     await client.query('COMMIT');
     return { user, workspace, ...session };
@@ -115,6 +118,7 @@ export async function loginWithGoogle({ email, displayName }) {
         workspaceName: name,
         workspaceSlug: `${slugify(name)}-${cryptoRandomSuffix()}`,
       });
+      await insertDefaultGenerationLimits(client, created.workspace.id, DEFAULT_WORKSPACE_GENERATION_LIMITS);
       await grantOnboardingCreditsInTransaction(client, { workspaceId: created.workspace.id });
       user = created.user;
     }

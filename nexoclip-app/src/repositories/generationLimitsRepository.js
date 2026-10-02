@@ -30,3 +30,22 @@ export async function sumBudgetGenerations(client, workspaceId, periodStart) {
   );
   return Number(result.rows[0]?.total || 0);
 }
+
+export async function insertDefaultGenerationLimits(client, workspaceId, limits) {
+  const result = await client.query(
+    `INSERT INTO workspace_generation_limits
+       (workspace_id, rate_limit, rate_window_seconds, max_concurrent, budget_credits, budget_period)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (workspace_id) DO NOTHING
+     RETURNING workspace_id, rate_limit, rate_window_seconds, max_concurrent, budget_credits, budget_period`,
+    [
+      workspaceId,
+      limits.rate_limit,
+      limits.rate_window_seconds,
+      limits.max_concurrent,
+      limits.budget_credits,
+      limits.budget_period,
+    ],
+  );
+  return result.rows[0] || null;
+}

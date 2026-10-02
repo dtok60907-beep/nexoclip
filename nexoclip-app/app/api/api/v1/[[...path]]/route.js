@@ -1,67 +1,16 @@
-import { NextResponse } from 'next/server';
-
-const MUAPI_BASE = 'https://api.muapi.ai';
-
-// The browser never holds the raw MuAPI key (apiKey is hardcoded null client-side,
-// see StandaloneShell.js) — inject it here, server-side only, like the OpenRouter route.
-function getApiKey() {
-    return process.env.MUAPI_API_KEY || null;
+// Retired: this proxy injected the platform MUAPI_API_KEY for any caller with no
+// session or workspace auth. Generation goes through the credited /api/generations.
+function retired() {
+    return Response.json(
+        { error: { code: 'ENDPOINT_RETIRED', message: 'This endpoint has been retired. Use /api/generations.' } },
+        { status: 410 },
+    );
 }
 
-function cleanHeaders(request) {
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-    headers.delete('connection');
-    headers.delete('cookie');
-    headers.delete('x-api-key');
-    return headers;
+export async function GET() {
+    return retired();
 }
 
-// Proxies /api/api/v1/* -> https://api.muapi.ai/api/v1/*
-// This is required because the AiAgent library hardcodes a double /api/api
-export async function GET(request, { params }) {
-    const apiKey = getApiKey();
-    if (!apiKey) return NextResponse.json({ error: 'MuAPI is not configured' }, { status: 503 });
-
-    const slug = await params;
-    const pathSegments = slug.path || [];
-    const path = pathSegments.join('/');
-
-    const { search } = new URL(request.url);
-    const targetUrl = `${MUAPI_BASE}/api/v1/${path}${search}`;
-
-    const headers = cleanHeaders(request);
-    headers.set('x-api-key', apiKey);
-
-    try {
-        const response = await fetch(targetUrl, { headers, method: 'GET' });
-        const data = await response.json();
-        return NextResponse.json(data, { status: response.status });
-    } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-}
-
-export async function POST(request, { params }) {
-    const apiKey = getApiKey();
-    if (!apiKey) return NextResponse.json({ error: 'MuAPI is not configured' }, { status: 503 });
-
-    const slug = await params;
-    const pathSegments = slug.path || [];
-    const path = pathSegments.join('/');
-
-    const { search } = new URL(request.url);
-    const targetUrl = `${MUAPI_BASE}/api/v1/${path}${search}`;
-
-    const headers = cleanHeaders(request);
-    headers.set('x-api-key', apiKey);
-
-    try {
-        const body = await request.arrayBuffer();
-        const response = await fetch(targetUrl, { method: 'POST', headers, body });
-        const data = await response.json();
-        return NextResponse.json(data, { status: response.status });
-    } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+export async function POST() {
+    return retired();
 }
