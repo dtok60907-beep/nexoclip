@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as v1 from '../../app/api/api/v1/[[...path]]/route.js';
 import * as workflow from '../../app/api/workflow/[[...path]]/route.js';
 
@@ -25,36 +26,35 @@ function withStubs(fn) {
 const ctx = (...path) => ({ params: Promise.resolve({ path }) });
 
 test('/api/api/v1 GET and POST are retired (410) and make no upstream fetch', withStubs(async (calls) => {
-  for (const [method, handler] of [['GET', v1.GET], ['POST', v1.POST]]) {
-    const res = await handler(new Request('http://app/api/api/v1/models', { method, ...(method === 'POST' ? { body: '{}' } : {}) }), ctx('models'));
+  for (const [method, handler] of [['GET', v1.GET], ['POST', v1.POST], ['PUT', v1.PUT], ['PATCH', v1.PATCH], ['DELETE', v1.DELETE], ['OPTIONS', v1.OPTIONS], ['HEAD', v1.HEAD]]) {
+    const res = await handler(new Request('http://app/api/api/v1/models', { method, ...(['POST', 'PUT', 'PATCH'].includes(method) ? { body: '{}' } : {}) }), ctx('models'));
     assert.equal(res.status, 410);
+    if (method !== 'HEAD') assert.equal((await res.json()).error.code, 'ENDPOINT_RETIRED');
+  }
+  assert.equal(calls.length, 0);
+}));
+
+test('/api/workflow is retired on every method (410) and makes no upstream fetch', withStubs(async (calls) => {
+  const cases = [
+    ['GET', workflow.GET, ['get-workflow-defs']],
+    ['GET', workflow.GET, ['get-workflow-def', 'wf-1']],
+    ['POST', workflow.POST, ['wf-1', 'run']],
+    ['POST', workflow.POST, ['architect']],
+    ['POST', workflow.POST, ['publish', 'wf-1']],
+    ['PUT', workflow.PUT, ['update-name', 'wf-1']],
+    ['PATCH', workflow.PATCH, ['wf-1']],
+    ['DELETE', workflow.DELETE, ['delete-workflow', 'wf-1']],
+  ];
+  for (const [method, handler, path] of cases) {
+    const init = { method, headers: { 'x-api-key': 'user-key' }, ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }) };
+    const res = await handler(new Request(`http://app/api/workflow/${path.join('/')}`, init), ctx(...path));
+    assert.equal(res.status, 410, `${method} ${path.join('/')}`);
     assert.equal((await res.json()).error.code, 'ENDPOINT_RETIRED');
   }
   assert.equal(calls.length, 0);
 }));
 
-test('/api/workflow never forwards the platform key when the client sends none', withStubs(async (calls) => {
-  const cases = [
-    ['GET', workflow.GET, ['get-workflow-def', 'wf-1']],
-    ['POST', workflow.POST, ['wf-1', 'run']],
-    ['POST', workflow.POST, ['architect']],
-    ['PUT', workflow.PUT, ['update-name', 'wf-1']],
-    ['DELETE', workflow.DELETE, ['delete-workflow', 'wf-1']],
-  ];
-  for (const [method, handler, path] of cases) {
-    const init = { method, ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }) };
-    await handler(new Request(`http://app/api/workflow/${path.join('/')}`, init), ctx(...path));
-  }
-  assert.equal(calls.length, cases.length);
-  for (const call of calls) {
-    assert.equal(call.headers.has('x-api-key'), false, `${call.method} ${call.url}`);
-    assert.doesNotMatch(JSON.stringify([...call.headers]), new RegExp(PLATFORM_KEY));
-  }
-}));
-
-test('/api/workflow treats literal "null" x-api-key as absent and forwards a real client key', withStubs(async (calls) => {
-  await workflow.GET(new Request('http://app/api/workflow/x', { headers: { 'x-api-key': 'null' } }), ctx('x'));
-  await workflow.GET(new Request('http://app/api/workflow/x', { headers: { 'x-api-key': 'user-key' } }), ctx('x'));
-  assert.equal(calls[0].headers.has('x-api-key'), false);
-  assert.equal(calls[1].headers.get('x-api-key'), 'user-key');
-}));
+test('/api/workflow route never references MUAPI_API_KEY', () => {
+  const src = readFileSync(new URL('../../app/api/workflow/[[...path]]/route.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /MUAPI_API_KEY/);
+});

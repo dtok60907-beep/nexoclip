@@ -14,3 +14,23 @@ export async function GET() {
 export async function POST() {
     return retired();
 }
+
+export async function PUT() {
+    return retired();
+}
+
+export async function PATCH() {
+    return retired();
+}
+
+export async function DELETE() {
+    return retired();
+}
+
+export async function OPTIONS() {
+    return retired();
+}
+
+export async function HEAD() {
+    return new Response(null, { status: 410 });
+}

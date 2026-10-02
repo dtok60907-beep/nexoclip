@@ -42,7 +42,6 @@ set +a
   -e NODE_ENV=production \
   -e POSTGRES_PASSWORD \
   -e DATABASE_URL_SPITE \
-  -e MUAPI_API_KEY \
   -e MUAPI_BASE_URL \
   -e LOCAL_OBJECT_STORAGE_SECRET \
   -e CANVAS_AUTH_URL \

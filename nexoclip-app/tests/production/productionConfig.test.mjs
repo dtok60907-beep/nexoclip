@@ -43,3 +43,21 @@ test('rejects missing realtime secrets and public database credentials without e
 test('does not require production-only values for development', () => {
   assert.deepEqual(validateProductionEnvironment({ NODE_ENV: 'development' }), { ok: true, errors: [] });
 });
+
+test('MUAPI_API_KEY is optional: unset or empty does not fail the production check', () => {
+  const base = {
+    NODE_ENV: 'production',
+    DATABASE_URL_SPITE: 'postgres://user:pw@db.example/spite',
+    LOCAL_OBJECT_STORAGE_SECRET: 'long-production-secret',
+    CANVAS_AUTH_URL: 'http://spite-realtime:3007/internal/authorize',
+    CANVAS_AUTH_HMAC_SECRET: 'canvas-hmac-secret',
+    REALTIME_JWT_SECRET: 'realtime-jwt-secret',
+    NEXOCLIP_INTERNAL_URL: 'http://nexoclip:3000',
+    NEXT_PUBLIC_REALTIME_URL: '/spite/ws',
+    POSTGRES_PASSWORD: 'a-production-postgres-password-0123',
+  };
+  assert.deepEqual(validateProductionEnvironment(base), { ok: true, errors: [] });
+  assert.deepEqual(validateProductionEnvironment({ ...base, MUAPI_API_KEY: '' }), { ok: true, errors: [] });
+  const missing = validateProductionEnvironment({ ...base, REALTIME_JWT_SECRET: '' });
+  assert.equal(missing.ok, false);
+});

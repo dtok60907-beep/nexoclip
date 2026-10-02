@@ -125,7 +125,7 @@ function WorkflowCard({ workflow, onClick, activeTab, onRename, onDelete }) {
   );
 }
 
-export default function WorkflowStudio({
+function WorkflowStudioInner({
   apiKey,
   isHeaderVisible = true,
   onToggleHeader,
@@ -1012,3 +1012,22 @@ export default function WorkflowStudio({
     </div>
   );
 }
+
+// The /api/workflow backend is retired (410). Render a clear unavailable state
+// instead of mounting the builder, which would fetch and error repeatedly.
+// Restore `WorkflowStudioInner` as the default export once the builder is
+// rebuilt on OpenRouter / the metered pipeline.
+export default function WorkflowStudio() {
+  return (
+    <div className="h-full w-full flex items-center justify-center p-8">
+      <div className="max-w-md text-center">
+        <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">Workflows</h1>
+        <p className="text-white/50 text-sm">
+          The Workflow builder is temporarily unavailable. Please check back later.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export { WorkflowStudioInner };
