@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useRef, type PointerEvent } from 'react'
+import { memo, useRef, useState, type PointerEvent } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
 import { TextB } from '@phosphor-icons/react'
 
@@ -10,18 +10,16 @@ import { useCanvasCollaboration } from '../canvas-collaboration'
 import { useBoardText, MAX_BOARD_TEXT_LENGTH } from '@/hooks/use-board-text'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { BOARD_COLORS, readBoardColor } from '@/lib/board-colors'
+import { MIN_TEXT_WIDTH as MIN_WIDTH, readFontSize, readTextSize, scaleTextLabel, type TextSize } from '@/lib/text-label-size'
 
-export const TEXT_SIZES = { s: 14, m: 20, l: 32, xl: 48 } as const
-type TextSize = keyof typeof TEXT_SIZES
 const MAX_AUTO_WIDTH = 720
-const MIN_WIDTH = 60
-
-function readSize(value: unknown): TextSize {
-  return typeof value === 'string' && value in TEXT_SIZES ? value as TextSize : 'm'
-}
+type Drag =
+  | { kind: 'width'; startX: number; startWidth: number; zoom: number }
+  | { kind: 'scale'; startX: number; fontSize: number; renderedWidth: number; width?: number; zoom: number }
 
 // A borderless text label for titles and section headings. It grows with its
-// text until given a width (drag the right edge), then wraps.
+// text until given a width (drag the right edge), then wraps; dragging the
+// corner scales the text itself.
 function TextLabelNodeImpl({ id, data, selected }: NodeProps) {
   const record = data as Record<string, unknown>
   const { patchNodeData } = useCanvasCollaboration()
@@ -29,47 +27,62 @@ function TextLabelNodeImpl({ id, data, selected }: NodeProps) {
   const user = useCurrentUser()
   const isNewByMe = !record.text && Boolean(user) && record.createdBy === user?.id
   const { text, editing, startEditing, stopEditing, change, canEdit } = useBoardText(id, record, { editOnMount: isNewByMe })
-  const size = readSize(record.size)
+  const size = readTextSize(record.size)
+  const customSize = typeof record.fontSize === 'number'
   const bold = record.bold === true
   const colorId = readBoardColor(record.color, 'yellow')
   const color = record.color ? BOARD_COLORS[colorId].text : '#e2e8f0'
-  const width = typeof record.width === 'number' ? record.width : undefined
-  const resizeRef = useRef<{ startX: number; startWidth: number; zoom: number } | null>(null)
+  const storedWidth = typeof record.width === 'number' ? record.width : undefined
+  const dragRef = useRef<Drag | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
+  // Live size while a handle is dragged; written to the node on release.
+  const [preview, setPreview] = useState<{ fontSize?: number; width?: number } | null>(null)
+  const fontSize = preview?.fontSize ?? readFontSize(record)
+  const width = preview && 'width' in preview ? preview.width : storedWidth
 
   const font = {
-    fontSize: TEXT_SIZES[size],
+    fontSize,
     lineHeight: 1.2,
     fontWeight: bold ? 700 : 500,
     color,
   }
 
-  const startResize = (event: PointerEvent<HTMLDivElement>) => {
+  const sizeFor = (drag: Drag, clientX: number) => drag.kind === 'width'
+    ? { width: Math.round(Math.max(MIN_WIDTH, drag.startWidth + (clientX - drag.startX) / drag.zoom)) }
+    : scaleTextLabel(drag, clientX - drag.startX, drag.zoom)
+
+  const startDrag = (kind: Drag['kind']) => (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
-    resizeRef.current = { startX: event.clientX, startWidth: boxRef.current?.offsetWidth ?? width ?? 200, zoom: getZoom() || 1 }
+    const renderedWidth = boxRef.current?.offsetWidth ?? storedWidth ?? 200
+    const zoom = getZoom() || 1
+    dragRef.current = kind === 'width'
+      ? { kind, startX: event.clientX, startWidth: renderedWidth, zoom }
+      : { kind, startX: event.clientX, fontSize: readFontSize(record), renderedWidth, width: storedWidth, zoom }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
-  const resize = (event: PointerEvent<HTMLDivElement>) => {
-    const start = resizeRef.current
-    if (!start || !boxRef.current) return
-    boxRef.current.style.width = `${Math.max(MIN_WIDTH, start.startWidth + (event.clientX - start.startX) / start.zoom)}px`
+  const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current) setPreview(sizeFor(dragRef.current, event.clientX))
   }
-  const finishResize = (event: PointerEvent<HTMLDivElement>) => {
-    const start = resizeRef.current
-    resizeRef.current = null
-    if (!start) return
-    const next = Math.round(Math.max(MIN_WIDTH, start.startWidth + (event.clientX - start.startX) / start.zoom))
-    patchNodeData(id, { width: next })
+  const endDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    dragRef.current = null
+    setPreview(null)
+    if (drag) patchNodeData(id, sizeFor(drag, event.clientX))
+  }
+  const cancelDrag = () => {
+    dragRef.current = null
+    setPreview(null)
   }
 
   const sizeButton = (value: TextSize, label: string) => (
     <button
       key={value}
       type="button"
-      onClick={() => patchNodeData(id, { size: value })}
-      aria-pressed={size === value}
-      className={`h-6 min-w-6 rounded-md px-1 text-[10px] font-semibold ${size === value ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+      // A preset replaces any size set by dragging the corner.
+      onClick={() => patchNodeData(id, { size: value, fontSize: undefined })}
+      aria-pressed={!customSize && size === value}
+      className={`h-6 min-w-6 rounded-md px-1 text-[10px] font-semibold ${!customSize && size === value ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
       title={`Size ${label}`}
     >
       {label}
@@ -135,16 +148,27 @@ function TextLabelNodeImpl({ id, data, selected }: NodeProps) {
           ) : null}
         </div>
 
-        {selected && canEdit ? (
-          <div
-            className="nodrag absolute -right-1.5 top-1/2 h-4 w-1.5 -translate-y-1/2 cursor-ew-resize rounded-full bg-white/70"
-            onPointerDown={startResize}
-            onPointerMove={resize}
-            onPointerUp={finishResize}
-            onPointerCancel={() => { resizeRef.current = null }}
-            title="Drag to set the width"
-            aria-label="Resize width"
-          />
+        {canEdit && !editing ? (
+          <>
+            <div
+              className={`nodrag absolute -right-2 top-1/2 h-5 w-1.5 -translate-y-1/2 cursor-ew-resize touch-none rounded-full bg-white/70 transition-opacity ${selected || preview ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              onPointerDown={startDrag('width')}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={cancelDrag}
+              title="Drag to set the width (text wraps)"
+              aria-label="Resize width"
+            />
+            <div
+              className={`nodrag absolute -bottom-2 -right-2 h-3 w-3 cursor-nwse-resize touch-none rounded-sm border border-slate-900 bg-white transition-opacity ${selected || preview ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              onPointerDown={startDrag('scale')}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={cancelDrag}
+              title="Drag to resize the text"
+              aria-label="Resize text"
+            />
+          </>
         ) : null}
       </div>
     </div>
