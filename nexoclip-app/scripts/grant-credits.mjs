@@ -94,7 +94,7 @@ function evaluate(ctx, { workspaceId, credits, ref, idempotencyKey }) {
 
 function budgetWarnings(ctx, balanceAfter) {
   if (ctx.budget > 0 && balanceAfter > ctx.budget) {
-    return [`Balance after top-up (${balanceAfter}) exceeds the workspace monthly budget_credits (${ctx.budget}); generations will be blocked by the budget limit until it is raised. Limits were not changed.`];
+    return [`Balance after top-up (${balanceAfter}) exceeds the workspace monthly budget_credits (${ctx.budget}); generations may be blocked once this month's spend reaches the budget, until it is raised. Limits were not changed.`];
   }
   return [];
 }

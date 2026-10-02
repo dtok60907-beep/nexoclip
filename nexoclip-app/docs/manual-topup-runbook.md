@@ -75,11 +75,15 @@ Koreksi kesalahan: ledger bersifat append-only, jangan UPDATE/DELETE. Koreksi di
 (reason `manual_topup_reversal`, key `manual_topup_reversal:<ref>`).
 PENDING: script belum punya flag `--reverse`. Sampai ditambahkan, minta engineer menjalankan reversal
 melalui `appendCreditEntry` (src/services/creditService.js); jangan edit saldo dengan SQL langsung.
+PERHATIAN: reversal GAGAL ("Insufficient credits") bila sebagian kredit sudah terpakai customer, karena
+saldo tidak boleh negatif. Cek saldo dulu; jika saldo < jumlah top-up, reversal hanya bisa sebagian
+(sebesar saldo tersisa) dan selisihnya diselesaikan secara bisnis (refund/penagihan) dengan keputusan Founder.
 
 ## 5. Menaikkan budget bulanan workspace
 
 `workspace_generation_limits.budget_credits` membatasi pemakaian per bulan kalender (0 = tanpa batas).
-Jika customer membeli lebih besar dari budget bulanannya, script mencetak WARNING dan tidak mengubah limit.
+Jika saldo setelah top-up melebihi budget bulanannya, script mencetak WARNING (generasi mungkin diblokir
+setelah pemakaian bulan ini mencapai budget) dan tidak mengubah limit.
 Menaikkan budget (butuh persetujuan Founder atas default limits):
 
     UPDATE workspace_generation_limits
