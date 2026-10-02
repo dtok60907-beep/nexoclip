@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Sparkle, ShareNetwork, ChatCircleDots } from '@phosphor-icons/react'
+import { Sparkle, ChatCircleDots } from '@phosphor-icons/react'
 import { useState } from 'react'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
 import type { RemotePresencePeer } from '@/lib/realtime/presence'
@@ -63,7 +63,6 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
       <div className="flex items-center gap-1">
         <CreditBalanceBadge />
         <button className="flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.06] px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-white/[0.1]" title="Ask agent"><ChatCircleDots size={14} /> <span className="hidden sm:inline">Mengobrol</span></button>
-        <button className="flex h-7 items-center gap-1.5 rounded-lg bg-white px-2.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-100" title="Share"><ShareNetwork size={14} /> <span className="hidden sm:inline">Bagikan</span></button>
         <div className="mx-1 h-4 w-px bg-white/10" />
         {onFollowGuest && <CanvasGuestList peers={guests} onFollow={onFollowGuest} />}
 
