@@ -8,7 +8,13 @@ import { persistGenerationResult } from '../services/generationOutputService.js'
 import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
 import { recoverQueuedGenerations, generationQueueName } from './generationQueue.js';
 import { createGenerationProcessor } from './generationWorker.js';
-import { recoverUnreservedGenerations } from '../services/generationCreditSettlementService.js';
+import { recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
+import { recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
+
+// A worker killed mid-job leaves the job 'running' with credits reserved. The
+// provider call may already have been made (and paid), so an expired image job
+// is failed and fully refunded, never re-queued.
+const EXPIRED_GRACE_MS = 2 * 60 * 1000;
 
 export function imageWorkerConfig(env = process.env) {
   if (!env.REDIS_URL) throw new Error('REDIS_URL is required');
@@ -21,6 +27,8 @@ export async function createImageWorker({
   env = process.env, Redis = IORedis, loadPool = getPool, closeDatabasePool = closePool,
   createQueue = createBullMqGenerationQueue, createHandler = createDefaultSaasImageHandler,
   recover = recoverQueuedGenerations, recoverUnreserved = recoverUnreservedGenerations,
+  recoverExpired = recoverExpiredGenerationJobs, releaseCredits = releaseGenerationReservation,
+  settleUnreserved = settleUnreservedGeneration,
   persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
@@ -29,7 +37,16 @@ export async function createImageWorker({
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
   const pool = loadPool();
   const queue = createQueue({ Queue, Worker, connection, queueName: generationQueueName('image') });
-  const recoverNow = async () => { await recoverUnreserved(pool); return recover({ pool, queue, kind: 'image' }); };
+  const recoverNow = async () => {
+    await recoverUnreserved(pool);
+    const expired = await recoverExpired(pool, { kind: 'image', graceMs: EXPIRED_GRACE_MS, requeue: false });
+    for (const job of expired) {
+      if (job.status !== 'failed') continue;
+      if (job.reservationLedgerId === null) await settleUnreserved(pool, { workspaceId: job.workspaceId, generationId: job.id, status: 'failed' });
+      else await releaseCredits(pool, { workspaceId: job.workspaceId, generationId: job.id });
+    }
+    return recover({ pool, queue, kind: 'image' });
+  };
   await recoverNow();
   const interval = schedule(() => recoverNow().catch(onError), 30_000);
   interval.unref?.();

@@ -128,3 +128,39 @@ test('records the provider task id only for the current claim', async () => {
   assert.match(pool.calls[0].text, /claim_token = \$2/);
   assert.deepEqual(pool.calls[0].values, ['g1', 'c1', 'byteplus', 'cgt-1']);
 });
+
+function expiredClient(rows) {
+  const calls = [];
+  return {
+    calls, release() {},
+    async query(text, values) {
+      calls.push({ text, values });
+      if (/FOR UPDATE SKIP LOCKED/.test(text)) return { rows };
+      return { rows: [] };
+    },
+  };
+}
+
+test('requeue:false fails a non-exhausted expired job instead of re-queueing it', async () => {
+  const client = expiredClient([
+    { id: 'img', workspace_id: 'w1', attempt_count: 1, max_attempts: 3, reservation_ledger_id: 'l1', timeout_at: '2026-08-13T23:50:00.000Z' },
+    { id: 'old', workspace_id: 'w1', attempt_count: 1, max_attempts: 3, reservation_ledger_id: null, timeout_at: '2026-08-10T00:00:00.000Z' },
+  ]);
+  const recovered = await recoverExpiredGenerationJobs({ connect: async () => client }, {
+    now: '2026-08-14T00:00:00.000Z', kind: 'image', graceMs: 120000, staleAfterMs: 6 * 60 * 60 * 1000, requeue: false,
+  });
+  assert.deepEqual(recovered.map((job) => [job.id, job.status, job.reservationLedgerId]), [['img', 'failed', 'l1'], ['old', 'failed', null]]);
+  assert.ok(!client.calls.some((call) => /SET status = 'queued'/.test(call.text)));
+  const expiredUpdate = client.calls.find((call) => /GENERATION_LEASE_EXPIRED/.test(call.text));
+  assert.match(expiredUpdate.text, /SET status = 'failed'/);
+  assert.doesNotMatch(expiredUpdate.text, /attempt_count >= max_attempts/);
+  assert.equal(expiredUpdate.values[0], 'img');
+  assert.ok(client.calls.some((call) => /GENERATION_LEASE_STALE/.test(call.text) && call.values[0] === 'old'));
+});
+
+test('default expired recovery still re-queues a non-exhausted job', async () => {
+  const client = expiredClient([{ id: 'vid', workspace_id: 'w1', attempt_count: 1, max_attempts: 3, reservation_ledger_id: 'l1', timeout_at: '2026-08-13T23:50:00.000Z' }]);
+  const recovered = await recoverExpiredGenerationJobs({ connect: async () => client }, { now: '2026-08-14T00:00:00.000Z' });
+  assert.equal(recovered[0].status, 'queued');
+  assert.ok(client.calls.some((call) => /SET status = 'queued'/.test(call.text)));
+});
