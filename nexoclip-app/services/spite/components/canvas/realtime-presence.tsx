@@ -122,6 +122,14 @@ function PresenceCursor({
           {peer.name}
         </div>
       </div>
+      {peer.cursorChat ? (
+        <div
+          className="ml-5 mt-1 max-w-[260px] whitespace-pre-wrap break-words rounded-2xl rounded-tl-sm px-3 py-1.5 text-[12px] font-medium shadow-lg"
+          style={{ background: peer.color.cursor, color: '#0b0c11' }}
+        >
+          {peer.cursorChat.text || <span className="opacity-60">typing…</span>}
+        </div>
+      ) : null}
     </div>
   )
 }

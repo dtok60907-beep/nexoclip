@@ -58,8 +58,13 @@ import { CanvasToolbar } from './canvas-toolbar'
 import { nodeHasNoMedia } from '@/lib/node-media'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { JobsPanel } from './jobs-panel'
+import { CommentNode } from './nodes/comment-node'
+import { ChatPanel } from './chat-panel'
+import { CursorChatInput } from './cursor-chat-input'
+import { useCanvasChat } from '@/hooks/use-canvas-chat'
+import { useCurrentUser } from '@/hooks/use-current-user'
 import { LeftToolbar, type Asset } from './left-toolbar'
-import { BottomBar } from './bottom-bar'
+import { BottomBar, type CanvasTool } from './bottom-bar'
 import { GenerationSettingsPanel } from './generation-settings-panel'
 import { SceneTimeline, type Shot } from './scene-timeline'
 import { AlignmentGuides, computeAlignmentGuides } from './alignment-guides'
@@ -86,6 +91,7 @@ const NODE_TYPES: NodeTypes = {
   prompt: withNodeErrorBoundary(PromptNode),
   reference: withNodeErrorBoundary(ReferenceNode),
   compress: withNodeErrorBoundary(CompressNode),
+  comment: withNodeErrorBoundary(CommentNode),
 }
 
 const EDGE_TYPES: EdgeTypes = {
@@ -299,6 +305,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [])
   const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
   const [localDeviceId] = useState(() => (typeof window === 'undefined' ? '' : getOrCreateDeviceHint()))
+  const [localParticipantId] = useState(() => (typeof window === 'undefined' ? '' : getOrCreateParticipantHint()))
   const selectedSceneNodeIdsRef = useRef<string[]>([])
   const lockedNodeIdsRef = useRef<Set<string>>(new Set())
   const [presenceNow, setPresenceNow] = useState(() => Date.now())
@@ -325,6 +332,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // Right-side jobs panel: open/close state lives here so the panel
   // survives canvas re-renders and stays open while the user pans/zooms.
   const [jobsPanelOpen, setJobsPanelOpen] = useState(false)
+  // Project chat shares the right-side slot with the Jobs panel.
+  const [chatOpen, setChatOpen] = useState(false)
+  const currentUser = useCurrentUser()
+  const chat = useCanvasChat({ doc: realtime.doc, projectId, user: currentUser, open: chatOpen })
   // Count of jobs currently running on this canvas — used to show a
   // small accent dot on the toolbar's Jobs button so the user knows
   // something is in flight even when the panel is closed.
@@ -339,7 +350,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
   )
 
   // Active tool state
-  const [activeTool, setActiveTool] = useState<'select' | 'hand' | 'cut'>('select')
+  const [activeTool, setActiveTool] = useState<CanvasTool>('select')
+  // Resolved comment pins stay out of the way unless asked for.
+  const [showResolvedComments, setShowResolvedComments] = useState(false)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1077,7 +1090,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // the Delete key for explicit removal.
       if (e.key === 'Delete') deleteSelected()
 
-      if (e.key === 'Escape') setContextMenu(null)
+      if (e.key === 'Escape') {
+        setContextMenu(null)
+        setActiveTool((tool) => (tool === 'comment' ? 'select' : tool))
+      }
+      // C: comment tool (plain key only; Ctrl+C stays copy).
+      if (key === 'c' && !ctrl && !e.altKey && !e.shiftKey && allowDocumentMutation) setActiveTool('comment')
     }
 
     // Paste — image from system clipboard takes priority; falls back to node clipboard
@@ -1201,6 +1219,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const sceneNodes = useMemo(() => {
     const selectedIds = new Set(selectedNodeIds)
     return (nodes as Node[]).map((rawNode) => {
+      if (rawNode.type === 'comment' && !showResolvedComments && (rawNode.data as Record<string, unknown> | undefined)?.resolved === true) {
+        return rawNode.hidden ? rawNode : { ...rawNode, hidden: true }
+      }
       const dragPosition = dragOverlay.get(rawNode.id)
       const documentNode = withMeasurements(rawNode, measuredSizesRef.current, measuredNodeCacheRef.current, Boolean(dragPosition))
       const node = dragPosition ? { ...documentNode, position: dragPosition } : documentNode
@@ -1242,7 +1263,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }
       return nextNode
     })
-  }, [dragOverlay, lockedNodeIds, nodes, selectedNodeIds])
+  }, [dragOverlay, lockedNodeIds, nodes, selectedNodeIds, showResolvedComments])
   const selectedSceneNodeIds = useMemo(
     () => sceneNodes.filter(node => node.selected).map(node => node.id),
     [sceneNodes],
@@ -1386,7 +1407,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
         projectId={projectId}
         readOnly={readOnly}
         jobsPanelOpen={jobsPanelOpen}
-        onToggleJobsPanel={() => setJobsPanelOpen(v => !v)}
+        onToggleJobsPanel={() => { setChatOpen(false); setJobsPanelOpen(v => !v) }}
+        chatOpen={chatOpen}
+        chatUnread={chat.unread}
+        onToggleChat={() => { setJobsPanelOpen(false); setChatOpen(v => !v) }}
         activeJobCount={activeJobCount}
         guests={visiblePresence}
         onFollowGuest={handleFollowGuest}
@@ -1395,6 +1419,18 @@ function CanvasInner({ projectId }: { projectId: string }) {
       {/* Right-side jobs panel — fixed position, doesn't capture canvas
           clicks so the user can pan/zoom/edit while it stays open. */}
       <JobsPanel open={jobsPanelOpen} onClose={() => setJobsPanelOpen(false)} />
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        messages={chat.messages}
+        selfId={currentUser?.id ?? null}
+        canSend={chat.canSend}
+        readOnly={readOnly}
+        muted={chat.muted}
+        onToggleMuted={chat.toggleMuted}
+        onSend={chat.send}
+        onDelete={chat.remove}
+      />
 
       <div
         className="flex-1 relative"
@@ -1450,7 +1486,17 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 // pointer-events:none; server lease remains the mutation gate.
                 presenceControllerRef.current?.startDragLock(node.id)
               }}
-              onPaneClick={() => {
+              onPaneClick={(event) => {
+                // Comment tool: drop a pin where the user clicked, then go
+                // back to the cursor so the next click selects as usual.
+                if (activeTool === 'comment') {
+                  if (allowDocumentMutation && currentUser) {
+                    const position = screenToFlowPosition({ x: event.clientX - 18, y: event.clientY - 34 })
+                    commands.createNode(makeNode('comment', position, 'Comment', activeSceneId, { createdBy: currentUser.id, resolved: false }))
+                  }
+                  setActiveTool('select')
+                  return
+                }
                 // Leaving a node releases its transient interaction lock.
                 presenceControllerRef.current?.stopDragLock()
                 setSettingsNodeId(null)
@@ -1478,7 +1524,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               className="spite-react-flow"
               style={{
                 background: '#0c0d12',
-                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' ? 'crosshair' : 'default'
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' || activeTool === 'comment' ? 'crosshair' : 'default'
               }}
               proOptions={{ hideAttribution: true }}
               // Keep nodes mounted while they are off-screen. Generator polling,
@@ -1522,6 +1568,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
           nodes={sceneNodes}
           viewport={viewport}
         />
+        <CursorChatInput
+          enabled={!readOnly}
+          participantId={localParticipantId}
+          onPublish={(state) => presenceControllerRef.current?.publishCursorChat(state)}
+        />
 
         {/* Asset/history panels remain mounted; their former left toolbar is hidden
             and all actions are now driven by the bottom toolbar. */}
@@ -1562,6 +1613,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
           onRecenter={handleRecenter}
           activeTool={activeTool}
           onSetTool={setActiveTool}
+          showResolvedComments={showResolvedComments}
+          onToggleResolvedComments={() => setShowResolvedComments(v => !v)}
           onAddNode={addNode}
           onAssetAction={(action) => window.dispatchEvent(new CustomEvent('spite:bottom-toolbar-action', { detail: action }))}
           onUndo={undo}

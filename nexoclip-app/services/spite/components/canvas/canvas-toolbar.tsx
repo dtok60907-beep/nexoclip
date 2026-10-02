@@ -22,9 +22,12 @@ interface CanvasToolbarProps {
   activeJobCount?: number
   guests?: RemotePresencePeer[]
   onFollowGuest?: (peer: RemotePresencePeer) => void
+  chatOpen?: boolean
+  chatUnread?: number
+  onToggleChat?: () => void
 }
 
-export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = false, guests = [], onFollowGuest }: CanvasToolbarProps) {
+export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = false, guests = [], onFollowGuest, chatOpen = false, chatUnread = 0, onToggleChat }: CanvasToolbarProps) {
   const [editing, setEditing] = useState(false)
 
   return (
@@ -62,7 +65,20 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
       {/* Right */}
       <div className="flex items-center gap-1">
         <CreditBalanceBadge />
-        <button className="flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.06] px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-white/[0.1]" title="Ask agent"><ChatCircleDots size={14} /> <span className="hidden sm:inline">Mengobrol</span></button>
+        <button
+          type="button"
+          onClick={onToggleChat}
+          aria-pressed={chatOpen}
+          className={`relative flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${chatOpen ? 'border-white/20 bg-white/[0.14] text-white' : 'border-white/[0.08] bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]'}`}
+          title="Project chat"
+        >
+          <ChatCircleDots size={14} /> <span className="hidden sm:inline">Mengobrol</span>
+          {chatUnread > 0 ? (
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white" aria-label={`${chatUnread} unread`}>
+              {chatUnread > 99 ? '99+' : chatUnread}
+            </span>
+          ) : null}
+        </button>
         <div className="mx-1 h-4 w-px bg-white/10" />
         {onFollowGuest && <CanvasGuestList peers={guests} onFollow={onFollowGuest} />}
 
