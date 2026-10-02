@@ -911,13 +911,7 @@ export function LeftToolbar({
                                 >
                                   <div className="w-7 h-7 rounded overflow-hidden bg-card border border-border/30 shrink-0 flex items-center justify-center">
                                     {f.assets[0]?.r2_url ? (
-                                      <img
-                                        src={f.assets[0].r2_url}
-                                        alt=""
-                                        className="w-full h-full object-cover"
-                                        loading="lazy"
-                                        decoding="async"
-                                      />
+                                      <AssetThumb url={f.assets[0].r2_url} type={f.assets[0].type === 'video' || f.assets[0].type === 'audio' ? f.assets[0].type : 'image'} audioIconSize={11} />
                                     ) : (
                                       <Icon size={11} className="text-muted-foreground/30" />
                                     )}
@@ -1101,13 +1095,7 @@ export function LeftToolbar({
                       >
                         <div className="aspect-video bg-[#0D0F12] relative overflow-hidden">
                           {f.assets[0]?.r2_url ? (
-                            <img
-                              src={f.assets[0].r2_url}
-                              alt=""
-                              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-                              loading="lazy"
-                              decoding="async"
-                            />
+                            <AssetThumb url={f.assets[0].r2_url} type={f.assets[0].type === 'video' || f.assets[0].type === 'audio' ? f.assets[0].type : 'image'} audioIconSize={24} />
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/30">
                               {(() => {
@@ -2362,7 +2350,7 @@ export function LeftToolbar({
                           </button>
                           <div className="w-10 h-10 rounded overflow-hidden shrink-0 bg-card border border-border/30">
                             {folder.assets[0]?.r2_url ? (
-                              <img src={folder.assets[0].r2_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                              <AssetThumb url={folder.assets[0].r2_url} type={folder.assets[0].type === 'video' || folder.assets[0].type === 'audio' ? folder.assets[0].type : 'image'} audioIconSize={14} />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <cat.icon size={14} className="text-muted-foreground/30" />
