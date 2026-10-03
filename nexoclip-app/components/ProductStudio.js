@@ -115,7 +115,48 @@ export default function ProductStudio({
   // Status Generate & Galeri
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
-  const [generatedResults, setGeneratedResults] = useState([]);
+  const [generatedResults, setGeneratedResults] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('nexoclip_product_studio_history');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return [];
+  });
+  const [generationElapsed, setGenerationElapsed] = useState(0);
+
+  useEffect(() => {
+    let timer;
+    if (isGenerating) {
+      setGenerationElapsed(0);
+      timer = setInterval(() => {
+        setGenerationElapsed((sec) => sec + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isGenerating]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('nexoclip_product_studio_history', JSON.stringify(generatedResults));
+      } catch {}
+    }
+  }, [generatedResults]);
+
+  const formatTimer = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const getStageMessage = (sec) => {
+    if (sec < 10) return 'Menganalisis proporsi geometri & tekstur produk...';
+    if (sec < 25) return 'Mensimulasikan tata cahaya softbox studio komersial...';
+    if (sec < 42) return 'Merender detail pencahayaan & material 2048x2048 Ultra HD...';
+    return 'Menyelesaikan sentuhan akhir & kompresi studio shot...';
+  };
   const [fullscreenImage, setFullscreenImage] = useState(null);
 
   // Popover State: 'model' | 'scene' | 'ar' | 'linkModal' | null
@@ -409,16 +450,75 @@ ${agentInfo?.suggested_prompt || ''}
       
       {/* ── MAIN CONTENT AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 pt-4 px-4 sm:px-6 flex flex-col items-center justify-center">
-        {generatedResults.length > 0 ? (
+        {isGenerating ? (
+          <div className="flex flex-col items-center justify-center p-8 bg-white/85 backdrop-blur-2xl rounded-3xl border border-[#A175FF]/30 shadow-2xl max-w-lg w-full text-center animate-fade-in my-auto">
+            <div className="relative mb-5">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-[#A175FF] to-[#22d3ee] p-0.5 shadow-xl animate-pulse">
+                <div className="w-full h-full bg-[#110C2A] rounded-2xl flex items-center justify-center overflow-hidden">
+                  {selectedImage ? (
+                    <img src={selectedImage} alt="" className="w-full h-full object-cover opacity-85" />
+                  ) : (
+                    <span className="text-3xl">✨</span>
+                  )}
+                </div>
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-[#22d3ee] rounded-full flex items-center justify-center shadow-md animate-spin">
+                <span className="text-[12px] text-black font-bold">⚡</span>
+              </div>
+            </div>
+
+            <h3 className="text-base font-extrabold text-[#110C2A] mb-1">
+              BytePlus SeaDream 5.0 Studio
+            </h3>
+            <p className="text-xs text-[#110C2A]/70 font-medium mb-4 max-w-sm h-8 flex items-center justify-center">
+              {getStageMessage(generationElapsed)}
+            </p>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-[#110C2A]/10 h-2.5 rounded-full overflow-hidden mb-3 relative">
+              <div
+                className="bg-gradient-to-r from-[#A175FF] via-purple-500 to-[#22d3ee] h-full rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `${Math.min(96, Math.max(8, (generationElapsed / 45) * 100))}%` }}
+              ></div>
+            </div>
+
+            {/* Timer & Details */}
+            <div className="flex items-center justify-between w-full text-[11px] font-semibold text-[#110C2A]/60 px-1">
+              <span className="flex items-center gap-1 text-[#6c3df4] font-bold">
+                <span>⏱️</span>
+                <span>{formatTimer(generationElapsed)}</span>
+              </span>
+              <span>Perkiraan: ~35-45 detik</span>
+              <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-800 font-bold text-[10px]">
+                2048x2048 HD
+              </span>
+            </div>
+          </div>
+        ) : generatedResults.length > 0 ? (
           <div className="w-full flex flex-col gap-4 animate-fade-in">
             <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-3">
               <div>
                 <h2 className="text-lg font-bold text-[#110C2A]">Galeri Hasil Photoshoot</h2>
                 <p className="text-xs text-[#110C2A]/60">Ditenagai oleh BytePlus SeaDream 5.0 Studio</p>
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-[#A175FF]/15 text-[#110C2A] font-semibold">
-                {generatedResults.length} foto dihasilkan
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2.5 py-1 rounded-full bg-[#A175FF]/15 text-[#110C2A] font-semibold">
+                  {generatedResults.length} foto dihasilkan
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Bersihkan semua hasil foto di galeri?')) {
+                      setGeneratedResults([]);
+                      try { localStorage.removeItem('nexoclip_product_studio_history'); } catch {}
+                    }
+                  }}
+                  className="text-xs text-[#110C2A]/50 hover:text-red-500 font-semibold px-2 py-1 rounded-lg hover:bg-black/5 transition-colors"
+                  title="Hapus riwayat galeri"
+                >
+                  Bersihkan
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1252,7 +1352,7 @@ ${agentInfo?.suggested_prompt || ''}
               {isGenerating ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-[#110C2A]/40 border-t-[#110C2A] rounded-full animate-spin"></span>
-                  <span className="whitespace-nowrap">Generating...</span>
+                  <span className="whitespace-nowrap">Generating ({formatTimer(generationElapsed)})...</span>
                 </>
               ) : (
                 <span className="whitespace-nowrap">Generate · 2.5 credits ✦</span>
