@@ -919,32 +919,33 @@ ${agentInfo?.suggested_prompt || ''}
 
               {/* ── CREATIVE DIRECTOR CONCEPTS STRIP ── */}
               {(creativeCampaigns.length > 0 || productData) && (
-                <div className="bg-[#181528] text-white rounded-2xl p-2.5 px-3.5 border border-[#A175FF]/30 shadow-lg flex flex-col gap-2 animate-fade-in">
+                <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2.5 px-3 border border-[#A175FF]/30 shadow-sm flex flex-col gap-2 animate-fade-in text-[#110C2A]">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">🎨</span>
-                      <span className="font-extrabold text-xs text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="text-base">🎨</span>
+                      <span className="font-black text-xs text-[#6c3df4] uppercase tracking-wide flex items-center gap-1.5">
                         <span>Creative Director Agent</span>
-                        <span className="text-[9px] font-normal px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                          5 Variasi Sudut
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#A175FF]/15 text-[#6c3df4] border border-[#A175FF]/30">
+                          5 Variasi Sudut 3D
                         </span>
                       </span>
-                      <span className="text-[10px] text-white/40 hidden md:inline">•</span>
-                      <span className="text-[10px] text-white/70 hidden lg:inline">
-                        Pilih sudut kamera & komposisi artistik:
+                      <span className="text-[11px] text-[#110C2A]/40 hidden md:inline">•</span>
+                      <span className="text-[11px] text-[#110C2A]/75 font-medium hidden lg:inline">
+                        Pilih sudut kamera dinamis untuk mengatasi foto statis:
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
                       {/* Toggle Mode Sudut Kamera 3D vs Kunci Siluet */}
-                      <div className="flex items-center bg-white/10 rounded-xl p-0.5 border border-white/10 text-[10px]">
+                      <div className="flex items-center bg-[#110C2A]/5 p-0.5 rounded-xl border border-[#110C2A]/10 text-[10px]">
                         <button
                           type="button"
                           onClick={() => setReferenceMode('creative_3d')}
-                          className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
+                          style={referenceMode === 'creative_3d' ? { backgroundColor: '#110C2A', color: '#ffffff' } : { color: '#110C2A' }}
+                          className={`px-2.5 py-1 rounded-lg font-extrabold transition-all ${
                             referenceMode === 'creative_3d'
-                              ? 'bg-[#A175FF] text-white shadow-xs'
-                              : 'text-white/60 hover:text-white'
+                              ? 'bg-[#110C2A] text-white shadow-xs'
+                              : 'text-[#110C2A]/70 hover:text-[#110C2A]'
                           }`}
                           title="Sudut Bebas 3D: AI merender perspektif baru dari berbagai sudut (low-angle, macro, splash) tanpa terkunci siluet foto 2D depan"
                         >
@@ -953,10 +954,11 @@ ${agentInfo?.suggested_prompt || ''}
                         <button
                           type="button"
                           onClick={() => setReferenceMode('guided')}
-                          className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
+                          style={referenceMode === 'guided' ? { backgroundColor: '#110C2A', color: '#ffffff' } : { color: '#110C2A' }}
+                          className={`px-2.5 py-1 rounded-lg font-extrabold transition-all ${
                             referenceMode === 'guided'
-                              ? 'bg-[#A175FF] text-white shadow-xs'
-                              : 'text-white/60 hover:text-white'
+                              ? 'bg-[#110C2A] text-white shadow-xs'
+                              : 'text-[#110C2A]/70 hover:text-[#110C2A]'
                           }`}
                           title="Kunci Siluet: Pertahankan bentuk dan posisi foto asli 1:1"
                         >
@@ -969,7 +971,7 @@ ${agentInfo?.suggested_prompt || ''}
                         type="button"
                         onClick={() => handleBrainstormConcepts()}
                         disabled={isBrainstorming}
-                        className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/90 transition-all flex items-center gap-1 border border-white/10"
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#6c3df4] border border-[#A175FF]/30 transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
                         title="Minta Creative Agent merancang ide sudut baru"
                       >
                         <span>🎲</span>
@@ -988,19 +990,32 @@ ${agentInfo?.suggested_prompt || ''}
                           key={camp.id}
                           type="button"
                           onClick={() => applyCreativeConcept(camp)}
-                          className={`px-3 py-1.5 rounded-xl text-left shrink-0 transition-all border flex items-center gap-2 ${
+                          style={isSelected ? { backgroundColor: '#110C2A', color: '#ffffff', borderColor: '#110C2A' } : {}}
+                          className={`px-3 py-1.5 rounded-xl text-left shrink-0 transition-all border flex items-center gap-2.5 cursor-pointer ${
                             isSelected
-                              ? 'bg-gradient-to-r from-[#A175FF] to-[#8042f4] text-white border-white/40 shadow-md ring-2 ring-[#A175FF]/50 scale-[1.02]'
-                              : 'bg-white/5 hover:bg-white/10 text-white/85 border-white/10 hover:border-white/20'
+                              ? 'bg-[#110C2A] text-white border-[#110C2A] shadow-md ring-2 ring-[#A175FF]/40 scale-[1.02]'
+                              : 'bg-white hover:bg-purple-50/70 text-[#110C2A] border-[#110C2A]/15 hover:border-[#A175FF]/40 shadow-xs'
                           }`}
                         >
-                          <span className="text-base">{icon}</span>
+                          <span className="text-base shrink-0">{icon}</span>
                           <div className="flex flex-col">
-                            <span className="text-[11px] font-bold leading-tight">{camp.title}</span>
-                            <span className="text-[9px] opacity-75 leading-tight">{camp.badge}</span>
+                            <span
+                              style={isSelected ? { color: '#ffffff' } : { color: '#110C2A' }}
+                              className="text-xs font-bold leading-tight block"
+                            >
+                              {camp.title}
+                            </span>
+                            <span
+                              style={isSelected ? { color: '#fcd34d' } : { color: '#6c3df4' }}
+                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded mt-0.5 inline-block leading-tight ${
+                                isSelected ? 'bg-white/10' : 'bg-[#A175FF]/15'
+                              }`}
+                            >
+                              {camp.badge}
+                            </span>
                           </div>
                           {isSelected && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-1"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 ml-1 shrink-0"></span>
                           )}
                         </button>
                       );
@@ -1034,24 +1049,24 @@ ${agentInfo?.suggested_prompt || ''}
                   {agentInfo ? (
                     <div className="flex flex-col gap-3">
                       {/* 🎨 Creative Commercial Director Matrix Hub */}
-                      <div className="bg-[#181528] text-white p-3.5 rounded-xl border border-[#A175FF]/30 flex flex-col gap-3 shadow-md">
-                        <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
+                      <div className="bg-gradient-to-br from-purple-50/80 via-white to-amber-50/50 p-4 rounded-2xl border border-[#A175FF]/30 flex flex-col gap-3 shadow-sm text-[#110C2A]">
+                        <div className="flex items-center justify-between pb-2 border-b border-[#110C2A]/10 flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <span className="text-base">🎨</span>
-                            <span className="font-extrabold text-sm text-amber-300">
+                            <span className="font-black text-sm text-[#110C2A]">
                               Creative Commercial Director Matrix
                             </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#A175FF]/20 text-[#c8aeff] border border-[#A175FF]/30">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#A175FF]/15 text-[#6c3df4] border border-[#A175FF]/30">
                               5 Sudut Kamera 3D
                             </span>
                           </div>
-                          <span className="text-[11px] text-white/60">
+                          <span className="text-xs text-[#110C2A]/60">
                             Mengatasi foto statis dengan variasi sudut & aksi sinematik
                           </span>
                         </div>
 
                         {creativeDirectorVision && (
-                          <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-xs italic text-amber-200/90 flex items-start gap-2">
+                          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs italic text-amber-950 flex items-start gap-2">
                             <span className="text-sm shrink-0">💡</span>
                             <span>"{creativeDirectorVision}"</span>
                           </div>
@@ -1063,19 +1078,20 @@ ${agentInfo?.suggested_prompt || ''}
                             e.preventDefault();
                             handleBrainstormConcepts(brainstormInput);
                           }}
-                          className="flex items-center gap-2 bg-white/5 p-1.5 rounded-xl border border-white/10"
+                          className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-[#110C2A]/15 shadow-inner"
                         >
                           <input
                             type="text"
                             value={brainstormInput}
                             onChange={(e) => setBrainstormInput(e.target.value)}
                             placeholder="Instruksi Creative Director (cth: tema badai salju es, flatlay di ranjang satin, dll)..."
-                            className="flex-1 bg-transparent px-2.5 py-1 text-xs text-white placeholder:text-white/40 outline-none"
+                            className="flex-1 bg-transparent px-2.5 py-1 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 outline-none"
                           />
                           <button
                             type="submit"
                             disabled={isBrainstorming}
-                            className="px-3 py-1.5 rounded-lg bg-[#A175FF] hover:bg-[#8e5af8] text-white font-bold text-xs shrink-0 transition-colors flex items-center gap-1"
+                            style={{ backgroundColor: '#110C2A', color: '#ffffff' }}
+                            className="px-3.5 py-1.5 rounded-lg bg-[#110C2A] hover:bg-black text-white font-bold text-xs shrink-0 transition-colors flex items-center gap-1 shadow-xs"
                           >
                             <span>✨</span>
                             <span>{isBrainstorming ? 'Merancang...' : 'Rombak Konsep'}</span>
@@ -1090,35 +1106,35 @@ ${agentInfo?.suggested_prompt || ''}
                             return (
                               <div
                                 key={camp.id}
-                                className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all ${
+                                className={`p-3 rounded-xl border flex flex-col justify-between gap-2.5 transition-all text-[#110C2A] ${
                                   isSelected
-                                    ? 'bg-[#251f3d] border-[#A175FF] ring-2 ring-[#A175FF]/30'
-                                    : 'bg-white/5 border-white/10 hover:border-white/20'
+                                    ? 'bg-purple-50/90 border-[#A175FF] ring-2 ring-[#A175FF]/30 shadow-sm'
+                                    : 'bg-white border-[#110C2A]/15 hover:border-[#A175FF]/40 shadow-xs'
                                 }`}
                               >
-                                <div className="flex flex-col gap-1">
+                                <div className="flex flex-col gap-1.5">
                                   <div className="flex items-center justify-between">
-                                    <span className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                                    <span className="font-black text-xs text-[#110C2A] flex items-center gap-1.5">
                                       <span>{icon}</span>
                                       <span>{camp.title}</span>
                                     </span>
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-900 border border-amber-500/30">
                                       {camp.badge}
                                     </span>
                                   </div>
-                                  <p className="text-[11px] text-white/70 leading-relaxed">
+                                  <p className="text-[11px] text-[#110C2A]/80 leading-relaxed font-normal">
                                     {camp.description}
                                   </p>
                                 </div>
 
-                                <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                                <div className="flex items-center gap-2 pt-2 border-t border-[#110C2A]/10">
                                   <button
                                     type="button"
                                     onClick={() => {
                                       applyCreativeConcept(camp);
                                       setIsAgentDrawerOpen(false);
                                     }}
-                                    className="flex-1 py-1 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] transition-colors flex items-center justify-center gap-1"
+                                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-white hover:bg-purple-100 text-[#6c3df4] border border-[#A175FF]/30 font-bold text-xs transition-colors flex items-center justify-center gap-1 shadow-xs"
                                   >
                                     <span>{isSelected ? '✓ Terpilih' : 'Gunakan Sudut Ini'}</span>
                                   </button>
@@ -1128,7 +1144,8 @@ ${agentInfo?.suggested_prompt || ''}
                                       applyCreativeConcept(camp, true);
                                       setIsAgentDrawerOpen(false);
                                     }}
-                                    className="py-1 px-2.5 rounded-lg bg-[#22d3ee] hover:bg-cyan-300 text-black font-extrabold text-[11px] transition-colors flex items-center justify-center gap-1"
+                                    style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
+                                    className="py-1.5 px-3 rounded-xl bg-[#A175FF] hover:bg-[#8e5af8] text-white font-extrabold text-xs transition-colors flex items-center justify-center gap-1 shadow-xs"
                                     title="Langsung generate sudut ini dengan BytePlus SeaDream"
                                   >
                                     <span>⚡ Generate</span>

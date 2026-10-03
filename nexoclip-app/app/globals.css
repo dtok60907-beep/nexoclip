@@ -62,8 +62,10 @@ body {
 .nexoclip-studio-shell header .text-white\/60 { color: rgba(17, 12, 42, 0.60) !important; }
 .nexoclip-studio-shell header .text-white\/80 { color: rgba(17, 12, 42, 0.80) !important; }
 /* Creative studio pages inherit the warm theme; replace legacy white utility text. */
-.nexoclip-studio-shell [class*="text-white/"] { color: rgba(17, 12, 42, 0.72) !important; }
-.nexoclip-studio-shell [class~="text-white"] { color: #110C2A !important; }
+.nexoclip-studio-shell [class*="text-white/"]:not(.keep-white) { color: rgba(17, 12, 42, 0.72) !important; }
+.nexoclip-studio-shell [class~="text-white"]:not(.keep-white) { color: #110C2A !important; }
+.nexoclip-studio-shell .keep-white,
+.nexoclip-studio-shell .keep-white * { color: #ffffff !important; }
 .nexoclip-studio-shell [class*="bg-[#0a0a0a]"] { background-color: rgba(255, 255, 255, 0.78) !important; }
 .nexoclip-studio-shell [class*="bg-[#0d0d0f]"] { background-color: #FFF6DE !important; }
 
