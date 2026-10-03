@@ -1053,24 +1053,30 @@ ${agentInfo?.suggested_prompt || ''}
                         <span>🎲</span>
                         <span>{isBrainstorming ? 'Merancang...' : 'Ide Baru'}</span>
                       </button>
-
-                      {/* Tombol Batch Generate Semua 5 Sudut */}
-                      <button
-                        type="button"
-                        onClick={handleBatchGenerateAllCampaigns}
-                        disabled={isGenerating}
-                        style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
-                        className="text-[11px] font-extrabold px-3 py-1 rounded-xl bg-[#A175FF] hover:bg-[#8e5af8] text-white transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-                        title="Generate kelima sudut pemotretan komersial sekaligus"
-                      >
-                        <span>🎬</span>
-                        <span>Generate 5 Sudut Sekaligus</span>
-                      </button>
                     </div>
                   </div>
 
                   {/* Horizontal Scrollable Pills of Creative Angles */}
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar w-full">
+                    {/* VIP Batch Action Card: Generate Semua 5 Sudut (1 Klik) */}
+                    <button
+                      type="button"
+                      onClick={handleBatchGenerateAllCampaigns}
+                      disabled={isGenerating}
+                      style={{ backgroundColor: '#110C2A', color: '#ffffff', borderColor: '#110C2A' }}
+                      className="px-3.5 py-1.5 rounded-xl text-left shrink-0 transition-all border border-[#110C2A] bg-[#110C2A] hover:bg-black text-white shadow-md flex items-center gap-2.5 cursor-pointer active:scale-95 disabled:opacity-50"
+                      title="Jalankan pemotretan untuk kelima sudut komersial secara paralel"
+                    >
+                      <span className="text-base shrink-0">🎬</span>
+                      <div className="flex flex-col">
+                        <span style={{ color: '#ffffff' }} className="text-xs font-black leading-tight block">
+                          Generate 5 Sudut Sekaligus
+                        </span>
+                        <span style={{ color: '#fcd34d' }} className="text-[10px] font-bold bg-white/10 px-1.5 py-0.2 rounded mt-0.5 inline-block leading-tight">
+                          ⚡ Paket Lengkap (1 Klik)
+                        </span>
+                      </div>
+                    </button>
                     {(creativeCampaigns.length > 0 ? creativeCampaigns : getInitialCampaigns(editedTitle || agentInfo?.name || productData?.title, agentInfo?.visual_details)).map((camp) => {
                       const isSelected = selectedCampaignId === camp.id;
                       const icon = camp.id.includes('splash') ? '🌊' : camp.id.includes('low') || camp.id.includes('hero') ? '🚀' : camp.id.includes('macro') ? '🔍' : camp.id.includes('hand') || camp.id.includes('life') ? '🖐️' : '🌌';
@@ -1834,11 +1840,11 @@ ${agentInfo?.suggested_prompt || ''}
                 )}
               </div>
 
-              {/* 5. Watermark Toggle Pill */}
+              {/* 5. Watermark Toggle Pill (Compact) */}
               <button
                 type="button"
                 onClick={() => setIsWatermarkEnabled((prev) => !prev)}
-                className={`h-[38px] flex items-center gap-1.5 px-3 rounded-md transition-all border text-xs font-bold whitespace-nowrap shadow-inner cursor-pointer ${
+                className={`h-[38px] flex items-center gap-1.5 px-2.5 rounded-md transition-all border text-xs font-bold whitespace-nowrap shadow-inner cursor-pointer ${
                   !isWatermarkEnabled
                     ? 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30 hover:bg-emerald-500/20'
                     : 'bg-black/5 text-[#110C2A]/60 border-[#110C2A]/15 hover:bg-black/10'
@@ -1846,7 +1852,7 @@ ${agentInfo?.suggested_prompt || ''}
                 title={!isWatermarkEnabled ? 'Watermark AI Generated dinonaktifkan (Hasil bersih profesional)' : 'Watermark AI Generated diaktifkan'}
               >
                 <span>{!isWatermarkEnabled ? '✨' : '🏷️'}</span>
-                <span>{!isWatermarkEnabled ? 'Watermark: OFF (Bersih)' : 'Watermark: ON'}</span>
+                <span>{!isWatermarkEnabled ? 'No Watermark' : 'Watermark: ON'}</span>
               </button>
 
             </PromptControls>
