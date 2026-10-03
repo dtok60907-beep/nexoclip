@@ -8,6 +8,7 @@ import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check,
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { GeneratorNodeToolbar } from './node-toolbar'
+import { GenerationGallery } from '../generation-gallery'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
@@ -1205,6 +1206,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         event.stopPropagation()
       }}
     >
+      {/* Run history: latest results under the node, and the Gallery. */}
+      <GenerationGallery nodeId={id} data={data as Record<string, unknown>} selected={selected} />
       <GeneratorNodeToolbar
         nodeId={id}
         selected={selected}

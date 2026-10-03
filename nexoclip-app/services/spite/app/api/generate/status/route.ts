@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { assetExpiresAt } from '@/lib/retention'
 import { createTerminalGenerationPatch } from '@/lib/durable-generation'
+import { terminalHistoryPatch } from '@/lib/generation-history'
 import {
   createNexoClipGenerationClient,
   type NexoClipGenerationClient,
@@ -70,17 +71,22 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
       // the most expensive part of this route, so the document is only read
       // once the job is terminal and its result has to be written to the node.
       const generation = await createGenerationClient().status({ userId: user.id, projectId, nodeId, generationId })
-      const patch = createTerminalGenerationPatch(generation)
+      const terminalPatch = createTerminalGenerationPatch(generation)
       const realtime = createRealtimeClient()
-      const document = mobile || !patch ? undefined : await realtime.exportDocument({ userId: user.id, projectId })
+      const document = mobile || !terminalPatch ? undefined : await realtime.exportDocument({ userId: user.id, projectId })
       const node = document?.projection.nodes.find((candidate) => candidate.id === nodeId)
+      // The finished run also lands in the node's gallery.
+      const historyPatch = terminalPatch && node
+        ? terminalHistoryPatch(generation, terminalPatch.outputUrl as string | undefined, node.data as Record<string, unknown>)
+        : null
+      const patch = terminalPatch ? { ...terminalPatch, ...historyPatch } : null
       const matchesNode = node && (
         node.data.generationId === generationId
         || node.data.lastGenerationId === generationId
       )
       if (!mobile && patch && !matchesNode) return projectNotFoundResponse()
       if (patch && node && (
-        Object.entries(patch).some(([key, value]) => node.data[key] !== value)
+        Object.entries(patch).some(([key, value]) => JSON.stringify(node.data[key]) !== JSON.stringify(value))
         || (['succeeded', 'failed'].includes(generation.status) && typeof node.data.generationId === 'string')
       )) {
         try {
