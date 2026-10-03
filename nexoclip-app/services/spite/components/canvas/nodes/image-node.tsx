@@ -8,6 +8,7 @@ import { Handle, NodeResizer, Position, NodeProps, useReactFlow, useUpdateNodeIn
 import { CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { GeneratorNodeToolbar } from './node-toolbar'
+import { GenerationGallery } from '../generation-gallery'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
@@ -1030,6 +1031,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         event.stopPropagation()
       }}
     >
+      {/* Run history: latest results under the node, and the Gallery. */}
+      <GenerationGallery nodeId={id} data={data as Record<string, unknown>} selected={selected} />
       <GeneratorNodeToolbar
         nodeId={id}
         selected={selected}

@@ -100,6 +100,8 @@ test('submits an owned image node as a durable NexoClip generation and patches i
     generationId: 'generation-1', generationStatus: 'queued', generationError: null,
     status: 'in_queue', error: null,
     submittedAt: (patches[0] as any).set.submittedAt,
+    // The run is recorded in the node's gallery as queued.
+    'gen:generation-1': { id: 'generation-1', kind: 'image', status: 'queued', startedAt: (patches[0] as any).set['gen:generation-1'].startedAt },
   })
   assert.equal(typeof (patches[0] as any).set.submittedAt, 'number')
 })
@@ -545,7 +547,10 @@ test('writes a successful durable generation result to the owned canvas node onc
   assert.equal(response.status, 200)
   assert.deepEqual(patches[0], {
     userId: OWNER_ID, projectId: PROJECT_ID, nodeId: 'node-1',
-    set: { lastGenerationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null },
+    set: {
+      lastGenerationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null,
+      'gen:g1': { id: 'g1', kind: 'image', status: 'succeeded', outputUrl: '/api/assets/a/download', finishedAt: (patches[0] as any).set['gen:g1'].finishedAt },
+    },
     unset: ['generationId'],
   })
 })
@@ -566,6 +571,7 @@ test('returns an idempotent terminal result after its active generation marker i
     createInternalRealtimeClient: () => ({
       exportDocument: async () => ({ projection: canvasWithNode('node-1', 'imageGen', {
         lastGenerationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null,
+        'gen:g1': { id: 'g1', kind: 'image', status: 'succeeded', outputUrl: '/api/assets/a/download', finishedAt: 5 },
       }), durableSeq: 1, projectedSeq: 1 }),
       patchNodeData: async (patch: unknown) => { patches.push(patch) },
     }) as any,

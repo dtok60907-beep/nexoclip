@@ -6,6 +6,7 @@ import {
   type NexoClipGenerationClient,
 } from '@/lib/nexoclip-generation-client'
 import { createQueuedGenerationPatch } from '@/lib/durable-generation'
+import { queuedHistoryPatch } from '@/lib/generation-history'
 import { getModelById } from '@/lib/fal-models'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import { mentionStateKey, type PersistedMention } from '@/lib/mention-state'
@@ -67,9 +68,11 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
 
       const realtime = createRealtimeClient()
       let durablePromptState: DurablePromptState | null = null
+      let nodeData: Record<string, unknown> | undefined
       if (!mobile) {
         const document = await realtime.exportDocument({ userId: user.id, projectId })
         const node = document.projection.nodes.find((candidate) => candidate.id === nodeId)
+        nodeData = node?.data as Record<string, unknown> | undefined
         if (!node || node.type !== (kind === 'image' ? 'imageGen' : 'videoGen')) return projectNotFoundResponse()
         if (!batchExtra && typeof node.data.generationId === 'string' && ['queued', 'processing', 'running'].includes(String(node.data.generationStatus))) {
           return NextResponse.json({ error: 'This node already has an active generation' }, { status: 409 })
@@ -105,11 +108,14 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         input: { kind, prompt, model, parameters, idempotencyKey: `spite:${projectId}:${nodeId}:${crypto.randomUUID()}` },
       })
       if (!mobile && !batchExtra) {
+        // Record the run in the node's gallery (and drop its oldest runs).
+        const history = queuedHistoryPatch(generation, nodeData)
         await realtime.patchNodeData({
           userId: user.id,
           projectId,
           nodeId,
-          set: createQueuedGenerationPatch(generation),
+          set: { ...createQueuedGenerationPatch(generation), ...history.set },
+          ...(history.unset.length ? { unset: history.unset } : {}),
         })
       }
 

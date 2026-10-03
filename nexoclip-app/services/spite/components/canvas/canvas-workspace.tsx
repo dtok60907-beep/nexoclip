@@ -66,6 +66,7 @@ import { TableNode } from './nodes/table-node'
 import { DrawingNode, ERASER_ATTRIBUTE } from './nodes/drawing-node'
 import { PenOverlay } from './pen-overlay'
 import { CanvasLoadingScreen } from './canvas-loading-screen'
+import { GenerationGalleryHost } from './generation-gallery'
 import { PEN_COLORS, PEN_WIDTHS } from '@/lib/drawing-path'
 import { createTableData } from '@/lib/table-data'
 import { GROUP_TYPE, isLockedByGroup, parentsFirst, planDrop, remapParents, withGroupMembers, type GroupableNode } from '@/lib/canvas-groups'
@@ -1455,6 +1456,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       <div className="spite-canvas-shell flex flex-col h-screen bg-[#0b0c10] overflow-hidden">
       {/* Covers the canvas until its content has synced from the server. */}
       <CanvasLoadingScreen ready={realtime.initialSyncComplete} />
+      <GenerationGalleryHost nodes={allNodes as Array<{ id: string; data?: unknown }>} />
       <OnboardingTour surface="canvas" />
       {/* Auto-remove any persisted legacy note nodes on sync/hydration */}
       <LegacyNoteCleanup />
