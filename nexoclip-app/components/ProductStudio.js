@@ -851,7 +851,7 @@ ${agentInfo?.suggested_prompt || ''}
       </div>
 
       {/* ── FLOATING PROMPT COMPOSER DOCK ── */}
-      <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-0 right-0 mx-auto w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up">
+      <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-0 right-0 mx-auto w-full max-w-[95%] xl:max-w-5xl z-30 animate-fade-in-up">
         <div className="flex flex-col gap-3">
           
           {/* Active Extracted Product Chip / Bar */}
@@ -1687,8 +1687,8 @@ ${agentInfo?.suggested_prompt || ''}
           </div>
 
           {/* Bottom Row: Controls + Generate Action */}
-          <PromptFooter className="flex flex-row items-center justify-between gap-3 pt-3 border-t border-[#110C2A]/5 relative">
-            <PromptControls ref={dropdownRef} className="flex items-center gap-2 relative flex-nowrap">
+          <PromptFooter className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-[#110C2A]/10 relative w-full">
+            <PromptControls ref={dropdownRef} className="flex flex-wrap items-center gap-1.5 sm:gap-2 relative">
               
               {/* 1. Model Selector Pill */}
               <div className="relative">
@@ -1700,6 +1700,7 @@ ${agentInfo?.suggested_prompt || ''}
                   }}
                   className={promptControlClassName({
                     active: activePopover === 'model',
+                    compact: true,
                   })}
                 >
                   <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-cyan-500/10 text-cyan-600 font-bold text-[10px]">
@@ -1744,6 +1745,7 @@ ${agentInfo?.suggested_prompt || ''}
                   }}
                   className={promptControlClassName({
                     active: activePopover === 'scene',
+                    compact: true,
                   })}
                 >
                   <span className="text-sm shrink-0">{currentScene.icon}</span>
@@ -1792,6 +1794,7 @@ ${agentInfo?.suggested_prompt || ''}
                   }}
                   className={promptControlClassName({
                     active: activePopover === 'ar',
+                    compact: true,
                   })}
                 >
                   <PromptAspectRatioIcon />
@@ -1834,6 +1837,7 @@ ${agentInfo?.suggested_prompt || ''}
                   }}
                   className={promptControlClassName({
                     active: activePopover === 'count',
+                    compact: true,
                   })}
                   title="Pilih jumlah foto yang dihasilkan sekaligus"
                 >
@@ -1916,7 +1920,7 @@ ${agentInfo?.suggested_prompt || ''}
             <PromptAction
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="h-[38px] !py-0 px-6 font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 self-center rounded-full bg-[#A175FF] hover:bg-[#9467f4] text-[#110C2A] flex items-center justify-center gap-1.5 shadow-md shadow-[#A175FF]/25 border border-[#A175FF]/20"
+              className="h-[38px] !py-0 px-5 sm:px-6 font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 ml-auto rounded-full bg-[#A175FF] hover:bg-[#9467f4] text-[#110C2A] flex items-center justify-center gap-1.5 shadow-md shadow-[#A175FF]/25 border border-[#A175FF]/20 cursor-pointer"
             >
               {isGenerating ? (
                 <>
