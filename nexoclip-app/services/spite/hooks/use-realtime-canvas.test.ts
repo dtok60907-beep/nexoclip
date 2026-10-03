@@ -147,3 +147,26 @@ test('releases recovery keys after terminal responses and errors', async () => {
   assert.equal(fetches.length, 3)
   room.destroy()
 })
+
+test('the room reports when its first sync completes, and a reconnect keeps it complete', async () => {
+  let provider: SyncableProvider | undefined
+  const room = new RealtimeCanvasRoom('project-loading', {
+    fetchFn: statusFetch([], []),
+    createProvider: (configuration) => {
+      provider = providerWithNodes([])(configuration)
+      return provider
+    },
+  })
+  assert.equal(room.getSnapshot().initialSyncComplete, false)
+  let emits = 0
+  const unsubscribe = room.subscribe(() => { emits += 1 })
+  provider?.sync()
+  await flush()
+  assert.equal(room.getSnapshot().initialSyncComplete, true)
+  assert.ok(emits >= 1, 'subscribers hear about it')
+  provider?.sync()
+  await flush()
+  assert.equal(room.getSnapshot().initialSyncComplete, true)
+  unsubscribe()
+  room.destroy()
+})
