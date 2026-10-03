@@ -81,6 +81,56 @@ const BYTEPLUS_MODELS = [
   { id: 'byteplus-commercial-v2', name: 'BytePlus Commercial v2', desc: 'Ultra-sharp textures, luxury materials & reflections' },
 ];
 
+
+// Generator konsep kampanye kreatif multi-sudut komersial
+const getInitialCampaigns = (title = 'Commercial Product', details = '') => [
+  {
+    id: 'hero_low_angle',
+    title: 'Epic Hero Low-Angle 25°',
+    badge: 'Sudut Bawah 25°',
+    angle_name: 'Low-Angle Worms-Eye',
+    description: 'Kamera dari sudut rendah 25° menatap megah ke atas, menonjolkan siluet 3D monumental dan rim-light emas.',
+    prompt: `Ultra-detailed commercial studio billboard photography of ${title}${details ? `, featuring ${details}` : ''}, shot from an extreme low-angle perspective looking upward at a 25-degree pitch, revealing the full 3D bevels and cap depth. Perched on a monolithic dark volcanic basalt rock, dramatic warm sunset rim lighting, rising sea mist, anamorphic lens flare, 8k crisp resolution.`,
+    recommended_mode: 'creative_3d'
+  },
+  {
+    id: 'dynamic_splash',
+    title: 'Dynamic Amber Splash & Wave',
+    badge: 'Aksi Kecepatan 1/8000s',
+    angle_name: 'High-Speed Dynamic Splash',
+    description: 'Botol diterpa gelombang cairan kristal amber dan butiran air membeku di udara berkecepatan 1/8000s.',
+    prompt: `High-speed kinetic advertising photography of ${title}${details ? `, featuring ${details}` : ''}, tilted at a dynamic three-quarter 45-degree angle, surrounded by an explosive splash of crystal golden amber liquid waves and suspended micro-droplets frozen mid-air at 1/8000s shutter speed. Hyper-detailed liquid refraction, dark obsidian base, dramatic strobe lighting.`,
+    recommended_mode: 'creative_3d'
+  },
+  {
+    id: 'macro_detail',
+    title: 'Macro Gold Noir & Refraction',
+    badge: 'Makro Ekstrem f/1.4',
+    angle_name: 'Macro Close-Up Refraction',
+    description: 'Fokus super tajam pada detail label marmer emas, tekstur embos, dan pantulan kristal kaca.',
+    prompt: `Extreme macro commercial product shot of ${title}${details ? `, featuring ${details}` : ''}, shallow depth of field f/1.4 with soft cinematic bokeh. Razor-sharp focus on the shimmering gold foil typography and surface texture, warm light caressing the glass bevels with crystalline refraction, rich dark luxury aesthetic, 8k raw detail.`,
+    recommended_mode: 'creative_3d'
+  },
+  {
+    id: 'lifestyle_hand',
+    title: 'Vogue Editorial Hand Pose',
+    badge: 'Model & Human Touch',
+    angle_name: 'Editorial Hand In-Situ',
+    description: 'Tangan model elegan berbalut cincin mewah sedang memegang botol dan menyemprotkan kabut parfum halus.',
+    prompt: `High-fashion Vogue editorial lifestyle photography featuring an elegant manicured hand with a minimalist gold ring gently holding ${title}${details ? `, featuring ${details}` : ''}, releasing a delicate luminous fine mist caught in a soft ray of golden hour sunlight. Luxury marble penthouse vanity in soft blurred background, warm ambient lighting.`,
+    recommended_mode: 'creative_3d'
+  },
+  {
+    id: 'zero_gravity',
+    title: 'Zero-Gravity Floating Particles',
+    badge: 'Melayang 3D 35°',
+    angle_name: 'Zero-Gravity Surrealist',
+    description: 'Botol melayang diagonal di udara dikelilingi bahan alami dan serpihan emas yang berkilau.',
+    prompt: `Surreal commercial advertising of ${title}${details ? `, featuring ${details}` : ''}, levitating weightlessly at a dynamic 35-degree diagonal tilt in mid-air. Surrounded by floating dark botanical ingredients and suspended glowing golden embers. Volumetric atmospheric studio light beam slicing through subtle smoke, ultra-sharp 3D composition, 8k render.`,
+    recommended_mode: 'creative_3d'
+  }
+];
+
 export default function ProductStudio({
   onGenerationStart,
   onGenerationEnd,
@@ -105,6 +155,14 @@ export default function ProductStudio({
   const [editedTitle, setEditedTitle] = useState('');
   const [editedPrice, setEditedPrice] = useState('');
   const [isEditingPrice, setIsEditingPrice] = useState(false);
+
+  // Creative Commercial Director Agent State
+  const [creativeCampaigns, setCreativeCampaigns] = useState([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [creativeDirectorVision, setCreativeDirectorVision] = useState('');
+  const [referenceMode, setReferenceMode] = useState('creative_3d'); // 'creative_3d' | 'guided'
+  const [isBrainstorming, setIsBrainstorming] = useState(false);
+  const [brainstormInput, setBrainstormInput] = useState('');
 
   // Konfigurasi Photoshoot
   const [selectedModel, setSelectedModel] = useState(BYTEPLUS_MODELS[0]);
@@ -201,6 +259,12 @@ export default function ProductStudio({
         setAgentInfo(data);
         setEditedTitle(data.name || targetTitle);
         if (data.price) setEditedPrice(data.price);
+        if (Array.isArray(data.creative_campaigns) && data.creative_campaigns.length > 0) {
+          setCreativeCampaigns(data.creative_campaigns);
+        }
+        if (data.creative_director_vision) {
+          setCreativeDirectorVision(data.creative_director_vision);
+        }
         setProductData((prev) => {
           const prevTitle = prev?.title || '';
           const isGeneric = !prevTitle || prevTitle.includes('Clipboard') || prevTitle === 'Foto Produk';
@@ -219,6 +283,54 @@ export default function ProductStudio({
       console.warn('Agent analysis warning:', err);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  // Minta Creative Director Agent merancang ide sudut & kampanye baru
+  const handleBrainstormConcepts = async (customDirection = '') => {
+    setIsBrainstorming(true);
+    try {
+      const res = await fetch('/api/marketplace/creative-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productTitle: editedTitle || agentInfo?.name || productData?.title || 'Commercial Product',
+          visualDetails: agentInfo?.visual_details || '',
+          category: agentInfo?.category || '',
+          price: editedPrice || agentInfo?.price || '',
+          userDirection: customDirection || brainstormInput,
+          existingImage: selectedImage,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.campaigns) && data.campaigns.length > 0) {
+        setCreativeCampaigns(data.campaigns);
+        if (data.creative_director_vision) {
+          setCreativeDirectorVision(data.creative_director_vision);
+        }
+        setBrainstormInput('');
+      }
+    } catch (err) {
+      console.warn('Creative brainstorm error:', err);
+    } finally {
+      setIsBrainstorming(false);
+    }
+  };
+
+  // Terapkan Konsep dari Creative Director Agent
+  const applyCreativeConcept = (campaign, autoGenerate = false) => {
+    if (!campaign) return;
+    setSelectedCampaignId(campaign.id);
+    setCustomPrompt(campaign.prompt);
+    setSelectedSceneId('custom');
+    if (campaign.recommended_mode) {
+      setReferenceMode(campaign.recommended_mode);
+    }
+    if (autoGenerate) {
+      setTimeout(() => {
+        handleGenerate(campaign.prompt);
+      }, 50);
     }
   };
 
@@ -379,8 +491,9 @@ ${agentInfo?.suggested_prompt || ''}
   };
 
   // Handler generate photoshoot AI via BytePlus
-  const handleGenerate = async () => {
-    if (!selectedImage && !marketplaceUrl.trim() && !customPrompt.trim()) {
+  const handleGenerate = async (overridePrompt = null) => {
+    const promptToUse = (typeof overridePrompt === 'string' ? overridePrompt : customPrompt).trim();
+    if (!selectedImage && !marketplaceUrl.trim() && !promptToUse) {
       setActivePopover('linkModal');
       return;
     }
@@ -408,10 +521,12 @@ ${agentInfo?.suggested_prompt || ''}
           productTitle: editedTitle || agentInfo?.name || productData?.title || 'Commercial Product',
           productImage: currentProdImg || 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=800&q=80',
           scenePreset: selectedSceneId,
-          customPrompt: customPrompt.trim(),
+          customPrompt: promptToUse,
           visualDetails: agentInfo?.visual_details || '',
           aspectRatio,
           model: selectedModel.id,
+          referenceMode,
+          preserveSilhouette: referenceMode === 'guided',
         }),
       });
 
@@ -790,6 +905,9 @@ ${agentInfo?.suggested_prompt || ''}
                       setIsAgentDrawerOpen(false);
                       setEditedTitle('');
                       setEditedPrice('');
+                      setCreativeCampaigns([]);
+                      setSelectedCampaignId(null);
+                      setCreativeDirectorVision('');
                     }}
                     className="w-6 h-6 rounded-full bg-[#110C2A]/10 hover:bg-red-500 hover:text-white text-[#110C2A]/60 flex items-center justify-center text-xs transition-colors"
                     title="Hapus Produk"
@@ -798,6 +916,98 @@ ${agentInfo?.suggested_prompt || ''}
                   </button>
                 </div>
               </div>
+
+              {/* ── CREATIVE DIRECTOR CONCEPTS STRIP ── */}
+              {(creativeCampaigns.length > 0 || productData) && (
+                <div className="bg-[#181528] text-white rounded-2xl p-2.5 px-3.5 border border-[#A175FF]/30 shadow-lg flex flex-col gap-2 animate-fade-in">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">🎨</span>
+                      <span className="font-extrabold text-xs text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Creative Director Agent</span>
+                        <span className="text-[9px] font-normal px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                          5 Variasi Sudut
+                        </span>
+                      </span>
+                      <span className="text-[10px] text-white/40 hidden md:inline">•</span>
+                      <span className="text-[10px] text-white/70 hidden lg:inline">
+                        Pilih sudut kamera & komposisi artistik:
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      {/* Toggle Mode Sudut Kamera 3D vs Kunci Siluet */}
+                      <div className="flex items-center bg-white/10 rounded-xl p-0.5 border border-white/10 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setReferenceMode('creative_3d')}
+                          className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
+                            referenceMode === 'creative_3d'
+                              ? 'bg-[#A175FF] text-white shadow-xs'
+                              : 'text-white/60 hover:text-white'
+                          }`}
+                          title="Sudut Bebas 3D: AI merender perspektif baru dari berbagai sudut (low-angle, macro, splash) tanpa terkunci siluet foto 2D depan"
+                        >
+                          🚀 Sudut Bebas 3D
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceMode('guided')}
+                          className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
+                            referenceMode === 'guided'
+                              ? 'bg-[#A175FF] text-white shadow-xs'
+                              : 'text-white/60 hover:text-white'
+                          }`}
+                          title="Kunci Siluet: Pertahankan bentuk dan posisi foto asli 1:1"
+                        >
+                          🔒 Kunci Siluet
+                        </button>
+                      </div>
+
+                      {/* Tombol Acak / Regenerate Concepts */}
+                      <button
+                        type="button"
+                        onClick={() => handleBrainstormConcepts()}
+                        disabled={isBrainstorming}
+                        className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/90 transition-all flex items-center gap-1 border border-white/10"
+                        title="Minta Creative Agent merancang ide sudut baru"
+                      >
+                        <span>🎲</span>
+                        <span>{isBrainstorming ? 'Merancang...' : 'Ide Baru'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Scrollable Pills of Creative Angles */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                    {(creativeCampaigns.length > 0 ? creativeCampaigns : getInitialCampaigns(editedTitle || agentInfo?.name || productData?.title, agentInfo?.visual_details)).map((camp) => {
+                      const isSelected = selectedCampaignId === camp.id;
+                      const icon = camp.id.includes('splash') ? '🌊' : camp.id.includes('low') || camp.id.includes('hero') ? '🚀' : camp.id.includes('macro') ? '🔍' : camp.id.includes('hand') || camp.id.includes('life') ? '🖐️' : '🌌';
+                      return (
+                        <button
+                          key={camp.id}
+                          type="button"
+                          onClick={() => applyCreativeConcept(camp)}
+                          className={`px-3 py-1.5 rounded-xl text-left shrink-0 transition-all border flex items-center gap-2 ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-[#A175FF] to-[#8042f4] text-white border-white/40 shadow-md ring-2 ring-[#A175FF]/50 scale-[1.02]'
+                              : 'bg-white/5 hover:bg-white/10 text-white/85 border-white/10 hover:border-white/20'
+                          }`}
+                        >
+                          <span className="text-base">{icon}</span>
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-bold leading-tight">{camp.title}</span>
+                            <span className="text-[9px] opacity-75 leading-tight">{camp.badge}</span>
+                          </div>
+                          {isSelected && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-1"></span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* ── EXPANDED AI PRODUCT AGENT INTELLIGENCE DRAWER ── */}
               {isAgentDrawerOpen && (
@@ -823,6 +1033,112 @@ ${agentInfo?.suggested_prompt || ''}
 
                   {agentInfo ? (
                     <div className="flex flex-col gap-3">
+                      {/* 🎨 Creative Commercial Director Matrix Hub */}
+                      <div className="bg-[#181528] text-white p-3.5 rounded-xl border border-[#A175FF]/30 flex flex-col gap-3 shadow-md">
+                        <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🎨</span>
+                            <span className="font-extrabold text-sm text-amber-300">
+                              Creative Commercial Director Matrix
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#A175FF]/20 text-[#c8aeff] border border-[#A175FF]/30">
+                              5 Sudut Kamera 3D
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-white/60">
+                            Mengatasi foto statis dengan variasi sudut & aksi sinematik
+                          </span>
+                        </div>
+
+                        {creativeDirectorVision && (
+                          <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-xs italic text-amber-200/90 flex items-start gap-2">
+                            <span className="text-sm shrink-0">💡</span>
+                            <span>"{creativeDirectorVision}"</span>
+                          </div>
+                        )}
+
+                        {/* Interactive Custom Brainstorm Bar */}
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleBrainstormConcepts(brainstormInput);
+                          }}
+                          className="flex items-center gap-2 bg-white/5 p-1.5 rounded-xl border border-white/10"
+                        >
+                          <input
+                            type="text"
+                            value={brainstormInput}
+                            onChange={(e) => setBrainstormInput(e.target.value)}
+                            placeholder="Instruksi Creative Director (cth: tema badai salju es, flatlay di ranjang satin, dll)..."
+                            className="flex-1 bg-transparent px-2.5 py-1 text-xs text-white placeholder:text-white/40 outline-none"
+                          />
+                          <button
+                            type="submit"
+                            disabled={isBrainstorming}
+                            className="px-3 py-1.5 rounded-lg bg-[#A175FF] hover:bg-[#8e5af8] text-white font-bold text-xs shrink-0 transition-colors flex items-center gap-1"
+                          >
+                            <span>✨</span>
+                            <span>{isBrainstorming ? 'Merancang...' : 'Rombak Konsep'}</span>
+                          </button>
+                        </form>
+
+                        {/* 5 Concept Cards Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {(creativeCampaigns.length > 0 ? creativeCampaigns : getInitialCampaigns(editedTitle || agentInfo?.name || productData?.title, agentInfo?.visual_details)).map((camp) => {
+                            const isSelected = selectedCampaignId === camp.id;
+                            const icon = camp.id.includes('splash') ? '🌊' : camp.id.includes('low') || camp.id.includes('hero') ? '🚀' : camp.id.includes('macro') ? '🔍' : camp.id.includes('hand') || camp.id.includes('life') ? '🖐️' : '🌌';
+                            return (
+                              <div
+                                key={camp.id}
+                                className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all ${
+                                  isSelected
+                                    ? 'bg-[#251f3d] border-[#A175FF] ring-2 ring-[#A175FF]/30'
+                                    : 'bg-white/5 border-white/10 hover:border-white/20'
+                                }`}
+                              >
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                                      <span>{icon}</span>
+                                      <span>{camp.title}</span>
+                                    </span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                      {camp.badge}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-white/70 leading-relaxed">
+                                    {camp.description}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      applyCreativeConcept(camp);
+                                      setIsAgentDrawerOpen(false);
+                                    }}
+                                    className="flex-1 py-1 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] transition-colors flex items-center justify-center gap-1"
+                                  >
+                                    <span>{isSelected ? '✓ Terpilih' : 'Gunakan Sudut Ini'}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      applyCreativeConcept(camp, true);
+                                      setIsAgentDrawerOpen(false);
+                                    }}
+                                    className="py-1 px-2.5 rounded-lg bg-[#22d3ee] hover:bg-cyan-300 text-black font-extrabold text-[11px] transition-colors flex items-center justify-center gap-1"
+                                    title="Langsung generate sudut ini dengan BytePlus SeaDream"
+                                  >
+                                    <span>⚡ Generate</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                       {/* Grid Brand, Kategori & Tagline */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#FFF6DE]/70 p-3 rounded-xl border border-[#110C2A]/10">
                         <div>

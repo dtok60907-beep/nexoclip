@@ -46,15 +46,27 @@ export async function POST(request) {
       aspectRatio = '1:1',
       resolution = '2K',
       model = 'byteplus/seedream-5.0-pro-unfiltered',
+      referenceMode = 'creative_3d', // 'creative_3d' | 'guided'
+      preserveSilhouette = false,
     } = body;
 
     if (!productImage) {
       return Response.json({ error: 'Gambar produk (productImage) wajib disertakan' }, { status: 400 });
     }
 
-    // Bangun Prompt Berdasarkan Preset
+    // Bangun Prompt Berdasarkan Preset atau Custom Creative Direction
     const promptBuilder = SCENE_PRESETS[scenePreset] || SCENE_PRESETS.minimalist_podium;
-    const finalPrompt = customPrompt ? customPrompt : promptBuilder(productTitle, visualDetails, customPrompt);
+    let basePrompt = customPrompt ? customPrompt : promptBuilder(productTitle, visualDetails, customPrompt);
+
+    // Tentukan apakah menggunakan reference image atau pure 3D prompt generation
+    // Jika user memilih mode 'creative_3d' (atau preserveSilhouette = false pada custom/creative angle),
+    // kita beri kebebasan penuh pada SeaDream untuk merender sudut 3D dinamis tanpa terkunci siluet 2D depan.
+    const useReferenceImage = referenceMode === 'guided' || preserveSilhouette === true;
+
+    let finalPrompt = basePrompt;
+    if (!useReferenceImage && visualDetails && !basePrompt.toLowerCase().includes(visualDetails.toLowerCase().slice(0, 20))) {
+      finalPrompt = `${basePrompt}, featuring ${productTitle} (${visualDetails})`;
+    }
 
     // Dapatkan konfigurasi BytePlus dari environment
     const apiKey = process.env.BYTEPLUS_API_KEY;
@@ -74,6 +86,7 @@ export async function POST(request) {
         message: 'Kredensial BYTEPLUS_API_KEY belum dikonfigurasi. Menggunakan preview studio komersial.',
         prompt: finalPrompt,
         preset: scenePreset,
+        referenceMode: useReferenceImage ? 'guided' : 'creative_3d',
         aspectRatio,
         outputs: [
           {
@@ -93,13 +106,13 @@ export async function POST(request) {
       baseUrl,
     });
 
-    // Panggil adapter BytePlus dengan reference image produk
+    // Panggil adapter BytePlus dengan kontrol reference image
     const result = await bytePlusAdapter.generate({
       model: endpointId,
       prompt: finalPrompt,
       aspectRatio,
       resolution,
-      referenceImages: [productImage],
+      referenceImages: useReferenceImage ? [productImage] : [],
     });
 
     const outputImages = result?.outputs || [];
@@ -146,6 +159,7 @@ export async function POST(request) {
       provider: 'byteplus',
       prompt: finalPrompt,
       preset: scenePreset,
+      referenceMode: useReferenceImage ? 'guided' : 'creative_3d',
       aspectRatio,
       outputs: persistedOutputs,
     });
