@@ -127,7 +127,7 @@ export default function ProductStudio({
   useEffect(() => {
     if (!activePopover || activePopover === 'linkModal') return;
     const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      if (dropdownRef.current && e?.target instanceof Node && !dropdownRef.current.contains(e.target)) {
         setActivePopover(null);
       }
     };
@@ -214,7 +214,7 @@ ${(agentInfo?.selling_points || []).map((s) => `- ${s}`).join('\n') || '-'}
 ### 📸 Rekomendasi Prompt Photoshoot Studio (BytePlus SeaDream):
 ${agentInfo?.suggested_prompt || ''}
 `;
-    navigator.clipboard.writeText(brief);
+    if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(brief).catch(() => {}); }
     setCopiedBrief(true);
     setTimeout(() => setCopiedBrief(false), 2500);
   };
@@ -230,6 +230,7 @@ ${agentInfo?.suggested_prompt || ''}
             const file = item.getAsFile();
             if (file) {
               const reader = new FileReader();
+              reader.onerror = () => {};
               reader.onload = () => {
                 const dataUrl = reader.result;
                 setSelectedImage(dataUrl);
@@ -317,6 +318,7 @@ ${agentInfo?.suggested_prompt || ''}
     if (!file) return;
 
     const reader = new FileReader();
+    reader.onerror = () => {};
     reader.onload = () => {
       const dataUrl = reader.result;
       setSelectedImage(dataUrl);
@@ -441,7 +443,7 @@ ${agentInfo?.suggested_prompt || ''}
                         title="Salin Tautan"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigator.clipboard.writeText(entry.url);
+                          if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(entry.url).catch(() => {}); }
                           alert("Link gambar berhasil disalin!");
                         }}
                         style={{ color: '#ffffff' }}
@@ -492,6 +494,7 @@ ${agentInfo?.suggested_prompt || ''}
                   src="https://images.unsplash.com/photo-1541643600914-78b084683601?w=300&q=80"
                   alt="Luxury Perfume Photoshoot"
                   className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               </div>
 
@@ -500,6 +503,7 @@ ${agentInfo?.suggested_prompt || ''}
                   src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=300&q=80"
                   alt="Cosmetic Cream Podium"
                   className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               </div>
 
@@ -508,6 +512,7 @@ ${agentInfo?.suggested_prompt || ''}
                   src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300&q=80"
                   alt="Sneakers Studio Shot"
                   className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               </div>
 
@@ -516,6 +521,7 @@ ${agentInfo?.suggested_prompt || ''}
                   src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80"
                   alt="Tech Product Studio"
                   className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               </div>
             </div>
@@ -1293,7 +1299,7 @@ ${agentInfo?.suggested_prompt || ''}
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(fullscreenImage.url);
+                    if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(fullscreenImage.url).catch(() => {}); }
                     alert('Link foto berhasil disalin!');
                   }}
                   style={{ color: '#ffffff' }}
