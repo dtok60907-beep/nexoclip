@@ -543,7 +543,7 @@ ${agentInfo?.suggested_prompt || ''}
       </div>
 
       {/* ── FLOATING PROMPT COMPOSER DOCK ── */}
-      <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up px-2 sm:px-0">
+      <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-0 right-0 mx-auto w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up">
         <div className="flex flex-col gap-3">
           
           {/* Active Extracted Product Chip / Bar */}
