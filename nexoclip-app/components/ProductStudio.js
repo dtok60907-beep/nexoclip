@@ -103,6 +103,8 @@ export default function ProductStudio({
   const [copiedBrief, setCopiedBrief] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
+  const [editedPrice, setEditedPrice] = useState('');
+  const [isEditingPrice, setIsEditingPrice] = useState(false);
 
   // Konfigurasi Photoshoot
   const [selectedModel, setSelectedModel] = useState(BYTEPLUS_MODELS[0]);
@@ -157,6 +159,7 @@ export default function ProductStudio({
       if (res.ok && data.success) {
         setAgentInfo(data);
         setEditedTitle(data.name || targetTitle);
+        if (data.price) setEditedPrice(data.price);
         setProductData((prev) => {
           const prevTitle = prev?.title || '';
           const isGeneric = !prevTitle || prevTitle.includes('Clipboard') || prevTitle === 'Foto Produk';
@@ -166,6 +169,7 @@ export default function ProductStudio({
             title: isGeneric ? (data.name || prevTitle) : prevTitle,
             brand: data.brand || prev?.brand,
             category: data.category || prev?.category,
+            price: data.price || prev?.price || null,
             images: prev?.images || (targetImage ? [targetImage] : []),
           };
         });
@@ -190,8 +194,10 @@ export default function ProductStudio({
   const copyAgentBrief = () => {
     if (!agentInfo && !productData) return;
     const name = editedTitle || agentInfo?.name || productData?.title || 'Produk E-Commerce';
+    const price = editedPrice || agentInfo?.price || productData?.price || '-';
     const brief = `# 🛍️ Product Intelligence Brief for AI Agent
 **Nama Produk**: ${name}
+**Estimasi Harga**: ${price}
 **Merk**: ${agentInfo?.brand || '-'}
 **Kategori**: ${agentInfo?.category || '-'}
 **Visual & Material Specs**: ${agentInfo?.visual_details || '-'}
@@ -287,6 +293,9 @@ ${agentInfo?.suggested_prompt || ''}
       setProductData(data);
       if (data.title) {
         setEditedTitle(data.title);
+      }
+      if (data.price) {
+        setEditedPrice(data.price);
       }
       if (data.images && data.images.length > 0) {
         setSelectedImage(data.images[0]);
@@ -560,11 +569,33 @@ ${agentInfo?.suggested_prompt || ''}
                           {agentInfo.category}
                         </span>
                       )}
-                      {productData.price && (
-                        <span className="text-[11px] font-semibold text-emerald-600">
-                          {productData.price}
-                        </span>
-                      )}
+                      <div className="flex items-center">
+                        {isEditingPrice ? (
+                          <input
+                            type="text"
+                            value={editedPrice}
+                            onChange={(e) => setEditedPrice(e.target.value)}
+                            onBlur={() => setIsEditingPrice(false)}
+                            onKeyDown={(e) => e.key === 'Enter' && setIsEditingPrice(false)}
+                            autoFocus
+                            placeholder="Rp 0"
+                            className="text-[11px] font-bold text-emerald-800 bg-white border border-emerald-400 rounded px-1.5 py-0.5 outline-none w-28 shadow-xs"
+                          />
+                        ) : (
+                          <span
+                            onClick={() => {
+                              setEditedPrice(editedPrice || agentInfo?.price || productData?.price || 'Rp 0');
+                              setIsEditingPrice(true);
+                            }}
+                            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors flex items-center gap-1 shadow-xs"
+                            title="Klik untuk mengubah harga produk"
+                          >
+                            <span>💰</span>
+                            <span>{editedPrice || agentInfo?.price || productData?.price || 'Set Harga'}</span>
+                            <span className="text-[9px] text-emerald-700/60">✏️</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Editable Title */}
@@ -652,6 +683,7 @@ ${agentInfo?.suggested_prompt || ''}
                       setAgentInfo(null);
                       setIsAgentDrawerOpen(false);
                       setEditedTitle('');
+                      setEditedPrice('');
                     }}
                     className="w-6 h-6 rounded-full bg-[#110C2A]/10 hover:bg-red-500 hover:text-white text-[#110C2A]/60 flex items-center justify-center text-xs transition-colors"
                     title="Hapus Produk"
@@ -686,13 +718,29 @@ ${agentInfo?.suggested_prompt || ''}
                   {agentInfo ? (
                     <div className="flex flex-col gap-3">
                       {/* Grid Brand, Kategori & Tagline */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#FFF6DE]/70 p-3 rounded-xl border border-[#110C2A]/10">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#FFF6DE]/70 p-3 rounded-xl border border-[#110C2A]/10">
                         <div>
                           <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-0.5">
                             🏷️ Brand & Kategori
                           </span>
-                          <p className="font-bold text-[#110C2A]">
+                          <p className="font-bold text-[#110C2A] truncate">
                             {agentInfo.brand || 'Produk Komersial'} • {agentInfo.category || 'E-Commerce'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-emerald-800/80 uppercase font-bold block mb-0.5">
+                            💰 Estimasi Harga Pasar
+                          </span>
+                          <p
+                            onClick={() => {
+                              setEditedPrice(editedPrice || agentInfo?.price || 'Rp 0');
+                              setIsEditingPrice(true);
+                            }}
+                            className="font-extrabold text-sm text-emerald-800 cursor-pointer hover:underline flex items-center gap-1 truncate"
+                            title="Klik untuk mengubah harga"
+                          >
+                            <span>{editedPrice || agentInfo.price || productData?.price || 'Rp -'}</span>
+                            <span className="text-[10px] text-emerald-700/60">✏️</span>
                           </p>
                         </div>
                         {agentInfo.marketing_tagline && (

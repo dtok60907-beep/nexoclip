@@ -21,13 +21,14 @@ export async function POST(request) {
     const content = [];
 
     let instruction = `Anda adalah E-Commerce Product Intelligence AI Agent profesional.
-Tugas Anda adalah menganalisis produk marketplace ini dan mengekstrak informasi lengkap untuk kebutuhan agency kreatif, pembuatan copywriting, dan fotografi studio komersial (BytePlus SeaDream AI).
+Tugas Anda adalah menganalisis produk marketplace ini dan mengekstrak informasi lengkap termasuk ESTIMASI HARGA pasar di Indonesia untuk kebutuhan agency kreatif, pembuatan copywriting, dan fotografi studio komersial (BytePlus SeaDream AI).
 
 Kembalikan jawaban HANYA dalam format JSON valid tanpa tag markdown apapun (pure JSON) dengan struktur persis seperti ini:
 {
   "name": "Nama lengkap produk yang akurat dan komersial (cth: Samsung Galaxy Watch Ultra)",
   "brand": "Nama merk / produsen (cth: Samsung)",
   "category": "Kategori produk (cth: Smartwatch & Wearable Tech)",
+  "price": "Estimasi harga pasar atau harga jual resmi di Indonesia dalam Rupiah (cth: Rp 9.999.000 atau Rp 12.999.000)",
   "visual_details": "Deskripsi visual detail: bentuk bodi, material (titanium, kulit, kaca), warna dominan, tali/strap, dan tekstur",
   "features": ["Fitur unggulan 1", "Fitur unggulan 2", "Fitur unggulan 3", "Fitur unggulan 4"],
   "selling_points": ["Keunggulan komersial 1", "Keunggulan komersial 2", "Keunggulan komersial 3"],
@@ -43,7 +44,6 @@ Kembalikan jawaban HANYA dalam format JSON valid tanpa tag markdown apapun (pure
 
     // Jika ada gambar (data URL base64 atau URL publik)
     if (image) {
-      // Pastikan format URL atau base64 valid
       content.push({
         type: 'image_url',
         image_url: {
@@ -89,7 +89,6 @@ Kembalikan jawaban HANYA dalam format JSON valid tanpa tag markdown apapun (pure
     try {
       parsedInfo = JSON.parse(rawContent);
     } catch {
-      // Fallback regex jika model membungkus dalam markdown
       const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         parsedInfo = JSON.parse(jsonMatch[0]);
