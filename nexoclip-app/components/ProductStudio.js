@@ -132,7 +132,6 @@ function BatchGenerationCard({
   onFullscreen,
 }) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  const [viewMode, setViewMode] = useState('carousel'); // 'carousel' | 'grid'
 
   const photos = Array.isArray(batch.photos) && batch.photos.length > 0
     ? batch.photos
@@ -141,15 +140,18 @@ function BatchGenerationCard({
   const isMultiple = photos.length > 1;
   const activePhoto = photos[activeSlideIndex] || photos[0];
 
-  const handleNext = () => {
+  const handleNext = (e) => {
+    e?.stopPropagation();
     setActiveSlideIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
   };
 
-  const handlePrev = () => {
+  const handlePrev = (e) => {
+    e?.stopPropagation();
     setActiveSlideIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
   };
 
-  const copyLink = (url) => {
+  const copyLink = (e, url) => {
+    e?.stopPropagation();
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).catch(() => {});
     }
@@ -157,299 +159,164 @@ function BatchGenerationCard({
   };
 
   return (
-    <div className="w-full flex flex-col gap-3 p-4 sm:p-5 rounded-3xl bg-white/90 backdrop-blur-md border border-[#110C2A]/10 shadow-sm transition-all hover:shadow-md">
-      {/* Header Sesi Generate */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#110C2A]/10 flex-wrap">
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold text-[#6c3df4] bg-[#A175FF]/15 border border-[#A175FF]/20">
-              {batch.scene || activePhoto.scene || 'Photoshoot Studio'}
-            </span>
-            <span className="text-xs text-[#110C2A]/60 font-medium">
-              {photos.length} Foto • {batch.aspectRatio || activePhoto.aspectRatio || '1:1'} • {batch.modelName || 'SeaDream 5.0'}
-            </span>
-          </div>
-          <h3 className="text-sm sm:text-base font-extrabold text-[#110C2A] truncate">
-            {batch.title || activePhoto.title || 'Product Photoshoot'}
-          </h3>
+    <div className="group relative flex flex-col rounded-2xl bg-white/95 border border-[#110C2A]/10 shadow-xs hover:shadow-lg transition-all duration-200 overflow-hidden">
+      {/* Compact Card Header */}
+      <div className="p-2.5 px-3 flex items-center justify-between gap-1.5 border-b border-[#110C2A]/10 bg-white">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md text-[#6c3df4] bg-[#A175FF]/15 border border-[#A175FF]/20 shrink-0">
+            {batch.scene || activePhoto.scene || 'Studio'}
+          </span>
+          <span className="text-[10px] text-[#110C2A]/50 font-medium truncate">
+            {photos.length > 1 ? `${photos.length} Foto` : '1 Foto'} • {batch.aspectRatio || activePhoto.aspectRatio || '1:1'}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {isMultiple && (
-            <div className="flex items-center bg-white p-0.5 rounded-xl border border-[#110C2A]/15 shadow-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode('carousel')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  viewMode === 'carousel'
-                    ? 'bg-[#6c3df4] text-white shadow-xs'
-                    : 'text-[#110C2A]/60 hover:text-[#110C2A]'
-                }`}
-              >
-                Carousel
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-[#6c3df4] text-white shadow-xs'
-                    : 'text-[#110C2A]/60 hover:text-[#110C2A]'
-                }`}
-              >
-                Grid
-              </button>
-            </div>
-          )}
-
-          {onDelete && (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="text-xs text-[#110C2A]/40 hover:text-red-600 font-semibold px-2 py-1 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
-              title="Hapus sesi generate ini"
-            >
-              Hapus Sesi
-            </button>
-          )}
-        </div>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="text-[11px] text-[#110C2A]/40 hover:text-red-500 font-bold px-1.5 py-0.5 rounded hover:bg-black/5 transition-colors cursor-pointer shrink-0"
+            title="Hapus sesi ini"
+          >
+            Hapus
+          </button>
+        )}
       </div>
 
-      {/* CAROUSEL VIEW jika batch berisi > 1 foto */}
-      {isMultiple && viewMode === 'carousel' && (
-        <div className="w-full max-w-4xl mx-auto flex flex-col gap-3">
-          <div className="relative aspect-square sm:aspect-[4/3] w-full rounded-2xl overflow-hidden bg-neutral-900 border border-[#110C2A]/10 shadow-xl flex items-center justify-center">
-            <img
-              src={activePhoto.url}
-              alt={activePhoto.title || batch.title}
-              className="w-full h-full object-contain sm:object-cover transition-all duration-300"
-            />
+      {/* Image Preview Container (Compact Aspect Square) */}
+      <div
+        className="relative aspect-square w-full overflow-hidden bg-neutral-900 cursor-pointer flex items-center justify-center"
+        onClick={() => onFullscreen(activePhoto)}
+      >
+        <img
+          src={activePhoto.url}
+          alt={activePhoto.title || batch.title}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+        />
 
-            {/* Navigasi Panah Carousel */}
+        {/* Top Badges Overlay */}
+        <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
+          {isMultiple ? (
+            <span
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', color: '#ffffff' }}
+              className="text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md border border-white/20"
+            >
+              {activeSlideIndex + 1} / {photos.length}
+            </span>
+          ) : (
+            <span></span>
+          )}
+          <span
+            style={{ backgroundColor: '#6c3df4', color: '#ffffff' }}
+            className="text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md shadow-xs ml-auto truncate max-w-[140px]"
+          >
+            {activePhoto.scene || batch.scene || 'Photoshoot'}
+          </span>
+        </div>
+
+        {/* Carousel Navigation Arrows (Compact on image) */}
+        {isMultiple && (
+          <>
             <button
               type="button"
               onClick={handlePrev}
-              className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-105 active:scale-95 text-xl font-bold"
-              title="Foto Sebelumnya"
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#ffffff' }}
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-80 hover:opacity-100 hover:bg-[#A175FF] text-base font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-md"
+              title="Sebelumnya"
             >
               ‹
             </button>
             <button
               type="button"
               onClick={handleNext}
-              className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-105 active:scale-95 text-xl font-bold"
-              title="Foto Selanjutnya"
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#ffffff' }}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-80 hover:opacity-100 hover:bg-[#A175FF] text-base font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-md"
+              title="Berikutnya"
             >
               ›
             </button>
+          </>
+        )}
 
-            {/* Floating Badges */}
-            <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-              <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border border-white/20 bg-black/70 text-white">
-                Foto {activeSlideIndex + 1} dari {photos.length}
-              </span>
-              <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm bg-[#6c3df4] text-white">
-                {activePhoto.scene || batch.scene || 'Photoshoot'}
-              </span>
-            </div>
-
-            {/* Floating Action Buttons (Text Only) */}
-            <div className="absolute bottom-3 right-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onFullscreen(activePhoto)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
-              >
-                Perbesar
-              </button>
-              <button
-                type="button"
-                onClick={() => copyLink(activePhoto.url)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
-              >
-                Salin Link
-              </button>
-              <a
-                href={activePhoto.url}
-                target="_blank"
-                rel="noreferrer"
-                download
-                className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#22d3ee] hover:bg-cyan-300 text-[#110C2A] transition-all border border-white/30 cursor-pointer shadow-md"
-              >
-                Unduh HD
-              </a>
-            </div>
-          </div>
-
-          {/* Active Photo Info Bar */}
-          <div className="p-3 bg-white/95 backdrop-blur-md rounded-xl border border-[#110C2A]/10 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-extrabold text-[#110C2A] truncate">
-                {activePhoto.title || batch.title}
-              </p>
-              <p className="text-[11px] text-[#110C2A]/60">
-                {activePhoto.scene || batch.scene} • {activePhoto.aspectRatio || batch.aspectRatio || '1:1'}
-              </p>
-            </div>
-            {activePhoto.prompt && onApplyPrompt && (
-              <button
-                type="button"
-                onClick={() => onApplyPrompt(activePhoto.prompt)}
-                className="text-[11px] font-bold text-[#6c3df4] hover:underline shrink-0 cursor-pointer"
-              >
-                Pakai Prompt Ini Lagi
-              </button>
-            )}
-          </div>
-
-          {/* Filmstrip Thumbnails Sesi Ini */}
-          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar p-1 pb-2">
-            {photos.map((item, idx) => {
-              const isActive = activeSlideIndex === idx;
-              return (
-                <div
-                  key={item.id || idx}
-                  onClick={() => setActiveSlideIndex(idx)}
-                  className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
-                    isActive
-                      ? 'border-[#A175FF] ring-4 ring-[#A175FF]/30 scale-105 shadow-md'
-                      : 'border-transparent opacity-70 hover:opacity-100 hover:border-[#110C2A]/20'
-                  }`}
-                >
-                  <img src={item.url} alt="" className="w-full h-full object-cover" />
-                  <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 rounded">
-                    #{idx + 1}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+        {/* Bottom Floating Quick Actions */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1.5 z-20">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFullscreen(activePhoto);
+            }}
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', color: '#ffffff' }}
+            className="px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 cursor-pointer shadow-sm"
+          >
+            Perbesar
+          </button>
+          <button
+            type="button"
+            onClick={(e) => copyLink(e, activePhoto.url)}
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', color: '#ffffff' }}
+            className="px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 cursor-pointer shadow-sm"
+          >
+            Salin Link
+          </button>
+          <a
+            href={activePhoto.url}
+            target="_blank"
+            rel="noreferrer"
+            download
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: '#22d3ee', color: '#110C2A' }}
+            className="px-2 py-1 rounded-lg text-[10px] font-black hover:bg-cyan-300 transition-all border border-white/30 cursor-pointer shadow-sm"
+          >
+            Unduh HD
+          </a>
         </div>
-      )}
 
-      {/* GRID VIEW jika batch berisi > 1 foto dan user memilih grid */}
-      {isMultiple && viewMode === 'grid' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {photos.map((entry, idx) => (
-            <div
-              key={entry.id || idx}
-              className="group relative rounded-2xl overflow-hidden bg-white border border-[#110C2A]/10 shadow-xs hover:shadow-lg transition-all flex flex-col"
+        {/* Mini dot indicators if multiple photos */}
+        {isMultiple && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 z-10 pointer-events-none">
+            {photos.map((_, idx) => (
+              <span
+                key={idx}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${
+                  idx === activeSlideIndex ? 'bg-white w-3' : 'bg-white/50'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Compact Card Footer */}
+      <div className="p-2.5 bg-white flex flex-col gap-1 border-t border-[#110C2A]/10">
+        <p style={{ color: '#110C2A' }} className="text-xs font-bold text-[#110C2A] truncate">
+          {batch.title || activePhoto.title || 'Product Photoshoot'}
+        </p>
+
+        <div className="flex items-center justify-between gap-1 text-[10px] text-[#110C2A]/60">
+          <span className="truncate">
+            {activePhoto.scene || batch.scene} • {activePhoto.aspectRatio || batch.aspectRatio || '1:1'}
+          </span>
+          {activePhoto.prompt && onApplyPrompt && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onApplyPrompt(activePhoto.prompt);
+              }}
+              className="text-[#6c3df4] font-bold hover:underline shrink-0 cursor-pointer"
             >
-              <div
-                className="relative aspect-square w-full overflow-hidden bg-[#110C2A]/5 cursor-pointer"
-                onClick={() => onFullscreen(entry)}
-              >
-                <img
-                  src={entry.url}
-                  alt={entry.title || batch.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      copyLink(entry.url);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-black/75 text-white text-[11px] font-bold hover:bg-[#A175FF] transition-all cursor-pointer"
-                  >
-                    Salin Link
-                  </button>
-                  <a
-                    href={entry.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    download
-                    onClick={(e) => e.stopPropagation()}
-                    className="px-2.5 py-1 rounded-lg bg-[#22d3ee] text-[#110C2A] text-[11px] font-extrabold hover:bg-cyan-300 transition-all cursor-pointer"
-                  >
-                    Unduh HD
-                  </a>
-                </div>
-              </div>
-              <div className="p-2.5 bg-white flex flex-col gap-1 border-t border-[#110C2A]/10">
-                <p className="text-xs font-bold text-[#110C2A] truncate">
-                  {entry.title || batch.title}
-                </p>
-                <div className="flex items-center justify-between text-[10px] text-[#110C2A]/60">
-                  <span>{entry.scene || batch.scene}</span>
-                  <span>#{idx + 1}</span>
-                </div>
-              </div>
-            </div>
-          ))}
+              Pakai Prompt
+            </button>
+          )}
         </div>
-      )}
-
-      {/* SINGLE PHOTO VIEW jika batch hanya 1 foto */}
-      {!isMultiple && (
-        <div className="w-full max-w-2xl mx-auto flex flex-col gap-3">
-          <div className="relative aspect-square sm:aspect-[4/3] w-full rounded-2xl overflow-hidden bg-neutral-900 border border-[#110C2A]/10 shadow-xl flex items-center justify-center">
-            <img
-              src={activePhoto.url}
-              alt={activePhoto.title || batch.title}
-              className="w-full h-full object-contain sm:object-cover"
-            />
-            {/* Top Badge */}
-            <div className="absolute top-3 left-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm bg-[#6c3df4] text-white">
-                {activePhoto.scene || batch.scene || 'Photoshoot'}
-              </span>
-            </div>
-            {/* Bottom Actions (Text Only, No Icons) */}
-            <div className="absolute bottom-3 right-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onFullscreen(activePhoto)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
-              >
-                Perbesar
-              </button>
-              <button
-                type="button"
-                onClick={() => copyLink(activePhoto.url)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
-              >
-                Salin Link
-              </button>
-              <a
-                href={activePhoto.url}
-                target="_blank"
-                rel="noreferrer"
-                download
-                className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#22d3ee] hover:bg-cyan-300 text-[#110C2A] transition-all border border-white/30 cursor-pointer shadow-md"
-              >
-                Unduh HD
-              </a>
-            </div>
-          </div>
-
-          <div className="p-3 bg-white/95 backdrop-blur-md rounded-xl border border-[#110C2A]/10 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-extrabold text-[#110C2A] truncate">
-                {activePhoto.title || batch.title}
-              </p>
-              <p className="text-[11px] text-[#110C2A]/60">
-                {activePhoto.scene || batch.scene} • {activePhoto.aspectRatio || batch.aspectRatio || '1:1'}
-              </p>
-            </div>
-            {activePhoto.prompt && onApplyPrompt && (
-              <button
-                type="button"
-                onClick={() => onApplyPrompt(activePhoto.prompt)}
-                className="text-[11px] font-bold text-[#6c3df4] hover:underline shrink-0 cursor-pointer"
-              >
-                Pakai Prompt Ini Lagi
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
-
-
 export default function ProductStudio({
   onGenerationStart,
   onGenerationEnd,
@@ -1064,7 +931,8 @@ ${agentInfo?.suggested_prompt || ''}
     <div className="w-full h-full flex flex-col items-center justify-between bg-[#FCEED1] text-[#110C2A] relative overflow-hidden">
       
       {/* ── MAIN CONTENT AREA ── */}
-      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 pt-4 px-4 sm:px-6 flex flex-col items-center justify-center">
+      <div className={`flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 pt-4 px-4 sm:px-6 flex flex-col ${generationBatches.length > 0 && !isGenerating ? "justify-start items-stretch" : "items-center justify-center"}`}>
+
         {isGenerating ? (
           <div className="flex flex-col items-center justify-center p-8 bg-white/85 backdrop-blur-2xl rounded-3xl border border-[#A175FF]/30 shadow-2xl max-w-lg w-full text-center animate-fade-in my-auto">
             <div className="relative mb-5">
@@ -1134,8 +1002,8 @@ ${agentInfo?.suggested_prompt || ''}
               </div>
             </div>
 
-            {/* List Carousel Per Sesi Generate */}
-            <div className="flex flex-col gap-6">
+            {/* Grid Kartu Sesi Generate (Skala Ringkas & Muat Banyak) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 w-full">
               {generationBatches.map((batch, batchIdx) => (
                 <BatchGenerationCard
                   key={batch.id || batchIdx}
