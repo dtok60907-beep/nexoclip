@@ -224,6 +224,7 @@ export default function ProductStudio({
   const [activePopover, setActivePopover] = useState(null);
   const dropdownRef = useRef(null);
   const textareaRef = useRef(null);
+  const modalTextareaRef = useRef(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -386,20 +387,15 @@ ${agentInfo?.suggested_prompt || ''}
     setTimeout(() => setCopiedBrief(false), 2500);
   };
 
-  // Listener Paste Global (Cmd+V / Ctrl+V) - TIDAK auto-run agar bisa multiple link
+  // Listener Paste Global (Cmd+V / Ctrl+V) - Mendukung Paste Gambar & Link di Mana Saja
   useEffect(() => {
     const handlePaste = (e) => {
-      // 1. Jangan cegat paste jika user sedang aktif mengetik di input atau textarea
-      const targetTag = e.target?.tagName?.toLowerCase();
-      if (targetTag === 'input' || targetTag === 'textarea') {
-        return;
-      }
-
-      // 2. Cek file gambar langsung dari clipboard
+      // 1. Cek file gambar langsung dari clipboard (selalu tangkap sekalipun user fokus di input/textarea!)
       const items = e.clipboardData?.items;
       if (items) {
         for (const item of items) {
           if (item.type.startsWith('image/')) {
+            e.preventDefault();
             const file = item.getAsFile();
             if (file) {
               const reader = new FileReader();
@@ -417,8 +413,10 @@ ${agentInfo?.suggested_prompt || ''}
                   };
                 });
                 setActivePopover('linkModal');
-                setExtractSuccessMessage('✓ Foto dari clipboard ditambahkan ke koleksi.');
+                setExtractSuccessMessage('✓ Foto berhasil ditempel dari clipboard ke koleksi!');
                 setExtractError('');
+                const combined = Array.from(new Set([...(productData?.images || []), dataUrl]));
+                runProductAgentAnalysis(combined, productData?.title || 'Foto Produk Marketplace', marketplaceUrl);
               };
               reader.readAsDataURL(file);
               return;
@@ -427,13 +425,24 @@ ${agentInfo?.suggested_prompt || ''}
         }
       }
 
-      // 3. Cek teks tautan gambar atau URL produk di clipboard
+      // 2. Jika bukan gambar (berarti teks link / teks biasa):
+      // Jika user sedang aktif fokus di input atau textarea, biarkan browser menempel teks secara native
+      const targetTag = e.target?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea') {
+        return;
+      }
+
+      // 3. Jika user menekan Cmd+V saat fokus di latar belakang / luar input:
       const text = e.clipboardData?.getData('text')?.trim();
-      if (text && (text.startsWith('http://') || text.startsWith('https://'))) {
-        setActivePopover('linkModal');
-        setMarketplaceUrl((prev) => (prev ? `${prev}\n${text}` : text));
-        setExtractSuccessMessage('✓ Link produk ditempel. Anda bisa menambah link lain atau klik Ambil Foto.');
-        setExtractError('');
+      if (text) {
+        const hasUrl = /https?:\/\/[^\s"',]+/i.test(text);
+        if (hasUrl) {
+          e.preventDefault();
+          setActivePopover('linkModal');
+          setMarketplaceUrl((prev) => (prev ? `${prev}\n${text}` : text));
+          setExtractSuccessMessage('✓ Link berhasil ditempel. Anda bisa menambah link lain atau klik Ambil Foto.');
+          setExtractError('');
+        }
       }
     };
 
@@ -1520,12 +1529,45 @@ ${agentInfo?.suggested_prompt || ''}
                       </div>
                       <div className="flex gap-2 items-stretch">
                         <textarea
+                          ref={modalTextareaRef}
                           rows={3}
                           placeholder="Tempel 1 atau banyak link Shopee / Tokopedia / CDN gambar di sini...&#10;Contoh:&#10;https://down-id.img.susercontent.com/file/...&#10;https://down-id.img.susercontent.com/file/..."
                           value={marketplaceUrl}
                           onChange={(e) => {
                             setMarketplaceUrl(e.target.value);
                             setExtractSuccessMessage('');
+                          }}
+                          onPaste={(e) => {
+                            // Intersep paste gambar saat kursor berada di dalam textarea
+                            const items = e.clipboardData?.items;
+                            if (items) {
+                              for (const item of items) {
+                                if (item.type.startsWith('image/')) {
+                                  e.preventDefault();
+                                  const file = item.getAsFile();
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = () => {
+                                      const dataUrl = reader.result;
+                                      setSelectedImage((curr) => curr || dataUrl);
+                                      setProductData((prev) => {
+                                        const merged = Array.from(new Set([...(prev?.images || []), dataUrl]));
+                                        return {
+                                          platform: prev?.platform || 'Shopee / Clipboard',
+                                          title: prev?.title || 'Foto Produk Marketplace',
+                                          price: prev?.price || null,
+                                          images: merged,
+                                        };
+                                      });
+                                      setExtractSuccessMessage('✓ Foto dari clipboard berhasil ditambahkan ke koleksi!');
+                                      setExtractError('');
+                                    };
+                                    reader.readAsDataURL(file);
+                                    return;
+                                  }
+                                }
+                              }
+                            }
                           }}
                           className="flex-1 rounded-xl border border-[#110C2A]/20 bg-white px-3 py-2 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 focus:outline-none focus:ring-2 focus:ring-[#A175FF] shadow-inner resize-none custom-scrollbar leading-relaxed"
                         />
@@ -1564,37 +1606,53 @@ ${agentInfo?.suggested_prompt || ''}
                       <button
                         type="button"
                         onClick={async () => {
-                          try {
-                            const clipboardItems = await navigator.clipboard.read();
-                            for (const item of clipboardItems) {
-                              const imageType = item.types.find((t) => t.startsWith('image/'));
-                              if (imageType) {
-                                const blob = await item.getType(imageType);
-                                const reader = new FileReader();
-                                reader.onload = () => {
-                                  setProductData((prev) => {
-                                    const merged = Array.from(new Set([...(prev?.images || []), reader.result]));
-                                    return {
-                                      platform: prev?.platform || 'Shopee / Clipboard',
-                                      title: prev?.title || 'Foto Produk Marketplace',
-                                      images: merged,
-                                    };
-                                  });
-                                  setSelectedImage((curr) => curr || reader.result);
-                                  setExtractSuccessMessage('✓ Foto dari clipboard berhasil ditambahkan ke koleksi.');
-                                };
-                                reader.readAsDataURL(blob);
+                          setExtractError('');
+                          // 1. Coba baca file gambar dari clipboard
+                          if (navigator.clipboard?.read) {
+                            try {
+                              const clipboardItems = await navigator.clipboard.read();
+                              for (const item of clipboardItems) {
+                                const imageType = item.types.find((t) => t.startsWith('image/'));
+                                if (imageType) {
+                                  const blob = await item.getType(imageType);
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    const dataUrl = reader.result;
+                                    setSelectedImage((curr) => curr || dataUrl);
+                                    setProductData((prev) => {
+                                      const merged = Array.from(new Set([...(prev?.images || []), dataUrl]));
+                                      return {
+                                        platform: prev?.platform || 'Shopee / Clipboard',
+                                        title: prev?.title || 'Foto Produk Marketplace',
+                                        images: merged,
+                                      };
+                                    });
+                                    setExtractSuccessMessage('✓ Foto dari clipboard berhasil ditambahkan ke koleksi!');
+                                  };
+                                  reader.readAsDataURL(blob);
+                                  return;
+                                }
+                              }
+                            } catch {}
+                          }
+
+                          // 2. Baca teks / URL dari clipboard
+                          if (navigator.clipboard?.readText) {
+                            try {
+                              const text = (await navigator.clipboard.readText())?.trim();
+                              if (text) {
+                                setMarketplaceUrl((prev) => (prev ? `${prev}\n${text}` : text));
+                                setExtractSuccessMessage('✓ Link berhasil ditempel ke input. Klik "Ambil Foto" untuk memuat.');
                                 return;
                               }
-                            }
-                            const text = await navigator.clipboard.readText();
-                            if (text) {
-                              setMarketplaceUrl((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
-                              setExtractSuccessMessage('✓ Link berhasil ditambahkan. Klik "Ambil Foto" untuk memuat foto.');
-                            }
-                          } catch {
-                            alert('Silakan tekan tombol keyboard Cmd+V (Mac) atau Ctrl+V (Windows) untuk menempelkan link/foto.');
+                            } catch {}
                           }
+
+                          // 3. Fallback info
+                          if (modalTextareaRef.current) {
+                            modalTextareaRef.current.focus();
+                          }
+                          setExtractSuccessMessage('Silakan tekan tombol keyboard Cmd+V (Mac) atau Ctrl+V (Windows) di kotak teks.');
                         }}
                         className="flex-1 py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#A175FF]/30 text-[#6c3df4] text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-[0.99] cursor-pointer"
                       >
