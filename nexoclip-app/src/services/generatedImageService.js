@@ -22,11 +22,12 @@ async function loadImageBytes(dataUrl, fetchImpl) {
   return { contentType, body: Buffer.from(await response.arrayBuffer()) };
 }
 
-export async function persistGeneratedImage({ workspaceId, dataUrl, storage = new R2ObjectStorage(), fetch: fetchImpl = globalThis.fetch, query = (...args) => getPool().query(...args) }) {
+export async function persistGeneratedImage({ workspaceId, dataUrl, filename, storage = new R2ObjectStorage(), fetch: fetchImpl = globalThis.fetch, query = (...args) => getPool().query(...args) }) {
   if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
   const { contentType, body } = await loadImageBytes(dataUrl, fetchImpl);
   const extension = contentType === 'image/jpeg' ? 'jpg' : contentType.slice('image/'.length);
-  const key = `${workspaceId}/generated/${randomUUID()}.${extension}`;
+  const namePrefix = filename ? `${filename.replace(/[^a-zA-Z0-9_-]/g, '_')}-` : '';
+  const key = `${workspaceId}/generated/${namePrefix}${randomUUID()}.${extension}`;
   const url = await storage.put(key, body, contentType);
   const result = await query(
     `INSERT INTO assets (workspace_id, storage_key, filename, content_type, size_bytes)

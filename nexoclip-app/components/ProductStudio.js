@@ -186,6 +186,8 @@ export default function ProductStudio({
     return [];
   });
   const [generationElapsed, setGenerationElapsed] = useState(0);
+  const [galleryViewMode, setGalleryViewMode] = useState('carousel'); // 'carousel' | 'grid'
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
 
   useEffect(() => {
     let timer;
@@ -600,6 +602,7 @@ ${agentInfo?.suggested_prompt || ''}
       }));
 
       setGeneratedResults((prev) => [...formattedOutputs, ...prev]);
+      setActiveSlideIndex(0);
 
       if (onGenerationComplete) {
         onGenerationComplete(formattedOutputs);
@@ -672,6 +675,7 @@ ${agentInfo?.suggested_prompt || ''}
       const allNewOutputs = batchResults.flat();
       if (allNewOutputs.length > 0) {
         setGeneratedResults((prev) => [...allNewOutputs, ...prev]);
+        setActiveSlideIndex(0);
         if (onGenerationComplete) onGenerationComplete(allNewOutputs);
       } else {
         throw new Error('Gagal menghasilkan foto kampanye batch');
@@ -739,15 +743,51 @@ ${agentInfo?.suggested_prompt || ''}
           </div>
         ) : generatedResults.length > 0 ? (
           <div className="w-full flex flex-col gap-4 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-3">
+            {/* Gallery Header with View Mode Switcher */}
+            <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-3 flex-wrap gap-2">
               <div>
-                <h2 className="text-lg font-bold text-[#110C2A]">Galeri Hasil Photoshoot</h2>
+                <h2 className="text-lg font-bold text-[#110C2A] flex items-center gap-2">
+                  <span>📸</span>
+                  <span>Galeri Hasil Photoshoot</span>
+                </h2>
                 <p className="text-xs text-[#110C2A]/60">Ditenagai oleh BytePlus SeaDream 5.0 Studio</p>
               </div>
+
               <div className="flex items-center gap-2">
-                <span className="text-xs px-2.5 py-1 rounded-full bg-[#A175FF]/15 text-[#110C2A] font-semibold">
-                  {generatedResults.length} foto dihasilkan
+                {/* Carousel / Grid View Switcher */}
+                {generatedResults.length > 1 && (
+                  <div className="flex items-center bg-white/90 p-0.5 rounded-xl border border-[#110C2A]/15 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => setGalleryViewMode('carousel')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        galleryViewMode === 'carousel'
+                          ? 'bg-[#6c3df4] text-white shadow-xs'
+                          : 'text-[#110C2A]/60 hover:text-[#110C2A]'
+                      }`}
+                    >
+                      <span>🎠</span>
+                      <span style={galleryViewMode === 'carousel' ? { color: '#ffffff' } : {}}>Carousel</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGalleryViewMode('grid')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        galleryViewMode === 'grid'
+                          ? 'bg-[#6c3df4] text-white shadow-xs'
+                          : 'text-[#110C2A]/60 hover:text-[#110C2A]'
+                      }`}
+                    >
+                      <span>⊞</span>
+                      <span style={galleryViewMode === 'grid' ? { color: '#ffffff' } : {}}>Grid</span>
+                    </button>
+                  </div>
+                )}
+
+                <span className="text-xs px-2.5 py-1 rounded-full bg-[#A175FF]/15 text-[#6c3df4] font-bold">
+                  {generatedResults.length} foto
                 </span>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -756,7 +796,7 @@ ${agentInfo?.suggested_prompt || ''}
                       try { localStorage.removeItem('nexoclip_product_studio_history'); } catch {}
                     }
                   }}
-                  className="text-xs text-[#110C2A]/50 hover:text-red-500 font-semibold px-2 py-1 rounded-lg hover:bg-black/5 transition-colors"
+                  className="text-xs text-[#110C2A]/50 hover:text-red-500 font-semibold px-2 py-1 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
                   title="Hapus riwayat galeri"
                 >
                   Bersihkan
@@ -764,69 +804,232 @@ ${agentInfo?.suggested_prompt || ''}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {generatedResults.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="group relative rounded-2xl overflow-hidden bg-black/5 border border-[#110C2A]/10 shadow-sm hover:shadow-xl transition-all duration-300"
-                >
+            {/* CAROUSEL VIEW: If multiple photos and carousel mode active */}
+            {galleryViewMode === 'carousel' && generatedResults.length > 1 && (
+              <div className="w-full max-w-4xl mx-auto flex flex-col gap-4 animate-fade-in">
+                {(() => {
+                  const activeEntry = generatedResults[activeSlideIndex] || generatedResults[0];
+                  if (!activeEntry) return null;
+                  return (
+                    <div className="flex flex-col gap-3">
+                      <div className="relative aspect-square sm:aspect-[4/3] w-full rounded-3xl overflow-hidden bg-neutral-900 border border-[#110C2A]/10 shadow-2xl flex items-center justify-center">
+                        <img
+                          src={activeEntry.url}
+                          alt={activeEntry.title || "Studio Commercial Shot"}
+                          className="w-full h-full object-contain sm:object-cover transition-all duration-300"
+                        />
+
+                        {/* Navigation Arrows */}
+                        <button
+                          type="button"
+                          onClick={() => setActiveSlideIndex((prev) => (prev > 0 ? prev - 1 : generatedResults.length - 1))}
+                          className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-110 active:scale-95"
+                          title="Foto Sebelumnya"
+                        >
+                          <span className="text-2xl font-bold leading-none -ml-0.5">‹</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveSlideIndex((prev) => (prev < generatedResults.length - 1 ? prev + 1 : 0))}
+                          className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-110 active:scale-95"
+                          title="Foto Selanjutnya"
+                        >
+                          <span className="text-2xl font-bold leading-none -mr-0.5">›</span>
+                        </button>
+
+                        {/* Top Floating Badges */}
+                        <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+                          <span style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#ffffff' }} className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border border-white/20">
+                            Foto {activeSlideIndex + 1} dari {generatedResults.length}
+                          </span>
+                          <span style={{ backgroundColor: '#6c3df4', color: '#ffffff' }} className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm">
+                            ✨ {activeEntry.scene || 'Photoshoot 3D'}
+                          </span>
+                        </div>
+
+                        {/* Bottom Floating Quick Actions */}
+                        <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFullscreenImage(activeEntry)}
+                            style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff' }}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer shadow-md"
+                          >
+                            <span>🔍</span>
+                            <span>Perbesar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(activeEntry.url).catch(() => {}); }
+                              alert("Link foto berhasil disalin!");
+                            }}
+                            style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff' }}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer shadow-md"
+                          >
+                            <span>📋</span>
+                            <span>Salin Link</span>
+                          </button>
+                          <a
+                            href={activeEntry.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            download
+                            style={{ backgroundColor: '#22d3ee', color: '#110C2A' }}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-black hover:bg-cyan-300 transition-all border border-white/30 flex items-center gap-1.5 cursor-pointer shadow-md"
+                          >
+                            <span>📥</span>
+                            <span>Unduh HD</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Active Slide Info Card (Clean Light Aesthetic - 100% Readable) */}
+                      <div className="p-4 bg-white/95 backdrop-blur-md rounded-2xl border border-[#110C2A]/10 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span style={{ color: '#6c3df4', backgroundColor: 'rgba(161, 117, 255, 0.15)' }} className="px-2.5 py-0.5 rounded-full text-xs font-bold">
+                              {activeEntry.scene || 'Minimalist Podium'}
+                            </span>
+                            <span style={{ color: 'rgba(17, 12, 42, 0.55)' }} className="text-xs font-medium">
+                              {activeEntry.aspectRatio || '1:1'} • {activeEntry.modelName || 'BytePlus SeaDream 5.0'}
+                            </span>
+                          </div>
+                          <h3 style={{ color: '#110C2A' }} className="text-sm font-extrabold text-[#110C2A] truncate">
+                            {activeEntry.title || "Studio Commercial Shot"}
+                          </h3>
+                        </div>
+                        {activeEntry.prompt && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomPrompt(activeEntry.prompt);
+                              alert("Prompt diterapkan ke input di bawah!");
+                            }}
+                            className="text-[11px] font-bold text-[#6c3df4] hover:underline shrink-0 cursor-pointer"
+                          >
+                            Pakai Prompt Ini Lagi ➔
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Horizontal Filmstrip Thumbnails */}
+                      <div className="flex items-center gap-2.5 overflow-x-auto custom-scrollbar p-1 pb-2">
+                        {generatedResults.map((item, idx) => {
+                          const isActive = activeSlideIndex === idx;
+                          return (
+                            <div
+                              key={item.id || idx}
+                              onClick={() => setActiveSlideIndex(idx)}
+                              className={`relative shrink-0 w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
+                                isActive
+                                  ? 'border-[#A175FF] ring-4 ring-[#A175FF]/30 scale-105 shadow-md'
+                                  : 'border-transparent opacity-70 hover:opacity-100 hover:border-[#110C2A]/20'
+                              }`}
+                            >
+                              <img src={item.url} alt="" className="w-full h-full object-cover" />
+                              <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 rounded">
+                                #{idx + 1}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* GRID VIEW: Rendered when in grid mode OR when single photo */}
+            {(galleryViewMode === 'grid' || generatedResults.length === 1) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {generatedResults.map((entry, idx) => (
                   <div
-                    className="relative aspect-square w-full overflow-hidden bg-neutral-900 cursor-pointer"
-                    onClick={() => setFullscreenImage(entry)}
+                    key={entry.id || idx}
+                    className="group relative rounded-2xl overflow-hidden bg-white/90 border border-[#110C2A]/10 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col"
                   >
-                    <img
-                      src={entry.url}
-                      alt={entry.title || "Studio Commercial Shot"}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                    <div
+                      className="relative aspect-square w-full overflow-hidden bg-[#110C2A]/5 cursor-pointer"
+                      onClick={() => setFullscreenImage(entry)}
+                    >
+                      <img
+                        src={entry.url}
+                        alt={entry.title || "Studio Commercial Shot"}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
-                      <button
-                        type="button"
-                        title="Salin Tautan"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(entry.url).catch(() => {}); }
-                          alert("Link gambar berhasil disalin!");
-                        }}
-                        style={{ color: '#ffffff' }}
-                        className="p-2 bg-black/70 backdrop-blur-md rounded-full text-white hover:bg-[#A175FF] transition-all border border-white/10"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                      </button>
-                      <a
-                        href={entry.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Download HD"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ color: '#000000' }}
-                        className="p-2 bg-[#22d3ee] backdrop-blur-md rounded-full text-black hover:bg-cyan-300 transition-all border border-white/10"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                        </svg>
-                      </a>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3.5">
+                        <button
+                          type="button"
+                          title="Salin Tautan"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(entry.url).catch(() => {}); }
+                            alert("Link gambar berhasil disalin!");
+                          }}
+                          style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+                          className="p-2 rounded-full hover:bg-[#A175FF] transition-all border border-white/20 shadow-md cursor-pointer"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                          </svg>
+                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {generatedResults.length > 1 && (
+                            <button
+                              type="button"
+                              title="Tampilkan di Carousel"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveSlideIndex(idx);
+                                setGalleryViewMode('carousel');
+                              }}
+                              style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+                              className="p-2 rounded-full hover:bg-[#A175FF] transition-all border border-white/20 shadow-md cursor-pointer"
+                            >
+                              <span>🎠</span>
+                            </button>
+                          )}
+                          <a
+                            href={entry.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Unduh HD"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ color: '#110C2A', backgroundColor: '#22d3ee' }}
+                            className="p-2 rounded-full font-bold hover:bg-cyan-300 transition-all border border-white/25 shadow-md cursor-pointer"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Clean Light Card Footer (100% Readable, No Inverted Text) */}
+                    <div className="p-3 bg-white flex flex-col gap-1.5 border-t border-[#110C2A]/10">
+                      <p style={{ color: '#110C2A' }} className="text-xs font-bold line-clamp-1 text-[#110C2A]">
+                        {entry.title || "Studio Commercial Shot"}
+                      </p>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span
+                          style={{ color: '#6c3df4', backgroundColor: 'rgba(161, 117, 255, 0.15)' }}
+                          className="px-2 py-0.5 rounded-full font-bold"
+                        >
+                          {entry.scene || 'Minimalist'}
+                        </span>
+                        <span style={{ color: 'rgba(17, 12, 42, 0.55)' }} className="font-medium">
+                          {entry.aspectRatio || '1:1'} • BytePlus
+                        </span>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="p-3 bg-[#181528] backdrop-blur-sm border-t border-white/5 flex flex-col gap-1.5 text-white">
-                    <p className="text-xs font-semibold line-clamp-1 text-white/90">
-                      {entry.title || "Studio Commercial Shot"}
-                    </p>
-                    <div className="flex items-center justify-between text-[10px] text-white/50">
-                      <span className="px-2 py-0.5 rounded bg-white/10 text-[#22d3ee] font-medium">
-                        {entry.scene || 'Minimalist'}
-                      </span>
-                      <span>{entry.aspectRatio || '1:1'} • BytePlus</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh] mt-4">
@@ -891,8 +1094,9 @@ ${agentInfo?.suggested_prompt || ''}
         )}
       </div>
 
-      {/* ── FLOATING PROMPT COMPOSER DOCK ── */}
-      <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-0 right-0 mx-auto w-full max-w-[95%] xl:max-w-5xl z-30 animate-fade-in-up">
+      {/* ── FLOATING PROMPT COMPOSER DOCK (Disembunyikan saat proses generate) ── */}
+      {!isGenerating && (
+        <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-0 right-0 mx-auto w-full max-w-[95%] xl:max-w-5xl z-30 animate-fade-in-up">
         <div className="flex flex-col gap-3">
           
           {/* Active Extracted Product Chip / Bar */}
@@ -1137,7 +1341,7 @@ ${agentInfo?.suggested_prompt || ''}
                           key={camp.id}
                           type="button"
                           onClick={() => applyCreativeConcept(camp)}
-                          style={isSelected ? { backgroundColor: '#110C2A', color: '#ffffff', borderColor: '#110C2A' } : {}}
+                          style={isSelected ? { backgroundColor: '#6c3df4', color: '#ffffff', borderColor: '#6c3df4' } : {}}
                           className={`px-3 py-1.5 rounded-xl text-left shrink-0 transition-all border flex items-center gap-2.5 cursor-pointer ${
                             isSelected
                               ? 'bg-[#110C2A] text-white border-[#110C2A] shadow-md ring-2 ring-[#A175FF]/40 scale-[1.02]'
@@ -2052,7 +2256,8 @@ ${agentInfo?.suggested_prompt || ''}
             </PromptAction>
           </PromptFooter>
         </div>
-      </PromptComposer>
+        </PromptComposer>
+      )}
 
       {/* ── FULLSCREEN LIGHTBOX MODAL ── */}
       {fullscreenImage && (
@@ -2079,10 +2284,10 @@ ${agentInfo?.suggested_prompt || ''}
               </button>
             </div>
 
-            <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white">
+            <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-bold text-base text-white">{fullscreenImage.title || 'Product Studio Shot'}</h3>
-                <p className="text-xs text-white/50 mt-0.5">
+                <h3 style={{ color: '#ffffff' }} className="font-bold text-base">{fullscreenImage.title || 'Product Studio Shot'}</h3>
+                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }} className="text-xs mt-0.5 font-medium">
                   Scene: {fullscreenImage.scene} • Rasio: {fullscreenImage.aspectRatio} • Engine: BytePlus SeaDream
                 </p>
               </div>

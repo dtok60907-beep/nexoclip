@@ -145,9 +145,11 @@ export async function POST(request) {
             persistedOutputs = await Promise.all(
               outputImages.map(async (img) => {
                 try {
+                  const cleanTitle = (productTitle || 'product').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase().slice(0, 35);
                   const persisted = await persistGeneratedImage({
                     workspaceId: tenant.workspace.id,
                     dataUrl: img.url,
+                    filename: `product-studio-${cleanTitle}`,
                   });
                   return { ...img, ...persisted };
                 } catch {
