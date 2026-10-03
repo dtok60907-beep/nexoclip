@@ -108,7 +108,7 @@ export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai
 export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl = globalThis.fetch } = {}) {
   if (!baseUrl) throw new TypeError('baseUrl is required');
   const root = String(baseUrl).replace(/\/+$/, '');
-  return { async generate({ model, prompt, aspectRatio, resolution, referenceImages }) {
+  return { async generate({ model, prompt, aspectRatio, resolution, referenceImages, watermark }) {
     // Deployment endpoints accept resolution presets; base models use explicit dimensions to preserve ratio.
     const providerResolution = model === 'ep-20260907150312-xx7gf' && resolution?.toUpperCase() === '1K' ? '2K' : resolution;
     const presetOnly = model.startsWith('ep-') || model.includes('seedream-5-0-pro');
@@ -120,6 +120,7 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model, prompt, response_format: 'url',
+          watermark: watermark !== undefined ? watermark : false,
           ...(size ? { size } : {}),
           ...(referenceImages?.length ? { image: referenceImages } : {}),
         }),

@@ -169,6 +169,8 @@ export default function ProductStudio({
   const [selectedSceneId, setSelectedSceneId] = useState('minimalist_podium');
   const [customPrompt, setCustomPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [imageCount, setImageCount] = useState(1); // 1, 2, 4 foto
+  const [isWatermarkEnabled, setIsWatermarkEnabled] = useState(false); // default: false (bersih tanpa watermark)
 
   // Status Generate & Galeri
   const [isGenerating, setIsGenerating] = useState(false);
@@ -527,6 +529,8 @@ ${agentInfo?.suggested_prompt || ''}
           model: selectedModel.id,
           referenceMode,
           preserveSilhouette: referenceMode === 'guided',
+          count: imageCount,
+          watermark: isWatermarkEnabled,
         }),
       });
 
@@ -557,6 +561,78 @@ ${agentInfo?.suggested_prompt || ''}
       if (onGenerationEnd) onGenerationEnd();
     }
   };
+
+  // Batch generate semua 5 sudut kampanye dari Creative Director sekaligus
+  const handleBatchGenerateAllCampaigns = async () => {
+    const campaignsToRun = (creativeCampaigns.length > 0 ? creativeCampaigns : getInitialCampaigns(editedTitle || agentInfo?.name || productData?.title, agentInfo?.visual_details)).slice(0, 5);
+    if (!campaignsToRun.length) return;
+
+    let currentProdImg = selectedImage;
+    if (!currentProdImg && (marketplaceUrl.startsWith('http://') || marketplaceUrl.startsWith('https://'))) {
+      await handleExtract();
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerateError('');
+    if (onGenerationStart) onGenerationStart();
+
+    const workspaceId = typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null;
+
+    try {
+      const tasks = campaignsToRun.map(async (camp) => {
+        try {
+          const res = await fetch('/api/marketplace/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(workspaceId ? { 'x-workspace-id': workspaceId } : {}),
+            },
+            body: JSON.stringify({
+              productTitle: editedTitle || agentInfo?.name || productData?.title || 'Commercial Product',
+              productImage: currentProdImg || 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=800&q=80',
+              scenePreset: 'custom',
+              customPrompt: camp.prompt,
+              visualDetails: agentInfo?.visual_details || '',
+              aspectRatio,
+              model: selectedModel.id,
+              referenceMode: camp.recommended_mode || 'creative_3d',
+              preserveSilhouette: false,
+              count: 1,
+              watermark: isWatermarkEnabled,
+            }),
+          });
+          const data = await res.json();
+          return (data.outputs || []).map((out, idx) => ({
+            ...out,
+            id: out.id || `byteplus-${Date.now()}-${camp.id}-${idx}`,
+            title: `${editedTitle || agentInfo?.name || 'Produk'} • ${camp.title}`,
+            scene: camp.title,
+            aspectRatio,
+            modelName: selectedModel.name,
+          }));
+        } catch {
+          return [];
+        }
+      });
+
+      const batchResults = await Promise.all(tasks);
+      const allNewOutputs = batchResults.flat();
+      if (allNewOutputs.length > 0) {
+        setGeneratedResults((prev) => [...allNewOutputs, ...prev]);
+        if (onGenerationComplete) onGenerationComplete(allNewOutputs);
+      } else {
+        throw new Error('Gagal menghasilkan foto kampanye batch');
+      }
+    } catch (err) {
+      setGenerateError(err.message || 'Gagal memproses batch foto produk');
+      if (onGenerationError) onGenerationError(err.message);
+    } finally {
+      setIsGenerating(false);
+      if (onGenerationEnd) onGenerationEnd();
+    }
+  };
+
 
   const isUrlInPrompt = customPrompt.trim().startsWith('http://') || customPrompt.trim().startsWith('https://');
 
@@ -976,6 +1052,19 @@ ${agentInfo?.suggested_prompt || ''}
                       >
                         <span>🎲</span>
                         <span>{isBrainstorming ? 'Merancang...' : 'Ide Baru'}</span>
+                      </button>
+
+                      {/* Tombol Batch Generate Semua 5 Sudut */}
+                      <button
+                        type="button"
+                        onClick={handleBatchGenerateAllCampaigns}
+                        disabled={isGenerating}
+                        style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
+                        className="text-[11px] font-extrabold px-3 py-1 rounded-xl bg-[#A175FF] hover:bg-[#8e5af8] text-white transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                        title="Generate kelima sudut pemotretan komersial sekaligus"
+                      >
+                        <span>🎬</span>
+                        <span>Generate 5 Sudut Sekaligus</span>
                       </button>
                     </div>
                   </div>
@@ -1673,6 +1762,92 @@ ${agentInfo?.suggested_prompt || ''}
                   </PromptPopover>
                 )}
               </div>
+
+              {/* 4. Multi-Image Output Count Pill (1x, 2x, 4x) */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActivePopover((p) => (p === 'count' ? null : 'count'));
+                  }}
+                  className={promptControlClassName({
+                    active: activePopover === 'count',
+                  })}
+                  title="Pilih jumlah foto yang dihasilkan sekaligus"
+                >
+                  <span className="text-xs shrink-0">🖼️</span>
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
+                    {imageCount === 1 ? '1 Foto' : `${imageCount} Variasi`}
+                  </span>
+                  <PromptChevronIcon />
+                </button>
+
+                {activePopover === 'count' && (
+                  <PromptPopover onClick={(e) => e.stopPropagation()} className="w-64">
+                    <PromptPopoverHeader>Jumlah Foto Dihasilkan</PromptPopoverHeader>
+                    <PromptMenuList>
+                      <PromptMenuItem
+                        selected={imageCount === 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImageCount(1);
+                          setActivePopover(null);
+                        }}
+                        description="Standar: 1 foto studio tajam"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs">1 Foto</span>
+                          <span className="text-[10px] text-gray-500 ml-auto">1x</span>
+                        </div>
+                      </PromptMenuItem>
+                      <PromptMenuItem
+                        selected={imageCount === 2}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImageCount(2);
+                          setActivePopover(null);
+                        }}
+                        description="2 variasi sudut & pencahayaan berbeda"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs">2 Variasi</span>
+                          <span className="text-[10px] font-bold text-[#A175FF] ml-auto">2x</span>
+                        </div>
+                      </PromptMenuItem>
+                      <PromptMenuItem
+                        selected={imageCount === 4}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImageCount(4);
+                          setActivePopover(null);
+                        }}
+                        description="4 batch photoshoot komersial lengkap"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs">4 Variasi</span>
+                          <span className="text-[10px] font-bold text-emerald-600 ml-auto">4x Rekomendasi</span>
+                        </div>
+                      </PromptMenuItem>
+                    </PromptMenuList>
+                  </PromptPopover>
+                )}
+              </div>
+
+              {/* 5. Watermark Toggle Pill */}
+              <button
+                type="button"
+                onClick={() => setIsWatermarkEnabled((prev) => !prev)}
+                className={`h-[38px] flex items-center gap-1.5 px-3 rounded-md transition-all border text-xs font-bold whitespace-nowrap shadow-inner cursor-pointer ${
+                  !isWatermarkEnabled
+                    ? 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30 hover:bg-emerald-500/20'
+                    : 'bg-black/5 text-[#110C2A]/60 border-[#110C2A]/15 hover:bg-black/10'
+                }`}
+                title={!isWatermarkEnabled ? 'Watermark AI Generated dinonaktifkan (Hasil bersih profesional)' : 'Watermark AI Generated diaktifkan'}
+              >
+                <span>{!isWatermarkEnabled ? '✨' : '🏷️'}</span>
+                <span>{!isWatermarkEnabled ? 'Watermark: OFF (Bersih)' : 'Watermark: ON'}</span>
+              </button>
 
             </PromptControls>
 

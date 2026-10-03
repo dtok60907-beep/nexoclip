@@ -48,6 +48,8 @@ export async function POST(request) {
       model = 'byteplus/seedream-5.0-pro-unfiltered',
       referenceMode = 'creative_3d', // 'creative_3d' | 'guided'
       preserveSilhouette = false,
+      count = 1,
+      watermark = false,
     } = body;
 
     if (!productImage) {
@@ -106,16 +108,22 @@ export async function POST(request) {
       baseUrl,
     });
 
-    // Panggil adapter BytePlus dengan kontrol reference image
-    const result = await bytePlusAdapter.generate({
-      model: endpointId,
-      prompt: finalPrompt,
-      aspectRatio,
-      resolution,
-      referenceImages: useReferenceImage ? [productImage] : [],
-    });
+    // Panggil adapter BytePlus dengan kontrol reference image dan multi-output (batch count)
+    const batchCount = Math.min(Math.max(Number(count) || 1, 1), 4);
 
-    const outputImages = result?.outputs || [];
+    const tasks = Array.from({ length: batchCount }).map(() =>
+      bytePlusAdapter.generate({
+        model: endpointId,
+        prompt: finalPrompt,
+        aspectRatio,
+        resolution,
+        watermark: Boolean(watermark),
+        referenceImages: useReferenceImage ? [productImage] : [],
+      })
+    );
+
+    const results = await Promise.all(tasks);
+    const outputImages = results.flatMap((r) => r?.outputs || []);
     if (!outputImages.length) {
       return Response.json({ error: 'BytePlus tidak mengembalikan hasil gambar' }, { status: 502 });
     }
