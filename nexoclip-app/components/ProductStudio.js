@@ -115,15 +115,14 @@ export default function ProductStudio({
 
   // Close dropdown on outside click
   useEffect(() => {
-    function handleClickOutside(e) {
+    if (!activePopover || activePopover === 'linkModal') return;
+    const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        if (activePopover && activePopover !== 'linkModal') {
-          setActivePopover(null);
-        }
+        setActivePopover(null);
       }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    };
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
   }, [activePopover]);
 
   const currentScene = SCENE_OPTIONS.find((s) => s.id === selectedSceneId) || SCENE_OPTIONS[0];
@@ -645,7 +644,7 @@ export default function ProductStudio({
 
           {/* Bottom Row: Controls + Generate Action */}
           <PromptFooter className="flex flex-row items-center justify-between gap-3 pt-3 border-t border-[#110C2A]/5 relative">
-            <PromptControls ref={dropdownRef} className="flex items-center gap-2 relative flex-nowrap overflow-x-auto pb-0">
+            <PromptControls ref={dropdownRef} className="flex items-center gap-2 relative flex-nowrap">
               
               {/* 1. Model Selector Pill */}
               <div className="relative">
