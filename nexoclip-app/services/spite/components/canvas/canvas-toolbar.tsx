@@ -29,6 +29,20 @@ interface CanvasToolbarProps {
 
 export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = false, guests = [], onFollowGuest, chatOpen = false, chatUnread = 0, onToggleChat }: CanvasToolbarProps) {
   const [editing, setEditing] = useState(false)
+  // Typing edits a local draft; the name is saved on Enter or blur. Saving
+  // every keystroke turned an emptied field into "Untitled Project" (the
+  // document's fallback), so the last letter could never be deleted.
+  const [draft, setDraft] = useState(projectName)
+  const startEditing = () => {
+    if (readOnly) return
+    setDraft(projectName)
+    setEditing(true)
+  }
+  const commit = () => {
+    setEditing(false)
+    const next = draft.trim().slice(0, 120)
+    if (next && next !== projectName) onProjectNameChange(next)
+  }
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0b0c11]/85 px-4 backdrop-blur-md relative z-30">
@@ -40,20 +54,23 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
         {editing ? (
           <input
             autoFocus
-            value={projectName}
-            onChange={e => onProjectNameChange(e.target.value)}
+            value={draft}
+            maxLength={120}
+            aria-label="Project name"
+            onChange={e => setDraft(e.target.value)}
             readOnly={readOnly}
-            onBlur={() => setEditing(false)}
-            onKeyDown={e => e.key === 'Enter' && setEditing(false)}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter') commit()
+              if (e.key === 'Escape') { setDraft(projectName); setEditing(false) }
+            }}
             className="bg-transparent border-none outline-none text-foreground text-base tracking-tight"
             style={{ fontFamily: 'var(--font-montserrat)' }}
           />
         ) : (
           <button
-            onClick={() => {
-              if (readOnly) return
-              setEditing(true)
-            }}
+            type="button"
+            onClick={startEditing}
             className="text-sm font-semibold tracking-tight text-slate-200 transition-colors hover:text-sky-300 cursor-text"
             style={{ fontFamily: 'var(--font-montserrat)' }}
           >
