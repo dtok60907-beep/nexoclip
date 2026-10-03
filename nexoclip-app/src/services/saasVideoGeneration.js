@@ -188,6 +188,6 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
   };
 }
 
-export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env }) {
-  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter, findBytePlusAssetLink, env });
+export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env, maxPolls, pollIntervalMs }) {
+  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter, findBytePlusAssetLink, env, ...(maxPolls ? { maxPolls } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}) });
 }

@@ -19,11 +19,20 @@ import { recoverExpiredGenerationJobs } from '../repositories/generationStateRep
 const EXPIRED_GRACE_MS = 2 * 60 * 1000;
 const EXPIRED_STALE_MS = 6 * 60 * 60 * 1000;
 
+// Seedance can take 15+ minutes for a 30s 1080p video (one took 13.5 min),
+// so the 10-minute job and polling limits shared with images timed long
+// renders out mid-generation. The job lease follows this timeout.
+const DEFAULT_VIDEO_TIMEOUT_MINUTES = 30;
+const VIDEO_POLL_INTERVAL_MS = 5_000;
+
 export function videoWorkerConfig(env = process.env) {
   if (!env.REDIS_URL) throw new Error('REDIS_URL is required');
   const concurrency = Number(env.VIDEO_WORKER_CONCURRENCY || 3);
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) throw new Error('VIDEO_WORKER_CONCURRENCY must be an integer between 1 and 8');
-  return { redisUrl: env.REDIS_URL, concurrency };
+  const timeoutMinutes = Number(env.VIDEO_GENERATION_TIMEOUT_MINUTES || DEFAULT_VIDEO_TIMEOUT_MINUTES);
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes < 5 || timeoutMinutes > 120) throw new Error('VIDEO_GENERATION_TIMEOUT_MINUTES must be between 5 and 120');
+  const timeoutMs = Math.round(timeoutMinutes * 60 * 1000);
+  return { redisUrl: env.REDIS_URL, concurrency, timeoutMs, maxPolls: Math.floor(timeoutMs / VIDEO_POLL_INTERVAL_MS), pollIntervalMs: VIDEO_POLL_INTERVAL_MS };
 }
 
 export async function createVideoWorker({
@@ -57,8 +66,8 @@ export async function createVideoWorker({
   const storage = loadStorage(env);
   const processor = createGenerationProcessor({
     pool,
-    handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage), findBytePlusAssetLink: findAssetLink, env }),
-    provider: 'openrouter', persistResult, onError,
+    handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage), findBytePlusAssetLink: findAssetLink, env, maxPolls: config.maxPolls, pollIntervalMs: config.pollIntervalMs }),
+    provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs,
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
   let closed = false;

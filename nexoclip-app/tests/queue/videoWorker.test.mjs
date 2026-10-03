@@ -4,12 +4,9 @@ import assert from 'node:assert/strict';
 const { createVideoWorker, videoWorkerConfig } = await import('../../src/queue/videoWorker.mjs');
 
 test('video worker defaults to three concurrent jobs', () => {
-  assert.deepEqual(videoWorkerConfig({ REDIS_URL: 'redis://localhost:6379' }), {
-    redisUrl: 'redis://localhost:6379', concurrency: 3,
-  });
-  assert.deepEqual(videoWorkerConfig({ REDIS_URL: 'redis://localhost:6379', VIDEO_WORKER_CONCURRENCY: '3' }), {
-    redisUrl: 'redis://localhost:6379', concurrency: 3,
-  });
+  assert.equal(videoWorkerConfig({ REDIS_URL: 'redis://localhost:6379' }).concurrency, 3);
+  assert.equal(videoWorkerConfig({ REDIS_URL: 'redis://localhost:6379' }).redisUrl, 'redis://localhost:6379');
+  assert.equal(videoWorkerConfig({ REDIS_URL: 'redis://localhost:6379', VIDEO_WORKER_CONCURRENCY: '3' }).concurrency, 3);
   assert.throws(() => videoWorkerConfig({ REDIS_URL: 'redis://localhost:6379', VIDEO_WORKER_CONCURRENCY: '0' }), /integer between 1 and 8/);
 });
 
@@ -83,4 +80,13 @@ test('video worker recovers expired video jobs and refunds the ones it fails', a
     ['settle', 'unreserved', 'failed'],
     ['recover', 'video'],
   ]);
+});
+
+test('video jobs get a 30-minute timeout and polling budget, configurable by env', async () => {
+  const { videoWorkerConfig } = await import('../../src/queue/videoWorker.mjs');
+  const config = videoWorkerConfig({ REDIS_URL: 'redis://x' });
+  assert.equal(config.timeoutMs, 30 * 60 * 1000);
+  assert.equal(config.maxPolls * config.pollIntervalMs, 30 * 60 * 1000);
+  assert.equal(videoWorkerConfig({ REDIS_URL: 'redis://x', VIDEO_GENERATION_TIMEOUT_MINUTES: '45' }).timeoutMs, 45 * 60 * 1000);
+  assert.throws(() => videoWorkerConfig({ REDIS_URL: 'redis://x', VIDEO_GENERATION_TIMEOUT_MINUTES: '1' }), /between 5 and 120/);
 });
