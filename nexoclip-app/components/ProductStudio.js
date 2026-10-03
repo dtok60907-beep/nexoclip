@@ -606,6 +606,7 @@ export default function ProductStudio({
         body: JSON.stringify({
           productTitle: editedTitle || agentInfo?.name || productData?.title || 'Commercial Product',
           visualDetails: agentInfo?.visual_details || '',
+          brand: agentInfo?.brand || '',
           category: agentInfo?.category || '',
           price: editedPrice || agentInfo?.price || '',
           userDirection: customDirection || brainstormInput,
@@ -872,6 +873,7 @@ ${agentInfo?.suggested_prompt || ''}
           scenePreset: selectedSceneId,
           customPrompt: promptToUse,
           visualDetails: agentInfo?.visual_details || '',
+          brand: agentInfo?.brand || '',
           aspectRatio,
           model: selectedModel.id,
           referenceMode,
@@ -953,6 +955,7 @@ ${agentInfo?.suggested_prompt || ''}
               scenePreset: 'custom',
               customPrompt: camp.prompt,
               visualDetails: agentInfo?.visual_details || '',
+          brand: agentInfo?.brand || '',
               aspectRatio,
               model: selectedModel.id,
               referenceMode: camp.recommended_mode || 'creative_3d',

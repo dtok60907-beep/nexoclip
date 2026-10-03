@@ -60,14 +60,24 @@ export async function POST(request) {
     const promptBuilder = SCENE_PRESETS[scenePreset] || SCENE_PRESETS.minimalist_podium;
     let basePrompt = customPrompt ? customPrompt : promptBuilder(productTitle, visualDetails, customPrompt);
 
-    // Tentukan apakah menggunakan reference image atau pure 3D prompt generation
-    // Jika user memilih mode 'creative_3d' (atau preserveSilhouette = false pada custom/creative angle),
-    // kita beri kebebasan penuh pada SeaDream untuk merender sudut 3D dinamis tanpa terkunci siluet 2D depan.
-    const useReferenceImage = referenceMode === 'guided' || preserveSilhouette === true;
+    // PENTING: reference image selalu wajib disertakan agar BytePlus SeaDream 5.0
+    // dapat melihat kemasan asli, logo brand, dan tipografi teks tanpa berhalusinasi (typo).
+    const referenceImages = productImage ? [productImage] : [];
 
-    let finalPrompt = basePrompt;
-    if (!useReferenceImage && visualDetails && !basePrompt.toLowerCase().includes(visualDetails.toLowerCase().slice(0, 20))) {
-      finalPrompt = `${basePrompt}, featuring ${productTitle} (${visualDetails})`;
+    // Bangun instruksi presisi teks dan akurasi tipografi kemasan
+    const cleanTitle = (productTitle || '').trim();
+    const brandName = (body.brand || '').trim();
+    
+    // Mode 'guided' (kunci siluet) vs 'creative_3d' (sudut dinamis)
+    const modeInstruction = (referenceMode === 'guided' || preserveSilhouette === true)
+      ? 'Strict silhouette lock: Preserve the exact front silhouette, packaging geometry, dimensions, and positioning from the reference image 1:1.'
+      : 'Commercial 3D studio staging: Present the product from an engaging advertising perspective while maintaining full physical fidelity to the reference image.';
+
+    const typographyDirective = `CRITICAL PRODUCT TEXT & LABEL ACCURACY: The product packaging, brand logo, and all printed text must match the reference image with 100% fidelity. Accurately preserve the authentic brand and product label: "${cleanTitle}". Flawless spelling, zero typographical errors, razor-sharp readable typography, authentic logo rendering, no garbled letters, no distorted text, and no invented words (such as "Sacheng" or corrupt characters). All text on the product packaging must be crystal clear, perfectly legible, correctly spelled, and faithful to the real product.`;
+
+    let finalPrompt = `${basePrompt}. ${modeInstruction} ${typographyDirective}`;
+    if (visualDetails && !basePrompt.toLowerCase().includes(visualDetails.toLowerCase().slice(0, 20))) {
+      finalPrompt += `, featuring ${cleanTitle} (${visualDetails})`;
     }
 
     // Dapatkan konfigurasi BytePlus dari environment
@@ -118,7 +128,7 @@ export async function POST(request) {
         aspectRatio,
         resolution,
         watermark: Boolean(watermark),
-        referenceImages: useReferenceImage ? [productImage] : [],
+        referenceImages,
       })
     );
 
