@@ -189,7 +189,7 @@ function BatchGenerationCard({
       {/* Image Preview Container (Compact Aspect Square) */}
       <div
         className="relative aspect-square w-full overflow-hidden bg-neutral-900 cursor-pointer flex items-center justify-center"
-        onClick={() => onFullscreen(activePhoto)}
+        onClick={() => onFullscreen(batch, activeSlideIndex)}
       >
         <img
           src={activePhoto.url}
@@ -223,18 +223,18 @@ function BatchGenerationCard({
             <button
               type="button"
               onClick={handlePrev}
-              style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#ffffff' }}
-              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-80 hover:opacity-100 hover:bg-[#A175FF] text-base font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-md"
-              title="Sebelumnya"
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', color: '#ffffff' }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-90 hover:opacity-100 hover:bg-[#A175FF] text-lg font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-md"
+              title="Foto Sebelumnya"
             >
               ‹
             </button>
             <button
               type="button"
               onClick={handleNext}
-              style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#ffffff' }}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-80 hover:opacity-100 hover:bg-[#A175FF] text-base font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-md"
-              title="Berikutnya"
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', color: '#ffffff' }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-90 hover:opacity-100 hover:bg-[#A175FF] text-lg font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-md"
+              title="Foto Selanjutnya"
             >
               ›
             </button>
@@ -247,7 +247,7 @@ function BatchGenerationCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onFullscreen(activePhoto);
+              onFullscreen(batch, activeSlideIndex);
             }}
             style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', color: '#ffffff' }}
             className="px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 cursor-pointer shadow-sm"
@@ -275,15 +275,21 @@ function BatchGenerationCard({
           </a>
         </div>
 
-        {/* Mini dot indicators if multiple photos */}
+        {/* Interactive dot indicators if multiple photos */}
         {isMultiple && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 z-10 pointer-events-none">
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 z-20 pointer-events-auto">
             {photos.map((_, idx) => (
-              <span
+              <button
                 key={idx}
-                className={`w-1.5 h-1.5 rounded-full transition-all ${
-                  idx === activeSlideIndex ? 'bg-white w-3' : 'bg-white/50'
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveSlideIndex(idx);
+                }}
+                className={`h-2 rounded-full transition-all cursor-pointer shadow-sm ${
+                  idx === activeSlideIndex ? 'bg-[#A175FF] w-4' : 'bg-white/70 hover:bg-white w-2'
                 }`}
+                title={`Lihat foto ${idx + 1}`}
               />
             ))}
           </div>
@@ -435,7 +441,79 @@ export default function ProductStudio({
     if (sec < 42) return 'Merender detail pencahayaan & material 2048x2048 Ultra HD...';
     return 'Menyelesaikan sentuhan akhir & kompresi studio shot...';
   };
-  const [fullscreenImage, setFullscreenImage] = useState(null);
+  const [fullscreenData, setFullscreenData] = useState(null);
+
+  const handleOpenFullscreen = (itemOrBatch, index = 0) => {
+    if (!itemOrBatch) return;
+    if (Array.isArray(itemOrBatch.photos) && itemOrBatch.photos.length > 0) {
+      setFullscreenData({
+        photos: itemOrBatch.photos,
+        activeIndex: typeof index === 'number' ? index : 0,
+        title: itemOrBatch.title,
+        scene: itemOrBatch.scene,
+        aspectRatio: itemOrBatch.aspectRatio,
+        modelName: itemOrBatch.modelName,
+      });
+    } else if (Array.isArray(itemOrBatch)) {
+      setFullscreenData({
+        photos: itemOrBatch,
+        activeIndex: typeof index === 'number' ? index : 0,
+        title: itemOrBatch[0]?.title || 'Product Photoshoot',
+        scene: itemOrBatch[0]?.scene || 'Studio',
+        aspectRatio: itemOrBatch[0]?.aspectRatio || '1:1',
+        modelName: itemOrBatch[0]?.modelName || 'BytePlus SeaDream',
+      });
+    } else {
+      // Find batch that contains this photo
+      const foundBatch = generationBatches.find((b) =>
+        b.photos?.some((p) => p.id === itemOrBatch.id || p.url === itemOrBatch.url)
+      );
+      if (foundBatch && foundBatch.photos?.length > 1) {
+        const idx = foundBatch.photos.findIndex((p) => p.id === itemOrBatch.id || p.url === itemOrBatch.url);
+        setFullscreenData({
+          photos: foundBatch.photos,
+          activeIndex: idx >= 0 ? idx : (typeof index === 'number' ? index : 0),
+          title: foundBatch.title,
+          scene: foundBatch.scene,
+          aspectRatio: foundBatch.aspectRatio,
+          modelName: foundBatch.modelName,
+        });
+      } else {
+        setFullscreenData({
+          photos: [itemOrBatch],
+          activeIndex: 0,
+          title: itemOrBatch.title,
+          scene: itemOrBatch.scene,
+          aspectRatio: itemOrBatch.aspectRatio,
+          modelName: itemOrBatch.modelName,
+        });
+      }
+    }
+  };
+
+  // Keyboard navigation for fullscreen lightbox
+  useEffect(() => {
+    if (!fullscreenData) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setFullscreenData(null);
+      } else if (e.key === 'ArrowLeft') {
+        setFullscreenData((prev) => {
+          if (!prev || !prev.photos?.length) return prev;
+          const newIdx = prev.activeIndex > 0 ? prev.activeIndex - 1 : prev.photos.length - 1;
+          return { ...prev, activeIndex: newIdx };
+        });
+      } else if (e.key === 'ArrowRight') {
+        setFullscreenData((prev) => {
+          if (!prev || !prev.photos?.length) return prev;
+          const newIdx = prev.activeIndex < prev.photos.length - 1 ? prev.activeIndex + 1 : 0;
+          return { ...prev, activeIndex: newIdx };
+        });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [fullscreenData]);
 
   // Popover State: 'model' | 'scene' | 'ar' | 'linkModal' | null
   const [activePopover, setActivePopover] = useState(null);
@@ -1013,7 +1091,7 @@ ${agentInfo?.suggested_prompt || ''}
                     setCustomPrompt(prompt);
                     alert("Prompt diterapkan ke input di bawah!");
                   }}
-                  onFullscreen={(photo) => setFullscreenImage(photo)}
+                  onFullscreen={(batchOrPhoto, idx) => handleOpenFullscreen(batchOrPhoto, idx)}
                 />
               ))}
             </div>
@@ -2217,65 +2295,170 @@ ${agentInfo?.suggested_prompt || ''}
         </PromptComposer>
       )}
 
-      {/* ── FULLSCREEN LIGHTBOX MODAL ── */}
-      {fullscreenImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setFullscreenImage(null)}
-        >
+      {/* ── FULLSCREEN LIGHTBOX MODAL WITH FULL CAROUSEL SLIDE SUPPORT ── */}
+      {fullscreenData && (() => {
+        const modalPhotos = fullscreenData.photos && fullscreenData.photos.length > 0
+          ? fullscreenData.photos
+          : [fullscreenData];
+        const modalIndex = typeof fullscreenData.activeIndex === 'number'
+          ? Math.max(0, Math.min(fullscreenData.activeIndex, modalPhotos.length - 1))
+          : 0;
+        const currentModalPhoto = modalPhotos[modalIndex] || modalPhotos[0];
+        const hasMultiple = modalPhotos.length > 1;
+
+        const nextSlide = (e) => {
+          e?.stopPropagation();
+          setFullscreenData((prev) => ({
+            ...prev,
+            activeIndex: prev.activeIndex < modalPhotos.length - 1 ? prev.activeIndex + 1 : 0,
+          }));
+        };
+
+        const prevSlide = (e) => {
+          e?.stopPropagation();
+          setFullscreenData((prev) => ({
+            ...prev,
+            activeIndex: prev.activeIndex > 0 ? prev.activeIndex - 1 : modalPhotos.length - 1,
+          }));
+        };
+
+        return (
           <div
-            className="relative max-w-4xl max-h-[90vh] bg-[#181528] rounded-3xl overflow-hidden border border-white/10 flex flex-col shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in"
+            onClick={() => setFullscreenData(null)}
           >
-            <div className="relative flex-1 overflow-hidden bg-black flex items-center justify-center min-h-[300px] max-h-[70vh]">
-              <img
-                src={fullscreenImage.url}
-                alt={fullscreenImage.title || 'Product Photoshoot'}
-                className="max-h-[70vh] w-auto object-contain"
-              />
-              <button
-                type="button"
-                onClick={() => setFullscreenImage(null)}
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 text-white hover:bg-white hover:text-black flex items-center justify-center font-bold transition-colors border border-white/20"
-              >
-                ×
-              </button>
-            </div>
+            <div
+              className="relative w-full max-w-5xl max-h-[95vh] bg-[#181528] rounded-3xl overflow-hidden border border-white/10 flex flex-col shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Media Container */}
+              <div className="relative flex-1 overflow-hidden bg-black flex items-center justify-center min-h-[320px] max-h-[72vh] select-none">
+                <img
+                  src={currentModalPhoto.url}
+                  alt={currentModalPhoto.title || fullscreenData.title || 'Product Photoshoot'}
+                  className="max-h-[72vh] max-w-full object-contain transition-all duration-300"
+                />
 
-            <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 style={{ color: '#ffffff' }} className="font-bold text-base">{fullscreenImage.title || 'Product Studio Shot'}</h3>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }} className="text-xs mt-0.5 font-medium">
-                  Scene: {fullscreenImage.scene} • Rasio: {fullscreenImage.aspectRatio} • Engine: BytePlus SeaDream
-                </p>
-              </div>
+                {/* Carousel Left / Right Arrows in Lightbox */}
+                {hasMultiple && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={prevSlide}
+                      style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', color: '#ffffff' }}
+                      className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 hover:bg-[#A175FF] text-2xl font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-2xl"
+                      title="Foto Sebelumnya (Panah Kiri)"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      onClick={nextSlide}
+                      style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', color: '#ffffff' }}
+                      className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 hover:bg-[#A175FF] text-2xl font-bold cursor-pointer z-20 hover:scale-110 active:scale-95 shadow-2xl"
+                      title="Foto Selanjutnya (Panah Kanan)"
+                    >
+                      ›
+                    </button>
+                  </>
+                )}
 
-              <div className="flex items-center gap-3">
+                {/* Top Badge: Slide Counter */}
+                <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none z-10">
+                  {hasMultiple && (
+                    <span
+                      style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', color: '#ffffff' }}
+                      className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border border-white/20"
+                    >
+                      Foto {modalIndex + 1} dari {modalPhotos.length}
+                    </span>
+                  )}
+                  <span
+                    style={{ backgroundColor: '#6c3df4', color: '#ffffff' }}
+                    className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm"
+                  >
+                    {currentModalPhoto.scene || fullscreenData.scene || 'Photoshoot'}
+                  </span>
+                </div>
+
+                {/* Close Button */}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(fullscreenImage.url).catch(() => {}); }
-                    alert('Link foto berhasil disalin!');
-                  }}
-                  style={{ color: '#ffffff' }}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors"
+                  onClick={() => setFullscreenData(null)}
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 text-white hover:bg-white hover:text-black flex items-center justify-center text-lg font-bold transition-colors border border-white/20 z-20 cursor-pointer"
+                  title="Tutup (Esc)"
                 >
-                  Salin Link
+                  ×
                 </button>
-                <a
-                  href={fullscreenImage.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: '#000000' }}
-                  className="px-5 py-2 rounded-xl bg-[#22d3ee] hover:bg-[#06b6d4] text-black text-xs font-black transition-colors"
-                >
-                  Download HD
-                </a>
+
+                {/* Interactive Filmstrip Thumbnails inside Lightbox */}
+                {hasMultiple && (
+                  <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-2 p-1 z-20 overflow-x-auto custom-scrollbar pointer-events-auto">
+                    {modalPhotos.map((photo, pIdx) => {
+                      const isActive = pIdx === modalIndex;
+                      return (
+                        <button
+                          key={photo.id || pIdx}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFullscreenData((prev) => ({ ...prev, activeIndex: pIdx }));
+                          }}
+                          className={`relative w-12 h-12 rounded-xl overflow-hidden cursor-pointer border-2 transition-all shrink-0 ${
+                            isActive
+                              ? 'border-[#A175FF] ring-2 ring-[#A175FF]/60 scale-105 shadow-lg'
+                              : 'border-white/30 opacity-60 hover:opacity-100 hover:border-white'
+                          }`}
+                        >
+                          <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#181528] border-t border-white/10">
+                <div className="min-w-0">
+                  <h3 style={{ color: '#ffffff' }} className="font-bold text-sm sm:text-base truncate">
+                    {currentModalPhoto.title || fullscreenData.title || 'Product Studio Shot'}
+                  </h3>
+                  <p style={{ color: 'rgba(255, 255, 255, 0.7)' }} className="text-xs mt-0.5 font-medium truncate">
+                    Scene: {currentModalPhoto.scene || fullscreenData.scene || 'Custom Prompt'} • Rasio: {currentModalPhoto.aspectRatio || fullscreenData.aspectRatio || '1:1'} • Engine: {currentModalPhoto.modelName || fullscreenData.modelName || 'BytePlus SeaDream'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.clipboard?.writeText) {
+                        navigator.clipboard.writeText(currentModalPhoto.url).catch(() => {});
+                      }
+                      alert('Link foto berhasil disalin!');
+                    }}
+                    style={{ color: '#ffffff' }}
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Salin Link
+                  </button>
+                  <a
+                    href={currentModalPhoto.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    style={{ color: '#000000', backgroundColor: '#22d3ee' }}
+                    className="px-5 py-2 rounded-xl bg-[#22d3ee] hover:bg-[#06b6d4] text-black text-xs font-black transition-colors cursor-pointer shadow-md"
+                  >
+                    Download HD
+                  </a>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
