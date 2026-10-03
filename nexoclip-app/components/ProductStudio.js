@@ -394,10 +394,10 @@ ${agentInfo?.suggested_prompt || ''}
   const isUrlInPrompt = customPrompt.trim().startsWith('http://') || customPrompt.trim().startsWith('https://');
 
   return (
-    <div className="relative min-h-[calc(100vh-60px)] flex flex-col justify-between overflow-x-hidden p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
+    <div className="w-full h-full flex flex-col items-center justify-between bg-[#FCEED1] text-[#110C2A] relative overflow-hidden">
       
       {/* ── MAIN CONTENT AREA ── */}
-      <div className="flex-1 flex flex-col justify-center items-center w-full mb-32">
+      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 pt-4 px-4 sm:px-6 flex flex-col items-center justify-center">
         {generatedResults.length > 0 ? (
           <div className="w-full flex flex-col gap-4 animate-fade-in">
             <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-3">
@@ -534,7 +534,7 @@ ${agentInfo?.suggested_prompt || ''}
       </div>
 
       {/* ── FLOATING PROMPT COMPOSER DOCK ── */}
-      <PromptComposer>
+      <PromptComposer positionClassName="absolute bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up px-2 sm:px-0">
         <div className="flex flex-col gap-3">
           
           {/* Active Extracted Product Chip / Bar */}
