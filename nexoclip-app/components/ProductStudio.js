@@ -96,6 +96,14 @@ export default function ProductStudio({
   const [productData, setProductData] = useState(null);
   const [selectedImage, setSelectedImage] = useState('');
 
+  // AI Product Agent Intelligence
+  const [agentInfo, setAgentInfo] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAgentDrawerOpen, setIsAgentDrawerOpen] = useState(false);
+  const [copiedBrief, setCopiedBrief] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+
   // Konfigurasi Photoshoot
   const [selectedModel, setSelectedModel] = useState(BYTEPLUS_MODELS[0]);
   const [selectedSceneId, setSelectedSceneId] = useState('minimalist_podium');
@@ -125,10 +133,90 @@ export default function ProductStudio({
     return () => window.removeEventListener('click', handler);
   }, [activePopover]);
 
-  // Listener Paste Global (Cmd+V / Ctrl+V) untuk mengambil gambar atau URL dari clipboard
+  // Ekstraksi AI Agent Intelligence menggunakan BytePlus VLM
+  const runProductAgentAnalysis = async (imgUrl, existingTitle = '', existingUrl = '') => {
+    const targetImage = imgUrl || selectedImage || '';
+    const targetTitle = existingTitle || productData?.title || '';
+    const targetUrl = existingUrl || marketplaceUrl || '';
+
+    if (!targetImage && !targetTitle && !targetUrl) return;
+
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/marketplace/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: targetImage,
+          title: targetTitle,
+          url: targetUrl,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAgentInfo(data);
+        setEditedTitle(data.name || targetTitle);
+        setProductData((prev) => {
+          const prevTitle = prev?.title || '';
+          const isGeneric = !prevTitle || prevTitle.includes('Clipboard') || prevTitle === 'Foto Produk';
+          return {
+            ...(prev || {}),
+            platform: prev?.platform || 'Shopee / Marketplace',
+            title: isGeneric ? (data.name || prevTitle) : prevTitle,
+            brand: data.brand || prev?.brand,
+            category: data.category || prev?.category,
+            images: prev?.images || (targetImage ? [targetImage] : []),
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Agent analysis warning:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Terapkan Prompt Rekomendasi dari AI Agent ke Studio
+  const applyAgentPrompt = () => {
+    if (agentInfo?.suggested_prompt) {
+      setCustomPrompt(agentInfo.suggested_prompt);
+      setSelectedSceneId('custom');
+      setIsAgentDrawerOpen(false);
+    }
+  };
+
+  // Salin Product Brief ke Clipboard untuk Agent lain
+  const copyAgentBrief = () => {
+    if (!agentInfo && !productData) return;
+    const name = editedTitle || agentInfo?.name || productData?.title || 'Produk E-Commerce';
+    const brief = `# 🛍️ Product Intelligence Brief for AI Agent
+**Nama Produk**: ${name}
+**Merk**: ${agentInfo?.brand || '-'}
+**Kategori**: ${agentInfo?.category || '-'}
+**Visual & Material Specs**: ${agentInfo?.visual_details || '-'}
+
+### 🌟 Fitur Utama:
+${(agentInfo?.features || []).map((f) => `- ${f}`).join('\n') || '-'}
+
+### 💎 Keunggulan Komersial (Selling Points):
+${(agentInfo?.selling_points || []).map((s) => `- ${s}`).join('\n') || '-'}
+
+### 📢 Tagline Marketing:
+"${agentInfo?.marketing_tagline || ''}"
+
+### 📸 Rekomendasi Prompt Photoshoot Studio (BytePlus SeaDream):
+${agentInfo?.suggested_prompt || ''}
+`;
+    navigator.clipboard.writeText(brief);
+    setCopiedBrief(true);
+    setTimeout(() => setCopiedBrief(false), 2500);
+  };
+
+  // Listener Paste Global (Cmd+V / Ctrl+V)
   useEffect(() => {
     const handlePaste = (e) => {
-      // 1. Cek file gambar langsung dari clipboard (misal klik kanan 'Salin Gambar' di Shopee)
+      // 1. Cek file gambar langsung dari clipboard
       const items = e.clipboardData?.items;
       if (items) {
         for (const item of items) {
@@ -139,14 +227,17 @@ export default function ProductStudio({
               reader.onload = () => {
                 const dataUrl = reader.result;
                 setSelectedImage(dataUrl);
-                setProductData({
-                  platform: 'Shopee / Clipboard',
-                  title: 'Foto Produk dari Clipboard',
-                  price: null,
+                const currentTitle = (productData?.title && !productData.title.includes('Clipboard')) ? productData.title : '';
+                setProductData((prev) => ({
+                  platform: prev?.platform || 'Shopee / Clipboard',
+                  title: currentTitle || 'Foto Produk Marketplace',
+                  price: prev?.price || null,
                   images: [dataUrl],
-                });
+                }));
                 setActivePopover(null);
                 setExtractError('');
+                // Panggil AI Agent untuk menganalisis produk
+                runProductAgentAnalysis(dataUrl, currentTitle, marketplaceUrl);
               };
               reader.readAsDataURL(file);
               return;
@@ -167,7 +258,7 @@ export default function ProductStudio({
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, []);
+  }, [productData, marketplaceUrl]);
 
   const currentScene = SCENE_OPTIONS.find((s) => s.id === selectedSceneId) || SCENE_OPTIONS[0];
 
@@ -194,11 +285,15 @@ export default function ProductStudio({
       }
 
       setProductData(data);
-      if (data.images && data.images.length > 0) {
-        setSelectedImage(data.images[0]);
+      if (data.title) {
+        setEditedTitle(data.title);
       }
       if (data.images && data.images.length > 0) {
+        setSelectedImage(data.images[0]);
         setActivePopover(null);
+        runProductAgentAnalysis(data.images[0], data.title, urlToUse);
+      } else if (data.title) {
+        runProductAgentAnalysis('', data.title, urlToUse);
       }
     } catch (err) {
       setExtractError(err.message || 'Terjadi kesalahan saat memproses tautan marketplace');
@@ -216,14 +311,17 @@ export default function ProductStudio({
     reader.onload = () => {
       const dataUrl = reader.result;
       setSelectedImage(dataUrl);
+      const fileTitle = file.name.replace(/\.[^/.]+$/, '');
       setProductData({
         platform: 'Foto Produk',
-        title: file.name.replace(/\.[^/.]+$/, ''),
+        title: fileTitle,
         price: null,
         images: [dataUrl],
       });
+      setEditedTitle(fileTitle);
       setActivePopover(null);
       setExtractError('');
+      runProductAgentAnalysis(dataUrl, fileTitle, '');
     };
     reader.readAsDataURL(file);
   };
@@ -235,7 +333,6 @@ export default function ProductStudio({
       return;
     }
 
-    // Auto extract if marketplace URL is pasted in prompt or URL field without extracting first
     let currentProdImg = selectedImage;
     if (!currentProdImg && (marketplaceUrl.startsWith('http://') || marketplaceUrl.startsWith('https://'))) {
       await handleExtract();
@@ -256,10 +353,11 @@ export default function ProductStudio({
           ...(workspaceId ? { 'x-workspace-id': workspaceId } : {}),
         },
         body: JSON.stringify({
-          productTitle: productData?.title || 'Commercial Product',
+          productTitle: editedTitle || agentInfo?.name || productData?.title || 'Commercial Product',
           productImage: currentProdImg || 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=800&q=80',
           scenePreset: selectedSceneId,
           customPrompt: customPrompt.trim(),
+          visualDetails: agentInfo?.visual_details || '',
           aspectRatio,
           model: selectedModel.id,
         }),
@@ -272,7 +370,7 @@ export default function ProductStudio({
       const formattedOutputs = outputs.map((out, idx) => ({
         ...out,
         id: out.id || `byteplus-${Date.now()}-${idx}`,
-        title: productData?.title || 'Product Photoshoot',
+        title: editedTitle || agentInfo?.name || productData?.title || 'Product Photoshoot',
         scene: currentScene.title,
         aspectRatio,
         modelName: selectedModel.name,
@@ -280,70 +378,58 @@ export default function ProductStudio({
 
       setGeneratedResults((prev) => [...formattedOutputs, ...prev]);
 
-      if (onGenerationComplete && outputs.length > 0) {
-        onGenerationComplete({
-          url: outputs[0]?.url,
-          model: selectedModel.id,
-          prompt: customPrompt.trim(),
-          type: 'image',
-        });
+      if (onGenerationComplete) {
+        onGenerationComplete(formattedOutputs);
       }
     } catch (err) {
-      const errMsg = typeof err === 'string' ? err : (err?.message || 'Gagal membuat foto produk dengan BytePlus');
-      console.error('[ProductStudio] Generation failed:', errMsg);
-      setGenerateError(errMsg);
-      if (onGenerationError) onGenerationError(errMsg);
+      const msg = err.message || 'Terjadi kesalahan saat membuat foto produk';
+      setGenerateError(msg);
+      if (onGenerationError) onGenerationError(msg);
     } finally {
       setIsGenerating(false);
       if (onGenerationEnd) onGenerationEnd();
     }
   };
 
-  // Deteksi jika prompt mengandung URL langsung
   const isUrlInPrompt = customPrompt.trim().startsWith('http://') || customPrompt.trim().startsWith('https://');
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-[#FCEED1] text-[#110C2A] relative p-4 md:p-6 overflow-hidden select-none">
+    <div className="relative min-h-[calc(100vh-60px)] flex flex-col justify-between overflow-x-hidden p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
       
-      {/* ── CENTRAL STAGE / GALLERY ── */}
-      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-44 lg:pb-36 px-2">
+      {/* ── MAIN CONTENT AREA ── */}
+      <div className="flex-1 flex flex-col justify-center items-center w-full mb-32">
         {generatedResults.length > 0 ? (
-          <div className="w-full pt-4 animate-fade-in-up">
-            <div className="flex items-center justify-between mb-4 border-b border-[#110C2A]/10 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#22d3ee]"></span>
-                <h2 className="text-base font-bold text-[#110C2A]">
-                  Hasil Photoshoot ({generatedResults.length})
-                </h2>
+          <div className="w-full flex flex-col gap-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-[#110C2A]">Galeri Hasil Photoshoot</h2>
+                <p className="text-xs text-[#110C2A]/60">Ditenagai oleh BytePlus SeaDream 5.0 Studio</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setGeneratedResults([])}
-                className="text-xs text-[#110C2A]/50 hover:text-red-500 font-medium transition-colors"
-              >
-                Bersihkan Galeri
-              </button>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-[#A175FF]/15 text-[#110C2A] font-semibold">
+                {generatedResults.length} foto dihasilkan
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full">
-              {generatedResults.map((entry, idx) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {generatedResults.map((entry) => (
                 <div
-                  key={entry.id || idx}
-                  className="relative group rounded-2xl overflow-hidden border border-[#110C2A]/10 bg-[#0a0a0a] shadow-xl hover:border-[#A175FF]/60 transition-all duration-300 flex flex-col cursor-pointer"
-                  onClick={() => setFullscreenImage(entry)}
+                  key={entry.id}
+                  className="group relative rounded-2xl overflow-hidden bg-black/5 border border-[#110C2A]/10 shadow-sm hover:shadow-xl transition-all duration-300"
                 >
-                  <div className="relative aspect-square w-full overflow-hidden bg-black/40">
+                  <div
+                    className="relative aspect-square w-full overflow-hidden bg-neutral-900 cursor-pointer"
+                    onClick={() => setFullscreenImage(entry)}
+                  >
                     <img
                       src={entry.url}
-                      alt={entry.title || "Generated photoshoot"}
+                      alt={entry.title || "Studio Commercial Shot"}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
 
-                    {/* Overlay Buttons */}
-                    <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
                       <button
                         type="button"
-                        title="Salin Link Gambar"
+                        title="Salin Tautan"
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(entry.url);
@@ -373,7 +459,6 @@ export default function ProductStudio({
                     </div>
                   </div>
 
-                  {/* Info Card Bar */}
                   <div className="p-3 bg-[#181528] backdrop-blur-sm border-t border-white/5 flex flex-col gap-1.5 text-white">
                     <p className="text-xs font-semibold line-clamp-1 text-white/90">
                       {entry.title || "Studio Commercial Shot"}
@@ -390,12 +475,9 @@ export default function ProductStudio({
             </div>
           </div>
         ) : (
-          /* Empty State: Matching ImageStudio Signature Hero */
           <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh] mt-4">
             
-            {/* Overlapping floating product photoshoot cards */}
             <div className="flex items-center justify-center gap-1.5 md:gap-3 mb-10 select-none scale-90 sm:scale-100">
-              {/* Card 1: Luxury Perfume */}
               <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/20 shadow-2xl -rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] flex-shrink-0">
                 <img
                   src="https://images.unsplash.com/photo-1541643600914-78b084683601?w=300&q=80"
@@ -404,7 +486,6 @@ export default function ProductStudio({
                 />
               </div>
 
-              {/* Card 2: Minimalist Botanical Cosmetics */}
               <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/20 shadow-2xl -rotate-[4deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
                 <img
                   src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=300&q=80"
@@ -413,7 +494,6 @@ export default function ProductStudio({
                 />
               </div>
 
-              {/* Card 3: Modern Sneaker Studio */}
               <div className="w-18 h-18 sm:w-24 sm:h-24 rounded-full border border-white/20 shadow-2xl rotate-[6deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
                 <img
                   src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300&q=80"
@@ -422,7 +502,6 @@ export default function ProductStudio({
                 />
               </div>
 
-              {/* Card 4: Tech Gadget Watch */}
               <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/20 shadow-2xl rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
                 <img
                   src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80"
@@ -432,7 +511,6 @@ export default function ProductStudio({
               </div>
             </div>
 
-            {/* Headline */}
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
               <span className="text-[#110C2A]/90 font-black uppercase text-xl sm:text-3xl tracking-wide mb-1 opacity-90">
                 START CREATING WITH
@@ -442,12 +520,10 @@ export default function ProductStudio({
               </span>
             </h1>
 
-            {/* Subtitle */}
             <p className="text-[#110C2A]/50 text-xs sm:text-sm font-medium tracking-wide text-center max-w-lg leading-relaxed px-4">
               Paste a marketplace product link or photo — generate commercial studio shots with BytePlus AI
             </p>
 
-            {/* Error Message if Any */}
             {generateError && (
               <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-700 text-xs rounded-xl max-w-md text-center">
                 {generateError}
@@ -463,50 +539,281 @@ export default function ProductStudio({
           
           {/* Active Extracted Product Chip / Bar */}
           {productData && selectedImage && (
-            <div className="flex items-center justify-between bg-white/70 backdrop-blur-md rounded-2xl p-2 px-3 border border-[#110C2A]/10 animate-fade-in shadow-sm">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-[#110C2A]/15 shrink-0 bg-white">
-                  <img src={selectedImage} alt="Selected Product" className="w-full h-full object-cover" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold text-[#A175FF] tracking-wider">
-                      {productData.platform || 'Product'}
-                    </span>
-                    {productData.price && (
-                      <span className="text-[11px] font-semibold text-emerald-600">
-                        {productData.price}
-                      </span>
-                    )}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between bg-white/80 backdrop-blur-md rounded-2xl p-2 px-3 border border-[#110C2A]/10 animate-fade-in shadow-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-[#110C2A]/15 shrink-0 bg-white shadow-xs">
+                    <img src={selectedImage} alt="Selected Product" className="w-full h-full object-cover" />
                   </div>
-                  <p className="text-xs font-bold text-[#110C2A] truncate max-w-xs sm:max-w-md">
-                    {productData.title}
-                  </p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] uppercase font-bold text-[#A175FF] tracking-wider">
+                        {productData.platform || 'Product'}
+                      </span>
+                      {agentInfo?.brand && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#A175FF]/15 text-[#6c3df4]">
+                          {agentInfo.brand}
+                        </span>
+                      )}
+                      {agentInfo?.category && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-900 hidden sm:inline">
+                          {agentInfo.category}
+                        </span>
+                      )}
+                      {productData.price && (
+                        <span className="text-[11px] font-semibold text-emerald-600">
+                          {productData.price}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Editable Title */}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {isEditingTitle ? (
+                        <input
+                          type="text"
+                          value={editedTitle}
+                          onChange={(e) => setEditedTitle(e.target.value)}
+                          onBlur={() => setIsEditingTitle(false)}
+                          onKeyDown={(e) => e.key === 'Enter' && setIsEditingTitle(false)}
+                          autoFocus
+                          className="text-xs font-bold text-[#110C2A] bg-white border border-[#A175FF] rounded px-1.5 py-0.5 outline-none shadow-xs"
+                        />
+                      ) : (
+                        <p
+                          onClick={() => {
+                            setEditedTitle(editedTitle || agentInfo?.name || productData.title || '');
+                            setIsEditingTitle(true);
+                          }}
+                          className="text-xs font-bold text-[#110C2A] truncate max-w-xs sm:max-w-md cursor-pointer hover:text-[#A175FF] transition-colors flex items-center gap-1"
+                          title="Klik untuk mengubah nama produk"
+                        >
+                          <span>{editedTitle || agentInfo?.name || productData.title}</span>
+                          <span className="text-[10px] text-[#110C2A]/40 hover:text-[#A175FF]">✏️</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Status AI Agent Analyzing */}
+                  {isAnalyzing && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 text-[#6c3df4] text-[11px] font-semibold animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-[#A175FF] animate-ping"></span>
+                      <span className="hidden sm:inline">Menganalisis...</span>
+                    </div>
+                  )}
+
+                  {/* Button Toggle Agent Intelligence Drawer */}
+                  <button
+                    type="button"
+                    onClick={() => setIsAgentDrawerOpen((prev) => !prev)}
+                    className={`px-3 py-1.5 text-[11px] font-bold rounded-xl border transition-all flex items-center gap-1.5 shadow-xs ${
+                      isAgentDrawerOpen
+                        ? 'bg-[#110C2A] text-white border-[#110C2A]'
+                        : 'bg-white hover:bg-[#A175FF]/10 text-[#6c3df4] border-[#A175FF]/30'
+                    }`}
+                  >
+                    <span>🤖</span>
+                    <span>Info & Prompt Agent</span>
+                    {agentInfo && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    )}
+                  </button>
+
+                  {/* Quick Apply Agent Prompt */}
+                  {agentInfo?.suggested_prompt && (
+                    <button
+                      type="button"
+                      onClick={applyAgentPrompt}
+                      className="hidden md:flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-amber-900 bg-amber-400/20 hover:bg-amber-400/30 rounded-xl border border-amber-500/30 transition-colors shadow-xs"
+                      title="Terapkan prompt rekomendasi dari AI Agent"
+                    >
+                      <span>✨</span>
+                      <span>Pakai Prompt AI</span>
+                    </button>
+                  )}
+
+                  {productData.images && productData.images.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setActivePopover('linkModal')}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-[#110C2A]/70 hover:text-[#110C2A] bg-white rounded-lg border border-[#110C2A]/10 shadow-xs transition-colors"
+                    >
+                      Foto ({productData.images.length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductData(null);
+                      setSelectedImage('');
+                      setAgentInfo(null);
+                      setIsAgentDrawerOpen(false);
+                      setEditedTitle('');
+                    }}
+                    className="w-6 h-6 rounded-full bg-[#110C2A]/10 hover:bg-red-500 hover:text-white text-[#110C2A]/60 flex items-center justify-center text-xs transition-colors"
+                    title="Hapus Produk"
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                {productData.images && productData.images.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setActivePopover('linkModal')}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-[#110C2A]/70 hover:text-[#110C2A] bg-white rounded-lg border border-[#110C2A]/10 shadow-xs transition-colors"
-                  >
-                    Ganti Foto ({productData.images.length})
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProductData(null);
-                    setSelectedImage('');
-                  }}
-                  className="w-6 h-6 rounded-full bg-[#110C2A]/10 hover:bg-red-500 hover:text-white text-[#110C2A]/60 flex items-center justify-center text-xs transition-colors"
-                  title="Hapus Produk"
-                >
-                  ×
-                </button>
-              </div>
+              {/* ── EXPANDED AI PRODUCT AGENT INTELLIGENCE DRAWER ── */}
+              {isAgentDrawerOpen && (
+                <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-4 border border-[#A175FF]/25 shadow-xl text-[#110C2A] flex flex-col gap-3 animate-fade-in text-xs max-h-[60vh] overflow-y-auto custom-scrollbar">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#110C2A]/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🤖</span>
+                      <span className="font-extrabold text-sm text-[#110C2A]">
+                        AI Product Agent Intelligence
+                      </span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                        BytePlus VLM Multi-Modal
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAgentDrawerOpen(false)}
+                      className="text-xs font-semibold text-[#110C2A]/50 hover:text-[#110C2A]"
+                    >
+                      Tutup ✕
+                    </button>
+                  </div>
+
+                  {agentInfo ? (
+                    <div className="flex flex-col gap-3">
+                      {/* Grid Brand, Kategori & Tagline */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#FFF6DE]/70 p-3 rounded-xl border border-[#110C2A]/10">
+                        <div>
+                          <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-0.5">
+                            🏷️ Brand & Kategori
+                          </span>
+                          <p className="font-bold text-[#110C2A]">
+                            {agentInfo.brand || 'Produk Komersial'} • {agentInfo.category || 'E-Commerce'}
+                          </p>
+                        </div>
+                        {agentInfo.marketing_tagline && (
+                          <div>
+                            <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-0.5">
+                              📢 Tagline Marketing
+                            </span>
+                            <p className="font-medium italic text-[#6c3df4]">
+                              "{agentInfo.marketing_tagline}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Visual & Material Details */}
+                      {agentInfo.visual_details && (
+                        <div className="bg-purple-50/60 p-2.5 rounded-xl border border-[#A175FF]/20">
+                          <span className="text-[10px] text-[#6c3df4] uppercase font-bold block mb-1">
+                            🔍 Karakteristik Visual & Material
+                          </span>
+                          <p className="text-[11px] leading-relaxed text-[#110C2A]/85">
+                            {agentInfo.visual_details}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Fitur & Selling Points */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {agentInfo.features && agentInfo.features.length > 0 && (
+                          <div className="bg-white p-2.5 rounded-xl border border-[#110C2A]/10">
+                            <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-1.5">
+                              ⚡ Fitur Utama
+                            </span>
+                            <ul className="space-y-1">
+                              {agentInfo.features.map((f, i) => (
+                                <li key={i} className="text-[11px] text-[#110C2A]/85 flex items-start gap-1.5">
+                                  <span className="text-[#A175FF] font-bold">•</span>
+                                  <span>{f}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {agentInfo.selling_points && agentInfo.selling_points.length > 0 && (
+                          <div className="bg-white p-2.5 rounded-xl border border-[#110C2A]/10">
+                            <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-1.5">
+                              💎 Nilai Jual / Keunggulan (USP)
+                            </span>
+                            <ul className="space-y-1">
+                              {agentInfo.selling_points.map((sp, i) => (
+                                <li key={i} className="text-[11px] text-emerald-800 flex items-start gap-1.5 font-medium">
+                                  <span className="text-emerald-500 font-bold">✓</span>
+                                  <span>{sp}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Prompt Rekomendasi Photoshoot */}
+                      {agentInfo.suggested_prompt && (
+                        <div className="bg-[#110C2A] text-white p-3 rounded-xl flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-[11px] text-white/70">
+                            <span className="font-bold flex items-center gap-1.5 text-amber-300">
+                              <span>✨</span>
+                              <span>Rekomendasi Prompt Studio AI</span>
+                            </span>
+                            <span className="text-[10px] text-white/50">BytePlus SeaDream 5.0</span>
+                          </div>
+                          <p className="text-[11px] font-mono leading-relaxed text-white/90 bg-white/5 p-2 rounded-lg border border-white/10 select-all">
+                            {agentInfo.suggested_prompt}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-[#110C2A]/10">
+                        <button
+                          type="button"
+                          onClick={copyAgentBrief}
+                          className="px-3.5 py-2 rounded-xl bg-white hover:bg-purple-50 border border-[#A175FF]/30 text-[#6c3df4] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                        >
+                          <span>{copiedBrief ? '✓' : '📋'}</span>
+                          <span>{copiedBrief ? 'Brief Tersalin ke Clipboard!' : 'Salin Brief Lengkap untuk Agent'}</span>
+                        </button>
+
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => runProductAgentAnalysis(selectedImage, editedTitle || productData?.title, marketplaceUrl)}
+                            disabled={isAnalyzing}
+                            className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-[#110C2A]/70 text-xs font-semibold transition-colors"
+                          >
+                            {isAnalyzing ? 'Menganalisis...' : '🔄 Analisis Ulang'}
+                          </button>
+                          {agentInfo.suggested_prompt && (
+                            <button
+                              type="button"
+                              onClick={applyAgentPrompt}
+                              style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
+                              className="px-4 py-2 rounded-xl bg-[#A175FF] hover:bg-[#8e5af8] text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <span>✨</span>
+                              <span style={{ color: '#ffffff' }}>Gunakan Prompt Ini</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-6 flex flex-col items-center justify-center text-center gap-2">
+                      <div className="w-8 h-8 rounded-full border-2 border-[#A175FF] border-t-transparent animate-spin"></div>
+                      <p className="text-xs font-semibold text-[#110C2A]/70">
+                        AI Agent sedang membaca detail visual dan spesifikasi produk Anda...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -633,10 +940,11 @@ export default function ProductStudio({
                                   setSelectedImage(dataUrl);
                                   setProductData({
                                     platform: 'Shopee / Clipboard',
-                                    title: 'Foto Produk dari Clipboard',
+                                    title: 'Foto Produk Marketplace',
                                     images: [dataUrl],
                                   });
                                   setActivePopover(null);
+                                  runProductAgentAnalysis(dataUrl, 'Foto Produk Marketplace', marketplaceUrl);
                                 };
                                 reader.readAsDataURL(blob);
                                 return;
@@ -710,6 +1018,7 @@ export default function ProductStudio({
                             onClick={() => {
                               setSelectedImage(img);
                               setActivePopover(null);
+                              runProductAgentAnalysis(img, productData.title, marketplaceUrl);
                             }}
                             className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
                               selectedImage === img
@@ -734,7 +1043,7 @@ export default function ProductStudio({
               onChange={(e) => setCustomPrompt(e.target.value)}
               placeholder={
                 productData
-                  ? `Atur gaya photoshoot untuk "${productData.title?.substring(0, 30)}..." atau pilih preset di bawah`
+                  ? `Atur gaya photoshoot untuk "${(editedTitle || agentInfo?.name || productData.title)?.substring(0, 30)}..." atau pilih preset di bawah`
                   : "Deskripsikan suasana foto atau tempel link marketplace di sini..."
               }
             />
@@ -760,27 +1069,27 @@ export default function ProductStudio({
                     ✦
                   </div>
                   <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                    BytePlus
+                    {selectedModel.name.replace('BytePlus ', '')}
                   </span>
                   <PromptChevronIcon />
                 </button>
 
                 {activePopover === 'model' && (
                   <PromptPopover onClick={(e) => e.stopPropagation()} className="w-72">
-                    <PromptPopoverHeader>BytePlus AI Engine</PromptPopoverHeader>
+                    <PromptPopoverHeader>Model Engine</PromptPopoverHeader>
                     <PromptMenuList>
-                      {BYTEPLUS_MODELS.map((m) => (
+                      {BYTEPLUS_MODELS.map((model) => (
                         <PromptMenuItem
-                          key={m.id}
-                          selected={selectedModel.id === m.id}
+                          key={model.id}
+                          selected={selectedModel.id === model.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedModel(m);
+                            setSelectedModel(model);
                             setActivePopover(null);
                           }}
-                          description={m.desc}
+                          description={model.desc}
                         >
-                          {m.name}
+                          <span className="font-semibold text-xs">{model.name}</span>
                         </PromptMenuItem>
                       ))}
                     </PromptMenuList>

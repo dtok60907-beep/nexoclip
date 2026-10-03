@@ -2,26 +2,26 @@ import { createBytePlusImageAdapter } from '../../../../src/providers/direct/ima
 
 // Prompt Presets Komersial Khusus Fotografi Produk E-Commerce
 const SCENE_PRESETS = {
-  minimalist_podium: (title) =>
-    `Commercial studio product photography of ${title}, elegantly displayed on a smooth rounded stone podium, clean neutral beige pastel backdrop, soft diffused softbox lighting, subtle ground shadows, ultra sharp 8k resolution, minimalist high-end advertisement visual.`,
+  minimalist_podium: (title, details) =>
+    `Commercial studio product photography of ${title}${details ? `, featuring ${details}` : ''}, elegantly displayed on a smooth rounded stone podium, clean neutral beige pastel backdrop, soft diffused softbox lighting, subtle ground shadows, ultra sharp 8k resolution, minimalist high-end advertisement visual.`,
   
-  nature_botanical: (title) =>
-    `Natural organic commercial product photography of ${title}, resting on a flat wet slate stone, surrounded by vibrant fresh green tropical monstera and palm leaves, dappled golden hour morning sunlight streaming through foliage, realistic dew water droplets, premium organic brand campaign.`,
+  nature_botanical: (title, details) =>
+    `Natural organic commercial product photography of ${title}${details ? `, featuring ${details}` : ''}, resting on a flat wet slate stone, surrounded by vibrant fresh green tropical monstera and palm leaves, dappled golden hour morning sunlight streaming through foliage, realistic dew water droplets, premium organic brand campaign.`,
   
-  luxury_marble: (title) =>
-    `Luxury commercial product photography of ${title}, centered on polished black Italian marble with subtle golden veins, dramatic cinematic rim lighting, gentle reflective surface, dark moody luxury atmosphere, high-end commercial ad aesthetic.`,
+  luxury_marble: (title, details) =>
+    `Luxury commercial product photography of ${title}${details ? `, featuring ${details}` : ''}, centered on polished black Italian marble with subtle golden veins, dramatic cinematic rim lighting, gentle reflective surface, dark moody luxury atmosphere, high-end commercial ad aesthetic.`,
   
-  lifestyle_cafe: (title) =>
-    `Modern lifestyle product photoshoot of ${title}, styled on a rustic warm oak wooden cafe table beside a small ceramic vase and a warm cup of coffee, soft morning window light, cozy blurry interior background bokeh, realistic authentic commercial visual.`,
+  lifestyle_cafe: (title, details) =>
+    `Modern lifestyle product photoshoot of ${title}${details ? `, featuring ${details}` : ''}, styled on a rustic warm oak wooden cafe table beside a small ceramic vase and a warm cup of coffee, soft morning window light, cozy blurry interior background bokeh, realistic authentic commercial visual.`,
   
-  festive_promo: (title) =>
-    `Festive holiday promotional commercial photography of ${title}, surrounded by warm glowing fairy lights, elegant gold and ribbon decorations, gentle celebratory bokeh background, warm festive lighting, award-winning marketing shoot.`,
+  festive_promo: (title, details) =>
+    `Festive holiday promotional commercial photography of ${title}${details ? `, featuring ${details}` : ''}, surrounded by warm glowing fairy lights, elegant gold and ribbon decorations, gentle celebratory bokeh background, warm festive lighting, award-winning marketing shoot.`,
   
-  neon_cyberpunk: (title) =>
-    `Futuristic tech commercial product photography of ${title}, placed on a sleek reflective acrylic surface with vibrant neon cyan and magenta gradient edge illumination, sleek dark moody atmosphere, crisp edge highlights, modern advertising.`,
+  neon_cyberpunk: (title, details) =>
+    `Futuristic tech commercial product photography of ${title}${details ? `, featuring ${details}` : ''}, placed on a sleek reflective acrylic surface with vibrant neon cyan and magenta gradient edge illumination, sleek dark moody atmosphere, crisp edge highlights, modern advertising.`,
   
-  custom: (title, custom) =>
-    `Professional commercial product photoshoot of ${title}, ${custom || 'clean studio backdrop, professional softbox lighting, 8k crisp focus'}.`,
+  custom: (title, details, custom) =>
+    custom ? custom : `Professional commercial product photoshoot of ${title}${details ? `, featuring ${details}` : ''}, clean studio backdrop, professional softbox lighting, 8k crisp focus.`,
 };
 
 const FALLBACK_SCENE_IMAGES = {
@@ -42,6 +42,7 @@ export async function POST(request) {
       productImage,
       scenePreset = 'minimalist_podium',
       customPrompt = '',
+      visualDetails = '',
       aspectRatio = '1:1',
       resolution = '2K',
       model = 'byteplus/seedream-5.0-pro-unfiltered',
@@ -53,7 +54,7 @@ export async function POST(request) {
 
     // Bangun Prompt Berdasarkan Preset
     const promptBuilder = SCENE_PRESETS[scenePreset] || SCENE_PRESETS.minimalist_podium;
-    const finalPrompt = promptBuilder(productTitle, customPrompt);
+    const finalPrompt = customPrompt ? customPrompt : promptBuilder(productTitle, visualDetails, customPrompt);
 
     // Dapatkan konfigurasi BytePlus dari environment
     const apiKey = process.env.BYTEPLUS_API_KEY;
