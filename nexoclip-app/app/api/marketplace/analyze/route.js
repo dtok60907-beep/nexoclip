@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { image, title = '', url = '' } = await request.json();
+    const { image, images, title = '', url = '' } = await request.json();
+    const imgArray = Array.isArray(images) && images.length > 0
+      ? images
+      : (Array.isArray(image) ? image : (image ? [image] : []));
 
-    if (!image && !title && !url) {
+    if (imgArray.length === 0 && !title && !url) {
       return NextResponse.json(
         { error: 'Minimal sertakan gambar, judul, atau tautan produk untuk dianalisis.' },
         { status: 400 }
@@ -97,15 +100,42 @@ Kembalikan jawaban HANYA dalam format JSON valid tanpa tag markdown apapun (pure
 
     content.push({ type: 'text', text: instruction });
 
-    // Jika ada gambar (data URL base64 atau URL publik)
-    if (image) {
+    // Konversi gambar ke base64 agar Ark VLM tidak gagal download jika URL diproteksi anti-bot
+    const processedImages = await Promise.all(
+      imgArray.slice(0, 5).map(async (img) => {
+        if (!img || typeof img !== 'string') return null;
+        if (img.startsWith('data:image/')) return img;
+        if (!img.startsWith('http://') && !img.startsWith('https://')) return null;
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 6000);
+          const res = await fetch(img, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': img.includes('shopee') ? 'https://shopee.co.id/' : 'https://www.google.com/',
+            },
+          });
+          clearTimeout(timer);
+          if (!res.ok) return null;
+          const arrayBuffer = await res.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const contentType = res.headers.get('content-type') || 'image/jpeg';
+          return `data:${contentType};base64,${buffer.toString('base64')}`;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    processedImages.filter(Boolean).forEach((imgDataUrl) => {
       content.push({
         type: 'image_url',
         image_url: {
-          url: image,
+          url: imgDataUrl,
         },
       });
-    }
+    });
 
     // Panggil BytePlus Ark Chat Completions dengan mode JSON
     const response = await fetch(`${baseUrl}/chat/completions`, {

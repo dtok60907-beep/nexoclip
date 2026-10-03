@@ -236,13 +236,23 @@ export default function ProductStudio({
     return () => window.removeEventListener('click', handler);
   }, [activePopover]);
 
-  // Ekstraksi AI Agent Intelligence menggunakan BytePlus VLM
-  const runProductAgentAnalysis = async (imgUrl, existingTitle = '', existingUrl = '') => {
-    const targetImage = imgUrl || selectedImage || '';
+  // Ekstraksi AI Agent Intelligence menggunakan BytePlus VLM (mendukung multiple image angles)
+  const runProductAgentAnalysis = async (imgInput, existingTitle = '', existingUrl = '') => {
+    let imagesToSend = [];
+    if (Array.isArray(imgInput)) {
+      imagesToSend = imgInput.filter(Boolean);
+    } else if (imgInput) {
+      imagesToSend = [imgInput];
+    } else if (productData?.images && productData.images.length > 0) {
+      imagesToSend = productData.images;
+    } else if (selectedImage) {
+      imagesToSend = [selectedImage];
+    }
+
     const targetTitle = existingTitle || productData?.title || '';
     const targetUrl = existingUrl || marketplaceUrl || '';
 
-    if (!targetImage && !targetTitle && !targetUrl) return;
+    if (imagesToSend.length === 0 && !targetTitle && !targetUrl) return;
 
     setIsAnalyzing(true);
     try {
@@ -250,7 +260,8 @@ export default function ProductStudio({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image: targetImage,
+          image: imagesToSend[0] || '',
+          images: imagesToSend,
           title: targetTitle,
           url: targetUrl,
         }),
@@ -277,7 +288,7 @@ export default function ProductStudio({
             brand: data.brand || prev?.brand,
             category: data.category || prev?.category,
             price: data.price || prev?.price || null,
-            images: prev?.images || (targetImage ? [targetImage] : []),
+            images: prev?.images && prev.images.length > 0 ? prev.images : (imagesToSend.length > 0 ? imagesToSend : []),
           };
         });
       }
@@ -1459,77 +1470,87 @@ ${agentInfo?.suggested_prompt || ''}
                     </button>
                   </div>
 
-                  {/* URL Input Form */}
+                  {/* Multi-URL Input Form */}
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
                       handleExtract();
                     }}
-                    className="mt-4 flex flex-col gap-3"
+                    className="mt-3 flex flex-col gap-2.5"
                   >
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Tempel link Tokopedia, Shopee, TikTok Shop..."
-                        value={marketplaceUrl}
-                        onChange={(e) => setMarketplaceUrl(e.target.value)}
-                        className="flex-1 rounded-xl border border-[#110C2A]/20 bg-white px-3.5 py-2.5 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 focus:outline-none focus:ring-2 focus:ring-[#A175FF] shadow-inner"
-                      />
-                      {/* AMBIL FOTO BUTTON */}
-                      <button
-                        type="submit"
-                        disabled={isExtracting || !marketplaceUrl.trim()}
-                        style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
-                        className="px-5 py-2.5 rounded-xl text-xs font-black shadow-md shadow-[#A175FF]/30 hover:brightness-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5"
-                      >
-                        {isExtracting ? (
-                          <>
-                            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
-                            <span style={{ color: '#ffffff' }}>Mengekstrak...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>🔍</span>
-                            <span style={{ color: '#ffffff' }}>Ambil Foto</span>
-                          </>
-                        )}
-                      </button>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-[#110C2A] flex items-center gap-1.5">
+                          <span>🔗</span>
+                          <span>Tempel Link Produk / Link Gambar (Bisa Banyak Sekaligus)</span>
+                        </label>
+                        <span className="text-[10px] text-[#110C2A]/50">Pisahkan baris baru untuk multiple link</span>
+                      </div>
+                      <div className="flex gap-2 items-stretch">
+                        <textarea
+                          rows={2}
+                          placeholder="Tempel 1 atau banyak link Shopee, Tokopedia, atau alamat gambar (Copy Image Address)...&#10;Contoh:&#10;https://down-id.img.susercontent.com/file/...&#10;https://shopee.co.id/product/..."
+                          value={marketplaceUrl}
+                          onChange={(e) => setMarketplaceUrl(e.target.value)}
+                          className="flex-1 rounded-xl border border-[#110C2A]/20 bg-white px-3 py-2 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 focus:outline-none focus:ring-2 focus:ring-[#A175FF] shadow-inner resize-none custom-scrollbar leading-relaxed"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isExtracting || !marketplaceUrl.trim()}
+                          style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
+                          className="px-4 py-2 rounded-xl text-xs font-black shadow-md shadow-[#A175FF]/30 hover:brightness-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                        >
+                          {isExtracting ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+                              <span style={{ color: '#ffffff' }} className="text-[11px]">Proses...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-base">🔍</span>
+                              <span style={{ color: '#ffffff' }} className="text-[11px] font-bold">Ambil Semua</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] text-[#110C2A]/50 font-medium">Didukung:</span>
-                      {['Tokopedia', 'Shopee', 'TikTok Shop', 'Amazon'].map((plat) => (
+                      {['Multiple Shopee Images', 'Tokopedia', 'TikTok Shop', 'Direct Image URLs'].map((plat) => (
                         <span key={plat} className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 border border-[#110C2A]/10 text-[#110C2A]/70 font-medium">
                           {plat}
                         </span>
                       ))}
                     </div>
 
-                    {/* Clipboard & Direct Upload Options */}
-                    <div className="mt-1 pt-3 border-t border-[#110C2A]/10 flex flex-col gap-2">
+                    {/* Clipboard & Multiple File Upload Options */}
+                    <div className="mt-1 pt-2.5 border-t border-[#110C2A]/10 flex flex-col sm:flex-row gap-2">
                       <button
                         type="button"
                         onClick={async () => {
                           try {
                             const clipboardItems = await navigator.clipboard.read();
+                            const pastedImages = [];
                             for (const item of clipboardItems) {
                               const imageType = item.types.find((t) => t.startsWith('image/'));
                               if (imageType) {
                                 const blob = await item.getType(imageType);
                                 const reader = new FileReader();
                                 reader.onload = () => {
-                                  const dataUrl = reader.result;
-                                  setSelectedImage(dataUrl);
-                                  setProductData({
-                                    platform: 'Shopee / Clipboard',
-                                    title: 'Foto Produk Marketplace',
-                                    images: [dataUrl],
+                                  pastedImages.push(reader.result);
+                                  setProductData((prev) => {
+                                    const merged = Array.from(new Set([...(prev?.images || []), reader.result]));
+                                    return {
+                                      platform: prev?.platform || 'Shopee / Clipboard',
+                                      title: prev?.title || 'Foto Produk Marketplace',
+                                      images: merged,
+                                    };
                                   });
-                                  setActivePopover(null);
-                                  runProductAgentAnalysis(dataUrl, 'Foto Produk Marketplace', marketplaceUrl);
+                                  setSelectedImage((curr) => curr || reader.result);
+                                  runProductAgentAnalysis([reader.result], 'Foto Produk Marketplace', marketplaceUrl);
                                 };
                                 reader.readAsDataURL(blob);
-                                return;
                               }
                             }
                             const text = await navigator.clipboard.readText();
@@ -1541,17 +1562,18 @@ ${agentInfo?.suggested_prompt || ''}
                             alert('Silakan tekan tombol keyboard Cmd+V (Mac) atau Ctrl+V (Windows) untuk menempelkan foto.');
                           }
                         }}
-                        className="w-full py-2.5 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#A175FF]/30 text-[#6c3df4] text-xs font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
+                        className="flex-1 py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#A175FF]/30 text-[#6c3df4] text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-[0.99] cursor-pointer"
                       >
                         <span>📋</span>
-                        <span>Tempel Gambar dari Clipboard (Cmd+V)</span>
+                        <span>Tempel Clipboard (Cmd+V)</span>
                       </button>
 
-                      <label className="cursor-pointer w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#A175FF]/10 border border-[#110C2A]/15 text-[#110C2A] text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]">
+                      <label className="flex-1 cursor-pointer py-2 px-3 rounded-xl bg-white hover:bg-[#A175FF]/10 border border-[#110C2A]/15 text-[#110C2A] text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-[0.99]">
                         <span>📁</span>
-                        <span>Atau Unggah Foto Produk Dari Komputer</span>
+                        <span>Unggah Banyak Foto Sekaligus</span>
                         <input
                           type="file"
+                          multiple
                           accept="image/*"
                           onChange={handleFileUpload}
                           className="hidden"
@@ -1587,30 +1609,63 @@ ${agentInfo?.suggested_prompt || ''}
                     )}
                   </form>
 
-                  {/* Thumbnail Selector if images were extracted */}
+                  {/* Thumbnail Selector / Image Pool */}
                   {productData?.images && productData.images.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-[#110C2A]/10">
-                      <p className="text-xs font-bold text-[#110C2A] mb-2">
-                        Pilih foto produk ({productData.images.length}):
-                      </p>
-                      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
-                        {productData.images.map((img, i) => (
-                          <div
-                            key={i}
-                            onClick={() => {
-                              setSelectedImage(img);
-                              setActivePopover(null);
-                              runProductAgentAnalysis(img, productData.title, marketplaceUrl);
-                            }}
-                            className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
-                              selectedImage === img
-                                ? 'border-[#A175FF] ring-2 ring-[#A175FF]/40 scale-105 shadow-md'
-                                : 'border-transparent hover:border-[#110C2A]/30'
-                            }`}
-                          >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ))}
+                    <div className="mt-3 pt-3 border-t border-[#110C2A]/10 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-black text-[#110C2A] flex items-center gap-1.5">
+                          <span>🖼️ Koleksi Foto Produk ({productData.images.length})</span>
+                          <span className="text-[10px] font-normal text-[#110C2A]/60">
+                            (Klik untuk ganti foto utama)
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductData((prev) => ({ ...prev, images: [] }));
+                            setSelectedImage('');
+                          }}
+                          className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                        >
+                          Hapus Semua
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                        {productData.images.map((img, i) => {
+                          const isCurrent = selectedImage === img;
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                setSelectedImage(img);
+                              }}
+                              className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
+                                isCurrent
+                                  ? 'border-[#A175FF] ring-2 ring-[#A175FF]/40 scale-105 shadow-md'
+                                  : 'border-transparent hover:border-[#110C2A]/30'
+                              }`}
+                            >
+                              <img src={img} alt="" className="w-full h-full object-cover" />
+                              {isCurrent && (
+                                <span className="absolute top-1 left-1 bg-[#A175FF] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-md shadow-xs">
+                                  Utama ✓
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveImage(i);
+                                }}
+                                className="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/70 hover:bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                title="Hapus foto ini"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
