@@ -55,6 +55,9 @@ export type RealtimeAwarenessPeer = {
 export type RealtimeCanvasRoomSnapshot = RealtimeCanvasBindingSnapshot & {
   peers: RealtimeAwarenessPeer[]
   persistenceStatus: ProjectRuntimeState
+  // True once the first sync with the server finished (the canvas content
+  // is loaded); drives the Canvas loading screen.
+  initialSyncComplete: boolean
 }
 
 export type RealtimeCanvasCommands = Pick<
@@ -125,6 +128,7 @@ const EMPTY_RESULT: UseRealtimeCanvasResult = {
   projectName: 'Untitled Project',
   peers: [],
   persistenceStatus: 'SYNCED',
+  initialSyncComplete: false,
   awareness: null,
   doc: null,
   commands: EMPTY_COMMANDS,
@@ -297,6 +301,7 @@ export class RealtimeCanvasRoom {
       ...this.binding.getSnapshot(),
       peers: [],
       persistenceStatus: 'SYNCED',
+      initialSyncComplete: false,
     }
 
     this.binding.subscribe(() => {
@@ -325,6 +330,10 @@ export class RealtimeCanvasRoom {
         if (state) {
           const isReconnect = this.hasCompletedInitialSync
           this.hasCompletedInitialSync = true
+          if (!isReconnect) {
+            this.snapshot = { ...this.snapshot, initialSyncComplete: true }
+            this.emit()
+          }
           // Reconnect may coalesce offline transactions into one update, or
           // may transmit nothing when Neon committed before the old socket lost
           // its ACK. Per-transaction counting is no longer meaningful after a
