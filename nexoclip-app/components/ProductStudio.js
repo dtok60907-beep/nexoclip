@@ -22,49 +22,42 @@ const SCENE_OPTIONS = [
   {
     id: 'minimalist_podium',
     title: 'Minimalist Podium',
-    icon: '🏛️',
     desc: 'Podium semen halus, pencahayaan softbox, latar pastel netral.',
     badge: 'Popular',
   },
   {
     id: 'nature_botanical',
     title: 'Nature & Botanical',
-    icon: '🌿',
     desc: 'Batu alam basah, daun monstera segar, sinar matahari sore.',
     badge: 'Organic',
   },
   {
     id: 'luxury_marble',
     title: 'Luxury Gold & Marble',
-    icon: '✨',
     desc: 'Marmer hitam corak emas, rim lighting sinematik, kesan mewah.',
     badge: 'High-End',
   },
   {
     id: 'lifestyle_cafe',
     title: 'Cozy Lifestyle',
-    icon: '☕',
     desc: 'Meja kayu hangat, cangkir kopi, interior kafe modern lembut.',
     badge: 'Authentic',
   },
   {
     id: 'festive_promo',
     title: 'Festive & Celebration',
-    icon: '🏮',
     desc: 'Lampu hias fairy lights, bokeh emas berkilau, tema perayaan.',
     badge: 'Campaign',
   },
   {
     id: 'neon_cyberpunk',
     title: 'Neon Tech',
-    icon: '⚡',
     desc: 'Permukaan akrilik reflektif, aksen neon cyan & magenta modern.',
     badge: 'Futuristic',
   },
   {
     id: 'custom',
     title: 'Custom Prompt',
-    icon: '✍️',
     desc: 'Tuliskan deskripsi latar belakang dan suasana khusus sesuai kreasi Anda.',
     badge: 'Bebas',
   },
@@ -131,6 +124,332 @@ const getInitialCampaigns = (title = 'Commercial Product', details = '') => [
   }
 ];
 
+// Komponen Kartu Batch Photoshoot: Menampilkan carousel khusus per sesi generate
+function BatchGenerationCard({
+  batch,
+  onDelete,
+  onApplyPrompt,
+  onFullscreen,
+}) {
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const [viewMode, setViewMode] = useState('carousel'); // 'carousel' | 'grid'
+
+  const photos = Array.isArray(batch.photos) && batch.photos.length > 0
+    ? batch.photos
+    : [batch];
+
+  const isMultiple = photos.length > 1;
+  const activePhoto = photos[activeSlideIndex] || photos[0];
+
+  const handleNext = () => {
+    setActiveSlideIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
+  };
+
+  const handlePrev = () => {
+    setActiveSlideIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
+  };
+
+  const copyLink = (url) => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    alert("Link foto berhasil disalin!");
+  };
+
+  return (
+    <div className="w-full flex flex-col gap-3 p-4 sm:p-5 rounded-3xl bg-white/90 backdrop-blur-md border border-[#110C2A]/10 shadow-sm transition-all hover:shadow-md">
+      {/* Header Sesi Generate */}
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#110C2A]/10 flex-wrap">
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold text-[#6c3df4] bg-[#A175FF]/15 border border-[#A175FF]/20">
+              {batch.scene || activePhoto.scene || 'Photoshoot Studio'}
+            </span>
+            <span className="text-xs text-[#110C2A]/60 font-medium">
+              {photos.length} Foto • {batch.aspectRatio || activePhoto.aspectRatio || '1:1'} • {batch.modelName || 'SeaDream 5.0'}
+            </span>
+          </div>
+          <h3 className="text-sm sm:text-base font-extrabold text-[#110C2A] truncate">
+            {batch.title || activePhoto.title || 'Product Photoshoot'}
+          </h3>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {isMultiple && (
+            <div className="flex items-center bg-white p-0.5 rounded-xl border border-[#110C2A]/15 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('carousel')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'carousel'
+                    ? 'bg-[#6c3df4] text-white shadow-xs'
+                    : 'text-[#110C2A]/60 hover:text-[#110C2A]'
+                }`}
+              >
+                Carousel
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-[#6c3df4] text-white shadow-xs'
+                    : 'text-[#110C2A]/60 hover:text-[#110C2A]'
+                }`}
+              >
+                Grid
+              </button>
+            </div>
+          )}
+
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="text-xs text-[#110C2A]/40 hover:text-red-600 font-semibold px-2 py-1 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
+              title="Hapus sesi generate ini"
+            >
+              Hapus Sesi
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* CAROUSEL VIEW jika batch berisi > 1 foto */}
+      {isMultiple && viewMode === 'carousel' && (
+        <div className="w-full max-w-4xl mx-auto flex flex-col gap-3">
+          <div className="relative aspect-square sm:aspect-[4/3] w-full rounded-2xl overflow-hidden bg-neutral-900 border border-[#110C2A]/10 shadow-xl flex items-center justify-center">
+            <img
+              src={activePhoto.url}
+              alt={activePhoto.title || batch.title}
+              className="w-full h-full object-contain sm:object-cover transition-all duration-300"
+            />
+
+            {/* Navigasi Panah Carousel */}
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-105 active:scale-95 text-xl font-bold"
+              title="Foto Sebelumnya"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-105 active:scale-95 text-xl font-bold"
+              title="Foto Selanjutnya"
+            >
+              ›
+            </button>
+
+            {/* Floating Badges */}
+            <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+              <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border border-white/20 bg-black/70 text-white">
+                Foto {activeSlideIndex + 1} dari {photos.length}
+              </span>
+              <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm bg-[#6c3df4] text-white">
+                {activePhoto.scene || batch.scene || 'Photoshoot'}
+              </span>
+            </div>
+
+            {/* Floating Action Buttons (Text Only) */}
+            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onFullscreen(activePhoto)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
+              >
+                Perbesar
+              </button>
+              <button
+                type="button"
+                onClick={() => copyLink(activePhoto.url)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
+              >
+                Salin Link
+              </button>
+              <a
+                href={activePhoto.url}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#22d3ee] hover:bg-cyan-300 text-[#110C2A] transition-all border border-white/30 cursor-pointer shadow-md"
+              >
+                Unduh HD
+              </a>
+            </div>
+          </div>
+
+          {/* Active Photo Info Bar */}
+          <div className="p-3 bg-white/95 backdrop-blur-md rounded-xl border border-[#110C2A]/10 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-extrabold text-[#110C2A] truncate">
+                {activePhoto.title || batch.title}
+              </p>
+              <p className="text-[11px] text-[#110C2A]/60">
+                {activePhoto.scene || batch.scene} • {activePhoto.aspectRatio || batch.aspectRatio || '1:1'}
+              </p>
+            </div>
+            {activePhoto.prompt && onApplyPrompt && (
+              <button
+                type="button"
+                onClick={() => onApplyPrompt(activePhoto.prompt)}
+                className="text-[11px] font-bold text-[#6c3df4] hover:underline shrink-0 cursor-pointer"
+              >
+                Pakai Prompt Ini Lagi
+              </button>
+            )}
+          </div>
+
+          {/* Filmstrip Thumbnails Sesi Ini */}
+          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar p-1 pb-2">
+            {photos.map((item, idx) => {
+              const isActive = activeSlideIndex === idx;
+              return (
+                <div
+                  key={item.id || idx}
+                  onClick={() => setActiveSlideIndex(idx)}
+                  className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
+                    isActive
+                      ? 'border-[#A175FF] ring-4 ring-[#A175FF]/30 scale-105 shadow-md'
+                      : 'border-transparent opacity-70 hover:opacity-100 hover:border-[#110C2A]/20'
+                  }`}
+                >
+                  <img src={item.url} alt="" className="w-full h-full object-cover" />
+                  <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 rounded">
+                    #{idx + 1}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* GRID VIEW jika batch berisi > 1 foto dan user memilih grid */}
+      {isMultiple && viewMode === 'grid' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {photos.map((entry, idx) => (
+            <div
+              key={entry.id || idx}
+              className="group relative rounded-2xl overflow-hidden bg-white border border-[#110C2A]/10 shadow-xs hover:shadow-lg transition-all flex flex-col"
+            >
+              <div
+                className="relative aspect-square w-full overflow-hidden bg-[#110C2A]/5 cursor-pointer"
+                onClick={() => onFullscreen(entry)}
+              >
+                <img
+                  src={entry.url}
+                  alt={entry.title || batch.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyLink(entry.url);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-black/75 text-white text-[11px] font-bold hover:bg-[#A175FF] transition-all cursor-pointer"
+                  >
+                    Salin Link
+                  </button>
+                  <a
+                    href={entry.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-2.5 py-1 rounded-lg bg-[#22d3ee] text-[#110C2A] text-[11px] font-extrabold hover:bg-cyan-300 transition-all cursor-pointer"
+                  >
+                    Unduh HD
+                  </a>
+                </div>
+              </div>
+              <div className="p-2.5 bg-white flex flex-col gap-1 border-t border-[#110C2A]/10">
+                <p className="text-xs font-bold text-[#110C2A] truncate">
+                  {entry.title || batch.title}
+                </p>
+                <div className="flex items-center justify-between text-[10px] text-[#110C2A]/60">
+                  <span>{entry.scene || batch.scene}</span>
+                  <span>#{idx + 1}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SINGLE PHOTO VIEW jika batch hanya 1 foto */}
+      {!isMultiple && (
+        <div className="w-full max-w-2xl mx-auto flex flex-col gap-3">
+          <div className="relative aspect-square sm:aspect-[4/3] w-full rounded-2xl overflow-hidden bg-neutral-900 border border-[#110C2A]/10 shadow-xl flex items-center justify-center">
+            <img
+              src={activePhoto.url}
+              alt={activePhoto.title || batch.title}
+              className="w-full h-full object-contain sm:object-cover"
+            />
+            {/* Top Badge */}
+            <div className="absolute top-3 left-3">
+              <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm bg-[#6c3df4] text-white">
+                {activePhoto.scene || batch.scene || 'Photoshoot'}
+              </span>
+            </div>
+            {/* Bottom Actions (Text Only, No Icons) */}
+            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onFullscreen(activePhoto)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
+              >
+                Perbesar
+              </button>
+              <button
+                type="button"
+                onClick={() => copyLink(activePhoto.url)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md bg-black/75 hover:bg-[#A175FF] text-white transition-all border border-white/20 cursor-pointer shadow-md"
+              >
+                Salin Link
+              </button>
+              <a
+                href={activePhoto.url}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#22d3ee] hover:bg-cyan-300 text-[#110C2A] transition-all border border-white/30 cursor-pointer shadow-md"
+              >
+                Unduh HD
+              </a>
+            </div>
+          </div>
+
+          <div className="p-3 bg-white/95 backdrop-blur-md rounded-xl border border-[#110C2A]/10 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-extrabold text-[#110C2A] truncate">
+                {activePhoto.title || batch.title}
+              </p>
+              <p className="text-[11px] text-[#110C2A]/60">
+                {activePhoto.scene || batch.scene} • {activePhoto.aspectRatio || batch.aspectRatio || '1:1'}
+              </p>
+            </div>
+            {activePhoto.prompt && onApplyPrompt && (
+              <button
+                type="button"
+                onClick={() => onApplyPrompt(activePhoto.prompt)}
+                className="text-[11px] font-bold text-[#6c3df4] hover:underline shrink-0 cursor-pointer"
+              >
+                Pakai Prompt Ini Lagi
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function ProductStudio({
   onGenerationStart,
   onGenerationEnd,
@@ -173,21 +492,37 @@ export default function ProductStudio({
   const [imageCount, setImageCount] = useState(1); // 1, 2, 4 foto
   const [isWatermarkEnabled, setIsWatermarkEnabled] = useState(false); // default: false (bersih tanpa watermark)
 
-  // Status Generate & Galeri
+  // Status Generate & Galeri Batch
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
-  const [generatedResults, setGeneratedResults] = useState(() => {
+  const [generationBatches, setGenerationBatches] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('nexoclip_product_studio_history');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            if (parsed.length > 0 && Array.isArray(parsed[0].photos)) {
+              return parsed;
+            }
+            // Migrasi riwayat lama ke format batch individual
+            return parsed.map((item, idx) => ({
+              id: item.batchId || `batch-${item.id || idx}`,
+              title: item.title || 'Product Photoshoot',
+              scene: item.scene || 'Minimalist Podium',
+              aspectRatio: item.aspectRatio || '1:1',
+              modelName: item.modelName || 'BytePlus SeaDream 5.0',
+              prompt: item.prompt || '',
+              createdAt: item.createdAt || new Date().toISOString(),
+              photos: [item],
+            }));
+          }
+        }
       } catch {}
     }
     return [];
   });
   const [generationElapsed, setGenerationElapsed] = useState(0);
-  const [galleryViewMode, setGalleryViewMode] = useState('carousel'); // 'carousel' | 'grid'
-  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
 
   useEffect(() => {
     let timer;
@@ -203,10 +538,23 @@ export default function ProductStudio({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('nexoclip_product_studio_history', JSON.stringify(generatedResults));
+        localStorage.setItem('nexoclip_product_studio_history', JSON.stringify(generationBatches));
       } catch {}
     }
-  }, [generatedResults]);
+  }, [generationBatches]);
+
+  const handleDeleteBatch = (batchId) => {
+    setGenerationBatches((prev) => prev.filter((b) => b.id !== batchId));
+  };
+
+  const handleClearAllBatches = () => {
+    if (confirm('Bersihkan semua riwayat generate di galeri?')) {
+      setGenerationBatches([]);
+      try {
+        localStorage.removeItem('nexoclip_product_studio_history');
+      } catch {}
+    }
+  };
 
   const formatTimer = (sec) => {
     const m = Math.floor(sec / 60);
@@ -365,23 +713,23 @@ export default function ProductStudio({
     if (!agentInfo && !productData) return;
     const name = editedTitle || agentInfo?.name || productData?.title || 'Produk E-Commerce';
     const price = editedPrice || agentInfo?.price || productData?.price || '-';
-    const brief = `# 🛍️ Product Intelligence Brief for AI Agent
+    const brief = `# Product Intelligence Brief for AI Agent
 **Nama Produk**: ${name}
 **Estimasi Harga**: ${price}
 **Merk**: ${agentInfo?.brand || '-'}
 **Kategori**: ${agentInfo?.category || '-'}
 **Visual & Material Specs**: ${agentInfo?.visual_details || '-'}
 
-### 🌟 Fitur Utama:
+### Fitur Utama:
 ${(agentInfo?.features || []).map((f) => `- ${f}`).join('\n') || '-'}
 
-### 💎 Keunggulan Komersial (Selling Points):
+### Keunggulan Komersial (Selling Points):
 ${(agentInfo?.selling_points || []).map((s) => `- ${s}`).join('\n') || '-'}
 
-### 📢 Tagline Marketing:
+### Tagline Marketing:
 "${agentInfo?.marketing_tagline || ''}"
 
-### 📸 Rekomendasi Prompt Photoshoot Studio (BytePlus SeaDream):
+### Rekomendasi Prompt Photoshoot Studio (BytePlus SeaDream):
 ${agentInfo?.suggested_prompt || ''}
 `;
     if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(brief).catch(() => {}); }
@@ -415,7 +763,7 @@ ${agentInfo?.suggested_prompt || ''}
                   };
                 });
                 setActivePopover('linkModal');
-                setExtractSuccessMessage('✓ Foto berhasil ditempel dari clipboard ke koleksi!');
+                setExtractSuccessMessage('Foto berhasil ditempel dari clipboard ke koleksi!');
                 setExtractError('');
                 const combined = Array.from(new Set([...(productData?.images || []), dataUrl]));
                 runProductAgentAnalysis(combined, productData?.title || 'Foto Produk Marketplace', marketplaceUrl);
@@ -442,7 +790,7 @@ ${agentInfo?.suggested_prompt || ''}
           e.preventDefault();
           setActivePopover('linkModal');
           setMarketplaceUrl((prev) => (prev ? `${prev}\n${text}` : text));
-          setExtractSuccessMessage('✓ Link berhasil ditempel. Anda bisa menambah link lain atau klik Ambil Foto.');
+          setExtractSuccessMessage('Link berhasil ditempel. Anda bisa menambah link lain atau klik Ambil Foto.');
           setExtractError('');
         }
       }
@@ -497,7 +845,7 @@ ${agentInfo?.suggested_prompt || ''}
       }
       if (data.images && data.images.length > 0) {
         setSelectedImage((curr) => curr || data.images[0]);
-        setExtractSuccessMessage(`✓ Berhasil memuat ${data.images.length} foto! Tambah link lain atau klik Selesai.`);
+        setExtractSuccessMessage(`Berhasil memuat ${data.images.length} foto! Tambah link lain atau klik Selesai.`);
         const combined = Array.from(new Set([...(productData?.images || []), ...data.images]));
         runProductAgentAnalysis(combined, data.title || productData?.title || 'Foto Produk', urlToUse);
       } else if (data.title) {
@@ -539,7 +887,7 @@ ${agentInfo?.suggested_prompt || ''}
           images: allMerged,
         };
       });
-      setExtractSuccessMessage(`✓ Berhasil menambahkan ${newUrls.length} file foto.`);
+      setExtractSuccessMessage(`Berhasil menambahkan ${newUrls.length} file foto.`);
       setExtractError('');
       const combined = Array.from(new Set([...(productData?.images || []), ...newUrls]));
       runProductAgentAnalysis(combined, results[0]?.name || 'Foto Produk', '');
@@ -599,10 +947,21 @@ ${agentInfo?.suggested_prompt || ''}
         scene: currentScene.title,
         aspectRatio,
         modelName: selectedModel.name,
+        prompt: promptToUse,
       }));
 
-      setGeneratedResults((prev) => [...formattedOutputs, ...prev]);
-      setActiveSlideIndex(0);
+      const newBatch = {
+        id: `batch-${Date.now()}`,
+        title: editedTitle || agentInfo?.name || productData?.title || 'Product Photoshoot',
+        scene: currentScene.title,
+        aspectRatio,
+        modelName: selectedModel.name,
+        prompt: promptToUse,
+        createdAt: new Date().toISOString(),
+        photos: formattedOutputs,
+      };
+
+      setGenerationBatches((prev) => [newBatch, ...prev]);
 
       if (onGenerationComplete) {
         onGenerationComplete(formattedOutputs);
@@ -674,8 +1033,17 @@ ${agentInfo?.suggested_prompt || ''}
       const batchResults = await Promise.all(tasks);
       const allNewOutputs = batchResults.flat();
       if (allNewOutputs.length > 0) {
-        setGeneratedResults((prev) => [...allNewOutputs, ...prev]);
-        setActiveSlideIndex(0);
+        const newBatch = {
+          id: `batch-${Date.now()}`,
+          title: editedTitle || agentInfo?.name || productData?.title || 'Product Photoshoot',
+          scene: '5 Sudut Photoshoot Komersial',
+          aspectRatio,
+          modelName: selectedModel.name,
+          prompt: '5 Sudut Photoshoot Komersial (Paket Lengkap)',
+          createdAt: new Date().toISOString(),
+          photos: allNewOutputs,
+        };
+        setGenerationBatches((prev) => [newBatch, ...prev]);
         if (onGenerationComplete) onGenerationComplete(allNewOutputs);
       } else {
         throw new Error('Gagal menghasilkan foto kampanye batch');
@@ -705,13 +1073,12 @@ ${agentInfo?.suggested_prompt || ''}
                   {selectedImage ? (
                     <img src={selectedImage} alt="" className="w-full h-full object-cover opacity-85" />
                   ) : (
-                    <span className="text-3xl">✨</span>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6c3df4] to-[#22d3ee] animate-pulse"></div>
                   )}
                 </div>
               </div>
               <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-[#22d3ee] rounded-full flex items-center justify-center shadow-md animate-spin">
-                <span className="text-[12px] text-black font-bold">⚡</span>
-              </div>
+                </div>
             </div>
 
             <h3 className="text-base font-extrabold text-[#110C2A] mb-1">
@@ -732,7 +1099,6 @@ ${agentInfo?.suggested_prompt || ''}
             {/* Timer & Details */}
             <div className="flex items-center justify-between w-full text-[11px] font-semibold text-[#110C2A]/60 px-1">
               <span className="flex items-center gap-1 text-[#6c3df4] font-bold">
-                <span>⏱️</span>
                 <span>{formatTimer(generationElapsed)}</span>
               </span>
               <span>Perkiraan: ~35-45 detik</span>
@@ -741,295 +1107,48 @@ ${agentInfo?.suggested_prompt || ''}
               </span>
             </div>
           </div>
-        ) : generatedResults.length > 0 ? (
-          <div className="w-full flex flex-col gap-4 animate-fade-in">
-            {/* Gallery Header with View Mode Switcher */}
+        ) : generationBatches.length > 0 ? (
+          <div className="w-full flex flex-col gap-6 animate-fade-in">
+            {/* Gallery Header */}
             <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-3 flex-wrap gap-2">
               <div>
-                <h2 className="text-lg font-bold text-[#110C2A] flex items-center gap-2">
-                  <span>📸</span>
-                  <span>Galeri Hasil Photoshoot</span>
+                <h2 className="text-lg font-bold text-[#110C2A]">
+                  Galeri Hasil Photoshoot
                 </h2>
                 <p className="text-xs text-[#110C2A]/60">Ditenagai oleh BytePlus SeaDream 5.0 Studio</p>
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Carousel / Grid View Switcher */}
-                {generatedResults.length > 1 && (
-                  <div className="flex items-center bg-white/90 p-0.5 rounded-xl border border-[#110C2A]/15 shadow-xs">
-                    <button
-                      type="button"
-                      onClick={() => setGalleryViewMode('carousel')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        galleryViewMode === 'carousel'
-                          ? 'bg-[#6c3df4] text-white shadow-xs'
-                          : 'text-[#110C2A]/60 hover:text-[#110C2A]'
-                      }`}
-                    >
-                      <span>🎠</span>
-                      <span style={galleryViewMode === 'carousel' ? { color: '#ffffff' } : {}}>Carousel</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGalleryViewMode('grid')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        galleryViewMode === 'grid'
-                          ? 'bg-[#6c3df4] text-white shadow-xs'
-                          : 'text-[#110C2A]/60 hover:text-[#110C2A]'
-                      }`}
-                    >
-                      <span>⊞</span>
-                      <span style={galleryViewMode === 'grid' ? { color: '#ffffff' } : {}}>Grid</span>
-                    </button>
-                  </div>
-                )}
-
                 <span className="text-xs px-2.5 py-1 rounded-full bg-[#A175FF]/15 text-[#6c3df4] font-bold">
-                  {generatedResults.length} foto
+                  {generationBatches.reduce((acc, b) => acc + (b.photos?.length || 1), 0)} foto ({generationBatches.length} sesi)
                 </span>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (confirm('Bersihkan semua hasil foto di galeri?')) {
-                      setGeneratedResults([]);
-                      try { localStorage.removeItem('nexoclip_product_studio_history'); } catch {}
-                    }
-                  }}
+                  onClick={handleClearAllBatches}
                   className="text-xs text-[#110C2A]/50 hover:text-red-500 font-semibold px-2 py-1 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
-                  title="Hapus riwayat galeri"
+                  title="Hapus semua riwayat galeri"
                 >
-                  Bersihkan
+                  Bersihkan Semua
                 </button>
               </div>
             </div>
 
-            {/* CAROUSEL VIEW: If multiple photos and carousel mode active */}
-            {galleryViewMode === 'carousel' && generatedResults.length > 1 && (
-              <div className="w-full max-w-4xl mx-auto flex flex-col gap-4 animate-fade-in">
-                {(() => {
-                  const activeEntry = generatedResults[activeSlideIndex] || generatedResults[0];
-                  if (!activeEntry) return null;
-                  return (
-                    <div className="flex flex-col gap-3">
-                      <div className="relative aspect-square sm:aspect-[4/3] w-full rounded-3xl overflow-hidden bg-neutral-900 border border-[#110C2A]/10 shadow-2xl flex items-center justify-center">
-                        <img
-                          src={activeEntry.url}
-                          alt={activeEntry.title || "Studio Commercial Shot"}
-                          className="w-full h-full object-contain sm:object-cover transition-all duration-300"
-                        />
-
-                        {/* Navigation Arrows */}
-                        <button
-                          type="button"
-                          onClick={() => setActiveSlideIndex((prev) => (prev > 0 ? prev - 1 : generatedResults.length - 1))}
-                          className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-110 active:scale-95"
-                          title="Foto Sebelumnya"
-                        >
-                          <span className="text-2xl font-bold leading-none -ml-0.5">‹</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveSlideIndex((prev) => (prev < generatedResults.length - 1 ? prev + 1 : 0))}
-                          className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/65 hover:bg-[#A175FF] text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-85 hover:opacity-100 shadow-xl cursor-pointer hover:scale-110 active:scale-95"
-                          title="Foto Selanjutnya"
-                        >
-                          <span className="text-2xl font-bold leading-none -mr-0.5">›</span>
-                        </button>
-
-                        {/* Top Floating Badges */}
-                        <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
-                          <span style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#ffffff' }} className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border border-white/20">
-                            Foto {activeSlideIndex + 1} dari {generatedResults.length}
-                          </span>
-                          <span style={{ backgroundColor: '#6c3df4', color: '#ffffff' }} className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm">
-                            ✨ {activeEntry.scene || 'Photoshoot 3D'}
-                          </span>
-                        </div>
-
-                        {/* Bottom Floating Quick Actions */}
-                        <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setFullscreenImage(activeEntry)}
-                            style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff' }}
-                            className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer shadow-md"
-                          >
-                            <span>🔍</span>
-                            <span>Perbesar</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(activeEntry.url).catch(() => {}); }
-                              alert("Link foto berhasil disalin!");
-                            }}
-                            style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff' }}
-                            className="px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md hover:bg-[#A175FF] transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer shadow-md"
-                          >
-                            <span>📋</span>
-                            <span>Salin Link</span>
-                          </button>
-                          <a
-                            href={activeEntry.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            download
-                            style={{ backgroundColor: '#22d3ee', color: '#110C2A' }}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-black hover:bg-cyan-300 transition-all border border-white/30 flex items-center gap-1.5 cursor-pointer shadow-md"
-                          >
-                            <span>📥</span>
-                            <span>Unduh HD</span>
-                          </a>
-                        </div>
-                      </div>
-
-                      {/* Active Slide Info Card (Clean Light Aesthetic - 100% Readable) */}
-                      <div className="p-4 bg-white/95 backdrop-blur-md rounded-2xl border border-[#110C2A]/10 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span style={{ color: '#6c3df4', backgroundColor: 'rgba(161, 117, 255, 0.15)' }} className="px-2.5 py-0.5 rounded-full text-xs font-bold">
-                              {activeEntry.scene || 'Minimalist Podium'}
-                            </span>
-                            <span style={{ color: 'rgba(17, 12, 42, 0.55)' }} className="text-xs font-medium">
-                              {activeEntry.aspectRatio || '1:1'} • {activeEntry.modelName || 'BytePlus SeaDream 5.0'}
-                            </span>
-                          </div>
-                          <h3 style={{ color: '#110C2A' }} className="text-sm font-extrabold text-[#110C2A] truncate">
-                            {activeEntry.title || "Studio Commercial Shot"}
-                          </h3>
-                        </div>
-                        {activeEntry.prompt && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomPrompt(activeEntry.prompt);
-                              alert("Prompt diterapkan ke input di bawah!");
-                            }}
-                            className="text-[11px] font-bold text-[#6c3df4] hover:underline shrink-0 cursor-pointer"
-                          >
-                            Pakai Prompt Ini Lagi ➔
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Horizontal Filmstrip Thumbnails */}
-                      <div className="flex items-center gap-2.5 overflow-x-auto custom-scrollbar p-1 pb-2">
-                        {generatedResults.map((item, idx) => {
-                          const isActive = activeSlideIndex === idx;
-                          return (
-                            <div
-                              key={item.id || idx}
-                              onClick={() => setActiveSlideIndex(idx)}
-                              className={`relative shrink-0 w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
-                                isActive
-                                  ? 'border-[#A175FF] ring-4 ring-[#A175FF]/30 scale-105 shadow-md'
-                                  : 'border-transparent opacity-70 hover:opacity-100 hover:border-[#110C2A]/20'
-                              }`}
-                            >
-                              <img src={item.url} alt="" className="w-full h-full object-cover" />
-                              <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 rounded">
-                                #{idx + 1}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* GRID VIEW: Rendered when in grid mode OR when single photo */}
-            {(galleryViewMode === 'grid' || generatedResults.length === 1) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {generatedResults.map((entry, idx) => (
-                  <div
-                    key={entry.id || idx}
-                    className="group relative rounded-2xl overflow-hidden bg-white/90 border border-[#110C2A]/10 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col"
-                  >
-                    <div
-                      className="relative aspect-square w-full overflow-hidden bg-[#110C2A]/5 cursor-pointer"
-                      onClick={() => setFullscreenImage(entry)}
-                    >
-                      <img
-                        src={entry.url}
-                        alt={entry.title || "Studio Commercial Shot"}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3.5">
-                        <button
-                          type="button"
-                          title="Salin Tautan"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(entry.url).catch(() => {}); }
-                            alert("Link gambar berhasil disalin!");
-                          }}
-                          style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
-                          className="p-2 rounded-full hover:bg-[#A175FF] transition-all border border-white/20 shadow-md cursor-pointer"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                          </svg>
-                        </button>
-                        <div className="flex items-center gap-1.5">
-                          {generatedResults.length > 1 && (
-                            <button
-                              type="button"
-                              title="Tampilkan di Carousel"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveSlideIndex(idx);
-                                setGalleryViewMode('carousel');
-                              }}
-                              style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
-                              className="p-2 rounded-full hover:bg-[#A175FF] transition-all border border-white/20 shadow-md cursor-pointer"
-                            >
-                              <span>🎠</span>
-                            </button>
-                          )}
-                          <a
-                            href={entry.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Unduh HD"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ color: '#110C2A', backgroundColor: '#22d3ee' }}
-                            className="p-2 rounded-full font-bold hover:bg-cyan-300 transition-all border border-white/25 shadow-md cursor-pointer"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                            </svg>
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Clean Light Card Footer (100% Readable, No Inverted Text) */}
-                    <div className="p-3 bg-white flex flex-col gap-1.5 border-t border-[#110C2A]/10">
-                      <p style={{ color: '#110C2A' }} className="text-xs font-bold line-clamp-1 text-[#110C2A]">
-                        {entry.title || "Studio Commercial Shot"}
-                      </p>
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span
-                          style={{ color: '#6c3df4', backgroundColor: 'rgba(161, 117, 255, 0.15)' }}
-                          className="px-2 py-0.5 rounded-full font-bold"
-                        >
-                          {entry.scene || 'Minimalist'}
-                        </span>
-                        <span style={{ color: 'rgba(17, 12, 42, 0.55)' }} className="font-medium">
-                          {entry.aspectRatio || '1:1'} • BytePlus
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* List Carousel Per Sesi Generate */}
+            <div className="flex flex-col gap-6">
+              {generationBatches.map((batch, batchIdx) => (
+                <BatchGenerationCard
+                  key={batch.id || batchIdx}
+                  batch={batch}
+                  onDelete={() => handleDeleteBatch(batch.id)}
+                  onApplyPrompt={(prompt) => {
+                    setCustomPrompt(prompt);
+                    alert("Prompt diterapkan ke input di bawah!");
+                  }}
+                  onFullscreen={(photo) => setFullscreenImage(photo)}
+                />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh] mt-4">
@@ -1143,9 +1262,8 @@ ${agentInfo?.suggested_prompt || ''}
                             className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors flex items-center gap-1 shadow-xs"
                             title="Klik untuk mengubah harga produk"
                           >
-                            <span>💰</span>
                             <span>{editedPrice || agentInfo?.price || productData?.price || 'Set Harga'}</span>
-                            <span className="text-[9px] text-emerald-700/60">✏️</span>
+                            
                           </span>
                         )}
                       </div>
@@ -1173,7 +1291,7 @@ ${agentInfo?.suggested_prompt || ''}
                           title="Klik untuk mengubah nama produk"
                         >
                           <span>{editedTitle || agentInfo?.name || productData.title}</span>
-                          <span className="text-[10px] text-[#110C2A]/40 hover:text-[#A175FF]">✏️</span>
+                          
                         </p>
                       )}
                     </div>
@@ -1199,7 +1317,6 @@ ${agentInfo?.suggested_prompt || ''}
                         : 'bg-white hover:bg-[#A175FF]/10 text-[#6c3df4] border-[#A175FF]/30'
                     }`}
                   >
-                    <span>🤖</span>
                     <span>Info & Prompt Agent</span>
                     {agentInfo && (
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -1214,7 +1331,6 @@ ${agentInfo?.suggested_prompt || ''}
                       className="hidden md:flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-amber-900 bg-amber-400/20 hover:bg-amber-400/30 rounded-xl border border-amber-500/30 transition-colors shadow-xs"
                       title="Terapkan prompt rekomendasi dari AI Agent"
                     >
-                      <span>✨</span>
                       <span>Pakai Prompt AI</span>
                     </button>
                   )}
@@ -1225,7 +1341,6 @@ ${agentInfo?.suggested_prompt || ''}
                     className="px-2.5 py-1 text-[11px] font-bold text-[#6c3df4] hover:text-[#5021db] bg-purple-50 hover:bg-purple-100 rounded-lg border border-[#A175FF]/30 shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                     title="Buka galeri foto produk atau tambah link/foto baru"
                   >
-                    <span>🖼️</span>
                     <span>{productData?.images?.length ? `${productData.images.length} Foto (+ Tambah)` : '+ Tambah Foto'}</span>
                   </button>
                   <button
@@ -1254,7 +1369,6 @@ ${agentInfo?.suggested_prompt || ''}
                 <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2.5 px-3 border border-[#A175FF]/30 shadow-sm flex flex-col gap-2 animate-fade-in text-[#110C2A]">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">🎨</span>
                       <span className="font-black text-xs text-[#6c3df4] uppercase tracking-wide flex items-center gap-1.5">
                         <span>Creative Director Agent</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#A175FF]/15 text-[#6c3df4] border border-[#A175FF]/30">
@@ -1281,7 +1395,7 @@ ${agentInfo?.suggested_prompt || ''}
                           }`}
                           title="Sudut Bebas 3D: AI merender perspektif baru dari berbagai sudut (low-angle, macro, splash) tanpa terkunci siluet foto 2D depan"
                         >
-                          🚀 Sudut Bebas 3D
+                          Sudut Bebas 3D
                         </button>
                         <button
                           type="button"
@@ -1294,7 +1408,7 @@ ${agentInfo?.suggested_prompt || ''}
                           }`}
                           title="Kunci Siluet: Pertahankan bentuk dan posisi foto asli 1:1"
                         >
-                          🔒 Kunci Siluet
+                          Kunci Siluet
                         </button>
                       </div>
 
@@ -1306,7 +1420,6 @@ ${agentInfo?.suggested_prompt || ''}
                         className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#6c3df4] border border-[#A175FF]/30 transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
                         title="Minta Creative Agent merancang ide sudut baru"
                       >
-                        <span>🎲</span>
                         <span>{isBrainstorming ? 'Merancang...' : 'Ide Baru'}</span>
                       </button>
                     </div>
@@ -1323,19 +1436,18 @@ ${agentInfo?.suggested_prompt || ''}
                       className="px-3.5 py-1.5 rounded-xl text-left shrink-0 transition-all border border-[#110C2A] bg-[#110C2A] hover:bg-black text-white shadow-md flex items-center gap-2.5 cursor-pointer active:scale-95 disabled:opacity-50"
                       title="Jalankan pemotretan untuk kelima sudut komersial secara paralel"
                     >
-                      <span className="text-base shrink-0">🎬</span>
                       <div className="flex flex-col">
                         <span style={{ color: '#ffffff' }} className="text-xs font-black leading-tight block">
                           Generate 5 Sudut Sekaligus
                         </span>
                         <span style={{ color: '#fcd34d' }} className="text-[10px] font-bold bg-white/10 px-1.5 py-0.2 rounded mt-0.5 inline-block leading-tight">
-                          ⚡ Paket Lengkap (1 Klik)
+                          Paket Lengkap (5 Sudut)
                         </span>
                       </div>
                     </button>
                     {(creativeCampaigns.length > 0 ? creativeCampaigns : getInitialCampaigns(editedTitle || agentInfo?.name || productData?.title, agentInfo?.visual_details)).map((camp) => {
                       const isSelected = selectedCampaignId === camp.id;
-                      const icon = camp.id.includes('splash') ? '🌊' : camp.id.includes('low') || camp.id.includes('hero') ? '🚀' : camp.id.includes('macro') ? '🔍' : camp.id.includes('hand') || camp.id.includes('life') ? '🖐️' : '🌌';
+                      
                       return (
                         <button
                           key={camp.id}
@@ -1348,7 +1460,6 @@ ${agentInfo?.suggested_prompt || ''}
                               : 'bg-white hover:bg-purple-50/70 text-[#110C2A] border-[#110C2A]/15 hover:border-[#A175FF]/40 shadow-xs'
                           }`}
                         >
-                          <span className="text-base shrink-0">{icon}</span>
                           <div className="flex flex-col">
                             <span
                               style={isSelected ? { color: '#ffffff' } : { color: '#110C2A' }}
@@ -1380,7 +1491,6 @@ ${agentInfo?.suggested_prompt || ''}
                 <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-4 border border-[#A175FF]/25 shadow-xl text-[#110C2A] flex flex-col gap-3 animate-fade-in text-xs max-h-[60vh] overflow-y-auto custom-scrollbar">
                   <div className="flex items-center justify-between pb-2 border-b border-[#110C2A]/10">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">🤖</span>
                       <span className="font-extrabold text-sm text-[#110C2A]">
                         AI Product Agent Intelligence
                       </span>
@@ -1393,18 +1503,17 @@ ${agentInfo?.suggested_prompt || ''}
                       onClick={() => setIsAgentDrawerOpen(false)}
                       className="text-xs font-semibold text-[#110C2A]/50 hover:text-[#110C2A]"
                     >
-                      Tutup ✕
+                      Tutup
                     </button>
                   </div>
 
                   {agentInfo ? (
                     <div className="flex flex-col gap-3">
-                      {/* 🎨 Creative Commercial Director Matrix Hub */}
+                      {/* Creative Commercial Director Matrix Hub */}
                       <div className="bg-gradient-to-br from-purple-50/80 via-white to-amber-50/50 p-4 rounded-2xl border border-[#A175FF]/30 flex flex-col gap-3 shadow-sm text-[#110C2A]">
                         <div className="flex items-center justify-between pb-2 border-b border-[#110C2A]/10 flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-base">🎨</span>
-                            <span className="font-black text-sm text-[#110C2A]">
+                                  <span className="font-black text-sm text-[#110C2A]">
                               Creative Commercial Director Matrix
                             </span>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#A175FF]/15 text-[#6c3df4] border border-[#A175FF]/30">
@@ -1418,7 +1527,6 @@ ${agentInfo?.suggested_prompt || ''}
 
                         {creativeDirectorVision && (
                           <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs italic text-amber-950 flex items-start gap-2">
-                            <span className="text-sm shrink-0">💡</span>
                             <span>"{creativeDirectorVision}"</span>
                           </div>
                         )}
@@ -1444,8 +1552,7 @@ ${agentInfo?.suggested_prompt || ''}
                             style={{ backgroundColor: '#110C2A', color: '#ffffff' }}
                             className="px-3.5 py-1.5 rounded-lg bg-[#110C2A] hover:bg-black text-white font-bold text-xs shrink-0 transition-colors flex items-center gap-1 shadow-xs"
                           >
-                            <span>✨</span>
-                            <span>{isBrainstorming ? 'Merancang...' : 'Rombak Konsep'}</span>
+                                  <span>{isBrainstorming ? 'Merancang...' : 'Rombak Konsep'}</span>
                           </button>
                         </form>
 
@@ -1453,7 +1560,7 @@ ${agentInfo?.suggested_prompt || ''}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           {(creativeCampaigns.length > 0 ? creativeCampaigns : getInitialCampaigns(editedTitle || agentInfo?.name || productData?.title, agentInfo?.visual_details)).map((camp) => {
                             const isSelected = selectedCampaignId === camp.id;
-                            const icon = camp.id.includes('splash') ? '🌊' : camp.id.includes('low') || camp.id.includes('hero') ? '🚀' : camp.id.includes('macro') ? '🔍' : camp.id.includes('hand') || camp.id.includes('life') ? '🖐️' : '🌌';
+                            
                             return (
                               <div
                                 key={camp.id}
@@ -1466,7 +1573,6 @@ ${agentInfo?.suggested_prompt || ''}
                                 <div className="flex flex-col gap-1.5">
                                   <div className="flex items-center justify-between">
                                     <span className="font-black text-xs text-[#110C2A] flex items-center gap-1.5">
-                                      <span>{icon}</span>
                                       <span>{camp.title}</span>
                                     </span>
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-900 border border-amber-500/30">
@@ -1487,7 +1593,7 @@ ${agentInfo?.suggested_prompt || ''}
                                     }}
                                     className="flex-1 py-1.5 px-2.5 rounded-xl bg-white hover:bg-purple-100 text-[#6c3df4] border border-[#A175FF]/30 font-bold text-xs transition-colors flex items-center justify-center gap-1 shadow-xs"
                                   >
-                                    <span>{isSelected ? '✓ Terpilih' : 'Gunakan Sudut Ini'}</span>
+                                    <span>{isSelected ? 'Terpilih' : 'Gunakan Sudut Ini'}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -1499,7 +1605,7 @@ ${agentInfo?.suggested_prompt || ''}
                                     className="py-1.5 px-3 rounded-xl bg-[#A175FF] hover:bg-[#8e5af8] text-white font-extrabold text-xs transition-colors flex items-center justify-center gap-1 shadow-xs"
                                     title="Langsung generate sudut ini dengan BytePlus SeaDream"
                                   >
-                                    <span>⚡ Generate</span>
+                                    <span>Generate Sudut Ini</span>
                                   </button>
                                 </div>
                               </div>
@@ -1511,7 +1617,7 @@ ${agentInfo?.suggested_prompt || ''}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#FFF6DE]/70 p-3 rounded-xl border border-[#110C2A]/10">
                         <div>
                           <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-0.5">
-                            🏷️ Brand & Kategori
+                            Brand & Kategori
                           </span>
                           <p className="font-bold text-[#110C2A] truncate">
                             {agentInfo.brand || 'Produk Komersial'} • {agentInfo.category || 'E-Commerce'}
@@ -1519,7 +1625,7 @@ ${agentInfo?.suggested_prompt || ''}
                         </div>
                         <div>
                           <span className="text-[10px] text-emerald-800/80 uppercase font-bold block mb-0.5">
-                            💰 Estimasi Harga Pasar
+                            Estimasi Harga Pasar
                           </span>
                           <p
                             onClick={() => {
@@ -1530,13 +1636,13 @@ ${agentInfo?.suggested_prompt || ''}
                             title="Klik untuk mengubah harga"
                           >
                             <span>{editedPrice || agentInfo.price || productData?.price || 'Rp -'}</span>
-                            <span className="text-[10px] text-emerald-700/60">✏️</span>
+                            
                           </p>
                         </div>
                         {agentInfo.marketing_tagline && (
                           <div>
                             <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-0.5">
-                              📢 Tagline Marketing
+                              Tagline Marketing
                             </span>
                             <p className="font-medium italic text-[#6c3df4]">
                               "{agentInfo.marketing_tagline}"
@@ -1549,7 +1655,7 @@ ${agentInfo?.suggested_prompt || ''}
                       {agentInfo.visual_details && (
                         <div className="bg-purple-50/60 p-2.5 rounded-xl border border-[#A175FF]/20">
                           <span className="text-[10px] text-[#6c3df4] uppercase font-bold block mb-1">
-                            🔍 Karakteristik Visual & Material
+                            Karakteristik Visual & Material
                           </span>
                           <p className="text-[11px] leading-relaxed text-[#110C2A]/85">
                             {agentInfo.visual_details}
@@ -1562,7 +1668,7 @@ ${agentInfo?.suggested_prompt || ''}
                         {agentInfo.features && agentInfo.features.length > 0 && (
                           <div className="bg-white p-2.5 rounded-xl border border-[#110C2A]/10">
                             <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-1.5">
-                              ⚡ Fitur Utama
+                              Fitur Utama
                             </span>
                             <ul className="space-y-1">
                               {agentInfo.features.map((f, i) => (
@@ -1578,12 +1684,12 @@ ${agentInfo?.suggested_prompt || ''}
                         {agentInfo.selling_points && agentInfo.selling_points.length > 0 && (
                           <div className="bg-white p-2.5 rounded-xl border border-[#110C2A]/10">
                             <span className="text-[10px] text-[#110C2A]/60 uppercase font-bold block mb-1.5">
-                              💎 Nilai Jual / Keunggulan (USP)
+                              Nilai Jual / Keunggulan (USP)
                             </span>
                             <ul className="space-y-1">
                               {agentInfo.selling_points.map((sp, i) => (
                                 <li key={i} className="text-[11px] text-emerald-800 flex items-start gap-1.5 font-medium">
-                                  <span className="text-emerald-500 font-bold">✓</span>
+                                  <span className="text-emerald-500 font-bold">•</span>
                                   <span>{sp}</span>
                                 </li>
                               ))}
@@ -1597,8 +1703,7 @@ ${agentInfo?.suggested_prompt || ''}
                         <div className="bg-[#110C2A] text-white p-3 rounded-xl flex flex-col gap-2">
                           <div className="flex items-center justify-between text-[11px] text-white/70">
                             <span className="font-bold flex items-center gap-1.5 text-amber-300">
-                              <span>✨</span>
-                              <span>Rekomendasi Prompt Studio AI</span>
+                                      <span>Rekomendasi Prompt Studio AI</span>
                             </span>
                             <span className="text-[10px] text-white/50">BytePlus SeaDream 5.0</span>
                           </div>
@@ -1615,7 +1720,7 @@ ${agentInfo?.suggested_prompt || ''}
                           onClick={copyAgentBrief}
                           className="px-3.5 py-2 rounded-xl bg-white hover:bg-purple-50 border border-[#A175FF]/30 text-[#6c3df4] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
                         >
-                          <span>{copiedBrief ? '✓' : '📋'}</span>
+                          <span>{copiedBrief ? 'Tersalin' : 'Salin'}</span>
                           <span>{copiedBrief ? 'Brief Tersalin ke Clipboard!' : 'Salin Brief Lengkap untuk Agent'}</span>
                         </button>
 
@@ -1626,7 +1731,7 @@ ${agentInfo?.suggested_prompt || ''}
                             disabled={isAnalyzing}
                             className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-[#110C2A]/70 text-xs font-semibold transition-colors"
                           >
-                            {isAnalyzing ? 'Menganalisis...' : '🔄 Analisis Ulang'}
+                            {isAnalyzing ? 'Menganalisis...' : 'Analisis Ulang'}
                           </button>
                           {agentInfo.suggested_prompt && (
                             <button
@@ -1635,8 +1740,7 @@ ${agentInfo?.suggested_prompt || ''}
                               style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
                               className="px-4 py-2 rounded-xl bg-[#A175FF] hover:bg-[#8e5af8] text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
                             >
-                              <span>✨</span>
-                              <span style={{ color: '#ffffff' }}>Gunakan Prompt Ini</span>
+                                      <span style={{ color: '#ffffff' }}>Gunakan Prompt Ini</span>
                             </button>
                           )}
                         </div>
@@ -1659,7 +1763,7 @@ ${agentInfo?.suggested_prompt || ''}
           {isUrlInPrompt && !productData && (
             <div className="flex items-center justify-between bg-[#A175FF]/10 border border-[#A175FF]/30 rounded-xl px-3 py-1.5 animate-fade-in">
               <span className="text-xs text-[#110C2A]/80 flex items-center gap-1.5 font-medium">
-                <span>🛒</span> Terdeteksi link produk
+                Terdeteksi link produk
               </span>
               <button
                 type="button"
@@ -1668,7 +1772,7 @@ ${agentInfo?.suggested_prompt || ''}
                 style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
                 className="text-xs font-bold text-white bg-[#A175FF] hover:bg-[#8e5af8] px-3 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
               >
-                {isExtracting ? 'Mengekstrak...' : 'Ekstrak Produk ➔'}
+                {isExtracting ? 'Mengekstrak...' : 'Ekstrak Produk'}
               </button>
             </div>
           )}
@@ -1703,7 +1807,6 @@ ${agentInfo?.suggested_prompt || ''}
                 >
                   <div className="flex items-center justify-between pb-3 border-b border-[#110C2A]/10">
                     <h3 className="text-sm font-extrabold text-[#110C2A] flex items-center gap-2">
-                      <span className="text-base">🛍️</span>
                       <span>Link Marketplace / Unggah Foto Produk</span>
                     </h3>
                     <button
@@ -1726,7 +1829,6 @@ ${agentInfo?.suggested_prompt || ''}
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold text-[#110C2A] flex items-center gap-1.5">
-                          <span>🔗</span>
                           <span>Tempel Link Produk / Link Gambar (Bisa Banyak Sekaligus)</span>
                         </label>
                         <span className="text-[10px] text-[#110C2A]/50">Pisahkan baris baru untuk multiple link</span>
@@ -1763,7 +1865,7 @@ ${agentInfo?.suggested_prompt || ''}
                                           images: merged,
                                         };
                                       });
-                                      setExtractSuccessMessage('✓ Foto dari clipboard berhasil ditambahkan ke koleksi!');
+                                      setExtractSuccessMessage('Foto dari clipboard berhasil ditambahkan ke koleksi!');
                                       setExtractError('');
                                     };
                                     reader.readAsDataURL(file);
@@ -1788,7 +1890,7 @@ ${agentInfo?.suggested_prompt || ''}
                             </>
                           ) : (
                             <>
-                              <span className="text-base">🔍</span>
+                              
                               <span style={{ color: '#ffffff' }} className="text-[11px] font-bold">Ambil Foto</span>
                             </>
                           )}
@@ -1831,7 +1933,7 @@ ${agentInfo?.suggested_prompt || ''}
                                         images: merged,
                                       };
                                     });
-                                    setExtractSuccessMessage('✓ Foto dari clipboard berhasil ditambahkan ke koleksi!');
+                                    setExtractSuccessMessage('Foto dari clipboard berhasil ditambahkan ke koleksi!');
                                   };
                                   reader.readAsDataURL(blob);
                                   return;
@@ -1846,7 +1948,7 @@ ${agentInfo?.suggested_prompt || ''}
                               const text = (await navigator.clipboard.readText())?.trim();
                               if (text) {
                                 setMarketplaceUrl((prev) => (prev ? `${prev}\n${text}` : text));
-                                setExtractSuccessMessage('✓ Link berhasil ditempel ke input. Klik "Ambil Foto" untuk memuat.');
+                                setExtractSuccessMessage('Link berhasil ditempel ke input. Klik "Ambil Foto" untuk memuat.');
                                 return;
                               }
                             } catch {}
@@ -1860,12 +1962,10 @@ ${agentInfo?.suggested_prompt || ''}
                         }}
                         className="flex-1 py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#A175FF]/30 text-[#6c3df4] text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-[0.99] cursor-pointer"
                       >
-                        <span>📋</span>
                         <span>Tempel Clipboard (Cmd+V)</span>
                       </button>
 
                       <label className="flex-1 cursor-pointer py-2 px-3 rounded-xl bg-white hover:bg-[#A175FF]/10 border border-[#110C2A]/15 text-[#110C2A] text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-[0.99]">
-                        <span>📁</span>
                         <span>Unggah Banyak Foto Sekaligus</span>
                         <input
                           type="file"
@@ -1879,7 +1979,6 @@ ${agentInfo?.suggested_prompt || ''}
 
                     <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed">
                       <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-950">
-                        <span>💡</span>
                         <span>Tips Khusus Shopee (Sistem Anti-Bot):</span>
                       </div>
                       <p className="text-[10px] text-amber-900/90 leading-normal">
@@ -1887,14 +1986,13 @@ ${agentInfo?.suggested_prompt || ''}
                       </p>
                       <ol className="list-decimal list-inside text-[10px] mt-1 space-y-0.5 text-amber-900/90 font-medium">
                         <li>Buka tab Shopee produk Anda.</li>
-                        <li><b>Klik kanan</b> foto produk ➔ pilih <b>"Salin Alamat Gambar"</b> atau <b>"Salin Gambar"</b>.</li>
+                        <li><b>Klik kanan</b> foto produk &gt; pilih <b>"Salin Alamat Gambar"</b> atau <b>"Salin Gambar"</b>.</li>
                         <li>Tekan <b>Cmd+V</b> di sini atau klik tombol <b>"Tempel Gambar"</b> di atas.</li>
                       </ol>
                     </div>
 
                     {extractSuccessMessage && (
                       <div className="text-[11px] leading-relaxed text-emerald-900 bg-emerald-500/15 p-2.5 rounded-xl border border-emerald-500/30 flex items-center gap-2 animate-fade-in">
-                        <span>✓</span>
                         <span className="font-semibold">{extractSuccessMessage}</span>
                       </div>
                     )}
@@ -1902,7 +2000,6 @@ ${agentInfo?.suggested_prompt || ''}
                     {extractError && (
                       <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-500/15 p-3 rounded-xl border border-amber-500/30 flex flex-col gap-1.5">
                         <div className="flex items-start gap-1.5 font-bold">
-                          <span>⚠️</span>
                           <span>{extractError}</span>
                         </div>
                         <span className="text-[10px] text-amber-800/80">
@@ -1917,7 +2014,7 @@ ${agentInfo?.suggested_prompt || ''}
                     <div className="mt-3 pt-3 border-t border-[#110C2A]/10 flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-black text-[#110C2A] flex items-center gap-1.5">
-                          <span>🖼️ Koleksi Foto Produk ({productData.images.length})</span>
+                          <span>Koleksi Foto Produk ({productData.images.length})</span>
                           <span className="text-[10px] font-normal text-[#110C2A]/60">
                             (Klik untuk ganti foto utama)
                           </span>
@@ -1952,7 +2049,7 @@ ${agentInfo?.suggested_prompt || ''}
                               <img src={img} alt="" className="w-full h-full object-cover" />
                               {isCurrent && (
                                 <span className="absolute top-1 left-1 bg-[#A175FF] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-md shadow-xs">
-                                  Utama ✓
+                                  Utama
                                 </span>
                               )}
                               <button
@@ -1988,7 +2085,7 @@ ${agentInfo?.suggested_prompt || ''}
                         style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
                         className="w-full py-2.5 px-4 rounded-xl font-black text-xs shadow-md shadow-[#A175FF]/30 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
                       >
-                        <span style={{ color: '#ffffff' }}>✨ Selesai & Rancang Photoshoot AI ({productData.images.length} Foto) ➔</span>
+                        <span style={{ color: '#ffffff' }}>Selesai & Rancang Photoshoot AI ({productData.images.length} Foto) </span>
                       </button>
                     </div>
                   )}
@@ -2026,9 +2123,7 @@ ${agentInfo?.suggested_prompt || ''}
                     compact: true,
                   })}
                 >
-                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-cyan-500/10 text-cyan-600 font-bold text-[10px]">
-                    ✦
-                  </div>
+                  
                   <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {selectedModel.name.replace('BytePlus ', '')}
                   </span>
@@ -2071,7 +2166,6 @@ ${agentInfo?.suggested_prompt || ''}
                     compact: true,
                   })}
                 >
-                  <span className="text-sm shrink-0">{currentScene.icon}</span>
                   <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {currentScene.title}
                   </span>
@@ -2094,7 +2188,6 @@ ${agentInfo?.suggested_prompt || ''}
                           description={scene.desc}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-base">{scene.icon}</span>
                             <span className="font-semibold text-xs">{scene.title}</span>
                             <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#110C2A]/5 text-[#110C2A]/60 font-normal ml-auto">
                               {scene.badge}
@@ -2120,7 +2213,6 @@ ${agentInfo?.suggested_prompt || ''}
                     compact: true,
                   })}
                 >
-                  <PromptAspectRatioIcon />
                   <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {aspectRatio}
                   </span>
@@ -2164,7 +2256,6 @@ ${agentInfo?.suggested_prompt || ''}
                   })}
                   title="Pilih jumlah foto yang dihasilkan sekaligus"
                 >
-                  <span className="text-xs shrink-0">🖼️</span>
                   <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {imageCount === 1 ? '1 Foto' : `${imageCount} Variasi`}
                   </span>
@@ -2233,7 +2324,6 @@ ${agentInfo?.suggested_prompt || ''}
                 }`}
                 title={!isWatermarkEnabled ? 'Watermark AI Generated dinonaktifkan (Hasil bersih profesional)' : 'Watermark AI Generated diaktifkan'}
               >
-                <span>{!isWatermarkEnabled ? '✨' : '🏷️'}</span>
                 <span>{!isWatermarkEnabled ? 'No Watermark' : 'Watermark: ON'}</span>
               </button>
 
@@ -2251,7 +2341,7 @@ ${agentInfo?.suggested_prompt || ''}
                   <span className="whitespace-nowrap">Generating ({formatTimer(generationElapsed)})...</span>
                 </>
               ) : (
-                <span className="whitespace-nowrap">Generate · 2.5 credits ✦</span>
+                <span className="whitespace-nowrap">Generate · 2.5 credits</span>
               )}
             </PromptAction>
           </PromptFooter>
@@ -2280,7 +2370,7 @@ ${agentInfo?.suggested_prompt || ''}
                 onClick={() => setFullscreenImage(null)}
                 className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 text-white hover:bg-white hover:text-black flex items-center justify-center font-bold transition-colors border border-white/20"
               >
-                ✕
+                ×
               </button>
             </div>
 

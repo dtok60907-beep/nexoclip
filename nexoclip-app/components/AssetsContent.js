@@ -168,7 +168,7 @@ export default function AssetsContent() {
             className="p-2 rounded-full hover:bg-[#A175FF] transition-all border border-white/20 shadow-md cursor-pointer"
           >
             {copiedId === asset.id ? (
-              <span className="text-xs">✓</span>
+              <span className="text-[10px] font-bold">Tersalin</span>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -222,7 +222,7 @@ export default function AssetsContent() {
             }}
             className="px-2 py-0.5 rounded-full font-bold"
           >
-            {asset.category === 'product' ? '🛍️ Product Studio' : '🎨 Image Studio'}
+            {asset.category === 'product' ? 'Product Studio' : 'Image Studio'}
           </span>
           <span style={{ color: 'rgba(17, 12, 42, 0.5)' }} className="font-medium">
             {new Date(asset.created_at).toLocaleDateString('id-ID', {
@@ -241,7 +241,7 @@ export default function AssetsContent() {
       <header className="mx-auto mb-6 flex max-w-7xl flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#110C2A]/10 pb-5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-[#110C2A] flex items-center gap-2">
-            <span>🗂️</span>
+            
             <span>Asset Library</span>
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-[#110C2A]/60 font-medium">
@@ -254,7 +254,6 @@ export default function AssetsContent() {
             style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
             className="rounded-xl px-4 py-2 text-xs font-bold shadow-md shadow-[#A175FF]/30 hover:brightness-105 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <span>🛍️</span>
             <span style={{ color: '#ffffff' }}>Product Studio</span>
           </a>
           <a
@@ -288,7 +287,7 @@ export default function AssetsContent() {
               : 'bg-white/80 hover:bg-white text-[#110C2A]/70 border border-[#110C2A]/10'
           }`}
         >
-          <span>🛍️</span>
+          
           <span>Product Studio ({productAssets.length})</span>
         </button>
         <button
@@ -300,7 +299,7 @@ export default function AssetsContent() {
               : 'bg-white/80 hover:bg-white text-[#110C2A]/70 border border-[#110C2A]/10'
           }`}
         >
-          <span>🎨</span>
+          
           <span>Image Studio ({imageAssets.length})</span>
         </button>
         <button
@@ -312,7 +311,7 @@ export default function AssetsContent() {
               : 'bg-white/80 hover:bg-white text-[#110C2A]/70 border border-[#110C2A]/10'
           }`}
         >
-          <span>📅</span>
+          
           <span>Kelompokkan per Tanggal</span>
         </button>
       </div>
@@ -326,7 +325,7 @@ export default function AssetsContent() {
 
       {status === 'ready' && allAssets.length === 0 && (
         <div className="mx-auto max-w-2xl rounded-3xl border border-[#110C2A]/10 bg-white/70 backdrop-blur-md p-12 text-center shadow-sm">
-          <span className="text-4xl block mb-3">🖼️</span>
+          
           <h3 className="text-base font-extrabold text-[#110C2A]">Belum Ada Aset Dihasilkan</h3>
           <p className="mt-1 text-xs text-[#110C2A]/60 max-w-sm mx-auto">
             Mulai generate foto produk komersial Anda di Product Studio atau gambar kreatif di Image Studio.
@@ -336,7 +335,7 @@ export default function AssetsContent() {
             style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
             className="mt-5 inline-block rounded-xl px-5 py-2.5 text-xs font-bold shadow-md hover:brightness-105 transition-all cursor-pointer"
           >
-            Mulai di Product Studio ➔
+            Mulai di Product Studio
           </a>
         </div>
       )}
@@ -349,7 +348,7 @@ export default function AssetsContent() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🛍️</span>
+                  
                   <h2 className="text-base font-extrabold text-[#110C2A]">Product Studio Photoshoots</h2>
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#A175FF]/20 text-[#6c3df4]">
                     {productAssets.length} Foto
@@ -359,7 +358,7 @@ export default function AssetsContent() {
                   href="/studio/product-studio"
                   className="text-xs font-bold text-[#6c3df4] hover:underline"
                 >
-                  Buka Product Studio ➔
+                  Buka Product Studio
                 </a>
               </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -373,7 +372,7 @@ export default function AssetsContent() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between border-b border-[#110C2A]/10 pb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🎨</span>
+                  
                   <h2 className="text-base font-extrabold text-[#110C2A]">Image Studio & Aset Lainnya</h2>
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-800">
                     {imageAssets.length} Gambar
@@ -383,7 +382,7 @@ export default function AssetsContent() {
                   href="/studio"
                   className="text-xs font-bold text-sky-700 hover:underline"
                 >
-                  Buka Image Studio ➔
+                  Buka Image Studio
                 </a>
               </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -402,7 +401,7 @@ export default function AssetsContent() {
             return (
               <div key={bucketName} className="flex flex-col gap-3">
                 <div className="flex items-center gap-2 border-b border-[#110C2A]/10 pb-2">
-                  <span className="text-base">📅</span>
+                  
                   <h2 className="text-sm font-extrabold text-[#110C2A]">{bucketName}</h2>
                   <span className="text-[11px] font-bold px-2 py-0.2 rounded-full bg-[#110C2A]/10 text-[#110C2A]/70">
                     {items.length} item
@@ -450,7 +449,7 @@ export default function AssetsContent() {
                   }}
                   className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mb-1"
                 >
-                  {previewAsset.category === 'product' ? '🛍️ Product Studio Shoot' : '🎨 Image Studio'}
+                  {previewAsset.category === 'product' ? 'Product Studio Shoot' : 'Image Studio'}
                 </span>
                 <h4 style={{ color: '#110C2A' }} className="text-sm font-extrabold text-[#110C2A] truncate">
                   {previewAsset.title}
@@ -467,7 +466,7 @@ export default function AssetsContent() {
                   onClick={() => copyLink(previewAsset.url, previewAsset.id)}
                   className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#6c3df4] text-xs font-bold border border-[#A175FF]/30 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>📋</span>
+                  
                   <span>{copiedId === previewAsset.id ? 'Tersalin!' : 'Salin Link'}</span>
                 </button>
                 <a
@@ -478,7 +477,7 @@ export default function AssetsContent() {
                   style={{ backgroundColor: '#22d3ee', color: '#110C2A' }}
                   className="px-4 py-2 rounded-xl text-xs font-extrabold hover:bg-cyan-300 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>📥</span>
+                  
                   <span>Unduh HD</span>
                 </a>
               </div>
