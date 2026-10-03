@@ -125,6 +125,50 @@ export default function ProductStudio({
     return () => window.removeEventListener('click', handler);
   }, [activePopover]);
 
+  // Listener Paste Global (Cmd+V / Ctrl+V) untuk mengambil gambar atau URL dari clipboard
+  useEffect(() => {
+    const handlePaste = (e) => {
+      // 1. Cek file gambar langsung dari clipboard (misal klik kanan 'Salin Gambar' di Shopee)
+      const items = e.clipboardData?.items;
+      if (items) {
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const dataUrl = reader.result;
+                setSelectedImage(dataUrl);
+                setProductData({
+                  platform: 'Shopee / Clipboard',
+                  title: 'Foto Produk dari Clipboard',
+                  price: null,
+                  images: [dataUrl],
+                });
+                setActivePopover(null);
+                setExtractError('');
+              };
+              reader.readAsDataURL(file);
+              return;
+            }
+          }
+        }
+      }
+
+      // 2. Cek teks tautan gambar atau URL Shopee CDN di clipboard
+      const text = e.clipboardData?.getData('text')?.trim();
+      if (text && (text.startsWith('http://') || text.startsWith('https://'))) {
+        if (text.includes('susercontent.com') || text.includes('tokopedia.net') || text.includes('ibyteimg.com') || /\.(png|jpe?g|webp|gif|avif)/i.test(text)) {
+          setMarketplaceUrl(text);
+          handleExtract(text);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
+
   const currentScene = SCENE_OPTIONS.find((s) => s.id === selectedSceneId) || SCENE_OPTIONS[0];
 
   // Handler ekstraksi link marketplace
@@ -572,8 +616,47 @@ export default function ProductStudio({
                       ))}
                     </div>
 
-                    {/* Quick Direct Upload / Fallback Button */}
+                    {/* Clipboard & Direct Upload Options */}
                     <div className="mt-1 pt-3 border-t border-[#110C2A]/10 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const clipboardItems = await navigator.clipboard.read();
+                            for (const item of clipboardItems) {
+                              const imageType = item.types.find((t) => t.startsWith('image/'));
+                              if (imageType) {
+                                const blob = await item.getType(imageType);
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const dataUrl = reader.result;
+                                  setSelectedImage(dataUrl);
+                                  setProductData({
+                                    platform: 'Shopee / Clipboard',
+                                    title: 'Foto Produk dari Clipboard',
+                                    images: [dataUrl],
+                                  });
+                                  setActivePopover(null);
+                                };
+                                reader.readAsDataURL(blob);
+                                return;
+                              }
+                            }
+                            const text = await navigator.clipboard.readText();
+                            if (text) {
+                              setMarketplaceUrl(text);
+                              handleExtract(text);
+                            }
+                          } catch {
+                            alert('Silakan tekan tombol keyboard Cmd+V (Mac) atau Ctrl+V (Windows) untuk menempelkan foto.');
+                          }
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#A175FF]/30 text-[#6c3df4] text-xs font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
+                      >
+                        <span>📋</span>
+                        <span>Tempel Gambar dari Clipboard (Cmd+V)</span>
+                      </button>
+
                       <label className="cursor-pointer w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#A175FF]/10 border border-[#110C2A]/15 text-[#110C2A] text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]">
                         <span>📁</span>
                         <span>Atau Unggah Foto Produk Dari Komputer</span>
@@ -584,6 +667,21 @@ export default function ProductStudio({
                           className="hidden"
                         />
                       </label>
+                    </div>
+
+                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed">
+                      <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-950">
+                        <span>💡</span>
+                        <span>Tips Khusus Shopee (Sistem Anti-Bot):</span>
+                      </div>
+                      <p className="text-[10px] text-amber-900/90 leading-normal">
+                        Shopee memproteksi halaman web dengan sistem keamanan bot. Cara termudah:
+                      </p>
+                      <ol className="list-decimal list-inside text-[10px] mt-1 space-y-0.5 text-amber-900/90 font-medium">
+                        <li>Buka tab Shopee produk Anda.</li>
+                        <li><b>Klik kanan</b> foto produk ➔ pilih <b>"Salin Alamat Gambar"</b> atau <b>"Salin Gambar"</b>.</li>
+                        <li>Tekan <b>Cmd+V</b> di sini atau klik tombol <b>"Tempel Gambar"</b> di atas.</li>
+                      </ol>
                     </div>
 
                     {extractError && (

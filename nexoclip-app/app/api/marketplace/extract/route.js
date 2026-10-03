@@ -6,15 +6,43 @@ export async function POST(request) {
       return Response.json({ error: 'URL produk marketplace wajib diisi' }, { status: 400 });
     }
 
+    const trimmedUrl = url.trim();
+
     let parsedUrl;
     try {
-      parsedUrl = new URL(url.trim());
+      parsedUrl = new URL(trimmedUrl);
     } catch {
       return Response.json({ error: 'Format URL tidak valid' }, { status: 400 });
     }
 
-    // Identifikasi platform marketplace
     const hostname = parsedUrl.hostname.toLowerCase();
+    const pathname = parsedUrl.pathname;
+
+    // 1. Identifikasi Tautan Gambar Langsung / CDN Marketplace (Shopee, Tokopedia, TikTok, dll.)
+    const isImageCdn =
+      hostname.includes('susercontent.com') ||
+      hostname.includes('images.tokopedia.net') ||
+      hostname.includes('ibyteimg.com') ||
+      hostname.includes('byteimg.com') ||
+      (hostname.includes('shopee') && pathname.includes('/file/')) ||
+      /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(pathname);
+
+    if (isImageCdn) {
+      let platform = 'Direct Image';
+      if (hostname.includes('susercontent') || hostname.includes('shopee')) platform = 'Shopee Image';
+      else if (hostname.includes('tokopedia')) platform = 'Tokopedia Image';
+      else if (hostname.includes('byteimg') || hostname.includes('tiktok')) platform = 'TikTok Shop Image';
+
+      return Response.json({
+        success: true,
+        platform,
+        title: 'Foto Produk dari Tautan Gambar',
+        description: 'Gambar produk berhasil dimuat langsung dari CDN marketplace.',
+        images: [trimmedUrl],
+      });
+    }
+
+    // 2. Identifikasi platform marketplace
     let platform = 'E-Commerce';
     if (hostname.includes('tokopedia')) platform = 'Tokopedia';
     else if (hostname.includes('shopee')) platform = 'Shopee';
@@ -24,15 +52,14 @@ export async function POST(request) {
     else if (hostname.includes('blibli')) platform = 'Blibli';
     else if (hostname.includes('bukalapak')) platform = 'Bukalapak';
 
-    // Cek jika URL adalah tautan gambar langsung
-    if (/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(parsedUrl.pathname)) {
-      return Response.json({
-        success: true,
-        platform: 'Direct Image',
-        title: 'Produk dari Gambar Langsung',
-        description: 'Gambar produk diambil langsung dari URL tautan.',
-        images: [url.trim()],
-      });
+    // Ekstraksi title awal dari URL slug untuk Shopee / Tokopedia (misal: /GALAXY-WATCH-ULTRA-i.123...)
+    let fallbackTitleFromSlug = '';
+    const slugMatch = pathname.match(/\/([^/?#]+)(?:-i\.|\/i\.|\?|$)/);
+    if (slugMatch && slugMatch[1] && slugMatch[1].length > 2) {
+      fallbackTitleFromSlug = decodeURIComponent(slugMatch[1])
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim();
     }
 
     // Fetch halaman marketplace dengan User-Agent browser modern
@@ -41,20 +68,34 @@ export async function POST(request) {
 
     let html = '';
     try {
-      const response = await fetch(url, {
+      const response = await fetch(trimmedUrl, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': `${parsedUrl.origin}/`,
           'Cache-Control': 'no-cache',
         },
       });
 
+      // Cek Content-Type header jika ternyata responnya adalah gambar biner
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.startsWith('image/')) {
+        return Response.json({
+          success: true,
+          platform: 'Direct Image',
+          title: fallbackTitleFromSlug || 'Foto Produk',
+          images: [trimmedUrl],
+        });
+      }
+
       html = await response.text();
     } catch (err) {
       if (err.name === 'AbortError') {
-        return Response.json({ error: 'Koneksi ke marketplace timeout. Silakan periksa kembali link atau masukkan link gambar langsung.' }, { status: 504 });
+        return Response.json({
+          error: 'Koneksi ke marketplace timeout. Silakan salin alamat gambar produk (Copy Image Address) atau unggah fotonya langsung.'
+        }, { status: 504 });
       }
       throw err;
     } finally {
@@ -89,7 +130,7 @@ export async function POST(request) {
       }
     }
 
-    // 2. Parse JSON-LD Schema (biasanya digunakan Tokopedia & Shopee untuk SEO)
+    // 2. Parse JSON-LD Schema (digunakan Tokopedia & e-commerce untuk SEO)
     const jsonLdMatches = html.match(/<script\s+type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/gi) || [];
     for (const scriptTag of jsonLdMatches) {
       try {
@@ -129,30 +170,42 @@ export async function POST(request) {
       }
     }
 
-    // 3. Fallback jika title belum didapat: dari tag <title>
+    // 3. Fallback jika title belum didapat: dari tag <title> atau URL slug
     if (!title) {
       const titleTagMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
       if (titleTagMatch && titleTagMatch[1]) {
         title = titleTagMatch[1].split('|')[0].split('-')[0].trim();
       }
     }
+    if (!title && fallbackTitleFromSlug) {
+      title = fallbackTitleFromSlug;
+    }
 
     // Bersihkan title dari boilerplate marketplace (misal "Jual Beli di Tokopedia...", dll.)
     title = title.replace(/\s*\|\s*(Tokopedia|Shopee Indonesia|TikTok Shop|Lazada|Blibli).*/i, '').trim();
 
+    // 4. Cari gambar CDN Shopee langsung di dalam HTML jika ada
+    if (platform === 'Shopee') {
+      const shopeeCdnRegex = /https:\/\/(?:down-id\.img\.susercontent\.com|cf\.shopee\.co\.id)\/file\/([a-zA-Z0-9_-]+)/g;
+      let match;
+      while ((match = shopeeCdnRegex.exec(html)) !== null) {
+        images.add(match[0]);
+      }
+    }
+
     const imageList = Array.from(images).filter(img => {
       // Filter favicon, small icons, tracking pixels
-      return !img.includes('favicon') && !img.includes('icon-') && !img.includes('logo') && !img.includes('avatar');
+      return !img.includes('favicon') && !img.includes('icon-') && !img.includes('logo') && !img.includes('avatar') && !img.includes('assets/1c8bdaaf45e1fd48');
     });
 
     if (imageList.length === 0) {
-      // Jika anti-scraping marketplace memblokir gambar
+      // Jika anti-scraping Shopee/marketplace memblokir gambar
       return Response.json({
         success: false,
         platform,
-        title: title || 'Produk Marketplace',
+        title: title || fallbackTitleFromSlug || 'Produk Marketplace',
         description: description || '',
-        message: 'Halaman berhasil diakses, namun gambar produk dilindungi sistem proteksi marketplace. Anda bisa menyalin URL gambar produk secara langsung atau mengunggah fotonya.',
+        message: 'Shopee memproteksi halaman produk dengan sistem anti-bot. Cukup KLIK KANAN foto di Shopee lalu pilih "Salin Alamat Gambar" (Copy Image Address), atau tempel langsung gambar (Cmd+V).',
         images: [],
       });
     }
@@ -160,7 +213,7 @@ export async function POST(request) {
     return Response.json({
       success: true,
       platform,
-      title: title || 'Produk Marketplace',
+      title: title || fallbackTitleFromSlug || 'Produk Marketplace',
       description: description || '',
       price: price || '',
       images: imageList,
