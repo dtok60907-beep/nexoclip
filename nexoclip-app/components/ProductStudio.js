@@ -141,6 +141,7 @@ export default function ProductStudio({
   const [marketplaceUrl, setMarketplaceUrl] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
+  const [extractSuccessMessage, setExtractSuccessMessage] = useState('');
   
   // Data produk yang diekstrak
   const [productData, setProductData] = useState(null);
@@ -385,10 +386,16 @@ ${agentInfo?.suggested_prompt || ''}
     setTimeout(() => setCopiedBrief(false), 2500);
   };
 
-  // Listener Paste Global (Cmd+V / Ctrl+V)
+  // Listener Paste Global (Cmd+V / Ctrl+V) - TIDAK auto-run agar bisa multiple link
   useEffect(() => {
     const handlePaste = (e) => {
-      // 1. Cek file gambar langsung dari clipboard
+      // 1. Jangan cegat paste jika user sedang aktif mengetik di input atau textarea
+      const targetTag = e.target?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea') {
+        return;
+      }
+
+      // 2. Cek file gambar langsung dari clipboard
       const items = e.clipboardData?.items;
       if (items) {
         for (const item of items) {
@@ -399,18 +406,19 @@ ${agentInfo?.suggested_prompt || ''}
               reader.onerror = () => {};
               reader.onload = () => {
                 const dataUrl = reader.result;
-                setSelectedImage(dataUrl);
-                const currentTitle = (productData?.title && !productData.title.includes('Clipboard')) ? productData.title : '';
-                setProductData((prev) => ({
-                  platform: prev?.platform || 'Shopee / Clipboard',
-                  title: currentTitle || 'Foto Produk Marketplace',
-                  price: prev?.price || null,
-                  images: [dataUrl],
-                }));
-                setActivePopover(null);
+                setSelectedImage((curr) => curr || dataUrl);
+                setProductData((prev) => {
+                  const merged = Array.from(new Set([...(prev?.images || []), dataUrl]));
+                  return {
+                    platform: prev?.platform || 'Shopee / Clipboard',
+                    title: prev?.title || 'Foto Produk Marketplace',
+                    price: prev?.price || null,
+                    images: merged,
+                  };
+                });
+                setActivePopover('linkModal');
+                setExtractSuccessMessage('✓ Foto dari clipboard ditambahkan ke koleksi.');
                 setExtractError('');
-                // Panggil AI Agent untuk menganalisis produk
-                runProductAgentAnalysis(dataUrl, currentTitle, marketplaceUrl);
               };
               reader.readAsDataURL(file);
               return;
@@ -419,13 +427,13 @@ ${agentInfo?.suggested_prompt || ''}
         }
       }
 
-      // 2. Cek teks tautan gambar atau URL Shopee CDN di clipboard
+      // 3. Cek teks tautan gambar atau URL produk di clipboard
       const text = e.clipboardData?.getData('text')?.trim();
       if (text && (text.startsWith('http://') || text.startsWith('https://'))) {
-        if (text.includes('susercontent.com') || text.includes('tokopedia.net') || text.includes('ibyteimg.com') || /\.(png|jpe?g|webp|gif|avif)/i.test(text)) {
-          setMarketplaceUrl(text);
-          handleExtract(text);
-        }
+        setActivePopover('linkModal');
+        setMarketplaceUrl((prev) => (prev ? `${prev}\n${text}` : text));
+        setExtractSuccessMessage('✓ Link produk ditempel. Anda bisa menambah link lain atau klik Ambil Foto.');
+        setExtractError('');
       }
     };
 
@@ -435,13 +443,14 @@ ${agentInfo?.suggested_prompt || ''}
 
   const currentScene = SCENE_OPTIONS.find((s) => s.id === selectedSceneId) || SCENE_OPTIONS[0];
 
-  // Handler ekstraksi link marketplace
+  // Handler ekstraksi link marketplace (Mendukung akumulasi multiple link tanpa auto-close modal)
   const handleExtract = async (overrideUrl) => {
     const urlToUse = (typeof overrideUrl === 'string' ? overrideUrl : marketplaceUrl).trim();
     if (!urlToUse) return;
 
     setIsExtracting(true);
     setExtractError('');
+    setExtractSuccessMessage('');
 
     try {
       const res = await fetch('/api/marketplace/extract', {
@@ -457,20 +466,34 @@ ${agentInfo?.suggested_prompt || ''}
         setExtractError(data.message);
       }
 
-      setProductData(data);
+      let allMergedImages = [];
+      setProductData((prev) => {
+        allMergedImages = Array.from(new Set([...(prev?.images || []), ...(data.images || [])]));
+        return {
+          ...data,
+          platform: data.platform || prev?.platform || 'Marketplace',
+          title: data.title || prev?.title || 'Foto Produk',
+          price: data.price || prev?.price || '',
+          images: allMergedImages,
+        };
+      });
+
       if (data.title) {
-        setEditedTitle(data.title);
+        setEditedTitle((curr) => curr || data.title);
       }
       if (data.price) {
-        setEditedPrice(data.price);
+        setEditedPrice((curr) => curr || data.price);
       }
       if (data.images && data.images.length > 0) {
-        setSelectedImage(data.images[0]);
-        setActivePopover(null);
-        runProductAgentAnalysis(data.images[0], data.title, urlToUse);
+        setSelectedImage((curr) => curr || data.images[0]);
+        setExtractSuccessMessage(`✓ Berhasil memuat ${data.images.length} foto! Tambah link lain atau klik Selesai.`);
+        const combined = Array.from(new Set([...(productData?.images || []), ...data.images]));
+        runProductAgentAnalysis(combined, data.title || productData?.title || 'Foto Produk', urlToUse);
       } else if (data.title) {
-        runProductAgentAnalysis('', data.title, urlToUse);
+        runProductAgentAnalysis([], data.title, urlToUse);
       }
+
+      setMarketplaceUrl('');
     } catch (err) {
       setExtractError(err.message || 'Terjadi kesalahan saat memproses tautan marketplace');
     } finally {
@@ -478,29 +501,38 @@ ${agentInfo?.suggested_prompt || ''}
     }
   };
 
-  // Handler unggah file gambar lokal langsung
+  // Handler unggah file gambar lokal langsung (Mendukung multiple files)
   const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onerror = () => {};
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      setSelectedImage(dataUrl);
-      const fileTitle = file.name.replace(/\.[^/.]+$/, '');
-      setProductData({
-        platform: 'Foto Produk',
-        title: fileTitle,
-        price: null,
-        images: [dataUrl],
+    const promises = files.map((file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, dataUrl: reader.result });
+        reader.readAsDataURL(file);
       });
-      setEditedTitle(fileTitle);
-      setActivePopover(null);
+    });
+
+    Promise.all(promises).then((results) => {
+      const newUrls = results.map((r) => r.dataUrl);
+      setSelectedImage((curr) => curr || newUrls[0]);
+      let allMerged = [];
+      setProductData((prev) => {
+        allMerged = Array.from(new Set([...(prev?.images || []), ...newUrls]));
+        const fileTitle = results[0]?.name ? results[0].name.replace(/\.[^/.]+$/, '') : 'Foto Produk';
+        return {
+          platform: prev?.platform || 'Upload File',
+          title: prev?.title || fileTitle,
+          price: prev?.price || null,
+          images: allMerged,
+        };
+      });
+      setExtractSuccessMessage(`✓ Berhasil menambahkan ${newUrls.length} file foto.`);
       setExtractError('');
-      runProductAgentAnalysis(dataUrl, fileTitle, '');
-    };
-    reader.readAsDataURL(file);
+      const combined = Array.from(new Set([...(productData?.images || []), ...newUrls]));
+      runProductAgentAnalysis(combined, results[0]?.name || 'Foto Produk', '');
+    });
   };
 
   // Handler generate photoshoot AI via BytePlus
@@ -974,15 +1006,15 @@ ${agentInfo?.suggested_prompt || ''}
                     </button>
                   )}
 
-                  {productData.images && productData.images.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setActivePopover('linkModal')}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-[#110C2A]/70 hover:text-[#110C2A] bg-white rounded-lg border border-[#110C2A]/10 shadow-xs transition-colors"
-                    >
-                      Foto ({productData.images.length})
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActivePopover('linkModal')}
+                    className="px-2.5 py-1 text-[11px] font-bold text-[#6c3df4] hover:text-[#5021db] bg-purple-50 hover:bg-purple-100 rounded-lg border border-[#A175FF]/30 shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Buka galeri foto produk atau tambah link/foto baru"
+                  >
+                    <span>🖼️</span>
+                    <span>{productData?.images?.length ? `${productData.images.length} Foto (+ Tambah)` : '+ Tambah Foto'}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -1488,10 +1520,13 @@ ${agentInfo?.suggested_prompt || ''}
                       </div>
                       <div className="flex gap-2 items-stretch">
                         <textarea
-                          rows={2}
-                          placeholder="Tempel 1 atau banyak link Shopee, Tokopedia, atau alamat gambar (Copy Image Address)...&#10;Contoh:&#10;https://down-id.img.susercontent.com/file/...&#10;https://shopee.co.id/product/..."
+                          rows={3}
+                          placeholder="Tempel 1 atau banyak link Shopee / Tokopedia / CDN gambar di sini...&#10;Contoh:&#10;https://down-id.img.susercontent.com/file/...&#10;https://down-id.img.susercontent.com/file/..."
                           value={marketplaceUrl}
-                          onChange={(e) => setMarketplaceUrl(e.target.value)}
+                          onChange={(e) => {
+                            setMarketplaceUrl(e.target.value);
+                            setExtractSuccessMessage('');
+                          }}
                           className="flex-1 rounded-xl border border-[#110C2A]/20 bg-white px-3 py-2 text-xs text-[#110C2A] placeholder:text-[#110C2A]/40 focus:outline-none focus:ring-2 focus:ring-[#A175FF] shadow-inner resize-none custom-scrollbar leading-relaxed"
                         />
                         <button
@@ -1508,7 +1543,7 @@ ${agentInfo?.suggested_prompt || ''}
                           ) : (
                             <>
                               <span className="text-base">🔍</span>
-                              <span style={{ color: '#ffffff' }} className="text-[11px] font-bold">Ambil Semua</span>
+                              <span style={{ color: '#ffffff' }} className="text-[11px] font-bold">Ambil Foto</span>
                             </>
                           )}
                         </button>
@@ -1531,14 +1566,12 @@ ${agentInfo?.suggested_prompt || ''}
                         onClick={async () => {
                           try {
                             const clipboardItems = await navigator.clipboard.read();
-                            const pastedImages = [];
                             for (const item of clipboardItems) {
                               const imageType = item.types.find((t) => t.startsWith('image/'));
                               if (imageType) {
                                 const blob = await item.getType(imageType);
                                 const reader = new FileReader();
                                 reader.onload = () => {
-                                  pastedImages.push(reader.result);
                                   setProductData((prev) => {
                                     const merged = Array.from(new Set([...(prev?.images || []), reader.result]));
                                     return {
@@ -1548,18 +1581,19 @@ ${agentInfo?.suggested_prompt || ''}
                                     };
                                   });
                                   setSelectedImage((curr) => curr || reader.result);
-                                  runProductAgentAnalysis([reader.result], 'Foto Produk Marketplace', marketplaceUrl);
+                                  setExtractSuccessMessage('✓ Foto dari clipboard berhasil ditambahkan ke koleksi.');
                                 };
                                 reader.readAsDataURL(blob);
+                                return;
                               }
                             }
                             const text = await navigator.clipboard.readText();
                             if (text) {
-                              setMarketplaceUrl(text);
-                              handleExtract(text);
+                              setMarketplaceUrl((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
+                              setExtractSuccessMessage('✓ Link berhasil ditambahkan. Klik "Ambil Foto" untuk memuat foto.');
                             }
                           } catch {
-                            alert('Silakan tekan tombol keyboard Cmd+V (Mac) atau Ctrl+V (Windows) untuk menempelkan foto.');
+                            alert('Silakan tekan tombol keyboard Cmd+V (Mac) atau Ctrl+V (Windows) untuk menempelkan link/foto.');
                           }
                         }}
                         className="flex-1 py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#A175FF]/30 text-[#6c3df4] text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-[0.99] cursor-pointer"
@@ -1595,6 +1629,13 @@ ${agentInfo?.suggested_prompt || ''}
                         <li>Tekan <b>Cmd+V</b> di sini atau klik tombol <b>"Tempel Gambar"</b> di atas.</li>
                       </ol>
                     </div>
+
+                    {extractSuccessMessage && (
+                      <div className="text-[11px] leading-relaxed text-emerald-900 bg-emerald-500/15 p-2.5 rounded-xl border border-emerald-500/30 flex items-center gap-2 animate-fade-in">
+                        <span>✓</span>
+                        <span className="font-semibold">{extractSuccessMessage}</span>
+                      </div>
+                    )}
 
                     {extractError && (
                       <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-500/15 p-3 rounded-xl border border-amber-500/30 flex flex-col gap-1.5">
@@ -1667,6 +1708,26 @@ ${agentInfo?.suggested_prompt || ''}
                           );
                         })}
                       </div>
+
+                      {/* Primary Finish & Proceed CTA Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivePopover(null);
+                          const allImages = productData?.images || [];
+                          if (allImages.length > 0 || selectedImage) {
+                            runProductAgentAnalysis(
+                              allImages.length > 0 ? allImages : [selectedImage],
+                              editedTitle || productData?.title || 'Foto Produk Marketplace',
+                              marketplaceUrl
+                            );
+                          }
+                        }}
+                        style={{ backgroundColor: '#A175FF', color: '#ffffff' }}
+                        className="w-full py-2.5 px-4 rounded-xl font-black text-xs shadow-md shadow-[#A175FF]/30 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+                      >
+                        <span style={{ color: '#ffffff' }}>✨ Selesai & Rancang Photoshoot AI ({productData.images.length} Foto) ➔</span>
+                      </button>
                     </div>
                   )}
                 </div>
