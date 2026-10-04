@@ -449,10 +449,10 @@ export default function OnboardingFlow() {
               )}
               {error && <p role="alert" className="mx-auto mt-5 max-w-md rounded-[14px] border border-red-300 bg-red-50 px-3.5 py-2.5 text-sm text-red-600">{error}</p>}
               <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
-                <button type="button" onClick={() => save('completed', TOOLS[recommended].path)} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-[#A175FF] px-5 py-3.5 text-sm font-bold text-[#110C2A] shadow-lg shadow-[#A175FF]/25 transition hover:-translate-y-0.5 hover:bg-[#9467f4] disabled:translate-y-0 disabled:opacity-60">
+                <button type="button" onClick={() => save('completed', TOOLS[recommended].path.startsWith('/studio') ? `${TOOLS[recommended].path}?tour=1` : TOOLS[recommended].path)} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-[#A175FF] px-5 py-3.5 text-sm font-bold text-[#110C2A] shadow-lg shadow-[#A175FF]/25 transition hover:-translate-y-0.5 hover:bg-[#9467f4] disabled:translate-y-0 disabled:opacity-60">
                   {saving ? 'Opening…' : `Open ${TOOLS[recommended].label}`}<Icons.arrow className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={() => save('completed', '/studio')} disabled={saving} className="flex-1 rounded-[18px] border border-[#110C2A]/12 bg-white px-5 py-3.5 text-sm font-bold text-[#110C2A] transition hover:border-[#110C2A]/30 disabled:opacity-60">
+                <button type="button" onClick={() => save('completed', '/studio?tour=1')} disabled={saving} className="flex-1 rounded-[18px] border border-[#110C2A]/12 bg-white px-5 py-3.5 text-sm font-bold text-[#110C2A] transition hover:border-[#110C2A]/30 disabled:opacity-60">
                   Explore the Studio
                 </button>
               </div>

@@ -7,6 +7,7 @@ import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
 import BillingContent from './BillingContent';
+import StudioTour from './tour/StudioTour';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
@@ -290,6 +291,7 @@ export default function StandaloneShell({ initialTab, children }) {
   const [activeTab, setActiveTab] = useState(getInitialTab());
 
   const [balance, setBalance] = useState(null);
+  const [tourOpen, setTourOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
   const [showPromoBanner, setShowPromoBanner] = useState(() => {
@@ -436,6 +438,14 @@ export default function StandaloneShell({ initialTab, children }) {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('tour') !== '1') return;
+    url.searchParams.delete('tour');
+    window.history.replaceState(null, '', url.pathname + url.search);
+    setTourOpen(true);
   }, []);
 
   const handleTabChange = useCallback((tabId) => {
@@ -689,15 +699,25 @@ export default function StandaloneShell({ initialTab, children }) {
 
           {/* Right: Actions */}
           <div className="flex-shrink-0 flex items-center gap-3">
-            <button onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
+            <button data-tour="credit-balance" onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
               <span className="text-cyan-300">◈</span>
               <span className="text-xs font-bold text-white/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
             </button>
-            <button onClick={() => handleTabChange('billing')} className="rounded-full bg-[#22d3ee] px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-cyan-300" aria-label="Top up credits">
+            <button data-tour="top-up" onClick={() => handleTabChange('billing')} className="rounded-full bg-[#22d3ee] px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-cyan-300" aria-label="Top up credits">
               Top up
             </button>
 
-            <JobListPanel />
+            <div data-tour="jobs" className="flex"><JobListPanel /></div>
+            <button
+              type="button"
+              data-tour="tour-button"
+              onClick={() => setTourOpen(true)}
+              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/5 text-sm font-bold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Take the Studio tour"
+              title="Take the Studio tour"
+            >
+              ?
+            </button>
             <AccountMenu />
           </div>
         </header>
@@ -722,7 +742,7 @@ export default function StandaloneShell({ initialTab, children }) {
               ${isSidebarCollapsed ? 'md:w-16' : 'md:w-52'}
             `}
           >
-            <nav aria-label="Studio navigation" className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-3 px-2">
+            <nav data-tour="studio-nav" aria-label="Studio navigation" className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-3 px-2">
               {(() => {
                 const isCollapsed = isSidebarCollapsed && !isMobileOpen;
 
@@ -766,6 +786,7 @@ export default function StandaloneShell({ initialTab, children }) {
                         return (
                           <a
                             href="/canvas"
+                            data-tour="canvas-link"
                             aria-label={canvasTab.label}
                             title={isCollapsed ? canvasTab.label : undefined}
                             className={`
@@ -993,6 +1014,7 @@ export default function StandaloneShell({ initialTab, children }) {
         }
       `}</style>
 
+      <StudioTour open={tourOpen} onClose={() => setTourOpen(false)} activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 }
