@@ -22,6 +22,7 @@ import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay 
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { MAX_VIDEO_PROMPT_CHARS } from '@/lib/prompt-limits'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
+import { buildNextShotPrompt, createLastFrameMention, type NextShotMention } from '@/lib/next-shot'
 import { probeMediaDuration, referenceDurationError } from '@/lib/media-duration'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { completeGenerationNode } from '@/lib/generation-node'
@@ -1124,37 +1125,60 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const feedbackFrameStyle = feedbackState.isRegenerating || feedbackState.isFailedRegeneration ? feedbackState.frameStyle : {}
 
   // Build options from current model's config
-  // Continue from this video's saved last frame: a reference node holding the
-  // frame, wired into a new Frame-mode video node of the same model family.
+  // Continue from this video's saved last frame in a new Omni shot of the
+  // same model: the frame joins the previous prompt's references as one more
+  // @mention (see lib/next-shot.ts), so the shot keeps every reference.
   const lastFrameUrl = typeof data.lastFrameUrl === 'string' && data.lastFrameUrl ? data.lastFrameUrl : null
-  const frameModelId = currentModel?.videoTaskMode === 'frame'
-    ? currentModel.id
-    : getModelById(`${currentModel?.id}-frame`)?.id
-  const createNextShotFromLastFrame = () => {
-    if (!lastFrameUrl || !frameModelId) return
-    const self = getNodes().find(nd => nd.id === id)
-    const x = self?.position?.x ?? 0
-    const y = self?.position?.y ?? 0
-    const stamp = Date.now()
-    const refId = `ref-lastframe-${stamp}`
-    const nextId = `${id}-next-${stamp}`
-    const sceneId = (data.sceneId as string | undefined)
-    const frameSettings = resolveGenerationSettings('video', { modelId: frameModelId })
-    addNodes([
-      {
-        id: refId, type: 'reference', position: { x: x + 420, y: y + 40 },
-        data: { thumbnail: lastFrameUrl, mediaType: 'image', label: 'Last frame', ...(sceneId ? { sceneId } : {}) },
-      },
-      {
-        id: nextId, type: 'videoGen', position: { x: x + 760, y },
-        data: {
-          label: 'Next shot', modelId: frameModelId, aspectRatio: frameSettings.aspectRatio, resolution, duration,
-          enableAudio, returnLastFrame: true, ...(sceneId ? { sceneId } : {}),
+  const nextShotModelId = currentModel?.videoTaskMode === 'frame'
+    ? getModelById(currentModel.id.replace(/-frame$/, ''))?.id
+    : currentModel?.id
+  const [creatingNextShot, setCreatingNextShot] = useState(false)
+  const createNextShotFromLastFrame = async () => {
+    if (!lastFrameUrl || !nextShotModelId || creatingNextShot) return
+    setCreatingNextShot(true)
+    try {
+      const frame = await createLastFrameMention({
+        projectId,
+        lastFrameUrl,
+        sourceLabel: typeof data.label === 'string' ? data.label : 'shot',
+      })
+      window.dispatchEvent(new CustomEvent('folders-changed'))
+      const nodes = getNodes()
+      const self = nodes.find(nd => nd.id === id)
+      const promptEdge = getEdges().find(edge => edge.target === id && edge.targetHandle === 'prompt-in')
+      const promptData = (promptEdge ? nodes.find(nd => nd.id === promptEdge.source)?.data : undefined) as Record<string, unknown> | undefined
+      const prompt = buildNextShotPrompt(
+        typeof promptData?.text === 'string' ? promptData.text : '',
+        Array.isArray(promptData?.mentions) ? promptData.mentions as NextShotMention[] : [],
+        frame,
+      )
+      const x = self?.position?.x ?? 0
+      const y = self?.position?.y ?? 0
+      const stamp = Date.now()
+      const promptId = `${id}-next-prompt-${stamp}`
+      const nextId = `${id}-next-${stamp}`
+      const sceneId = (data.sceneId as string | undefined)
+      const settings = resolveGenerationSettings('video', { modelId: nextShotModelId })
+      addNodes([
+        {
+          id: promptId, type: 'prompt', position: { x: x + 480, y },
+          data: { label: 'Next shot prompt', text: prompt.text, mentions: prompt.mentions, ...(sceneId ? { sceneId } : {}) },
         },
-      },
-    ] as any)
-    addEdges([{ id: `${refId}-${nextId}`, source: refId, sourceHandle: 'image-out', target: nextId, targetHandle: 'image-in' }] as any)
-    toast.success('Next shot created — connect a Text node and generate.')
+        {
+          id: nextId, type: 'videoGen', position: { x: x + 920, y },
+          data: {
+            label: 'Next shot', modelId: nextShotModelId, aspectRatio: aspectRatio || settings.aspectRatio, resolution, duration,
+            enableAudio, returnLastFrame: true, ...(sceneId ? { sceneId } : {}),
+          },
+        },
+      ] as any)
+      addEdges([{ id: `${promptId}-${nextId}`, source: promptId, sourceHandle: 'prompt-out', target: nextId, targetHandle: 'prompt-in' }] as any)
+      toast.success(`Next shot created — the last frame is @${frame.name.replace(/[^\w]+/g, '-')}. Edit the prompt, then generate.`)
+    } catch (err) {
+      reportError(err instanceof Error ? err.message : "Couldn't create the next shot")
+    } finally {
+      setCreatingNextShot(false)
+    }
   }
 
   const finalizeDraft = async () => {
@@ -1695,14 +1719,16 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <Sparkle size={12} weight="fill" />
               <span className="ml-1 text-[11px] font-bold">Render 1080p</span>
             </button>
-          ) : status === 'completed' && lastFrameUrl && frameModelId && !draftMode ? (
+          ) : status === 'completed' && lastFrameUrl && nextShotModelId && !draftMode ? (
             <div className="flex items-center gap-1.5">
               <button
-                onClick={createNextShotFromLastFrame}
-                className="flex h-8 items-center justify-center rounded-full bg-sky-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-sky-300"
-                title="Start a new Frame-mode shot from this video's last frame"
+                type="button"
+                onClick={() => { void createNextShotFromLastFrame() }}
+                disabled={creatingNextShot}
+                className="flex h-8 items-center justify-center rounded-full bg-sky-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-sky-300 disabled:cursor-wait disabled:opacity-60"
+                title="Start a new shot from this video's last frame, keeping the same references"
               >
-                <Plus size={12} weight="bold" />
+                {creatingNextShot ? <CircleNotch size={12} weight="bold" className="animate-spin" /> : <Plus size={12} weight="bold" />}
                 <span className="ml-1 text-[11px] font-bold">Next shot</span>
               </button>
               <button
