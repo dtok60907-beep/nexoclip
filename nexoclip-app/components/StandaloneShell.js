@@ -292,8 +292,8 @@ export default function StandaloneShell({ initialTab, children }) {
   const [balance, setBalance] = useState(null);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
-  const [showVadooBanner, setShowVadooBanner] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('vadoo_banner_dismissed') !== '1';
+  const [showPromoBanner, setShowPromoBanner] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('nexoclip_promo_banner_dismissed') !== '1';
     return true;
   });
 
@@ -597,21 +597,21 @@ export default function StandaloneShell({ initialTab, children }) {
         </div>
       )}
 
-      {/* Vadoo promo banner */}
-      {showVadooBanner && (
+      {/* NexoClip promo banner */}
+      {showPromoBanner && (
         <div className="flex-shrink-0 w-full bg-indigo-600 flex items-center justify-center px-4 py-2 gap-3 relative z-50">
           <a
-            href="https://vadoo.tv"
+            href="https://nexoclip.com"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[13px] font-bold text-white hover:opacity-80 transition-opacity text-center"
           >
-            Unrestricted AI Images &amp; Videos → Auto-Publish as YouTube Shorts &amp; TikToks, Earn ↗
+            Turn product photos into scroll-stopping video ads in minutes → nexoclip.com ↗
           </a>
           <button
             onClick={() => {
-              setShowVadooBanner(false);
-              localStorage.setItem('vadoo_banner_dismissed', '1');
+              setShowPromoBanner(false);
+              localStorage.setItem('nexoclip_promo_banner_dismissed', '1');
             }}
             className="absolute right-3 text-white/60 hover:text-white transition-colors text-lg leading-none"
             aria-label="Dismiss"
