@@ -734,6 +734,35 @@ function CanvasInner({ projectId }: { projectId: string }) {
     commands.createNode(makeNode(type, pos, undefined, activeSceneId, initialData))
   }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
+  // The Canvas tour asks for a connected Prompt → Image pair so its node steps
+  // point at real nodes. An empty canvas gets a starter pair (undoable like any
+  // edit); otherwise the view just frames the nodes already there.
+  useEffect(() => {
+    const onSeed = () => {
+      const existing = getNodes().filter((node) => node.type === 'prompt' || node.type === 'imageGen')
+      if (existing.length || !allowDocumentMutation) {
+        if (existing.length) fitView({ nodes: existing.map((node) => ({ id: node.id })), duration: 300, padding: 0.35, maxZoom: 1 })
+        return
+      }
+      const center = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+      const prompt = makeNode('prompt', { x: center.x - 700, y: center.y - 250 }, undefined, activeSceneId, {
+        text: 'A ceramic coffee cup on a marble table, soft morning light, product photo',
+      })
+      // A Prompt node is about 620px wide; leave a clear gap before the generator.
+      const image = makeNode('imageGen', { x: center.x + 40, y: center.y - 250 }, undefined, activeSceneId)
+      commands.createNode(prompt)
+      commands.createNode(image)
+      commands.connect({ source: prompt.id, sourceHandle: 'prompt-out', target: image.id, targetHandle: 'prompt-in' })
+      window.setTimeout(() => {
+        updateNodeInternals(prompt.id)
+        updateNodeInternals(image.id)
+        fitView({ nodes: [{ id: prompt.id }, { id: image.id }], duration: 300, padding: 0.35, maxZoom: 1 })
+      }, 120)
+    }
+    window.addEventListener('spite:tour-seed-nodes', onSeed)
+    return () => window.removeEventListener('spite:tour-seed-nodes', onSeed)
+  }, [allowDocumentMutation, getNodes, fitView, screenToFlowPosition, commands, activeSceneId, updateNodeInternals])
+
   // Scene handlers. Name = highest existing "Scene N" + 1 so deletes
   // don't reuse numbers (deleting Scene 3 then adding a new one gives
   // you Scene 6, not Scene 3 again — names monotonically increase

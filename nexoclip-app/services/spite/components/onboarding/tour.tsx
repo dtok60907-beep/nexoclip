@@ -22,6 +22,11 @@ function popoverStyle(rect: DOMRect | null): React.CSSProperties {
   const clampX = (x: number) => Math.max(12, Math.min(x, vw - POPOVER_W - 12))
   const below = vh - rect.bottom
   const above = rect.top
+  // A target that fills the screen (e.g. the expanded assets panel) leaves no
+  // room on either side, so float the card over its lower edge instead.
+  if (below < 200 && above < 200) {
+    return { bottom: 28, left: clampX(vw / 2 - POPOVER_W / 2), width: POPOVER_W }
+  }
   if (below >= 240 || below >= above) {
     return { top: rect.bottom + 12 + PAD, left: clampX(rect.left + rect.width / 2 - POPOVER_W / 2), width: POPOVER_W }
   }
@@ -48,7 +53,10 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (reason: 
 
   const measure = useCallback(() => {
     const el = step?.target ? document.querySelector<HTMLElement>(step.target) : null
-    setRect(el && el.offsetParent !== null ? el.getBoundingClientRect() : null)
+    // Measure the box rather than offsetParent, which is null for any
+    // position: fixed element (e.g. the expanded assets panel).
+    const box = el?.getBoundingClientRect()
+    setRect(box && box.width > 0 && box.height > 0 ? box : null)
   }, [step])
 
   // On step change: bring the target into view, then measure (twice — once now,

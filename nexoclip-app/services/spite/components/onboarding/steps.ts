@@ -17,6 +17,12 @@ export interface TourStep {
   onLeave?: () => void
 }
 
+// Ask the canvas for a connected Prompt → Image pair to point at (see
+// canvas-workspace). Idempotent: it only adds nodes to an empty canvas.
+const seedNodes = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('spite:tour-seed-nodes'))
+}
+
 // Drive the canvas assets panel from the tour (left-toolbar listens for this).
 const assets = (mode: 'side' | 'expanded' | 'close') => () => {
   if (typeof window !== 'undefined') {
@@ -56,45 +62,126 @@ export const TOURS: Record<TourSurface, TourStep[]> = {
   canvas: [
     {
       title: 'Welcome to the Canvas',
-      body: 'An infinite plane where every node is a piece of your shot — drag, connect and generate. Here’s how it flows.',
+      body: 'An infinite board where every node is a piece of your shot: prompts, references, images and videos, wired together. This tour covers every tool, about two minutes.',
       video: '/onboarding/canvas-working.mp4',
       image: '/onboarding/canvas-welcome.png', // fallback if the video is absent
     },
     {
-      target: '[data-tour="left-toolbar"]',
-      title: 'Your tools',
-      body: 'Select, add nodes, cut connections — all from this strip.',
+      target: '[data-tour="canvas-toolbar"]',
+      title: 'Your toolbar',
+      body: 'Everything you need sits in this bar, grouped left to right: navigate, comment, board objects, drawing, new nodes, assets, then undo and redo. Hover any button to see its name and shortcut.',
     },
     {
-      target: '[data-tour="tool-add"]',
-      title: 'Add a node anywhere',
-      body: 'Use this to add a node — or just right-click anywhere on the empty canvas to open the same menu (prompts, image/video generators, uploads and more) right where your cursor is.',
-      image: '/onboarding/canvas-add-menu.png',
+      target: '[data-tour="tools-navigate"]',
+      title: 'Select, pan and cut',
+      body: 'Cursor selects, moves and connects nodes. Hand only pans, so you can move around without nudging anything. Cut removes connections between nodes.',
+    },
+    {
+      target: '[data-tour="add-nodes"]',
+      title: 'Add nodes',
+      body: 'Drop a Prompt, an Image generator or a Video generator into the middle of your view. Right-click empty canvas for the full menu, placed right where your cursor is.',
+    },
+    {
+      target: '.react-flow__node-prompt',
+      title: 'A Prompt node',
+      body: 'We added a starter Prompt and Image pair so you can see how they work; delete them or press Undo anytime. Write what you want in the Prompt. Type @ to mention a character, prop or location from your library.',
+      onEnter: seedNodes,
+    },
+    {
+      target: '.react-flow__edge',
+      title: 'Connections carry the prompt',
+      body: 'Drag from the right edge of one node to the left edge of another to connect them. Drag a connection into empty space to create a new, already-connected Image or Video node.',
+      onEnter: seedNodes,
+    },
+    {
+      target: '.react-flow__node-imageGen',
+      title: 'An Image generator',
+      body: 'Pick the model, aspect ratio and how many images to make, right on the node. The Generate button shows the credit cost first. Results collect under the node, and Regenerate runs it again.',
+      onEnter: seedNodes,
+    },
+    {
+      target: '[data-tour="add-video"]',
+      title: 'Video generators go further',
+      body: 'Connect a prompt, a first frame or reference images, then choose a mode.',
+    },
+    {
+      target: '[data-tour="add-video"]',
+      title: 'Draft, Extend, Edit, Next shot',
+      body: 'Draft renders a cheap 480p preview; Render 1080p finalises the take you like. Extend continues a clip, Edit changes one, and Next shot starts a new connected shot from the last frame, keeping your references.',
+    },
+    {
+      target: '[data-tour="asset-tools"]',
+      title: 'History, uploads and your library',
+      body: 'Open every past generation, upload your own images, and keep Characters, Props, Locations and General folders. Anything in a folder can be @mentioned in a prompt to keep it consistent.',
     },
     {
       target: '[data-tour="assets-panel"]',
-      title: 'Your asset library',
-      body: 'Characters, Props, Locations and uploads live in this side panel. Tag an image to a folder, then @mention it in any prompt to keep a character consistent.',
+      title: 'The library panel',
+      body: 'Browse and search your assets here, then drag any of them straight onto the canvas as a reference.',
       onEnter: assets('side'),
       onLeave: assets('close'),
     },
     {
       target: '[data-tour="assets-expanded"]',
       title: 'Browse it full-screen',
-      body: 'Open the library expanded to search, organise into folders, and drag assets straight onto the canvas.',
+      body: 'Open the library expanded to organise folders, rename, bulk-select and download.',
       onEnter: assets('expanded'),
       onLeave: assets('close'),
     },
     {
+      target: '[data-tour="tools-comment"]',
+      title: 'Comments',
+      body: 'Pick Comment (C) and click anywhere to drop a pin for feedback. The check button next to it shows or hides resolved comments.',
+    },
+    {
+      target: '[data-tour="project-chat"]',
+      title: 'Project chat',
+      body: 'Talk with everyone on this project without leaving the board. Collaborators’ cursors and names show live on the canvas.',
+    },
+    {
+      target: '[data-tour="tools-board"]',
+      title: 'Notes, text and tables',
+      body: 'Sticky notes (N), text labels (T) and tables for shot lists or briefs. Select two or more nodes and press Ctrl+G to group them in a frame; Ctrl+Shift+G ungroups.',
+    },
+    {
+      target: '[data-tour="tools-draw"]',
+      title: 'Pen and eraser',
+      body: 'Sketch arrows, circles or layout ideas with the Pen (P). The Eraser (E) removes strokes you sweep across.',
+    },
+    {
+      target: '[data-tour="undo-redo"]',
+      title: 'Undo and redo',
+      body: 'Step back or forward through your edits. The canvas saves automatically as you work.',
+    },
+    {
       target: '[data-tour="scene-timeline"]',
-      title: 'Scenes, shots & pages',
-      body: 'Assign a node to a shot from the badge on the node itself — assigned shots always glow yellow so you can spot them at a glance. The strip up here switches between scenes, and you can keep as many pages / scenes / canvases as you need. Export drops a storyboard zip, one folder per scene.',
+      title: 'Scenes, shots and pages',
+      body: 'Switch scenes up here and add as many as you need. Assign a node to a shot from the badge on the node; assigned shots glow yellow. Export downloads a storyboard zip with one folder per scene.',
       image: '/onboarding/canvas-shot.png',
     },
     {
-      target: '[data-tour="jobs-toggle"]',
-      title: 'Track every generation',
-      body: 'The jobs panel shows what’s running and what finished. Your canvas autosaves every few seconds — the save status sits up here too.',
+      target: '[data-tour="canvas-page"]',
+      title: 'Where you are',
+      body: 'Shows the current canvas page. The target button recenters the view on your work if you get lost.',
+    },
+    {
+      target: '[data-tour="zoom-controls"]',
+      title: 'Zoom and fit',
+      body: 'Zoom in and out, or fit everything in view. The minimap above it gives you an overview of large boards.',
+    },
+    {
+      target: '[data-tour="canvas-credits"]',
+      title: 'Your credits',
+      body: 'Your balance, shared with every studio in Nexoclip. Each Generate button shows its cost before you run it.',
+    },
+    {
+      target: '[data-tour="canvas-tour-button"]',
+      title: 'Replay anytime',
+      body: 'Open this tour again from here whenever you need a refresher.',
+    },
+    {
+      title: 'You’re ready',
+      body: 'Try it now: edit the starter prompt, press Generate on the Image node, then connect the image into a Video generator and make a Draft.',
     },
   ],
   flow: [
