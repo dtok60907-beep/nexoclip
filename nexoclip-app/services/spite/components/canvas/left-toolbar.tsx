@@ -110,6 +110,13 @@ interface GeneratedAsset {
   workspaceAssetId?: string
 }
 
+// SWR's data is undefined while a key is null (assets panel closed) or
+// loading. A `= []` default would be a new array every render, and the effect
+// syncing selectedGenAsset depends on it — that re-ran on every render and,
+// while dragging re-rendered the toolbar each frame, looped until React gave
+// up with "Maximum update depth exceeded" (#185).
+const NO_ASSETS: GeneratedAsset[] = []
+
 function TrustForSeedance({
   type,
   state,
@@ -278,7 +285,7 @@ export function LeftToolbar({
     const d = await r.json()
     return Array.isArray(d) ? d : []
   }
-  const { data: generatedAssets = [], isLoading: loadingHistory, mutate: mutateAssets } = useSWR<GeneratedAsset[]>(
+  const { data: generatedAssets = NO_ASSETS, isLoading: loadingHistory, mutate: mutateAssets } = useSWR<GeneratedAsset[]>(
     historyOpen ? withBasePath('/api/workspace-assets') : null,
     async (url: string) => {
       const response = await fetch(url)
@@ -342,7 +349,10 @@ export function LeftToolbar({
     setSelectedGenAsset(current => {
       if (!current) return current
       const updated = generatedAssets.find(asset => asset.id === current.id)
-      return updated ? mergeAssetPreservingBytePlusTrust(current, updated) : current
+      if (!updated || updated === current) return current
+      const merged = mergeAssetPreservingBytePlusTrust(current, updated)
+      // Same content, new object: keep the current one so nothing re-renders.
+      return JSON.stringify(merged) === JSON.stringify(current) ? current : merged
     })
   }, [generatedAssets])
 
