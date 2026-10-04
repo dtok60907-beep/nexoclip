@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'SPITE — AI filmmaking workflows',
-  description: 'Open-source node-based canvas for AI filmmaking workflows. Your keys. Your models. Your workflow.',
+  title: 'Canvas — Nexoclip',
+  description: 'Node-based canvas for producing AI images and videos with Nexoclip.',
   // Browser page translation rewrites text nodes under React's feet, which
   // crashes the canvas with "insertBefore/removeChild ... not a child of this
   // node". It's a tool UI, so opt out of translation entirely.

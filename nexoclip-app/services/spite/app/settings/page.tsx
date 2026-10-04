@@ -289,9 +289,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-10">
-        {/* fal.ai API Key Section */}
+        {/* AI provider connection (keys are managed by Nexoclip) */}
         <section data-tour="settings-apikey" className="space-y-4">
-          <h2 className="text-sm font-mono uppercase tracking-wider text-muted-foreground">fal.ai API Key</h2>
+          <h2 className="text-sm font-mono uppercase tracking-wider text-muted-foreground">AI Providers</h2>
           <div className="glass rounded-xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -325,9 +325,8 @@ export default function SettingsPage() {
 
             <div className="pt-3 border-t border-border/50">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Add your fal.ai key to your Vercel project under{' '}
-                <span className="text-foreground font-mono">Settings → Environment Variables → FAL_KEY</span>, then redeploy.
-                The key is never sent to the browser — it lives only in Vercel&apos;s encrypted environment config.
+                Nexoclip manages the AI provider keys for you, so there is nothing to set up here.
+                Keys stay on the server and are never sent to the browser.
               </p>
             </div>
           </div>

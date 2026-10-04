@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Sparkle, ChatCircleDots } from '@phosphor-icons/react'
+import { Sparkle, ChatCircleDots, Question } from '@phosphor-icons/react'
+import { startTour } from '@/lib/onboarding'
 import { useState } from 'react'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
 import type { RemotePresencePeer } from '@/lib/realtime/presence'
@@ -81,9 +82,10 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
 
       {/* Right */}
       <div className="flex items-center gap-1">
-        <CreditBalanceBadge />
+        <span data-tour="canvas-credits" className="flex"><CreditBalanceBadge /></span>
         <button
           type="button"
+          data-tour="project-chat"
           onClick={onToggleChat}
           aria-pressed={chatOpen}
           className={`relative flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${chatOpen ? 'border-white/20 bg-white/[0.14] text-white' : 'border-white/[0.08] bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]'}`}
@@ -95,6 +97,16 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
               {chatUnread > 99 ? '99+' : chatUnread}
             </span>
           ) : null}
+        </button>
+        <button
+          type="button"
+          data-tour="canvas-tour-button"
+          onClick={() => startTour('canvas')}
+          className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.06] text-slate-300 transition-colors hover:bg-white/[0.1] hover:text-white"
+          title="Take the Canvas tour"
+          aria-label="Take the Canvas tour"
+        >
+          <Question size={14} />
         </button>
         <div className="mx-1 h-4 w-px bg-white/10" />
         {onFollowGuest && <CanvasGuestList peers={guests} onFollow={onFollowGuest} />}
