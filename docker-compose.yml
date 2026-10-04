@@ -119,6 +119,7 @@ services:
     command: ["node", "src/queue/imageWorker.mjs"]
     environment:
       NODE_ENV: production
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
@@ -163,6 +164,7 @@ services:
     command: ["node", "src/queue/videoWorker.mjs"]
     environment:
       NODE_ENV: production
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
@@ -281,12 +283,14 @@ services:
       args:
         # Caddy owns the public canvas route; do not expose the Spite app port in the UI.
         NEXT_PUBLIC_SPITE_URL: ${NEXT_PUBLIC_SPITE_URL:-http://localhost/spite}
+        NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
     container_name: nexoclip-app
     networks:
       - default
       - ai-ugc
     environment:
       NODE_ENV: production
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
@@ -317,6 +321,11 @@ services:
       CANVAS_AUTH_URL: ${CANVAS_AUTH_URL:-http://spite-realtime:3007/internal/authorize}
       CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
       CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      PAKASIR_SLUG: ${PAKASIR_SLUG:-}
+      PAKASIR_API_KEY: ${PAKASIR_API_KEY:-}
+      PAKASIR_WEBHOOK_SECRET: ${PAKASIR_WEBHOOK_SECRET:-}
+      PAKASIR_ALLOW_SANDBOX: ${PAKASIR_ALLOW_SANDBOX:-0}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
       REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
     volumes:

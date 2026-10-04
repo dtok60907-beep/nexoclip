@@ -15,9 +15,9 @@
 export const CREDITS_PER_USD = 100;
 const CREDIT_PRECISION = 10;
 
-// Generation markup only. The older NEXT_PUBLIC_CREDIT_MARKUP_PERCENT is not
-// read here: it is set to 0 in production for other displays and would
-// silently remove the markup.
+// Generation markup only. NEXT_PUBLIC_CREDIT_MARKUP_PERCENT is not read here:
+// it is baked into the browser bundle for Studio estimates at build time, and
+// an empty or stale value there must not change what is charged.
 export function markupMultiplier(env = process.env) {
   const raw = env.CREDIT_MARKUP_PERCENT;
   const percent = raw === undefined || raw === '' ? 30 : Number(raw);

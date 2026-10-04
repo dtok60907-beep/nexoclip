@@ -11,6 +11,10 @@ COPY nexoclip-app/packages/studio/package*.json ./packages/studio/
 RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
 
 FROM deps AS builder
+# Studio price estimates run in the browser, so their markup is fixed at build
+# time. Keep it equal to the runtime CREDIT_MARKUP_PERCENT that is charged.
+ARG NEXT_PUBLIC_CREDIT_MARKUP_PERCENT=30
+ENV NEXT_PUBLIC_CREDIT_MARKUP_PERCENT=$NEXT_PUBLIC_CREDIT_MARKUP_PERCENT
 COPY nexoclip-app/ .
 # Next imports database-backed route modules while collecting build metadata.
 # This non-routable URL satisfies configuration checks without exposing a secret.
