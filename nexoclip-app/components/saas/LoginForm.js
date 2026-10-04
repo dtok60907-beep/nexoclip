@@ -1,46 +1,52 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { saasFetch } from '../../src/lib/saas/api.js';
 import { getAuthRequest, validateAuthFields } from '../../src/lib/saas/authForm.js';
+import AuthShell, {
+  AuthAlert, AuthDivider, AuthLegal, PasswordToggle, inputClass, labelClass, primaryButtonClass, secondaryButtonClass,
+} from './AuthShell.js';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const POINTS = [
+  { title: 'Your boards and results', body: 'Canvas projects, galleries and folders are where you left them.' },
+  { title: 'One credit balance', body: 'Every studio draws from the same credits. Top up anytime.' },
+  { title: 'Always see the cost', body: 'The credit estimate shows before you press Generate.' },
+];
+
+// Messages for ?error= values set by the Google sign-in routes.
+const URL_ERRORS = {
+  google: 'Google sign-in did not complete. Please try again.',
+  google_state: 'Your Google sign-in expired. Please try again.',
+  google_unconfigured: 'Google sign-in is not available right now. Use your email instead.',
+};
+
+function readQuery() {
+  if (typeof window === 'undefined') return { returnTo: '/studio', urlError: null };
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get('next');
+  return {
+    returnTo: next?.startsWith('/') && !next.startsWith('//') ? next : '/studio',
+    urlError: URL_ERRORS[params.get('error')] || null,
+  };
+}
 
 export default function LoginForm() {
   const router = useRouter();
-  const requestedReturnTo = typeof window === 'undefined'
-    ? null
-    : new URLSearchParams(window.location.search).get('next');
-  const returnTo = requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//')
-    ? requestedReturnTo
-    : '/studio';
-  const [step, setStep] = useState('email'); // 'email' | 'password'
+  const [{ returnTo, urlError }] = useState(readQuery);
   const [values, setValues] = useState({ email: '', password: '' });
-  const [error, setError] = useState(null);
-  const [notice, setNotice] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState(urlError);
   const [loading, setLoading] = useState(false);
 
-  function continueWithEmail(event) {
-    event.preventDefault();
-    setNotice(null);
-    const email = values.email.trim();
-    if (!email) return setError('Email is required.');
-    if (!EMAIL_RE.test(email)) return setError('Enter a valid email address.');
-    setError(null);
-    setStep('password');
-  }
+  const set = (key) => (event) => setValues((current) => ({ ...current, [key]: event.target.value }));
 
-  function backToEmail() {
-    setError(null);
-    setNotice(null);
-    setStep('email');
-  }
-
-  async function submitLogin(event) {
+  async function submit(event) {
     event.preventDefault();
     const errors = validateAuthFields(values);
-    if (errors.password) return setError(errors.password);
+    if (errors.email) return setError(errors.email);
+    if (!values.password) return setError('Password is required.');
     setLoading(true);
     setError(null);
     try {
@@ -48,94 +54,55 @@ export default function LoginForm() {
       await saasFetch(path, options);
       router.push(returnTo);
     } catch (cause) {
-      setError(cause?.message || 'We could not sign you in. Please try again.');
+      setError(cause?.status === 401 ? 'Email or password is incorrect.' : cause?.message || 'We could not sign you in. Please try again.');
       setLoading(false);
     }
   }
 
-  const inputClass =
-    'w-full rounded-[18px] border border-[#110C2A]/10 bg-white px-4 py-3.5 text-sm text-[#110C2A] placeholder:text-[#110C2A]/35 outline-none transition focus:border-[#A175FF] focus:ring-4 focus:ring-[#A175FF]/15 disabled:opacity-60';
-  const primaryBtn =
-    'w-full rounded-[18px] bg-[#A175FF] px-4 py-3.5 text-sm font-bold text-[#110C2A] shadow-lg shadow-[#A175FF]/25 transition hover:-translate-y-0.5 hover:bg-[#9467f4] disabled:opacity-60';
-
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#FFF6DE] px-4 py-12 text-[#110C2A]">
-      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#A175FF]/25 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-[#8BDFDD]/35 blur-3xl" />
-      <div className="relative w-full max-w-sm rounded-[40px] border border-white/70 bg-white/75 p-7 shadow-[0_24px_80px_rgba(17,12,42,0.12)] backdrop-blur-xl sm:p-9">
-        <div className="mb-5 flex justify-center">
-          <div className="grid h-12 w-12 place-items-center rounded-[18px] bg-[#110C2A] text-lg font-black text-[#A175FF] shadow-lg shadow-[#A175FF]/20">
-            N
+    <AuthShell
+      headline={<>Welcome back<br />to your studio.</>}
+      subtitle="Pick up where you left off: product videos, photos and AI influencer content, all in one place."
+      points={POINTS}
+      eyebrow="Welcome back"
+      title="Sign in to Nexoclip"
+      description="Use the email and password you signed up with."
+    >
+      {error && <AuthAlert>{error}</AuthAlert>}
+
+      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+        <div>
+          <label htmlFor="email" className={labelClass}>Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" autoFocus value={values.email} onChange={set('email')} disabled={loading} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="password" className={labelClass}>Password</label>
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="Your password"
+              value={values.password}
+              onChange={set('password')}
+              disabled={loading}
+              className={`${inputClass} pr-12`}
+            />
+            <PasswordToggle shown={showPassword} onToggle={() => setShowPassword((shown) => !shown)} />
           </div>
         </div>
+        <button type="submit" disabled={loading} className={primaryButtonClass}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
 
-        <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[#A175FF]">Welcome back</p>
-        <h1 className="mb-8 text-center text-3xl font-black tracking-tight text-[#110C2A]">Sign in to Nexoclip</h1>
+      <AuthDivider>Don&apos;t have an account?</AuthDivider>
+      <Link href="/register" className={`mt-3 ${secondaryButtonClass}`}>
+        Sign up free · get 50 credits
+      </Link>
 
-        {error && (
-          <p role="alert" className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p className="mb-3 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2 text-sm text-black/60">
-            {notice}
-          </p>
-        )}
-
-        {step === 'email' ? (
-          <>
-            <form onSubmit={continueWithEmail} className="space-y-3" noValidate>
-              <input
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="Enter email"
-                autoFocus
-                value={values.email}
-                onChange={(e) => setValues((v) => ({ ...v, email: e.target.value }))}
-                className={inputClass}
-              />
-              <button type="submit" className={primaryBtn}>Continue</button>
-            </form>
-          </>
-        ) : (
-          <form onSubmit={submitLogin} className="space-y-3" noValidate>
-            <button
-              type="button"
-              onClick={backToEmail}
-              className="flex w-full items-center justify-between gap-3 rounded-[18px] border border-[#110C2A]/10 bg-white px-3.5 py-2.5 text-left text-sm text-[#110C2A] transition hover:border-[#A175FF]/50 hover:bg-[#A175FF]/5"
-            >
-              <span className="min-w-0 truncate">{values.email}</span>
-              <span className="flex-shrink-0 text-xs font-medium text-black/45">Change</span>
-            </button>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Password"
-              autoFocus
-              value={values.password}
-              onChange={(e) => setValues((v) => ({ ...v, password: e.target.value }))}
-              disabled={loading}
-              className={inputClass}
-            />
-            <button type="submit" disabled={loading} className={primaryBtn}>
-              {loading ? 'Please wait…' : 'Continue'}
-            </button>
-          </form>
-        )}
-
-        <p className="mt-5 text-center text-sm text-[#110C2A]/60">
-          New to Nexoclip?{' '}
-          <a href="/register" className="font-bold text-[#7d3cff] underline-offset-2 hover:underline">Create a free account</a>
-        </p>
-        <p className="mt-4 text-center text-xs leading-5 text-[#110C2A]/50">
-          By clicking “Continue” you agree to our{' '}
-          <a href="https://www.nexoclip.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-black/70">Terms of use</a>{' '}&amp;{' '}
-          <a href="https://www.nexoclip.com/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-black/70">Privacy Policy</a>.
-        </p>
-      </div>
-    </main>
+      <AuthLegal action="signing in" />
+    </AuthShell>
   );
 }
