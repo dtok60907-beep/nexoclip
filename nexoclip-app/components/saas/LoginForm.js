@@ -126,7 +126,11 @@ export default function LoginForm() {
           </form>
         )}
 
-        <p className="mt-5 text-center text-xs leading-5 text-[#110C2A]/50">
+        <p className="mt-5 text-center text-sm text-[#110C2A]/60">
+          New to Nexoclip?{' '}
+          <a href="/register" className="font-bold text-[#7d3cff] underline-offset-2 hover:underline">Create a free account</a>
+        </p>
+        <p className="mt-4 text-center text-xs leading-5 text-[#110C2A]/50">
           By clicking “Continue” you agree to our{' '}
           <a href="https://www.nexoclip.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-black/70">Terms of use</a>{' '}&amp;{' '}
           <a href="https://www.nexoclip.com/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-black/70">Privacy Policy</a>.

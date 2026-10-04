@@ -105,6 +105,7 @@ export async function loginWithGoogle({ email, displayName }) {
   try {
     await client.query('BEGIN');
     let user = await findUserByEmail(client, normalizedEmail);
+    const isNew = !user;
     if (!user) {
       const passwordHash = await hashPassword(createSessionToken());
       const name = `${displayName || 'Personal'} workspace`;
@@ -120,7 +121,7 @@ export async function loginWithGoogle({ email, displayName }) {
     }
     const session = await createSessionForClient(client, user.id);
     await client.query('COMMIT');
-    return { user: { id: user.id, email: user.email, display_name: user.display_name }, ...session };
+    return { user: { id: user.id, email: user.email, display_name: user.display_name }, isNew, ...session };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

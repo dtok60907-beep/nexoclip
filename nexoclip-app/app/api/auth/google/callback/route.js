@@ -50,9 +50,10 @@ export async function GET(request) {
     if (!email || profile.email_verified === false) throw new Error('Email not available or unverified');
     const displayName = profile.name || profile.given_name || null;
 
-    const { token, expiresAt } = await loginWithGoogle({ email, displayName });
+    const { token, expiresAt, isNew } = await loginWithGoogle({ email, displayName });
 
-    const response = NextResponse.redirect(new URL('/studio', url.origin));
+    // First sign-in creates the account, so it continues into onboarding.
+    const response = NextResponse.redirect(new URL(isNew ? '/onboarding' : '/studio', url.origin));
     response.cookies.set(SESSION_COOKIE, token, { ...sessionCookieOptions(request), expires: new Date(expiresAt) });
     response.cookies.set('g_oauth_state', '', { path: '/', maxAge: 0 });
     return response;

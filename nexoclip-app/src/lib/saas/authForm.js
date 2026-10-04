@@ -11,6 +11,13 @@ export function validateAuthFields({ email, password }) {
 export function getAuthRequest(mode, values) {
   return {
     path: mode === 'register' ? '/api/auth/register' : '/api/auth/login',
-    options: { method: 'POST', body: JSON.stringify({ email: values.email.trim(), password: values.password }) },
+    options: {
+      method: 'POST',
+      body: JSON.stringify({
+        email: values.email.trim(),
+        password: values.password,
+        ...(mode === 'register' && values.displayName?.trim() ? { displayName: values.displayName.trim() } : {}),
+      }),
+    },
   };
 }
