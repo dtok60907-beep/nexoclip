@@ -115,6 +115,10 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       setEditing(false)
       setEditorLockError('Prompt changed concurrently. The latest saved version is shown; review it before generating.')
     }
+    // Already showing this state: setting it again would hand React a new
+    // mentions array (`data.mentions || []` is fresh each run), re-run this
+    // effect, and loop until "Maximum update depth exceeded" (#185).
+    if (text === incomingText && mentionStateKey(text, mentions) === incomingStateKey) return
     const finishSync = syncGuardRef.current.beginPropSync()
     setText(incomingText)
     setMentions(incomingMentions)

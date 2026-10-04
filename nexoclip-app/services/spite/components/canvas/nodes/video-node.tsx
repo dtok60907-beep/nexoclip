@@ -27,6 +27,7 @@ import { probeMediaDuration, referenceDurationError } from '@/lib/media-duration
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
+import { AddToFolderModal } from '../add-to-folder-modal'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
@@ -183,6 +184,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isRenaming, setIsRenaming] = useState(false)
+  const [folderModalOpen, setFolderModalOpen] = useState(false)
+  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location' | 'general'>('general')
   const [labelDraft, setLabelDraft] = useState('')
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
@@ -1181,6 +1184,24 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
   }
 
+  // A node that already has a result (finished, draft, extend, failed) runs
+  // again as "Regenerate" so it's clear the button starts a new run.
+  const hasRun = status === 'completed' || status === 'failed'
+  const generateButton = (
+    <button
+      type="button"
+      onClick={requestGenerate}
+      disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
+      className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      title={hasRun ? `Regenerate — ${generateTooltip}` : generateTooltip}
+    >
+      {hasRun ? <ArrowsClockwise size={12} weight="bold" /> : <Sparkle size={12} weight="fill" />}
+      <span className="ml-1 text-[11px] font-bold">
+        {hasRun ? 'Regenerate' : 'Generate'}{costEstimate.isKnown ? ` · ${formatCreditsShort(costEstimate.total)}` : ''}
+      </span>
+    </button>
+  )
+
   const finalizeDraft = async () => {
     const draftGenerationId = (data.lastGenerationId as string | undefined) || durableGenerationId
     if (!draftGenerationId || !draftMode || status !== 'completed') return
@@ -1241,7 +1262,20 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         locked={Boolean(data.locked)}
         onRename={handleRename}
         onViewFullscreen={outputUrl ? () => setLightboxOpen(true) : undefined}
+        onAddToFolder={outputUrl ? (type) => { setFolderType(type); setFolderModalOpen(true) } : undefined}
       />
+
+      {outputUrl ? (
+        <AddToFolderModal
+          open={folderModalOpen}
+          onClose={() => setFolderModalOpen(false)}
+          folderType={folderType}
+          projectId={projectId}
+          assetUrl={outputUrl}
+          mediaType="video"
+          workspaceAssetId={typeof data.workspaceAssetId === 'string' ? data.workspaceAssetId : undefined}
+        />
+      ) : null}
 
       <Lightbox
         open={lightboxOpen}
@@ -1618,9 +1652,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   if (next) {
                     setExtendMode(false)
                     setEditMode(false)
-                    setAspectRatio('adaptive')
                   }
-                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode, editMode: next ? false : editMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
+                  // Keeps the chosen aspect ratio: Draft renders it as picked.
+                  patchPersistedNodeData({ draftMode: next, extendMode: next ? false : extendMode, editMode: next ? false : editMode })
                 }}
                 disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${draftMode ? 'bg-amber-500/25 text-amber-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
@@ -1637,9 +1671,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   if (next) {
                     setDraftMode(false)
                     setEditMode(false)
-                    setAspectRatio('adaptive')
                   }
-                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode, editMode: next ? false : editMode, ...(next ? { aspectRatio: 'adaptive' } : {}) })
+                  // The chosen aspect ratio stays: an extend is sent as
+                  // adaptive (Seedance requires it), and the ratio applies
+                  // again once Extend is switched off.
+                  patchPersistedNodeData({ extendMode: next, draftMode: next ? false : draftMode, editMode: next ? false : editMode })
                 }}
                 disabled={isGenerating}
                 className={`px-2 h-6 rounded-md text-[10px] font-mono ${extendMode ? 'bg-emerald-500/25 text-emerald-300' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
@@ -1708,17 +1744,21 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           {/* Submitted durable jobs cannot be safely cancelled locally; keep
               their node state aligned with the provider until completion. */}
           {isGenerating ? null : status === 'completed' && draftMode && durableGenerationId ? (
-            // Same size as the Generate button it replaces — the old 9px pill
-            // was easy to miss, so finished drafts looked like they had no
-            // way to render the final video.
-            <button
-              onClick={finalizeDraft}
-              className="flex h-8 min-w-12 items-center justify-center rounded-full bg-amber-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-amber-300"
-              title="Render this Draft at 1080p"
-            >
-              <Sparkle size={12} weight="fill" />
-              <span className="ml-1 text-[11px] font-bold">Render 1080p</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              {generateButton}
+              {/* Same size as the Generate button — the old 9px pill was
+                  easy to miss, so finished drafts looked like they had no
+                  way to render the final video. */}
+              <button
+                type="button"
+                onClick={finalizeDraft}
+                className="flex h-8 min-w-12 items-center justify-center rounded-full bg-amber-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-amber-300"
+                title="Render this Draft at 1080p"
+              >
+                <Sparkle size={12} weight="fill" />
+                <span className="ml-1 text-[11px] font-bold">Render 1080p</span>
+              </button>
+            </div>
           ) : status === 'completed' && lastFrameUrl && nextShotModelId && !draftMode ? (
             <div className="flex items-center gap-1.5">
               <button
@@ -1731,35 +1771,21 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 {creatingNextShot ? <CircleNotch size={12} weight="bold" className="animate-spin" /> : <Plus size={12} weight="bold" />}
                 <span className="ml-1 text-[11px] font-bold">Next shot</span>
               </button>
-              <button
-                onClick={requestGenerate}
-                disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
-                className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                title={generateTooltip}
-              >
-                <Sparkle size={12} weight="fill" />
-                <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatCreditsShort(costEstimate.total) : 'Generate'}</span>
-              </button>
+              {generateButton}
             </div>
           ) : status === 'failed' && generationId ? (
-            <button
-              onClick={handleRecheck}
-              className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
-              title="Check the durable generation result again."
-            >
-              Re-check
-            </button>
-          ) : (
-            <button
-              onClick={requestGenerate}
-              disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
-              className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-              title={generateTooltip}
-            >
-              <Sparkle size={12} weight="fill" />
-              <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatCreditsShort(costEstimate.total) : 'Generate'}</span>
-            </button>
-          )}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleRecheck}
+                className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
+                title="Check the durable generation result again."
+              >
+                Re-check
+              </button>
+              {generateButton}
+            </div>
+          ) : generateButton}
         </div>
       </div>
 
