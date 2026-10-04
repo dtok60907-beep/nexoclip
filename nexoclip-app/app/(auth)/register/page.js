@@ -1,10 +1,10 @@
-import AuthForm from '../../../components/saas/AuthForm.js';
+import RegisterForm from '../../../components/saas/RegisterForm.js';
 
 export const metadata = {
-  title: 'Create account | NexoClip',
-  description: 'Create your NexoClip workspace.',
+  title: 'Create account | Nexoclip',
+  description: 'Create your Nexoclip account and get 50 free credits.',
 };
 
 export default function RegisterPage() {
-  return <main className="flex min-h-screen items-center justify-center bg-[#050505] px-4 py-12"><AuthForm mode="register" /></main>;
+  return <RegisterForm />;
 }

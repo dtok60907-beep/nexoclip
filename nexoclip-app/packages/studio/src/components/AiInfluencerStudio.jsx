@@ -487,7 +487,7 @@ export default function AiInfluencerStudio({
       {/* ════════════════════════════════════════════════════════════
           LEFT — Builder / Options Panel
       ════════════════════════════════════════════════════════════ */}
-      <div className="flex flex-col w-[320px] shrink-0 border-r border-white/[0.07] bg-[#111111] overflow-hidden">
+      <div data-tour="influencer-builder" className="flex flex-col w-[320px] shrink-0 border-r border-white/[0.07] bg-[#111111] overflow-hidden">
 
         {/* Builder header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
@@ -607,6 +607,7 @@ export default function AiInfluencerStudio({
 
             {/* Generate */}
             <button
+              data-tour="influencer-generate"
               onClick={handleGenerate}
               disabled={isGenerating}
               className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-bold transition-all shadow-lg ${
@@ -718,7 +719,7 @@ export default function AiInfluencerStudio({
       {/* ════════════════════════════════════════════════════════════
           RIGHT — Generated Characters History Gallery
       ════════════════════════════════════════════════════════════ */}
-      <div className="flex flex-col w-[160px] shrink-0 border-l border-white/[0.07] bg-[#111111] overflow-hidden">
+      <div data-tour="influencer-gallery" className="flex flex-col w-[160px] shrink-0 border-l border-white/[0.07] bg-[#111111] overflow-hidden">
 
         {/* Gallery header */}
         <div className="px-3 py-3 border-b border-white/[0.07] shrink-0">

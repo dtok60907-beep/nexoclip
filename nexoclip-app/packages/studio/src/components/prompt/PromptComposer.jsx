@@ -299,7 +299,7 @@ export function PromptComposer({
 }) {
   return (
     <div className={joinClasses(positionClassName, className)} style={style}>
-      <div className={joinClasses(DEFAULT_PANEL_CLASS, panelClassName)}>
+      <div data-tour="prompt-composer" className={joinClasses(DEFAULT_PANEL_CLASS, panelClassName)}>
         {children}
       </div>
     </div>
@@ -351,6 +351,7 @@ export const PromptTextarea = forwardRef(function PromptTextarea(
 
   return (
     <textarea
+      data-tour="prompt-input"
       {...props}
       ref={internalRef}
       value={value}
@@ -382,6 +383,7 @@ export const PromptControls = forwardRef(function PromptControls(
   return (
     <div
       ref={ref}
+      data-tour="prompt-controls"
       className={joinClasses(
         "flex items-center gap-2 relative flex-wrap pb-1 md:pb-0",
         className,
@@ -398,6 +400,7 @@ export const PromptAction = forwardRef(function PromptAction(
 ) {
   return (
     <button
+      data-tour="prompt-generate"
       {...props}
       ref={ref}
       type={type}
