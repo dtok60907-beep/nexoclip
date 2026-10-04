@@ -27,7 +27,7 @@ const assets = (mode: 'side' | 'expanded' | 'close') => () => {
 export const TOURS: Record<TourSurface, TourStep[]> = {
   dashboard: [
     {
-      title: 'Welcome to SPITE',
+      title: 'Welcome to Nexoclip Canvas',
       body: 'Your pre-production studio for AI filmmaking. There are two ways to create — let’s take a quick look. (You can skip anytime.)',
       image: '/onboarding/dashboard-welcome.png',
     },
@@ -138,8 +138,8 @@ export const TOURS: Record<TourSurface, TourStep[]> = {
     },
     {
       target: '[data-tour="settings-apikey"]',
-      title: 'Your fal.ai key',
-      body: 'SPITE runs on your own fal.ai key — set it in your host’s environment variables. This shows the live connection status.',
+      title: 'AI providers',
+      body: 'Nexoclip manages the AI provider keys for you, so there is nothing to set up. This shows whether generation is connected.',
     },
     {
       target: '[data-tour="settings-retention"]',
