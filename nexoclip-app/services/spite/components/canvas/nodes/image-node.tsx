@@ -1003,6 +1003,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
   const feedbackState = getGenerationFeedbackState({ status: status === 'cancelled' ? 'idle' : status, hasOutput: Boolean(outputUrl) })
   const isGenerating = status === 'submitting' || status === 'in_queue' || status === 'in_progress'
+
+  // A node that already has a result (or a failed run) offers "Regenerate" so
+  // a new take is always one click away, matching the video node.
+  const hasRun = Boolean(outputUrl) || status === 'completed' || status === 'failed'
   const isTaggedToShot = !!selectedShotId
   const feedbackFrameStyle = feedbackState.isRegenerating || feedbackState.isFailedRegeneration ? feedbackState.frameStyle : {}
 
@@ -1011,6 +1015,21 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const aspectOptions = currentModel?.aspectRatios.map(a => ({ value: a, label: a })) || []
   const resolutionOptions = currentModel?.resolutions?.map(r => ({ value: r, label: r })) || []
 
+
+  const generateButton = (
+    <button
+      type="button"
+      onClick={requestGenerate}
+      disabled={isGenerating || promptState.disabled || !generationPersistenceGuard.allowed}
+      className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      title={hasRun ? `Regenerate — ${generateTooltip}` : generateTooltip}
+    >
+      {hasRun ? <ArrowsClockwise size={12} weight="bold" /> : <Sparkle size={12} weight="fill" />}
+      <span className="ml-1 text-[11px] font-bold">
+        {hasRun ? 'Regenerate' : 'Generate'}{costEstimate.isKnown ? ` · ${formatCreditsShort(costEstimate.total)}` : ''}
+      </span>
+    </button>
+  )
   return (
     <div
       className="relative group"
@@ -1303,24 +1322,17 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               finish after a local cancel and leave the node/server disagreeing.
               Keep polling, and offer re-check only after a soft timeout. */}
           {isGenerating ? null : status === 'failed' && generationId ? (
-            <button
-              onClick={handleRecheck}
-              className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
-              title="Check the durable generation result again."
-            >
-              Re-check
-            </button>
-          ) : (
-            <button
-              onClick={requestGenerate}
-              disabled={isGenerating || promptState.disabled || !generationPersistenceGuard.allowed}
-              className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-              title={generateTooltip}
-            >
-              <Sparkle size={12} weight="fill" />
-              <span className="ml-1 text-[11px] font-bold">{costEstimate.isKnown ? formatCreditsShort(costEstimate.total) : 'Generate'}</span>
-            </button>
-          )}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleRecheck}
+                className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
+                title="Check the durable generation result again."
+              >
+                Re-check
+              </button>
+              {generateButton}
+            </div>
+          ) : generateButton}
         </div>
       </div>
 
