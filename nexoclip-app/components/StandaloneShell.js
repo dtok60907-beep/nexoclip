@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
+import BillingContent from './BillingContent';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
@@ -141,9 +142,26 @@ const TABS = [
     )
   },
   {
+    id: 'billing',
+    label: 'Top Up',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="6" width="20" height="14" rx="2"/>
+        <path d="M2 10h20"/>
+        <path d="M16 15h2"/>
+        <path d="M6 6V4h12v2"/>
+      </svg>
+    )
+  },
+  {
     id: 'usage',
     label: 'Usage',
-    icon: null,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3v18h18"/>
+        <path d="M7 15l4-4 3 3 5-6"/>
+      </svg>
+    )
   },
   {
     id: 'ai-influencer',
@@ -190,6 +208,17 @@ const NAVIGATION_CATEGORIES = [
         <path d="M9 18V5l12-2v13"/>
         <circle cx="6" cy="18" r="3"/>
         <circle cx="18" cy="16" r="3"/>
+      </svg>
+    )
+  },
+  {
+    id: 'credits',
+    label: 'Credits',
+    tabIds: ['billing', 'usage'],
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 7v10M9.5 9.5h3.75a1.75 1.75 0 0 1 0 3.5h-2.5a1.75 1.75 0 0 0 0 3.5H14.5"/>
       </svg>
     )
   }
@@ -263,8 +292,8 @@ export default function StandaloneShell({ initialTab, children }) {
   const [balance, setBalance] = useState(null);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
-  const [showVadooBanner, setShowVadooBanner] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('vadoo_banner_dismissed') !== '1';
+  const [showPromoBanner, setShowPromoBanner] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('nexoclip_promo_banner_dismissed') !== '1';
     return true;
   });
 
@@ -568,21 +597,21 @@ export default function StandaloneShell({ initialTab, children }) {
         </div>
       )}
 
-      {/* Vadoo promo banner */}
-      {showVadooBanner && (
+      {/* NexoClip promo banner */}
+      {showPromoBanner && (
         <div className="flex-shrink-0 w-full bg-indigo-600 flex items-center justify-center px-4 py-2 gap-3 relative z-50">
           <a
-            href="https://vadoo.tv"
+            href="https://nexoclip.com"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[13px] font-bold text-white hover:opacity-80 transition-opacity text-center"
           >
-            Unrestricted AI Images &amp; Videos → Auto-Publish as YouTube Shorts &amp; TikToks, Earn ↗
+            Turn product photos into scroll-stopping video ads in minutes → nexoclip.com ↗
           </a>
           <button
             onClick={() => {
-              setShowVadooBanner(false);
-              localStorage.setItem('vadoo_banner_dismissed', '1');
+              setShowPromoBanner(false);
+              localStorage.setItem('nexoclip_promo_banner_dismissed', '1');
             }}
             className="absolute right-3 text-white/60 hover:text-white transition-colors text-lg leading-none"
             aria-label="Dismiss"
@@ -663,6 +692,9 @@ export default function StandaloneShell({ initialTab, children }) {
             <button onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
               <span className="text-cyan-300">◈</span>
               <span className="text-xs font-bold text-white/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
+            </button>
+            <button onClick={() => handleTabChange('billing')} className="rounded-full bg-[#22d3ee] px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-cyan-300" aria-label="Top up credits">
+              Top up
             </button>
 
             <JobListPanel />
@@ -778,7 +810,8 @@ export default function StandaloneShell({ initialTab, children }) {
 
         {/* Studio Content */}
         <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#030303] text-white">
-        {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} /> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
+        {activeTab === 'billing' && <BillingContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} balance={balance} onCompleted={refreshBalance} />}
+        {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} onTopUp={() => handleTabChange('billing')} /> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
           <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
         {activeTab === 'video' && (

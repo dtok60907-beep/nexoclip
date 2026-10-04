@@ -1184,9 +1184,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
   }
 
-  // A node that already has a result (finished, draft, extend, failed) runs
-  // again as "Regenerate" so it's clear the button starts a new run.
-  const hasRun = status === 'completed' || status === 'failed'
+  // A node that already has a result (finished, draft, extend, edit, failed)
+  // runs again as "Regenerate" so it's clear the button starts a new run. An
+  // output that survived a cancel or reload counts too.
+  const hasRun = Boolean(outputUrl) || status === 'completed' || status === 'failed'
   const generateButton = (
     <button
       type="button"

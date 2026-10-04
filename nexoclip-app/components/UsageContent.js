@@ -19,7 +19,7 @@ export function usagePath({ scope, page }) {
   return `/api/usage?scope=${encodeURIComponent(scope)}&page=${page}&pageSize=25`;
 }
 
-export default function UsageContent({ workspaceId, onBalanceChange }) {
+export default function UsageContent({ workspaceId, onBalanceChange, onTopUp }) {
   const [scope, setScope] = useState('me');
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
@@ -44,7 +44,7 @@ export default function UsageContent({ workspaceId, onBalanceChange }) {
   if (!data) return <div className="p-6 text-white/50">Loading usage…</div>;
   const { summary, permissions, items, pagination } = data;
   return <main className="h-full overflow-auto p-5 md:p-8 text-white">
-    <h1 className="text-2xl font-bold">Usage</h1><p className="mt-1 text-sm text-white/45">Monitor your credit usage and generations.</p>
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold">Usage</h1><p className="mt-1 text-sm text-white/45">Monitor your credit usage and generations.</p></div>{onTopUp && <button type="button" onClick={onTopUp} className="rounded-xl bg-[#22d3ee] px-4 py-2 text-sm font-bold text-black transition hover:bg-cyan-300">Top up credits</button>}</div>
     <div className="mt-6 grid gap-3 md:grid-cols-3">
       {[['Balance', `${formatCredits(data.balance)} credits`], ['Used this month', `${formatCredits(summary.creditsUsed)} credits`], ['Generations', summary.generationCount]].map(([label, value]) => <div key={label} className="rounded-xl border border-white/10 bg-white/[.03] p-4"><p className="text-xs text-white/45">{label}</p><p className="mt-2 text-xl font-bold">{value}</p></div>)}
     </div>

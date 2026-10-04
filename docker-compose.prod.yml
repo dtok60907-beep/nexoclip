@@ -103,13 +103,14 @@ services:
       target: web
       args:
         NEXT_PUBLIC_SPITE_URL: /canvas
+        NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_SPITE_URL: /canvas
       SPITE_INTERNAL_URL: http://spite:3005
-      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-0}
-      NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: ${NEXT_PUBLIC_CREDIT_MARKUP_PERCENT:-0}
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
+      NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -136,6 +137,11 @@ services:
       CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
       REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
       REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
+      PAKASIR_SLUG: ${PAKASIR_SLUG:-}
+      PAKASIR_API_KEY: ${PAKASIR_API_KEY:-}
+      PAKASIR_WEBHOOK_SECRET: ${PAKASIR_WEBHOOK_SECRET:-}
+      PAKASIR_ALLOW_SANDBOX: ${PAKASIR_ALLOW_SANDBOX:-0}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     volumes:
       - nexoclip-assets:/data
     depends_on:
@@ -230,6 +236,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
@@ -268,6 +275,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
