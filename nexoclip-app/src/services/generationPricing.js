@@ -2,9 +2,10 @@
 // 10 per video whatever the model, resolution or duration, far below provider
 // cost (a 5s 1080p Seedance 2.5 video costs ~$2.84; we charged $0.10).
 //
-// Charge = provider cost (USD) x markup (1.6x by default) x CREDITS_PER_USD. A job reserves an
-// upper-bound estimate up front; on success it is settled at the actual
-// provider usage when the provider reports it (the difference is refunded).
+// Charge = provider cost (USD) x markup (1.6x by default) x CREDITS_PER_USD
+// x FX factor. A job reserves an upper-bound estimate up front; on success it
+// is settled at the actual provider usage when the provider reports it (the
+// difference is refunded).
 //
 // Sources:
 // - Seedance video and Seedream images: BytePlus ModelArk list prices.
@@ -24,11 +25,56 @@ export function markupMultiplier(env = process.env) {
   return Number.isFinite(percent) && percent >= 0 ? 1 + percent / 100 : 1.6;
 }
 
-export function usdToCredits(usd, env = process.env) {
+// Providers bill in USD but credits are sold in rupiah, so a weaker rupiah
+// would eat the margin. Credits scale with USD/IDR relative to the rate the
+// current prices were set at (5 Oct 2026), so prices are unchanged at that
+// rate and the margin holds as it moves.
+export const PRICING_REFERENCE_USD_IDR = 17915;
+const SANE_USD_IDR = [10000, 40000];
+
+function validRate(value) {
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate >= SANE_USD_IDR[0] && rate <= SANE_USD_IDR[1] ? rate : null;
+}
+
+export function fxFactor(rate) {
+  const valid = validRate(rate);
+  return valid ? valid / PRICING_REFERENCE_USD_IDR : 1;
+}
+
+export function usdToCredits(usd, env = process.env, usdIdrRate = env.USD_IDR_RATE) {
   const cost = Number(usd);
   if (!Number.isFinite(cost) || cost < 0) throw new Error('Provider cost is invalid');
   if (cost === 0) return 0;
-  return Math.ceil(cost * markupMultiplier(env) * CREDITS_PER_USD * CREDIT_PRECISION - 1e-9) / CREDIT_PRECISION;
+  return Math.ceil(cost * markupMultiplier(env) * CREDITS_PER_USD * fxFactor(usdIdrRate) * CREDIT_PRECISION - 1e-9) / CREDIT_PRECISION;
+}
+
+// USD_IDR_RATE pins the rate; otherwise a daily public rate is used, and the
+// reference rate when it cannot be fetched.
+let fxCache = { expiresAt: 0, rate: null };
+const FX_TTL_MS = 12 * 60 * 60 * 1000;
+
+export async function loadUsdIdrRate({ fetchImpl = globalThis.fetch, env = process.env, now = Date.now() } = {}) {
+  const pinned = validRate(env.USD_IDR_RATE);
+  if (pinned) return pinned;
+  if (fxCache.rate && fxCache.expiresAt > now) return fxCache.rate;
+  try {
+    const response = await fetchImpl('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`exchange rate ${response.status}`);
+    const rate = validRate((await response.json())?.rates?.IDR);
+    if (!rate) throw new Error('exchange rate missing or out of range');
+    fxCache = { expiresAt: now + FX_TTL_MS, rate };
+    return rate;
+  } catch (error) {
+    console.error('[pricing] USD/IDR rate unavailable', error?.message);
+    // Retry sooner, but keep serving the last known (or reference) rate.
+    fxCache = { expiresAt: now + 30 * 60 * 1000, rate: fxCache.rate };
+    return fxCache.rate || PRICING_REFERENCE_USD_IDR;
+  }
+}
+
+export function resetUsdIdrRateCache() {
+  fxCache = { expiresAt: 0, rate: null };
 }
 
 // ---------------------------------------------------------------- video ----
@@ -335,7 +381,9 @@ export async function estimateGenerationCostUsd({ kind, model, prompt, parameter
 
 export async function estimateGenerationCredits(input, options = {}) {
   const usd = await estimateGenerationCostUsd(input, options);
-  return usd === null ? null : { usd, credits: usdToCredits(usd, options.env) };
+  if (usd === null) return null;
+  const env = options.env || process.env;
+  return { usd, credits: usdToCredits(usd, env, await loadUsdIdrRate({ fetchImpl: options.fetchImpl, env })) };
 }
 
 // Credits to capture for a finished job, from provider usage. Returns null
@@ -352,5 +400,5 @@ export async function actualGenerationCredits(job, usage = {}, { fetchImpl, env 
   } else {
     usd = actualTokenImageCostUsd(input, usage, await loadOpenRouterImagePrices({ fetchImpl }));
   }
-  return usd === null ? null : usdToCredits(usd, env);
+  return usd === null ? null : usdToCredits(usd, env, await loadUsdIdrRate({ fetchImpl, env }));
 }
