@@ -1,6 +1,4 @@
 import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById, OPENROUTER_IMAGE_MODEL_MAP, OPENROUTER_VIDEO_MODEL_MAP, OPENROUTER_V2V_MODEL_MAP, OPENROUTER_MULTI_REFERENCE_MODELS } from './models.js';
-import { rememberActiveJob, forgetActiveJob } from '../../../src/lib/jobs/durableJobStore.js';
-import { isTransientPollFailure } from '../../../src/lib/jobs/jobStatus.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -62,19 +60,31 @@ async function submitAndPoll(endpoint, payload, key, onRequestId, maxAttempts = 
     return { ...result, url: outputUrl };
 }
 
+// Image calls go through the credited /api/generations pipeline: the
+// OpenRouter proxy routes they used to call charged no credits.
+function saasImageParameters(params) {
+    const references = params.images_list?.length ? params.images_list : (params.image_url ? [params.image_url] : []);
+    return {
+        ...(params.aspect_ratio ? { aspectRatio: params.aspect_ratio } : {}),
+        ...(params.resolution ? { resolution: params.resolution } : {}),
+        ...(params.quality ? { quality: params.quality } : {}),
+        ...(params.seed !== undefined && params.seed !== -1 ? { seed: params.seed } : {}),
+        ...(references.length ? { referenceImages: references } : {}),
+    };
+}
+
+async function generateCreditedImage(params) {
+    if (!OPENROUTER_IMAGE_MODEL_MAP[params.model]) throw new Error(`Image model is not available on OpenRouter: ${params.model}`);
+    const result = await generateSaasImage({
+        ...params,
+        parameters: saasImageParameters(params),
+        idempotencyKey: params.idempotencyKey || crypto.randomUUID(),
+    });
+    return { ...result, url: result.outputs?.[0]?.url };
+}
+
 export async function generateImage(_apiKey, params) {
-    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
-    if (!model) throw new Error(`Image model is not available on OpenRouter: ${params.model}`);
-    const payload = { model, prompt: params.prompt };
-    if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
-    if (params.resolution) payload.resolution = params.resolution;
-    if (params.quality) payload.quality = params.quality;
-    if (params.image_url) payload.input_references = [{ type: 'image_url', image_url: { url: params.image_url } }];
-    if (params.images_list?.length) payload.input_references = params.images_list.map((url) => ({ type: 'image_url', image_url: { url } }));
-    if (params.seed !== undefined && params.seed !== -1) payload.seed = params.seed;
-    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {}) }, body: JSON.stringify(payload) });
-    if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
-    return response.json();
+    return generateCreditedImage(params);
 }
 
 async function submitSaasGeneration({ kind, model, params }, { maxAttempts = 180, interval = 2000 } = {}) {
@@ -143,99 +153,18 @@ export async function generateSaasVideo(params, options) {
 }
 
 export async function generateI2I(_apiKey, params) {
-    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
-    if (!model) throw new Error(`Image model is not available on OpenRouter: ${params.model}`);
-    const payload = { model, prompt: params.prompt || '' };
-    const imageField = 'image_url';
-    const imagesList = params.images_list?.length > 0 ? params.images_list : (params.image_url ? [params.image_url] : null);
-    if (imagesList) payload.input_references = imagesList.map((url) => ({ type: 'image_url', image_url: { url } }));
-    if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
-    if (params.resolution) payload.resolution = params.resolution;
-    if (params.quality) payload.quality = params.quality;
-    if (params.seed !== undefined && params.seed !== -1) payload.seed = params.seed;
-    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {}) }, body: JSON.stringify(payload) });
-    if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
-    return response.json();
+    return generateCreditedImage(params);
 }
 
-// Async submit-then-poll against our OpenRouter video proxy — used only for models
-// present in OPENROUTER_VIDEO_MODEL_MAP; everything else stays on the MuAPI path
-// below (submitAndPoll), unchanged.
-async function generateVideoOpenRouter(model, params) {
-    const body = { model, prompt: params.prompt || '' };
-    if (params.aspect_ratio) body.aspect_ratio = params.aspect_ratio;
-    if (params.duration) body.duration = Number(params.duration);
-    if (params.resolution) body.resolution = params.resolution;
-    if (params.seed !== undefined && params.seed !== -1) body.seed = params.seed;
-
-    const imageUrls = params.images_list?.length ? params.images_list : (params.image_url ? [params.image_url] : []);
-    if (OPENROUTER_MULTI_REFERENCE_MODELS.has(params.model)) {
-        // These models composite 2-9 reference photos rather than animating between a
-        // first and last frame — send them as plain image references, not frame_images.
-        if (imageUrls.length) body.input_references = imageUrls.map((url) => ({ type: 'image_url', image_url: { url } }));
-    } else {
-        const frameImages = imageUrls.map((url, index) => ({
-            type: 'image_url',
-            image_url: { url },
-            frame_type: index === 0 ? 'first_frame' : 'last_frame',
-        }));
-        if (params.last_image) {
-            frameImages.push({ type: 'image_url', image_url: { url: params.last_image }, frame_type: 'last_frame' });
-        }
-        if (frameImages.length) body.frame_images = frameImages;
-    }
-
-    const workspaceHeaders = params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {};
-    const submitRes = await fetch('/api/openrouter/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
-        body: JSON.stringify(body),
-    });
-    if (!submitRes.ok) throw new Error(`OpenRouter video request failed: ${submitRes.status}`);
-    const submitData = await submitRes.json();
-    const jobId = submitData.id;
-    const durableJobId = submitData.job_id;
-    if (!jobId) throw new Error('No job id returned from video submission');
-    if (params.onRequestId) params.onRequestId(jobId);
-
-    const hasLocalStorage = typeof window !== 'undefined' && window.localStorage;
-    if (durableJobId && params.workspace_id && hasLocalStorage) {
-        rememberActiveJob(params.workspace_id, durableJobId, window.localStorage);
-    }
-    const forgetJob = () => {
-        if (durableJobId && params.workspace_id && hasLocalStorage) {
-            forgetActiveJob(params.workspace_id, durableJobId, window.localStorage);
-        }
-    };
-
-    const maxAttempts = 120; // 120 * 5s = 10 minutes
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const pollUrl = durableJobId
-            ? `/api/openrouter/videos/${jobId}?job_id=${encodeURIComponent(durableJobId)}`
-            : `/api/openrouter/videos/${jobId}`;
-        const pollRes = await fetch(pollUrl, { headers: workspaceHeaders });
-        if (!pollRes.ok) {
-            if (isTransientPollFailure(pollRes.status)) continue;
-            throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
-        }
-        const pollData = await pollRes.json();
-        if (pollData.status === 'completed') {
-            forgetJob();
-            return { provider: 'openrouter', status: 'succeeded', id: jobId, url: pollData.url };
-        }
-        if (['failed', 'cancelled', 'expired'].includes(pollData.status)) {
-            forgetJob();
-            throw new Error(`Video generation ${pollData.status}: ${pollData.error || 'unknown error'}`);
-        }
-    }
-    forgetJob();
-    throw new Error('Video generation timed out after polling.');
+// OpenRouter video models go through the credited /api/generations pipeline;
+// everything else stays on the MuAPI path below (submitAndPoll).
+async function generateCreditedVideo(params) {
+    const result = await generateSaasVideo(params);
+    return { ...result, status: 'succeeded', url: result.outputs?.[0]?.url };
 }
 
 export async function generateVideo(apiKey, params) {
-    const openRouterModel = OPENROUTER_VIDEO_MODEL_MAP[params.model];
-    if (openRouterModel) return generateVideoOpenRouter(openRouterModel, params);
+    if (OPENROUTER_VIDEO_MODEL_MAP[params.model]) return generateCreditedVideo(params);
     const modelInfo = getVideoModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};
@@ -253,8 +182,7 @@ export async function generateVideo(apiKey, params) {
 }
 
 export async function generateI2V(apiKey, params) {
-    const openRouterModel = OPENROUTER_VIDEO_MODEL_MAP[params.model];
-    if (openRouterModel) return generateVideoOpenRouter(openRouterModel, params);
+    if (OPENROUTER_VIDEO_MODEL_MAP[params.model]) return generateCreditedVideo(params);
     const modelInfo = getI2VModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};
@@ -305,69 +233,8 @@ export async function generateMarketingStudioAd(apiKey, params) {
     return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
 }
 
-// Async submit-then-poll against our OpenRouter video proxy for video-to-video —
-// mirrors generateVideoOpenRouter above, but sends the source video as an
-// input_references entry of type video_url instead of frame images.
-async function processV2VOpenRouter(model, params) {
-    const body = { model, prompt: params.prompt || '' };
-    if (params.video_url) {
-        body.input_references = [{ type: 'video_url', video_url: { url: params.video_url } }];
-    }
-    if (params.image_url) {
-        body.input_references = [...(body.input_references || []), { type: 'image_url', image_url: { url: params.image_url } }];
-    }
-
-    const workspaceHeaders = params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {};
-    const submitRes = await fetch('/api/openrouter/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
-        body: JSON.stringify(body),
-    });
-    if (!submitRes.ok) throw new Error(`OpenRouter video request failed: ${submitRes.status}`);
-    const submitData = await submitRes.json();
-    const jobId = submitData.id;
-    const durableJobId = submitData.job_id;
-    if (!jobId) throw new Error('No job id returned from video submission');
-    if (params.onRequestId) params.onRequestId(jobId);
-
-    const hasLocalStorage = typeof window !== 'undefined' && window.localStorage;
-    if (durableJobId && params.workspace_id && hasLocalStorage) {
-        rememberActiveJob(params.workspace_id, durableJobId, window.localStorage);
-    }
-    const forgetJob = () => {
-        if (durableJobId && params.workspace_id && hasLocalStorage) {
-            forgetActiveJob(params.workspace_id, durableJobId, window.localStorage);
-        }
-    };
-
-    const maxAttempts = 120; // 120 * 5s = 10 minutes
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const pollUrl = durableJobId
-            ? `/api/openrouter/videos/${jobId}?job_id=${encodeURIComponent(durableJobId)}`
-            : `/api/openrouter/videos/${jobId}`;
-        const pollRes = await fetch(pollUrl, { headers: workspaceHeaders });
-        if (!pollRes.ok) {
-            if (isTransientPollFailure(pollRes.status)) continue;
-            throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
-        }
-        const pollData = await pollRes.json();
-        if (pollData.status === 'completed') {
-            forgetJob();
-            return { provider: 'openrouter', status: 'succeeded', id: jobId, url: pollData.url };
-        }
-        if (['failed', 'cancelled', 'expired'].includes(pollData.status)) {
-            forgetJob();
-            throw new Error(`Video generation ${pollData.status}: ${pollData.error || 'unknown error'}`);
-        }
-    }
-    forgetJob();
-    throw new Error('Video generation timed out after polling.');
-}
-
 export async function processV2V(apiKey, params) {
-    const openRouterModel = OPENROUTER_V2V_MODEL_MAP[params.model];
-    if (openRouterModel) return processV2VOpenRouter(openRouterModel, params);
+    if (OPENROUTER_V2V_MODEL_MAP[params.model]) return generateCreditedVideo(params);
     const modelInfo = getV2VModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const videoField = modelInfo?.videoField || 'video_url';

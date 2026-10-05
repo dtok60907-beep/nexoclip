@@ -85,12 +85,16 @@ test('prices per-second video models from their published rates', async () => {
   // Veo 3.1: $0.40/s with audio and $0.20/s silent at 1080p.
   assert.equal(perSecondVideoCostUsd('google/veo-3.1', { resolution: '1080p', duration: 8 }), 3.2);
   assert.equal(perSecondVideoCostUsd('google/veo-3.1', { resolution: '1080p', duration: 8, generateAudio: false }), 1.6);
-  // A resolution between listed tiers uses the next tier up (Veo Fast lists 720p and 4K).
-  assert.equal(perSecondVideoCostUsd('google/veo-3.1-fast', { resolution: '1080p', duration: 10 }), 3);
+  // Veo Fast lists 1080p between its 720p and 4K tiers.
+  assert.equal(Math.round(perSecondVideoCostUsd('google/veo-3.1-fast', { resolution: '1080p', duration: 10 }) * 100) / 100, 1.2);
+  // A resolution below the lowest listed tier uses the next tier up (Sora lists 720p and 1080p).
+  assert.equal(perSecondVideoCostUsd('openai/sora-2-pro', { resolution: '480p', duration: 10 }), 3);
   // Above the highest tier, the highest applies.
   assert.equal(Math.round(perSecondVideoCostUsd('x-ai/grok-imagine-video', { resolution: '1080p', duration: 10 }) * 100) / 100, 0.7);
   // Wan bills image-to-video at its own, higher tiers; Grok adds a per-image fee.
   assert.equal(perSecondVideoCostUsd('alibaba/wan-2.6', { resolution: '1080p', duration: 5 }), 0.6);
+  assert.equal(perSecondVideoCostUsd('alibaba/wan-2.6', { resolution: '720p', duration: 5 }), 0.4);
+  assert.equal(Math.round(perSecondVideoCostUsd('x-ai/grok-imagine-video-1.5', { resolution: '720p', duration: 10 }) * 100) / 100, 1.4);
   assert.equal(perSecondVideoCostUsd('alibaba/wan-2.6', { resolution: '1080p', duration: 5, frameImages: [{}] }), 0.75);
   assert.equal(perSecondVideoCostUsd('x-ai/grok-imagine-video-1.5', { resolution: '480p', duration: 8, referenceImages: ['a', 'b'] }), 0.66);
   // Sora 2 Pro runs on OpenAI directly under either id.
@@ -98,11 +102,47 @@ test('prices per-second video models from their published rates', async () => {
   assert.equal(perSecondVideoCostUsd('unknown/video-model', { duration: 5 }), null);
 });
 
-test('every Studio video model has a price, so none falls back to the flat rule', async () => {
+test('video-to-video models reserve for the longest source video and honour minimums', async () => {
+  const { perSecondVideoCostUsd } = await import('../../src/services/generationPricing.js');
+  // Runway Aleph 2: $0.28/s, at least $0.56 a generation.
+  assert.equal(Math.round(perSecondVideoCostUsd('runway/aleph-2', {}) * 100) / 100, 4.2);
+  assert.equal(perSecondVideoCostUsd('runway/aleph-2', { duration: 1 }), 0.56);
+  assert.equal(Math.round(perSecondVideoCostUsd('alibaba/wan-2.7', {}) * 100) / 100, 1.5);
+});
+
+test('OpenRouter videos settle at the USD cost it reports; zero cost is ignored', async () => {
+  const job = { kind: 'video', model: 'runway/aleph-2', parameters: {} };
+  // $1.40 x1.3 x100 = 182 credits
+  assert.equal(await actualGenerationCredits(job, { cost: 1.4 }, { env: {} }), 182);
+  assert.equal(await actualGenerationCredits(job, { cost: 0 }, { env: {} }), null);
+  const seedance = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
+  assert.equal(await actualGenerationCredits(seedance, { cost: 0, completion_tokens: 108000 }, { env: {} }), 150.3);
+});
+
+test('per-image reference fees are charged per image, not per token', async () => {
+  const { estimateTokenImageCostUsd } = await import('../../src/services/generationPricing.js');
+  const one = estimateTokenImageCostUsd({ model: 'x-ai/grok-imagine-image-2.0', prompt: 'x', parameters: { referenceImages: ['a'] } });
+  const none = estimateTokenImageCostUsd({ model: 'x-ai/grok-imagine-image-2.0', prompt: 'x', parameters: {} });
+  close(one - none, 0.01, 1e-9);
+});
+
+test('every Studio video model has a price, so none is refused', async () => {
   const { estimateVideoCostUsd } = await import('../../src/services/generationPricing.js');
-  const { OPENROUTER_VIDEO_MODEL_MAP } = await import('../../packages/studio/src/models.js');
-  const unpriced = [...new Set(Object.values(OPENROUTER_VIDEO_MODEL_MAP))]
+  const { OPENROUTER_VIDEO_MODEL_MAP, OPENROUTER_V2V_MODEL_MAP } = await import('../../packages/studio/src/models.js');
+  const unpriced = [...new Set([...Object.values(OPENROUTER_VIDEO_MODEL_MAP), ...Object.values(OPENROUTER_V2V_MODEL_MAP)])]
     .filter((model) => estimateVideoCostUsd({ model, parameters: { resolution: '1080p', duration: 5 } }) === null);
+  assert.deepEqual(unpriced, []);
+});
+
+test('every Studio image model is priced even when OpenRouter is unreachable', async () => {
+  const { OPENROUTER_IMAGE_MODEL_MAP } = await import('../../packages/studio/src/models.js');
+  resetOpenRouterPriceCache();
+  const offline = async () => { throw new Error('offline'); };
+  const unpriced = [];
+  for (const model of new Set(Object.values(OPENROUTER_IMAGE_MODEL_MAP))) {
+    if (!await estimateGenerationCredits({ kind: 'image', model, prompt: 'x', parameters: {} }, { fetchImpl: offline, env: {} })) unpriced.push(model);
+  }
+  resetOpenRouterPriceCache();
   assert.deepEqual(unpriced, []);
 });
 
@@ -118,4 +158,18 @@ test('reserves a Seedance run with no resolution as 1080p', async () => {
   const { estimateVideoCostUsd } = await import('../../src/services/generationPricing.js');
   const model = 'bytedance/seedance-2.0';
   assert.equal(estimateVideoCostUsd({ model, parameters: { duration: 5 } }), estimateVideoCostUsd({ model, parameters: { duration: 5, resolution: '1080p' } }));
+});
+
+test('every Canvas model is priced under the id the Canvas submit route sends', async () => {
+  const { FAL_MODELS } = await import('../../services/spite/lib/fal-models.ts');
+  resetOpenRouterPriceCache();
+  const offline = async () => { throw new Error('offline'); };
+  const unpriced = [];
+  for (const config of FAL_MODELS) {
+    const model = `${config.provider}/${config.providerModel}`;
+    const parameters = config.category === 'video' ? { resolution: '720p', duration: 5 } : {};
+    if (!await estimateGenerationCredits({ kind: config.category, model, prompt: 'x', parameters }, { fetchImpl: offline, env: {} })) unpriced.push(model);
+  }
+  resetOpenRouterPriceCache();
+  assert.deepEqual(unpriced, []);
 });

@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createImageGenerationJobWithReservation, createVimaxGenerationJobWithReservation } from '../../src/services/generationService.js';
 
+// The flat pricing rule only supplies the pricing version; the amount is the model price.
+const flatPrice = async () => ({ usd: 0.025, credits: 2.5 });
+
 function poolFor({ existing = null, balance = '10', pricing = { pricingVersion: { id: 'pv1', version: 3 }, rule: { operation: 'image_generation', unit: 'job', unitPrice: '2.500000' } } } = {}) {
   const calls = [];
   const client = {
@@ -26,7 +29,7 @@ test('reserves priced credits and creates the generation job in one transaction'
   const pool = poolFor();
   const job = await createImageGenerationJobWithReservation(pool, 'w1', {
     prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation', createdByUserId: 'attacker',
-  }, { userId: 'u1' });
+  }, { userId: 'u1', priceGeneration: flatPrice });
   assert.equal(job.id, 'g1');
   assert.equal(pool.calls[0].text, 'BEGIN');
   assert.match(pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text)).text, /INSERT INTO credit_ledger/);
@@ -41,7 +44,7 @@ test('returns an idempotent existing job without reserving credits again', async
   const pool = poolFor({ existing: { id: 'g-existing', status: 'queued' } });
   const job = await createImageGenerationJobWithReservation(pool, 'w1', {
     prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation',
-  }, { userId: 'u1' });
+  }, { userId: 'u1', priceGeneration: async () => null });
   assert.equal(job.id, 'g-existing');
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
   assert.equal(pool.calls.at(-1).text, 'COMMIT');
@@ -100,7 +103,7 @@ test('re-reads a ViMax job after a concurrent idempotency unique conflict', asyn
 test('rejects reservation when the workspace balance is insufficient', async () => {
   const pool = poolFor({ balance: '2' });
   await assert.rejects(
-    createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation' }, { userId: 'u1' }),
+    createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation' }, { userId: 'u1', priceGeneration: flatPrice }),
     /Insufficient credits/,
   );
   assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
@@ -113,4 +116,14 @@ test('reserves the per-model price instead of the flat rule when the model is pr
   });
   const ledger = pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text));
   assert.ok(ledger.values.includes(-5.2), `reservation ledger values: ${JSON.stringify(ledger.values)}`);
+});
+
+test('refuses a model with no price instead of reserving the flat rule', async () => {
+  const pool = poolFor({ balance: '1000' });
+  await assert.rejects(
+    createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'unknown/model', idempotencyKey: 'request-10', operation: 'image_generation' }, { userId: 'u1', priceGeneration: async () => null }),
+    (error) => error.code === 'MODEL_PRICE_UNAVAILABLE' && error.status === 422,
+  );
+  assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
+  assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
 });
