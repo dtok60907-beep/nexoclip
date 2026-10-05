@@ -10,7 +10,7 @@ export function costUsdToCredits(costUsd) {
   return Math.ceil((cost * CREDITS_PER_USD * CREDIT_PRECISION) - Number.EPSILON) / CREDIT_PRECISION;
 }
 
-// Free trial credits for a new workspace (about USD 0.50 of provider cost).
+// Free trial credits for a new workspace (about USD 0.25 of provider cost).
 export const ONBOARDING_CREDITS = 50;
 
 const onboardingEntry = (workspaceId) => ({

@@ -72,16 +72,16 @@ async function pendingTopup({ env = {}, remote } = {}) {
   const db = fakeDatabase();
   const gateway = fakeGateway(remote);
   const service = createTopupService({ pool: db.pool, gateway, env });
-  const topup = await service.createTopup({ workspaceId: 'w1', userId: 'u1', packageCode: 'topup_50k', returnUrl: 'https://app.example/studio/billing' });
+  const topup = await service.createTopup({ workspaceId: 'w1', userId: 'u1', packageCode: 'topup_249k', returnUrl: 'https://app.example/studio/billing' });
   return { db, gateway, service, topup, row: db.state.topups.get(topup.id) };
 }
 
 test('creates a pending top-up with a payment link that returns to the studio', async () => {
   const { gateway, topup, row } = await pendingTopup();
   assert.equal(topup.status, 'pending');
-  assert.equal(topup.amountIdr, 50000);
-  assert.equal(topup.credits, 250);
-  assert.deepEqual(gateway.calls.create[0], { orderId: row.order_id, amount: 50000, method: 'payment_link' });
+  assert.equal(topup.amountIdr, 249000);
+  assert.equal(topup.credits, 1250);
+  assert.deepEqual(gateway.calls.create[0], { orderId: row.order_id, amount: 249000, method: 'payment_link' });
   const url = new URL(topup.paymentUrl);
   assert.equal(url.origin + url.pathname, 'https://app.pakasir.com/pay-v2/txn-1');
   assert.equal(url.searchParams.get('redirect'), `https://app.example/studio/billing?topup=${topup.id}`);
@@ -98,22 +98,22 @@ test('rejects an unknown package before contacting the gateway', async () => {
 
 test('grants credits once when Pakasir confirms the payment', async () => {
   const { db, gateway, service, row } = await pendingTopup();
-  gateway.remote = { order_id: row.order_id, amount: 50000, status: 'completed', is_sandbox: false, completed_at: '2026-10-05T01:00:00Z' };
+  gateway.remote = { order_id: row.order_id, amount: 249000, status: 'completed', is_sandbox: false, completed_at: '2026-10-05T01:00:00Z' };
   const settled = await service.settleByTxnId('txn-1');
   assert.equal(settled.status, 'completed');
-  assert.equal(db.state.balance, 250);
+  assert.equal(db.state.balance, 1250);
   assert.equal(db.state.ledger.length, 1);
   assert.equal(db.state.ledger[0].idempotency_key, `topup:${row.id}`);
 
   // A repeated webhook or poll does not add credits again.
   await service.settleByTxnId('txn-1');
-  assert.equal(db.state.balance, 250);
+  assert.equal(db.state.balance, 1250);
   assert.equal(db.state.ledger.length, 1);
 });
 
 test('does not grant credits while the payment is still pending', async () => {
   const { db, gateway, service, row } = await pendingTopup();
-  gateway.remote = { order_id: row.order_id, amount: 50000, status: 'pending', is_sandbox: false };
+  gateway.remote = { order_id: row.order_id, amount: 249000, status: 'pending', is_sandbox: false };
   const result = await service.getTopup({ workspaceId: 'w1', topupId: row.id });
   assert.equal(result.status, 'pending');
   assert.equal(db.state.balance, 0);
@@ -129,7 +129,7 @@ test('refuses a confirmed payment whose amount does not match the order', async 
 
 test('refuses sandbox payments unless explicitly allowed', async () => {
   const { db, gateway, service, row } = await pendingTopup();
-  gateway.remote = { order_id: row.order_id, amount: 50000, status: 'completed', is_sandbox: true };
+  gateway.remote = { order_id: row.order_id, amount: 249000, status: 'completed', is_sandbox: true };
   await assert.rejects(() => service.settleByTxnId('txn-1'), (error) => error.code === 'TOPUP_SANDBOX');
   assert.equal(db.state.balance, 0);
 
@@ -137,12 +137,12 @@ test('refuses sandbox payments unless explicitly allowed', async () => {
   const settled = await allowed.settleByTxnId('txn-1');
   assert.equal(settled.status, 'completed');
   assert.equal(settled.is_sandbox, true);
-  assert.equal(db.state.balance, 250);
+  assert.equal(db.state.balance, 1250);
 });
 
 test('marks a top-up canceled when Pakasir cancels it', async () => {
   const { db, gateway, service, row } = await pendingTopup();
-  gateway.remote = { order_id: row.order_id, amount: 50000, status: 'canceled', is_sandbox: false };
+  gateway.remote = { order_id: row.order_id, amount: 249000, status: 'canceled', is_sandbox: false };
   const result = await service.getTopup({ workspaceId: 'w1', topupId: row.id });
   assert.equal(result.status, 'canceled');
   assert.equal(result.paymentUrl, null);
@@ -158,6 +158,6 @@ test('marks the order failed when the gateway rejects it', async () => {
   const db = fakeDatabase();
   const gateway = { ...fakeGateway(), async createTransaction() { throw Object.assign(new Error('Payment gateway request failed (500)'), { status: 502 }); } };
   const service = createTopupService({ pool: db.pool, gateway, env: {} });
-  await assert.rejects(() => service.createTopup({ workspaceId: 'w1', userId: 'u1', packageCode: 'topup_100k' }), (error) => error.status === 502);
+  await assert.rejects(() => service.createTopup({ workspaceId: 'w1', userId: 'u1', packageCode: 'topup_499k' }), (error) => error.status === 502);
   assert.equal([...db.state.topups.values()][0].status, 'failed');
 });

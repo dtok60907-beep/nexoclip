@@ -14,7 +14,7 @@ const MIN_PASSWORD = 12;
 const POINTS = [
   { title: '50 free credits', body: 'Enough for a first draft video or about 20 images. No card needed.' },
   { title: 'Every studio, one balance', body: 'Canvas, Video, Image, Cinema and AI Influencer share your credits.' },
-  { title: 'Pay as you go', body: 'Top up from Rp 50.000 with QRIS or a virtual account. Credits never expire.' },
+  { title: 'Pay as you go', body: 'Top up from Rp 249.000 with QRIS or a virtual account. Credits never expire.' },
 ];
 
 // Only the length is required (see validateAuthFields); the rest are hints.

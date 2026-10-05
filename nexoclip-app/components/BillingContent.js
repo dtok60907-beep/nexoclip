@@ -27,12 +27,36 @@ function formatNumber(value) {
   return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(Number(value) || 0);
 }
 
+// What a package buys, priced live by the same rules as the charge.
+const EXAMPLES = [
+  { label: 'Nano Banana images', query: 'kind=image&model=google%2Fgemini-2.5-flash-image' },
+  { label: 'Kling 3 videos (5s)', query: 'kind=video&model=kwaivgi%2Fkling-v3.0-std&duration=5' },
+  { label: 'Seedance 2.5 videos (720p, 5s)', query: 'kind=video&model=bytedance%2Fseedance-2.5&resolution=720p&duration=5' },
+];
+
+function useExamplePrices() {
+  const [prices, setPrices] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(EXAMPLES.map(async (example) => {
+      try {
+        const response = await fetch(`/api/generations/price?${example.query}`);
+        const { credits } = await response.json();
+        return credits > 0 ? { label: example.label, credits } : null;
+      } catch { return null; }
+    })).then((results) => { if (!cancelled) setPrices(results.filter(Boolean)); });
+    return () => { cancelled = true; };
+  }, []);
+  return prices;
+}
+
 export default function BillingContent({ workspaceId, balance, onCompleted }) {
   const [packages, setPackages] = useState(null);
   const [topups, setTopups] = useState([]);
   const [buying, setBuying] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const examples = useExamplePrices();
 
   const load = useCallback(async () => {
     const data = await saasFetch('/api/billing/topups', { headers: { 'x-workspace-id': workspaceId } });
@@ -142,8 +166,10 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
           </div>
           <p className="mt-3 text-3xl font-bold">{formatNumber(pkg.credits)}<span className="ml-1 text-sm font-medium text-white/45">credits</span></p>
           <p className="mt-1 text-lg font-semibold text-white/90">{formatRupiah(pkg.priceIdr)}</p>
-          <p className="text-xs text-white/40">{formatRupiah(pkg.priceIdr / pkg.credits)} per credit</p>
-          <p className="mt-3 flex-1 text-sm text-white/55">{pkg.description}</p>
+          <p className="mt-3 text-sm text-white/55">{pkg.description}</p>
+          <ul className="mt-3 flex-1 space-y-1 text-xs text-white/45">
+            {examples.map((example) => <li key={example.label}>≈ {formatNumber(Math.floor(pkg.credits / example.credits))} {example.label}</li>)}
+          </ul>
           <button
             type="button"
             disabled={buying !== null}
