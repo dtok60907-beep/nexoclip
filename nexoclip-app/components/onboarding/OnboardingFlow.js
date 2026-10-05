@@ -410,7 +410,7 @@ export default function OnboardingFlow() {
                 <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] bg-[#A175FF] text-[#110C2A]"><Icons.qr /></span>
                 <span>
                   <span className="block text-sm font-bold">Top up to start creating</span>
-                  <span className="mt-1 block text-[13px] leading-relaxed text-white/65">Packages from Rp 249.000 for 1,250 credits, paid with QRIS or a bank virtual account. Find it under Credits → Top Up.</span>
+                  <span className="mt-1 block text-[13px] leading-relaxed text-white/65">Packages from Rp 149.000 for 750 credits, paid with QRIS or a bank virtual account. Find it under Credits → Top Up.</span>
                 </span>
               </div>
             </>
