@@ -56,12 +56,28 @@ const ASSUMED_AUTO_DURATION_SECONDS = 15;
 const SEEDANCE_25_MAX_SECONDS = 30;
 const DEFAULT_VIDEO_SECONDS = 5;
 
-export function isSeedanceModel(model) {
-  return SEEDANCE_RATES.some((entry) => entry.match.test(String(model)));
+// Dedicated BytePlus endpoints (the "Unfiltered" models) are addressed by an
+// endpoint id with no model name in it; price them as the model they serve.
+const ENDPOINT_PRICING_ALIASES = {
+  'ep-20260904190604-p8pjl': 'seedance-2.5',
+  'ep-20260907150312-xx7gf': 'seedream-4.5',
+  'ep-20260907150433-zg8fr': 'seedream-5.0-lite',
+};
+
+export function pricingModelId(model) {
+  return ENDPOINT_PRICING_ALIASES[model] || String(model);
 }
 
+export function isSeedanceModel(model) {
+  return SEEDANCE_RATES.some((entry) => entry.match.test(pricingModelId(model)));
+}
+
+// With no resolution the provider renders at its own default, which may be
+// 1080p, so reserve as 1080p. Seedance settles at the reported usage, so a
+// cheaper render refunds the difference.
 function normalizedResolution(value) {
-  const res = String(value || '720p').toLowerCase();
+  if (!value) return '1080p';
+  const res = String(value).toLowerCase();
   return VIDEO_PIXELS[res] ? res : '720p';
 }
 
@@ -72,7 +88,7 @@ function videoInputs(parameters = {}) {
 
 // USD per million tokens for this job.
 export function seedanceRatePerMillion(model, parameters = {}) {
-  const entry = SEEDANCE_RATES.find((candidate) => candidate.match.test(String(model)));
+  const entry = SEEDANCE_RATES.find((candidate) => candidate.match.test(pricingModelId(model)));
   if (!entry) return null;
   if (entry.flat) return entry.flat;
   if (entry.audio) return parameters.generateAudio === false ? entry.audio[1] : entry.audio[0];
@@ -87,16 +103,69 @@ function billedResolution(parameters = {}) {
 }
 
 export function estimateSeedanceTokens(parameters = {}, model = '') {
-  const isSeedance25 = /seedance-2[.-]5/.test(String(model));
+  const isSeedance25 = /seedance-2[.-]5/.test(pricingModelId(model));
   const duration = Number(parameters.duration);
   const outputSeconds = duration === -1 ? (isSeedance25 ? SEEDANCE_25_MAX_SECONDS : ASSUMED_AUTO_DURATION_SECONDS) : (Number.isFinite(duration) && duration > 0 ? duration : DEFAULT_VIDEO_SECONDS);
   const inputSeconds = videoInputs(parameters) && !parameters.draftTaskId ? (isSeedance25 ? SEEDANCE_25_MAX_SECONDS : ASSUMED_INPUT_VIDEO_SECONDS) : 0;
   return Math.ceil(((inputSeconds + outputSeconds) * VIDEO_PIXELS[billedResolution(parameters)] * VIDEO_FPS) / 1024);
 }
 
+// Video models billed per second of output, in USD. Taken from each model's
+// OpenRouter page (openrouter.ai/<model>) in October 2026; Sora 2 Pro runs on
+// OpenAI's own API at the same rates. Not published in OpenRouter's models
+// API, so update these by hand when a provider changes its prices.
+// Tiers are keyed by resolution. A resolution between listed tiers is billed
+// at the next listed tier above it, so a run is never undercharged; above the
+// highest tier it uses the highest. `any` applies to every resolution.
+const PER_SECOND_VIDEO_PRICES = [
+  { match: /^google\/veo-3\.1-fast$/, audio: { '720p': 0.10, '4k': 0.30 }, silent: { '720p': 0.08, '4k': 0.25 } },
+  { match: /^google\/veo-3\.1-lite$/, audio: { '720p': 0.05, '1080p': 0.08 }, silent: { '720p': 0.03, '1080p': 0.05 } },
+  { match: /^google\/veo-3\.1$/, audio: { '1080p': 0.40, '4k': 0.60 }, silent: { '1080p': 0.20, '4k': 0.40 } },
+  { match: /^kwaivgi\/kling-v3\.0-pro$/, audio: { any: 0.168 }, silent: { any: 0.112 } },
+  { match: /^kwaivgi\/kling-v3\.0-std$/, audio: { any: 0.126 }, silent: { any: 0.084 } },
+  { match: /^kwaivgi\/kling-video-o1$/, tiers: { any: 0.112 } },
+  { match: /^minimax\/hailuo-2\.3$/, tiers: { any: 0.0817 } },
+  { match: /^(openai\/)?sora-2-pro$/, tiers: { '720p': 0.30, '1080p': 0.50 } },
+  { match: /^x-ai\/grok-imagine-video-1\.5$/, tiers: { '480p': 0.08, '1080p': 0.25 }, perInputImage: 0.01 },
+  { match: /^x-ai\/grok-imagine-video$/, tiers: { '480p': 0.05, '720p': 0.07 }, perInputImage: 0.002 },
+  { match: /^alibaba\/happyhorse-1\.0$/, tiers: { '720p': 0.0988, '1080p': 0.1694 } },
+  { match: /^alibaba\/happyhorse-1\.1$/, tiers: { '720p': 0.0988, '1080p': 0.1278 } },
+  { match: /^alibaba\/wan-2\.6$/, tiers: { '480p': 0.04, '1080p': 0.12 }, imageTiers: { '720p': 0.10, '1080p': 0.15 } },
+];
+const RESOLUTION_ORDER = ['480p', '720p', '1080p', '4k'];
+// Video Studio always sends a duration; this only covers a missing one.
+const ASSUMED_PER_SECOND_VIDEO_SECONDS = 8;
+
+function tierPrice(tiers, resolution) {
+  if (tiers.any !== undefined) return tiers.any;
+  const listed = RESOLUTION_ORDER.filter((key) => tiers[key] !== undefined);
+  const wanted = RESOLUTION_ORDER.indexOf(resolution);
+  const match = listed.find((key) => RESOLUTION_ORDER.indexOf(key) >= wanted) || listed[listed.length - 1];
+  return tiers[match];
+}
+
+function inputImageCount(parameters = {}) {
+  const frames = Array.isArray(parameters.frameImages) ? parameters.frameImages.length : 0;
+  const references = Array.isArray(parameters.referenceImages) ? parameters.referenceImages.length : 0;
+  return frames + references;
+}
+
+export function perSecondVideoCostUsd(model, parameters = {}) {
+  const entry = PER_SECOND_VIDEO_PRICES.find((candidate) => candidate.match.test(String(model)));
+  if (!entry) return null;
+  const resolution = String(parameters.resolution || '1080p').toLowerCase();
+  const images = inputImageCount(parameters);
+  const tiers = entry.imageTiers && images > 0 ? entry.imageTiers
+    : entry.audio ? (parameters.generateAudio === false ? entry.silent : entry.audio)
+      : entry.tiers;
+  const duration = Number(parameters.duration);
+  const seconds = Number.isFinite(duration) && duration > 0 ? duration : ASSUMED_PER_SECOND_VIDEO_SECONDS;
+  return tierPrice(tiers, resolution) * seconds + images * (entry.perInputImage || 0);
+}
+
 export function estimateVideoCostUsd({ model, parameters = {} }) {
   const rate = seedanceRatePerMillion(model, parameters);
-  if (rate === null) return null;
+  if (rate === null) return perSecondVideoCostUsd(model, parameters);
   return (estimateSeedanceTokens(parameters, model) * rate) / 1e6;
 }
 
@@ -121,7 +190,7 @@ const SEEDREAM_PRICES = [
 ];
 
 export function seedreamCostUsd(model, parameters = {}) {
-  const entry = SEEDREAM_PRICES.find((candidate) => candidate.match.test(String(model)));
+  const entry = SEEDREAM_PRICES.find((candidate) => candidate.match.test(pricingModelId(model)));
   if (!entry) return null;
   const resolution = String(parameters.resolution || '').toUpperCase();
   const high = entry.high && ['2K', '3K', '4K'].includes(resolution);

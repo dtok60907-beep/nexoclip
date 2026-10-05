@@ -79,3 +79,43 @@ test('image jobs settle at reported usage: OpenRouter USD, Google/OpenAI tokens'
 test('the legacy NEXT_PUBLIC markup variable does not remove the generation markup', () => {
   assert.equal(usdToCredits(1, { NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: '0' }), 130);
 });
+
+test('prices per-second video models from their published rates', async () => {
+  const { perSecondVideoCostUsd } = await import('../../src/services/generationPricing.js');
+  // Veo 3.1: $0.40/s with audio and $0.20/s silent at 1080p.
+  assert.equal(perSecondVideoCostUsd('google/veo-3.1', { resolution: '1080p', duration: 8 }), 3.2);
+  assert.equal(perSecondVideoCostUsd('google/veo-3.1', { resolution: '1080p', duration: 8, generateAudio: false }), 1.6);
+  // A resolution between listed tiers uses the next tier up (Veo Fast lists 720p and 4K).
+  assert.equal(perSecondVideoCostUsd('google/veo-3.1-fast', { resolution: '1080p', duration: 10 }), 3);
+  // Above the highest tier, the highest applies.
+  assert.equal(Math.round(perSecondVideoCostUsd('x-ai/grok-imagine-video', { resolution: '1080p', duration: 10 }) * 100) / 100, 0.7);
+  // Wan bills image-to-video at its own, higher tiers; Grok adds a per-image fee.
+  assert.equal(perSecondVideoCostUsd('alibaba/wan-2.6', { resolution: '1080p', duration: 5 }), 0.6);
+  assert.equal(perSecondVideoCostUsd('alibaba/wan-2.6', { resolution: '1080p', duration: 5, frameImages: [{}] }), 0.75);
+  assert.equal(perSecondVideoCostUsd('x-ai/grok-imagine-video-1.5', { resolution: '480p', duration: 8, referenceImages: ['a', 'b'] }), 0.66);
+  // Sora 2 Pro runs on OpenAI directly under either id.
+  assert.equal(perSecondVideoCostUsd('openai/sora-2-pro', { resolution: '720p', duration: 10 }), 3);
+  assert.equal(perSecondVideoCostUsd('unknown/video-model', { duration: 5 }), null);
+});
+
+test('every Studio video model has a price, so none falls back to the flat rule', async () => {
+  const { estimateVideoCostUsd } = await import('../../src/services/generationPricing.js');
+  const { OPENROUTER_VIDEO_MODEL_MAP } = await import('../../packages/studio/src/models.js');
+  const unpriced = [...new Set(Object.values(OPENROUTER_VIDEO_MODEL_MAP))]
+    .filter((model) => estimateVideoCostUsd({ model, parameters: { resolution: '1080p', duration: 5 } }) === null);
+  assert.deepEqual(unpriced, []);
+});
+
+test('prices dedicated BytePlus endpoints as the model they serve', async () => {
+  const { estimateVideoCostUsd, seedreamCostUsd } = await import('../../src/services/generationPricing.js');
+  const parameters = { resolution: '1080p', duration: 5 };
+  assert.equal(estimateVideoCostUsd({ model: 'ep-20260904190604-p8pjl', parameters }), estimateVideoCostUsd({ model: 'bytedance/seedance-2.5', parameters }));
+  assert.equal(seedreamCostUsd('ep-20260907150312-xx7gf'), 0.04);
+  assert.equal(seedreamCostUsd('ep-20260907150433-zg8fr'), 0.035);
+});
+
+test('reserves a Seedance run with no resolution as 1080p', async () => {
+  const { estimateVideoCostUsd } = await import('../../src/services/generationPricing.js');
+  const model = 'bytedance/seedance-2.0';
+  assert.equal(estimateVideoCostUsd({ model, parameters: { duration: 5 } }), estimateVideoCostUsd({ model, parameters: { duration: 5, resolution: '1080p' } }));
+});
