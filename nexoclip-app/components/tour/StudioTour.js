@@ -96,7 +96,7 @@ export const TOUR_STEPS = [
   {
     target: 'top-up',
     title: 'Top up anytime',
-    body: 'Packages start at Rp 249.000 for 1,250 credits, paid with QRIS or a bank virtual account. Credits never expire.',
+    body: 'Packages start at Rp 149.000 for 750 credits, paid with QRIS or a bank virtual account. Credits never expire.',
   },
   {
     target: 'jobs',
