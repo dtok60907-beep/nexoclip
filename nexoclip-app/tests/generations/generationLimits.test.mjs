@@ -26,24 +26,25 @@ function poolFor({ counts = { rate: 0, budget: '0', active: 0 }, limit = { rate_
 }
 
 const input = { prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1' };
+const priceGeneration = async () => ({ usd: 0.025, credits: 2.5 });
 
 test('rejects a workspace when its generation rate window is exhausted', async () => {
   await assert.rejects(
-    createImageGenerationJobWithReservation(poolFor({ counts: { rate: 2, budget: '0', active: 0 } }), 'w1', input, { userId: 'u1' }),
+    createImageGenerationJobWithReservation(poolFor({ counts: { rate: 2, budget: '0', active: 0 } }), 'w1', input, { userId: 'u1', priceGeneration }),
     (error) => error.code === 'GENERATION_RATE_LIMITED' && error.status === 429 && /rate limit/i.test(error.message),
   );
 });
 
 test('rejects a workspace when its concurrency limit is exhausted', async () => {
   await assert.rejects(
-    createImageGenerationJobWithReservation(poolFor({ counts: { rate: 0, budget: '0', active: 2 } }), 'w1', input, { userId: 'u1' }),
+    createImageGenerationJobWithReservation(poolFor({ counts: { rate: 0, budget: '0', active: 2 } }), 'w1', input, { userId: 'u1', priceGeneration }),
     (error) => error.code === 'GENERATION_CONCURRENCY_LIMITED' && error.status === 429,
   );
 });
 
 test('rejects a reservation when the workspace budget would be exceeded', async () => {
   await assert.rejects(
-    createImageGenerationJobWithReservation(poolFor({ counts: { rate: 0, budget: '9', active: 0 } }), 'w1', input, { userId: 'u1' }),
+    createImageGenerationJobWithReservation(poolFor({ counts: { rate: 0, budget: '9', active: 0 } }), 'w1', input, { userId: 'u1', priceGeneration }),
     (error) => error.code === 'GENERATION_BUDGET_EXCEEDED' && error.status === 402 && /budget/i.test(error.message),
   );
 });
@@ -58,6 +59,6 @@ test('keeps repeated idempotent requests ahead of admission limits', async () =>
       throw new Error('limit checks must not run for an existing request');
     }, release() {},
   });
-  const result = await createImageGenerationJobWithReservation(pool, 'w1', input, { userId: 'u1' });
+  const result = await createImageGenerationJobWithReservation(pool, 'w1', input, { userId: 'u1', priceGeneration });
   assert.equal(result.id, 'g-existing');
 });

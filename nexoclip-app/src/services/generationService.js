@@ -181,23 +181,25 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
   const validated = input?.kind === 'video' ? validateVideoGenerationInput(input, { allowLegacyCanvasReferences }) : validateImageGenerationInput(input);
   // Priced per model/resolution/duration before the transaction: it may
   // fetch live OpenRouter prices and must not hold row locks meanwhile.
-  // Unknown models fall back to the flat pricing rule below.
+  // A model with no known price is refused: the flat rule (2.5 or 10
+  // credits) is far below what most models cost the provider.
   let modelPrice = null;
   try {
     modelPrice = await priceGeneration({ kind: validated.kind === 'video' ? 'video' : 'image', ...validated });
   } catch (error) {
-    console.error('[pricing] model price unavailable, using flat rule', validated.model, error?.message);
+    console.error('[pricing] model price unavailable', validated.model, error?.message);
   }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const existing = await findGenerationByIdempotencyKey(client, workspaceId, input.idempotencyKey);
     if (existing) { await client.query('COMMIT'); return existing; }
+    if (!modelPrice) throw admissionError('MODEL_PRICE_UNAVAILABLE', `No price is configured for model ${validated.model}`, 422);
 
     const selected = await findPricingRule(client, { operation: input.operation || (validated.kind === 'video' ? 'video_generation' : 'image_generation'), pricingVersion: input.pricingVersion || null });
     if (!selected) throw new Error('Pricing rule not found');
     const ruleEstimate = estimateCost({ ...selected, quantity: 1 });
-    const estimate = modelPrice ? { ...ruleEstimate, amount: String(modelPrice.credits) } : ruleEstimate;
+    const estimate = { ...ruleEstimate, amount: String(modelPrice.credits) };
     await enforceGenerationLimits(client, workspaceId, Number(estimate.amount));
     await createCreditAccount(client, workspaceId);
     const account = await lockCreditAccount(client, workspaceId);

@@ -64,8 +64,10 @@ const ENDPOINT_PRICING_ALIASES = {
   'ep-20260907150433-zg8fr': 'seedream-5.0-lite',
 };
 
+// Canvas sends BytePlus models as `byteplus/<id>`.
 export function pricingModelId(model) {
-  return ENDPOINT_PRICING_ALIASES[model] || String(model);
+  const id = String(model).replace(/^byteplus\//, '');
+  return ENDPOINT_PRICING_ALIASES[id] || String(model);
 }
 
 export function isSeedanceModel(model) {
@@ -110,15 +112,15 @@ export function estimateSeedanceTokens(parameters = {}, model = '') {
   return Math.ceil(((inputSeconds + outputSeconds) * VIDEO_PIXELS[billedResolution(parameters)] * VIDEO_FPS) / 1024);
 }
 
-// Video models billed per second of output, in USD. Taken from each model's
-// OpenRouter page (openrouter.ai/<model>) in October 2026; Sora 2 Pro runs on
-// OpenAI's own API at the same rates. Not published in OpenRouter's models
-// API, so update these by hand when a provider changes its prices.
+// Video models billed per second of output, in USD. Taken from the
+// `pricing_skus` of OpenRouter's video catalog (GET /api/v1/videos/models) in
+// October 2026; Sora 2 Pro runs on OpenAI's own API at the same rates. Update
+// these by hand when a provider changes its prices.
 // Tiers are keyed by resolution. A resolution between listed tiers is billed
 // at the next listed tier above it, so a run is never undercharged; above the
 // highest tier it uses the highest. `any` applies to every resolution.
 const PER_SECOND_VIDEO_PRICES = [
-  { match: /^google\/veo-3\.1-fast$/, audio: { '720p': 0.10, '4k': 0.30 }, silent: { '720p': 0.08, '4k': 0.25 } },
+  { match: /^google\/veo-3\.1-fast$/, audio: { '720p': 0.10, '1080p': 0.12, '4k': 0.30 }, silent: { '720p': 0.08, '1080p': 0.10, '4k': 0.25 } },
   { match: /^google\/veo-3\.1-lite$/, audio: { '720p': 0.05, '1080p': 0.08 }, silent: { '720p': 0.03, '1080p': 0.05 } },
   { match: /^google\/veo-3\.1$/, audio: { '1080p': 0.40, '4k': 0.60 }, silent: { '1080p': 0.20, '4k': 0.40 } },
   { match: /^kwaivgi\/kling-v3\.0-pro$/, audio: { any: 0.168 }, silent: { any: 0.112 } },
@@ -126,11 +128,14 @@ const PER_SECOND_VIDEO_PRICES = [
   { match: /^kwaivgi\/kling-video-o1$/, tiers: { any: 0.112 } },
   { match: /^minimax\/hailuo-2\.3$/, tiers: { any: 0.0817 } },
   { match: /^(openai\/)?sora-2-pro$/, tiers: { '720p': 0.30, '1080p': 0.50 } },
-  { match: /^x-ai\/grok-imagine-video-1\.5$/, tiers: { '480p': 0.08, '1080p': 0.25 }, perInputImage: 0.01 },
+  { match: /^x-ai\/grok-imagine-video-1\.5$/, tiers: { '480p': 0.08, '720p': 0.14, '1080p': 0.25 }, perInputImage: 0.01 },
   { match: /^x-ai\/grok-imagine-video$/, tiers: { '480p': 0.05, '720p': 0.07 }, perInputImage: 0.002 },
   { match: /^alibaba\/happyhorse-1\.0$/, tiers: { '720p': 0.0988, '1080p': 0.1694 } },
   { match: /^alibaba\/happyhorse-1\.1$/, tiers: { '720p': 0.0988, '1080p': 0.1278 } },
-  { match: /^alibaba\/wan-2\.6$/, tiers: { '480p': 0.04, '1080p': 0.12 }, imageTiers: { '720p': 0.10, '1080p': 0.15 } },
+  { match: /^alibaba\/wan-2\.6$/, tiers: { '480p': 0.04, '720p': 0.08, '1080p': 0.12 }, imageTiers: { '720p': 0.10, '1080p': 0.15 } },
+  // Video-to-video: the output is as long as the source video.
+  { match: /^runway\/aleph-2$/, tiers: { any: 0.28 }, minimum: 0.56, sourceLength: true },
+  { match: /^alibaba\/wan-2\.7$/, tiers: { any: 0.10 }, sourceLength: true },
 ];
 const RESOLUTION_ORDER = ['480p', '720p', '1080p', '4k'];
 // Video Studio always sends a duration; this only covers a missing one.
@@ -159,8 +164,9 @@ export function perSecondVideoCostUsd(model, parameters = {}) {
     : entry.audio ? (parameters.generateAudio === false ? entry.silent : entry.audio)
       : entry.tiers;
   const duration = Number(parameters.duration);
-  const seconds = Number.isFinite(duration) && duration > 0 ? duration : ASSUMED_PER_SECOND_VIDEO_SECONDS;
-  return tierPrice(tiers, resolution) * seconds + images * (entry.perInputImage || 0);
+  const assumed = entry.sourceLength ? ASSUMED_INPUT_VIDEO_SECONDS : ASSUMED_PER_SECOND_VIDEO_SECONDS;
+  const seconds = Number.isFinite(duration) && duration > 0 ? duration : assumed;
+  return Math.max(entry.minimum || 0, tierPrice(tiers, resolution) * seconds + images * (entry.perInputImage || 0));
 }
 
 export function estimateVideoCostUsd({ model, parameters = {} }) {
@@ -169,7 +175,11 @@ export function estimateVideoCostUsd({ model, parameters = {} }) {
   return (estimateSeedanceTokens(parameters, model) * rate) / 1e6;
 }
 
+// OpenRouter reports the USD charge as usage.cost; BytePlus reports tokens.
+// A zero cost (a provider free quota) is not what the user is charged.
 export function actualVideoCostUsd({ model, parameters = {} }, usage = {}) {
+  const cost = Number(usage.costUsd ?? usage.cost);
+  if (Number.isFinite(cost) && cost > 0) return cost;
   const tokens = Number(usage.completion_tokens ?? usage.total_tokens);
   const rate = seedanceRatePerMillion(model, parameters);
   if (rate === null || !Number.isFinite(tokens) || tokens <= 0) return null;
@@ -209,9 +219,17 @@ const OPENROUTER_IMAGE_SNAPSHOT = {
   'openai/gpt-image-2': { prompt: 0.000008, completion: 0.000008, image_output: 0.00003 },
   'openai/gpt-image-1': { prompt: 0.00001, completion: 0.00001, image_output: 0.00004 },
   'openai/gpt-image-1-mini': { prompt: 0.0000025, completion: 0.0000025, image_output: 0.000008 },
+  // Not on OpenRouter; Canvas calls OpenAI directly (OpenAI list price).
+  'openai/gpt-image-1.5': { prompt: 0.000005, completion: 0.00001, image: 0.000008, image_output: 0.000032 },
   'openai/gpt-5.4-image-2': { prompt: 0.000008, completion: 0.000015, image_output: 0.00003 },
   'openai/gpt-5-image': { prompt: 0.00001, completion: 0.00001, image_output: 0.00004 },
   'openai/gpt-5-image-mini': { prompt: 0.0000025, completion: 0.000002, image_output: 0.000008 },
+  'black-forest-labs/flux.2-pro': { prompt: 0, completion: 0, image_output: 0.00000732421875 },
+  'black-forest-labs/flux.2-flex': { prompt: 0, completion: 0, image_token: 0.0000146484375, image_output: 0.0000146484375 },
+  'black-forest-labs/flux.2-max': { prompt: 0, completion: 0, image_output: 0.00001708984375 },
+  'qwen/qwen-image-3': { prompt: 0, completion: 0, image: 0.003, image_token: 0.00000718562874251497, image_output: 0.00000718562874251497 },
+  'qwen/qwen-image-3-pro': { prompt: 0, completion: 0, image: 0.003, image_token: 0.00000958083832335329, image_output: 0.00000958083832335329 },
+  'x-ai/grok-imagine-image-2.0': { prompt: 0, completion: 0, image: 0.01, image_token: 0.00000958083832335329, image_output: 0.00000958083832335329 },
 };
 
 // Output tokens per generated image, used for the reservation only (the
@@ -233,7 +251,7 @@ const OPENROUTER_TTL_MS = 60 * 60 * 1000;
 
 function parsePricing(pricing = {}) {
   const out = {};
-  for (const key of ['prompt', 'completion', 'image', 'image_output', 'request']) {
+  for (const key of ['prompt', 'completion', 'image', 'image_token', 'image_output', 'request']) {
     const value = Number(pricing[key]);
     if (Number.isFinite(value) && value >= 0) out[key] = value;
   }
@@ -276,16 +294,19 @@ export function estimateTokenImageCostUsd({ model, prompt = '', parameters = {} 
   if (!pricing) return null;
   const references = Array.isArray(parameters.referenceImages) ? parameters.referenceImages.length : 0;
   const promptTokens = Math.ceil(String(prompt).length / 3);
-  const inputCost = promptTokens * (pricing.prompt || 0)
-    + references * ESTIMATED_INPUT_TOKENS_PER_REFERENCE * (pricing.image ?? pricing.prompt ?? 0);
+  // Models that list `image_token` price `image` per input image, not per token.
+  const referenceCost = pricing.image_token !== undefined
+    ? (pricing.image || 0)
+    : ESTIMATED_INPUT_TOKENS_PER_REFERENCE * (pricing.image ?? pricing.prompt ?? 0);
+  const inputCost = promptTokens * (pricing.prompt || 0) + references * referenceCost;
   const outputCost = estimatedImageOutputTokens(model, parameters) * (pricing.image_output ?? pricing.completion ?? 0);
   return inputCost + outputCost + (pricing.request || 0);
 }
 
 // Actual cost from the usage a provider reported. OpenRouter reports USD
-// directly; Google and OpenAI report token counts.
+// directly; Google and OpenAI report token counts. A zero cost is not used.
 export function actualTokenImageCostUsd({ model }, usage = {}, livePrices = {}) {
-  if (Number.isFinite(Number(usage.costUsd))) return Number(usage.costUsd);
+  if (Number(usage.costUsd) > 0) return Number(usage.costUsd);
   const pricing = tokenPricing(model, livePrices);
   if (!pricing) return null;
   const imageOutput = Number(usage.imageOutputTokens) || 0;
@@ -301,7 +322,7 @@ export function actualTokenImageCostUsd({ model }, usage = {}, livePrices = {}) 
 // ---------------------------------------------------------------- jobs -----
 
 // Provider cost estimate (USD) for a validated generation, or null when the
-// model has no known price (the caller then falls back to the flat rule).
+// model has no known price (the caller then refuses the job).
 export async function estimateGenerationCostUsd({ kind, model, prompt, parameters = {} }, { fetchImpl, env = process.env } = {}) {
   if (kind === 'video') return estimateVideoCostUsd({ model, parameters });
   const seedream = seedreamCostUsd(model, parameters);
