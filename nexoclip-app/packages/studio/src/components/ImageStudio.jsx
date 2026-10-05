@@ -24,8 +24,9 @@ import {
   getEffectsForI2IModel,
   getDefaultEffectForI2IModel,
   getI2IModelById,
+  OPENROUTER_IMAGE_MODEL_MAP,
 } from "../models.js";
-import { estimateImagePrice, fetchOpenRouterModels, findOpenRouterModel } from "../lib/openrouterPricing.js";
+import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -909,7 +910,6 @@ export default function ImageStudio({
   const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
   const [selectedModelId, setSelectedModelId] = useState(openRouterT2IModels[0].id);
   const [selectedModelName, setSelectedModelName] = useState(openRouterT2IModels[0].name);
-  const [openRouterPricing, setOpenRouterPricing] = useState(null);
   const [selectedAr, setSelectedAr] = useState("9:16");
   const [selectedQuality, setSelectedQuality] = useState(() => {
     const resolutions = getResolutionsForModel(openRouterT2IModels[0].id);
@@ -919,14 +919,6 @@ export default function ImageStudio({
   const [maxImages, setMaxImages] = useState(1);
   const [seed, setSeed] = useState(null); // last-used seed, shown for reuse
   const [seedLocked, setSeedLocked] = useState(false); // when true, reuse `seed` instead of randomizing
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchOpenRouterModels()
-      .then((models) => { if (!cancelled) setOpenRouterPricing(models); })
-      .catch(() => { if (!cancelled) setOpenRouterPricing(null); });
-    return () => { cancelled = true; };
-  }, []);
 
   // ── Prompt / upload state ───────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");
@@ -938,7 +930,6 @@ export default function ImageStudio({
   const [dropdownOpen, setDropdownOpen] = useState(null); // 'model' | 'ar' | 'quality' | null
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
-  const [creditEstimate, setCreditEstimate] = useState(null);
   const [fullscreenUrl, setFullscreenUrl] = useState(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
 
@@ -1259,32 +1250,19 @@ export default function ImageStudio({
     setMaxImages(1);
   };
 
-  useEffect(() => {
-    const workspaceId = typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null;
-    if (!workspaceId) return;
-    let cancelled = false;
-    fetch('/api/generations/estimate', {
-      method: 'POST', credentials: 'include',
-      headers: { 'content-type': 'application/json', 'x-workspace-id': workspaceId },
-      body: JSON.stringify({ operation: 'image_generation', quantity: 1 }),
-    }).then(async (response) => response.ok ? response.json() : null)
-      .then((data) => !cancelled && setCreditEstimate(data?.estimate?.amount || null))
-      .catch(() => !cancelled && setCreditEstimate(null));
-    return () => { cancelled = true; };
-  }, []);
 
-  const mappedPricing = openRouterPricing && (() => {
-    const slug = (imageMode ? openRouterI2IModels : openRouterT2IModels)
-      .find((model) => model.id === selectedModelId);
-    return slug ? findOpenRouterModel(openRouterPricing, slug.id) : null;
-  })();
-  const liveImageEstimate = mappedPricing
-    ? estimateImagePrice({
-        pricing: mappedPricing.pricing,
-        inputImageCount: imageMode ? uploadedImageUrls.length : 0,
-        outputImageCount: batchSize,
-      })
-    : null;
+  // Same pricing as the server reservation: one job per image, so the
+  // button shows the per-image price times the batch.
+  const pricePerImage = useGenerationPrice({
+    kind: "image",
+    model: OPENROUTER_IMAGE_MODEL_MAP[selectedModelId] || selectedModelId,
+    parameters: {
+      resolution: currentQualityField === "resolution" ? selectedQuality : undefined,
+      referenceImages: imageMode ? uploadedImageUrls.length : 0,
+    },
+    promptLength: prompt.trim().length,
+  });
+  const batchCredits = pricePerImage === null ? null : pricePerImage * batchSize;
 
   // ── Generation ───────────────────────────────────────────────────────────
   const randomSeed = () => Math.floor(Math.random() * 2147483647);
@@ -1879,7 +1857,7 @@ export default function ImageStudio({
                 </>
               ) : (
                 <>
-                  <span>{liveImageEstimate ? `Generate · ${liveImageEstimate.credits.toLocaleString()} credits ✦` : creditEstimate ? `Generate · ${Number(creditEstimate).toLocaleString()} credits ✦` : 'Generate ✦'}</span>
+                  <span>{batchCredits !== null ? `Generate · ${formatCredits(batchCredits)} credits ✦` : 'Generate ✦'}</span>
                 </>
               )}
             </PromptAction>

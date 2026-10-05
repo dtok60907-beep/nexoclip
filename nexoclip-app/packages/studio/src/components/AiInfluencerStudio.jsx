@@ -3,6 +3,8 @@
 import { useState, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateSaasImage } from "../generationClient.js";
+import { OPENROUTER_IMAGE_MODEL_MAP } from "../models.js";
+import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
@@ -361,6 +363,11 @@ export default function AiInfluencerStudio({
   });
 
   const [aspectRatio, setAspectRatio] = useState("3:4");
+  const characterCredits = useGenerationPrice({
+    kind: "image",
+    model: OPENROUTER_IMAGE_MODEL_MAP[INFLUENCER_MODEL] || INFLUENCER_MODEL,
+    parameters: { aspectRatio },
+  });
   const [customPrompt, setCustomPrompt] = useState("");
   const [isGeneratingInternal, setIsGeneratingInternal] = useState(false);
   const [currentResult, setCurrentResult] = useState(null);   // latest generated image
@@ -625,7 +632,7 @@ export default function AiInfluencerStudio({
                   Generating…
                 </>
               ) : (
-                <><BoltIcon />Generate Character</>
+                <><BoltIcon />Generate Character{characterCredits !== null ? ` · ${formatCredits(characterCredits)} credits` : ""}</>
               )}
             </button>
           </div>

@@ -3,6 +3,8 @@ import { confirmDialog } from "./confirmDialog.jsx";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateSaasImage, uploadFile } from "../generationClient.js";
+import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
+
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import MobileGenerationActions, {
   CopyContentIcon,
@@ -22,6 +24,9 @@ import {
   promptControlClassName,
   promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
+
+// Every Cinema shot renders on Seedream 4.5.
+const CINEMA_MODEL = "bytedance-seed/seedream-4.5";
 
 // ─── Constants (inlined from promptUtils) ───────────────────────────────────
 
@@ -558,6 +563,11 @@ export default function CinemaStudio({
   const [canvasUrl, setCanvasUrl] = useState(null); // null = prompt view
   const [fullscreenUrl, setFullscreenUrl] = useState(null);
   const [uploadedImage, setUploadedImage] = useState(null);
+  const shotCredits = useGenerationPrice({
+    kind: "image",
+    model: CINEMA_MODEL,
+    parameters: { resolution, referenceImages: uploadedImage ? 1 : 0 },
+  });
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadProgress, setImageUploadProgress] = useState(0);
   const imageInputRef = useRef(null);
@@ -674,7 +684,7 @@ export default function CinemaStudio({
     try {
       const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const res = await generateSaasImage({
-        model: "bytedance-seed/seedream-4.5",
+        model: CINEMA_MODEL,
         prompt: finalPrompt,
         workspace_id: workspaceId,
         idempotencyKey: crypto.randomUUID(),
@@ -711,7 +721,7 @@ export default function CinemaStudio({
         if (onGenerationComplete) {
           onGenerationComplete({
             url: outputUrl,
-            model: "bytedance-seed/seedream-4.5",
+            model: CINEMA_MODEL,
             prompt: basePrompt,
             type: "cinema",
           });
@@ -1225,7 +1235,7 @@ export default function CinemaStudio({
                 </>
               ) : (
                 <>
-                  <span>Shoot ✦ 10</span>
+                  <span>{shotCredits !== null ? `Shoot ✦ ${formatCredits(shotCredits)}` : "Shoot ✦"}</span>
                 </>
               )}
             </PromptAction>

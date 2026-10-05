@@ -27,8 +27,10 @@ import {
   getDefaultEffectForI2VModel,
   getModesForModel,
   getMaxImagesForI2VModel,
+  OPENROUTER_VIDEO_MODEL_MAP,
+  OPENROUTER_V2V_MODEL_MAP,
 } from "../models.js";
-import { estimateVideoPrice, fetchOpenRouterModels, findOpenRouterModel } from "../lib/openrouterPricing.js";
+import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -471,14 +473,6 @@ export default function VideoStudio({
     migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
   }, [PERSIST_KEY]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchOpenRouterModels()
-      .then((models) => { if (!cancelled) setOpenRouterPricing(models); })
-      .catch(() => { if (!cancelled) setOpenRouterPricing(null); });
-    return () => { cancelled = true; };
-  }, []);
-
   // ── mode state ──
   const [imageMode, setImageMode] = useState(false); // i2v
   const [v2vMode, setV2vMode] = useState(false);
@@ -487,7 +481,6 @@ export default function VideoStudio({
   const defaultModel = openRouterT2VModels[0];
   const [selectedModel, setSelectedModel] = useState(defaultModel.id);
   const [selectedModelName, setSelectedModelName] = useState(defaultModel.name);
-  const [openRouterPricing, setOpenRouterPricing] = useState(null);
   const [selectedAr, setSelectedAr] = useState(
     defaultModel.inputs?.aspect_ratio?.default || "16:9",
   );
@@ -537,18 +530,6 @@ export default function VideoStudio({
   const [lastGenerationId, setLastGenerationId] = useState(null);
   const [lastGenerationModel, setLastGenerationModel] = useState(null);
 
-  const videoPricingModel = openRouterPricing && (() => {
-    const models = v2vMode ? openRouterV2VModels : imageMode ? openRouterI2VModels : openRouterT2VModels;
-    const model = models.find((item) => item.id === selectedModel);
-    return model ? findOpenRouterModel(openRouterPricing, model.id) : null;
-  })();
-  const liveVideoEstimate = videoPricingModel
-    ? estimateVideoPrice({
-        pricing: videoPricingModel.pricing,
-        durationSeconds: Number.parseFloat(selectedDuration) || 0,
-        inputImageCount: imageMode ? Math.max(1, uploadedImageUrls.length || (uploadedImageUrl ? 1 : 0)) : 0,
-      })
-    : null;
 
   // ── history ──
   const [localHistory, setLocalHistory] = useState([]);
@@ -560,6 +541,22 @@ export default function VideoStudio({
   // ── prompt ──
   const [prompt, setPrompt] = useState("");
   const [promptDisabled, setPromptDisabled] = useState(false);
+
+  // Mirrors what Generate submits, priced exactly like the server reservation.
+  const pricedResolutions = imageMode ? getResolutionsForI2VModel(selectedModel) : getResolutionsForVideoModel(selectedModel);
+  const pricedImageCount = imageMode
+    ? Math.max(uploadedImageUrls.length, uploadedImageUrl ? 1 : 0) + (uploadedEndImageUrl ? 1 : 0)
+    : 0;
+  const videoCredits = useGenerationPrice({
+    kind: "video",
+    model: OPENROUTER_VIDEO_MODEL_MAP[selectedModel] || OPENROUTER_V2V_MODEL_MAP[selectedModel] || selectedModel,
+    parameters: {
+      resolution: pricedResolutions.length > 0 ? selectedResolution : /-480p$/.test(selectedModel) ? "480p" : undefined,
+      duration: v2vMode ? undefined : selectedDuration,
+      referenceImages: pricedImageCount,
+      referenceVideos: v2vMode && uploadedVideoUrl ? 1 : 0,
+    },
+  });
 
   // ── refs ──
   const containerRef = useRef(null);
@@ -1263,6 +1260,9 @@ export default function VideoStudio({
         if (durations.length > 0) i2vParams.duration = selectedDuration;
         const resolutions = getResolutionsForI2VModel(selectedModel);
         if (resolutions.length > 0) i2vParams.resolution = selectedResolution;
+        // "-480p" variants carry their resolution only in the id, which is
+        // lost once mapped to the provider model; send it explicitly.
+        else if (/-480p$/.test(selectedModel)) i2vParams.resolution = "480p";
         if (selectedQuality) i2vParams.quality = selectedQuality;
         if (selectedMode) i2vParams.mode = selectedMode;
         if (showEffect && selectedEffect) i2vParams.name = selectedEffect;
@@ -1321,6 +1321,7 @@ export default function VideoStudio({
         if (durations.length > 0) params.duration = selectedDuration;
         const resolutions = getResolutionsForVideoModel(selectedModel);
         if (resolutions.length > 0) params.resolution = selectedResolution;
+        else if (/-480p$/.test(selectedModel)) params.resolution = "480p";
         if (selectedQuality) params.quality = selectedQuality;
         if (selectedMode) params.mode = selectedMode;
 
@@ -2208,7 +2209,7 @@ export default function VideoStudio({
                 </>
               ) : (
                 <>
-                  <span>{liveVideoEstimate ? `Generate · ${liveVideoEstimate.credits.toLocaleString()} credits` : 'Generate'}</span>
+                  <span>{videoCredits !== null ? `Generate · ${formatCredits(videoCredits)} credits` : 'Generate'}</span>
                 </>
               )}
             </PromptAction>
