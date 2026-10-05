@@ -256,7 +256,7 @@ export default function OnboardingFlow() {
               <div className="mx-auto mt-10 grid max-w-xl gap-3 text-left sm:grid-cols-3">
                 {[
                   [Icons.clock, 'About 2 minutes', `${QUESTION_COUNT} short questions`],
-                  [Icons.coins, '50 free credits', 'Already in your workspace'],
+                  [Icons.coins, 'One balance', 'Credits work in every studio'],
                   [Icons.sparkle, 'A tailored start', 'We suggest where to begin'],
                 ].map(([Icon, title, body]) => (
                   <div key={title} className="rounded-[20px] border border-white/70 bg-white/70 p-4 backdrop-blur">
@@ -380,11 +380,11 @@ export default function OnboardingFlow() {
 
           {step.id === 'credits' && (
             <>
-              <StepHeader eyebrow="How credits work" title="You have 50 free credits" subtitle="Each generation uses credits based on the model, resolution and length. You always see the cost before you press Generate." />
+              <StepHeader eyebrow="How credits work" title="One balance for every studio" subtitle="Each generation uses credits based on the model, resolution and length. You always see the cost before you press Generate." />
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  ['about 20', 'images', 'With Nano Banana at 2.5 credits each'],
-                  ['1', 'draft video', '5 seconds at 480p with Seedance 2.0'],
+                  ['± 8', 'credits per image', 'With Nano Banana'],
+                  ['± 126', 'credits per video', '5 seconds with Kling 3'],
                   ['0', 'expiry', 'Credits never expire'],
                 ].map(([value, unit, note]) => (
                   <div key={unit} className="rounded-[20px] border border-white/70 bg-white/80 p-5 backdrop-blur">
@@ -409,7 +409,7 @@ export default function OnboardingFlow() {
               <div className="mt-4 flex items-start gap-4 rounded-[20px] bg-[#110C2A] p-5 text-white">
                 <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] bg-[#A175FF] text-[#110C2A]"><Icons.qr /></span>
                 <span>
-                  <span className="block text-sm font-bold">Need more? Top up anytime</span>
+                  <span className="block text-sm font-bold">Top up to start creating</span>
                   <span className="mt-1 block text-[13px] leading-relaxed text-white/65">Packages from Rp 249.000 for 1,250 credits, paid with QRIS or a bank virtual account. Find it under Credits → Top Up.</span>
                 </span>
               </div>
