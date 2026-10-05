@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   actualGenerationCredits, estimateGenerationCredits, estimateVideoCostUsd, loadOpenRouterImagePrices,
-  resetOpenRouterPriceCache, usdToCredits,
+  resetOpenRouterPriceCache, usdToCredits, fxFactor, loadUsdIdrRate, resetUsdIdrRateCache, PRICING_REFERENCE_USD_IDR,
 } from '../../src/services/generationPricing.js';
 import { googleImageUsage, openAIImageUsage } from '../../src/providers/direct/imageAdapters.js';
 
+// Pins USD/IDR at the reference rate so no test fetches a live rate.
+const FX = { USD_IDR_RATE: '17915' };
 const close = (actual, expected, tolerance) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} vs ${expected}`);
 
 test('credits are provider USD x 1.6 markup x 100, rounded up to 0.1', () => {
@@ -36,16 +38,16 @@ test('longer, higher-resolution and draft videos are priced accordingly', () => 
 test('video jobs settle at the tokens BytePlus reports', async () => {
   const job = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
   // 108,000 tokens x $10.70/M = $1.1556 -> x1.6 x100 = 184.9 credits
-  assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, { env: {} }), 184.9);
-  assert.equal(await actualGenerationCredits(job, {}, { env: {} }), null);
+  assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, { env: FX }), 184.9);
+  assert.equal(await actualGenerationCredits(job, {}, { env: FX }), null);
 });
 
 test('Seedream uses BytePlus per-image prices, never OpenRouter', async () => {
   let fetched = false;
   const fetchImpl = async () => { fetched = true; throw new Error('should not fetch'); };
-  const priced = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-4-5-251128', prompt: 'x', parameters: {} }, { fetchImpl, env: {} });
+  const priced = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-4-5-251128', prompt: 'x', parameters: {} }, { fetchImpl, env: FX });
   assert.equal(priced.credits, 6.4);
-  const pro2k = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-5.0-pro-unfiltered', prompt: 'x', parameters: { resolution: '2K' } }, { fetchImpl, env: {} });
+  const pro2k = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-5.0-pro-unfiltered', prompt: 'x', parameters: { resolution: '2K' } }, { fetchImpl, env: FX });
   assert.equal(pro2k.credits, 14.4);
   assert.equal(fetched, false);
 });
@@ -53,13 +55,13 @@ test('Seedream uses BytePlus per-image prices, never OpenRouter', async () => {
 test('other image models use live OpenRouter prices, falling back to the snapshot', async () => {
   resetOpenRouterPriceCache();
   const live = async () => new Response(JSON.stringify({ data: [{ id: 'google/gemini-2.5-flash-image', pricing: { prompt: '0', completion: '0', image_output: '0.0001' } }] }));
-  const priced = await estimateGenerationCredits({ kind: 'image', model: 'google/gemini-2.5-flash-image', prompt: '', parameters: {} }, { fetchImpl: live, env: {} });
+  const priced = await estimateGenerationCredits({ kind: 'image', model: 'google/gemini-2.5-flash-image', prompt: '', parameters: {} }, { fetchImpl: live, env: FX });
   close(priced.usd, 1290 * 0.0001, 1e-9);
 
   resetOpenRouterPriceCache();
   const down = async () => { throw new Error('offline'); };
   assert.deepEqual(await loadOpenRouterImagePrices({ fetchImpl: down }), {});
-  const fallback = await estimateGenerationCredits({ kind: 'image', model: 'google/gemini-2.5-flash-image', prompt: '', parameters: {} }, { fetchImpl: down, env: {} });
+  const fallback = await estimateGenerationCredits({ kind: 'image', model: 'google/gemini-2.5-flash-image', prompt: '', parameters: {} }, { fetchImpl: down, env: FX });
   close(fallback.usd, 1290 * 0.00003, 1e-9);
   resetOpenRouterPriceCache();
 });
@@ -68,10 +70,10 @@ test('image jobs settle at reported usage: OpenRouter USD, Google/OpenAI tokens'
   resetOpenRouterPriceCache();
   const down = async () => { throw new Error('offline'); };
   const gemini = { kind: 'image', model: 'google/gemini-2.5-flash-image', parameters: {} };
-  assert.equal(await actualGenerationCredits(gemini, { costUsd: 0.039 }, { fetchImpl: down, env: {} }), 6.3);
+  assert.equal(await actualGenerationCredits(gemini, { costUsd: 0.039 }, { fetchImpl: down, env: FX }), 6.3);
   const usage = googleImageUsage({ promptTokenCount: 100, candidatesTokensDetails: [{ modality: 'IMAGE', tokenCount: 1290 }] });
   // 100 x 0.0000003 + 1290 x 0.00003 = 0.03873 -> 6.2 credits
-  assert.equal(await actualGenerationCredits(gemini, usage, { fetchImpl: down, env: {} }), 6.2);
+  assert.equal(await actualGenerationCredits(gemini, usage, { fetchImpl: down, env: FX }), 6.2);
   assert.deepEqual(openAIImageUsage({ input_tokens: 50, output_tokens: 4160 }), { inputTokens: 50, imageOutputTokens: 4160 });
   resetOpenRouterPriceCache();
 });
@@ -113,10 +115,10 @@ test('video-to-video models reserve for the longest source video and honour mini
 test('OpenRouter videos settle at the USD cost it reports; zero cost is ignored', async () => {
   const job = { kind: 'video', model: 'runway/aleph-2', parameters: {} };
   // $1.40 x1.6 x100 = 224 credits
-  assert.equal(await actualGenerationCredits(job, { cost: 1.4 }, { env: {} }), 224);
-  assert.equal(await actualGenerationCredits(job, { cost: 0 }, { env: {} }), null);
+  assert.equal(await actualGenerationCredits(job, { cost: 1.4 }, { env: FX }), 224);
+  assert.equal(await actualGenerationCredits(job, { cost: 0 }, { env: FX }), null);
   const seedance = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
-  assert.equal(await actualGenerationCredits(seedance, { cost: 0, completion_tokens: 108000 }, { env: {} }), 184.9);
+  assert.equal(await actualGenerationCredits(seedance, { cost: 0, completion_tokens: 108000 }, { env: FX }), 184.9);
 });
 
 test('per-image reference fees are charged per image, not per token', async () => {
@@ -140,7 +142,7 @@ test('every Studio image model is priced even when OpenRouter is unreachable', a
   const offline = async () => { throw new Error('offline'); };
   const unpriced = [];
   for (const model of new Set(Object.values(OPENROUTER_IMAGE_MODEL_MAP))) {
-    if (!await estimateGenerationCredits({ kind: 'image', model, prompt: 'x', parameters: {} }, { fetchImpl: offline, env: {} })) unpriced.push(model);
+    if (!await estimateGenerationCredits({ kind: 'image', model, prompt: 'x', parameters: {} }, { fetchImpl: offline, env: FX })) unpriced.push(model);
   }
   resetOpenRouterPriceCache();
   assert.deepEqual(unpriced, []);
@@ -168,8 +170,46 @@ test('every Canvas model is priced under the id the Canvas submit route sends', 
   for (const config of FAL_MODELS) {
     const model = `${config.provider}/${config.providerModel}`;
     const parameters = config.category === 'video' ? { resolution: '720p', duration: 5 } : {};
-    if (!await estimateGenerationCredits({ kind: config.category, model, prompt: 'x', parameters }, { fetchImpl: offline, env: {} })) unpriced.push(model);
+    if (!await estimateGenerationCredits({ kind: config.category, model, prompt: 'x', parameters }, { fetchImpl: offline, env: FX })) unpriced.push(model);
   }
   resetOpenRouterPriceCache();
   assert.deepEqual(unpriced, []);
+});
+
+test('credits follow USD/IDR relative to the reference rate', () => {
+  assert.equal(fxFactor(PRICING_REFERENCE_USD_IDR), 1);
+  // A 10% weaker rupiah charges 10% more credits for the same provider cost.
+  assert.equal(usdToCredits(1, {}, PRICING_REFERENCE_USD_IDR * 1.1), 176);
+  assert.equal(usdToCredits(1, { USD_IDR_RATE: String(PRICING_REFERENCE_USD_IDR * 0.9) }), 144);
+  // A missing or implausible rate leaves prices at the reference.
+  assert.equal(usdToCredits(1, {}, undefined), 160);
+  assert.equal(usdToCredits(1, {}, 179), 160);
+});
+
+test('the USD/IDR rate is pinned by env, fetched daily otherwise, and falls back to the reference', async () => {
+  resetUsdIdrRateCache();
+  let fetches = 0;
+  const live = async () => { fetches += 1; return new Response(JSON.stringify({ rates: { IDR: 18500 } })); };
+  assert.equal(await loadUsdIdrRate({ fetchImpl: live, env: { USD_IDR_RATE: '19000' } }), 19000);
+  assert.equal(fetches, 0);
+  assert.equal(await loadUsdIdrRate({ fetchImpl: live, env: {}, now: 0 }), 18500);
+  assert.equal(await loadUsdIdrRate({ fetchImpl: live, env: {}, now: 1000 }), 18500);
+  assert.equal(fetches, 1);
+
+  resetUsdIdrRateCache();
+  const down = async () => { throw new Error('offline'); };
+  assert.equal(await loadUsdIdrRate({ fetchImpl: down, env: {} }), PRICING_REFERENCE_USD_IDR);
+  const garbage = async () => new Response(JSON.stringify({ rates: { IDR: 5 } }));
+  resetUsdIdrRateCache();
+  assert.equal(await loadUsdIdrRate({ fetchImpl: garbage, env: {} }), PRICING_REFERENCE_USD_IDR);
+  resetUsdIdrRateCache();
+});
+
+test('estimates and settlements apply the live rate', async () => {
+  const job = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
+  const weak = { USD_IDR_RATE: String(PRICING_REFERENCE_USD_IDR * 1.1) };
+  // $1.1556 x1.6 x100 x1.1 = 203.4 credits
+  assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, { env: weak }), 203.4);
+  const priced = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-4-5-251128', prompt: 'x', parameters: {} }, { env: weak });
+  assert.equal(priced.credits, 7.1);
 });
