@@ -12,8 +12,8 @@ import AuthShell, {
 const MIN_PASSWORD = 12;
 
 const POINTS = [
-  { title: '50 free credits', body: 'Enough for a first draft video or about 20 images. No card needed.' },
   { title: 'Every studio, one balance', body: 'Canvas, Video, Image, Cinema and AI Influencer share your credits.' },
+  { title: 'See the cost first', body: 'Every Generate button shows its price in credits before you spend any.' },
   { title: 'Pay as you go', body: 'Top up from Rp 249.000 with QRIS or a virtual account. Credits never expire.' },
 ];
 
@@ -70,9 +70,9 @@ export default function RegisterForm() {
       headline={<>From one photo<br />to a video ad.</>}
       subtitle="Create product videos, photos and AI influencer content without a camera or a shoot."
       points={POINTS}
-      eyebrow="Get started free"
+      eyebrow="Get started"
       title="Create your account"
-      description="50 free credits are waiting in your workspace."
+      description="Set up your workspace, then top up credits to start creating."
     >
       {error && (
         <AuthAlert>
@@ -128,7 +128,7 @@ export default function RegisterForm() {
           )}
         </div>
         <button type="submit" disabled={loading} className={primaryButtonClass}>
-          {loading ? 'Creating your workspace…' : 'Create free account'}
+          {loading ? 'Creating your workspace…' : 'Create account'}
         </button>
       </form>
 

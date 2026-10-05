@@ -99,7 +99,7 @@ export default function LoginForm() {
 
       <AuthDivider>Don&apos;t have an account?</AuthDivider>
       <Link href="/register" className={`mt-3 ${secondaryButtonClass}`}>
-        Sign up free · get 50 credits
+        Create an account
       </Link>
 
       <AuthLegal action="signing in" />
