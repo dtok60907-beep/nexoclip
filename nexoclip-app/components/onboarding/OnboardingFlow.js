@@ -383,8 +383,8 @@ export default function OnboardingFlow() {
               <StepHeader eyebrow="How credits work" title="One balance for every studio" subtitle="Each generation uses credits based on the model, resolution and length. You always see the cost before you press Generate." />
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  ['± 8', 'credits per image', 'With Nano Banana'],
-                  ['± 126', 'credits per video', '5 seconds with Kling 3'],
+                  ['± 6', 'credits per image', 'With Nano Banana'],
+                  ['± 101', 'credits per video', '5 seconds with Kling 3'],
                   ['0', 'expiry', 'Credits never expire'],
                 ].map(([value, unit, note]) => (
                   <div key={unit} className="rounded-[20px] border border-white/70 bg-white/80 p-5 backdrop-blur">
