@@ -1,7 +1,7 @@
 // Credit packages sold for rupiah. Base rate is about Rp 200 per credit;
-// larger packages carry bonus credits. Generation is charged at twice the
-// provider cost (CREDIT_MARKUP_PERCENT=100), which keeps the Studio package's
-// 30% bonus at a healthy margin.
+// larger packages carry bonus credits. Generation is charged at 1.6x the
+// provider cost (CREDIT_MARKUP_PERCENT=60), which keeps the Studio package's
+// 30% bonus at a ~33% gross margin.
 export const TOPUP_PACKAGES = Object.freeze([
   { code: 'topup_249k', name: 'Starter', description: 'Try every studio and model.', priceIdr: 249_000, credits: 1_250, bonusPercent: 0, popular: false },
   { code: 'topup_499k', name: 'Creator', description: 'For a steady weekly content flow.', priceIdr: 499_000, credits: 2_750, bonusPercent: 10, popular: true },

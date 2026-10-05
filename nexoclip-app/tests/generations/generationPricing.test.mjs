@@ -8,9 +8,9 @@ import { googleImageUsage, openAIImageUsage } from '../../src/providers/direct/i
 
 const close = (actual, expected, tolerance) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} vs ${expected}`);
 
-test('credits are provider USD x 2 markup x 100, rounded up to 0.1', () => {
-  assert.equal(usdToCredits(1, {}), 200);
-  assert.equal(usdToCredits(0.04, {}), 8);
+test('credits are provider USD x 1.6 markup x 100, rounded up to 0.1', () => {
+  assert.equal(usdToCredits(1, {}), 160);
+  assert.equal(usdToCredits(0.04, {}), 6.4);
   assert.equal(usdToCredits(1, { CREDIT_MARKUP_PERCENT: '50' }), 150);
   assert.equal(usdToCredits(0, {}), 0);
 });
@@ -35,8 +35,8 @@ test('longer, higher-resolution and draft videos are priced accordingly', () => 
 
 test('video jobs settle at the tokens BytePlus reports', async () => {
   const job = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
-  // 108,000 tokens x $10.70/M = $1.1556 -> x2 x100 = 231.2 credits
-  assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, { env: {} }), 231.2);
+  // 108,000 tokens x $10.70/M = $1.1556 -> x1.6 x100 = 184.9 credits
+  assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, { env: {} }), 184.9);
   assert.equal(await actualGenerationCredits(job, {}, { env: {} }), null);
 });
 
@@ -44,9 +44,9 @@ test('Seedream uses BytePlus per-image prices, never OpenRouter', async () => {
   let fetched = false;
   const fetchImpl = async () => { fetched = true; throw new Error('should not fetch'); };
   const priced = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-4-5-251128', prompt: 'x', parameters: {} }, { fetchImpl, env: {} });
-  assert.equal(priced.credits, 8);
+  assert.equal(priced.credits, 6.4);
   const pro2k = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-5.0-pro-unfiltered', prompt: 'x', parameters: { resolution: '2K' } }, { fetchImpl, env: {} });
-  assert.equal(pro2k.credits, 18);
+  assert.equal(pro2k.credits, 14.4);
   assert.equal(fetched, false);
 });
 
@@ -68,16 +68,16 @@ test('image jobs settle at reported usage: OpenRouter USD, Google/OpenAI tokens'
   resetOpenRouterPriceCache();
   const down = async () => { throw new Error('offline'); };
   const gemini = { kind: 'image', model: 'google/gemini-2.5-flash-image', parameters: {} };
-  assert.equal(await actualGenerationCredits(gemini, { costUsd: 0.039 }, { fetchImpl: down, env: {} }), 7.8);
+  assert.equal(await actualGenerationCredits(gemini, { costUsd: 0.039 }, { fetchImpl: down, env: {} }), 6.3);
   const usage = googleImageUsage({ promptTokenCount: 100, candidatesTokensDetails: [{ modality: 'IMAGE', tokenCount: 1290 }] });
-  // 100 x 0.0000003 + 1290 x 0.00003 = 0.03873 -> 7.8 credits
-  assert.equal(await actualGenerationCredits(gemini, usage, { fetchImpl: down, env: {} }), 7.8);
+  // 100 x 0.0000003 + 1290 x 0.00003 = 0.03873 -> 6.2 credits
+  assert.equal(await actualGenerationCredits(gemini, usage, { fetchImpl: down, env: {} }), 6.2);
   assert.deepEqual(openAIImageUsage({ input_tokens: 50, output_tokens: 4160 }), { inputTokens: 50, imageOutputTokens: 4160 });
   resetOpenRouterPriceCache();
 });
 
 test('the legacy NEXT_PUBLIC markup variable does not remove the generation markup', () => {
-  assert.equal(usdToCredits(1, { NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: '0' }), 200);
+  assert.equal(usdToCredits(1, { NEXT_PUBLIC_CREDIT_MARKUP_PERCENT: '0' }), 160);
 });
 
 test('prices per-second video models from their published rates', async () => {
@@ -112,11 +112,11 @@ test('video-to-video models reserve for the longest source video and honour mini
 
 test('OpenRouter videos settle at the USD cost it reports; zero cost is ignored', async () => {
   const job = { kind: 'video', model: 'runway/aleph-2', parameters: {} };
-  // $1.40 x2 x100 = 280 credits
-  assert.equal(await actualGenerationCredits(job, { cost: 1.4 }, { env: {} }), 280);
+  // $1.40 x1.6 x100 = 224 credits
+  assert.equal(await actualGenerationCredits(job, { cost: 1.4 }, { env: {} }), 224);
   assert.equal(await actualGenerationCredits(job, { cost: 0 }, { env: {} }), null);
   const seedance = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
-  assert.equal(await actualGenerationCredits(seedance, { cost: 0, completion_tokens: 108000 }, { env: {} }), 231.2);
+  assert.equal(await actualGenerationCredits(seedance, { cost: 0, completion_tokens: 108000 }, { env: {} }), 184.9);
 });
 
 test('per-image reference fees are charged per image, not per token', async () => {

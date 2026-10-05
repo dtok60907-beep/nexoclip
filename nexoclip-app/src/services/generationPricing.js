@@ -2,7 +2,7 @@
 // 10 per video whatever the model, resolution or duration, far below provider
 // cost (a 5s 1080p Seedance 2.5 video costs ~$2.84; we charged $0.10).
 //
-// Charge = provider cost (USD) x markup (2x by default) x CREDITS_PER_USD. A job reserves an
+// Charge = provider cost (USD) x markup (1.6x by default) x CREDITS_PER_USD. A job reserves an
 // upper-bound estimate up front; on success it is settled at the actual
 // provider usage when the provider reports it (the difference is refunded).
 //
@@ -20,8 +20,8 @@ const CREDIT_PRECISION = 10;
 // an empty or stale value there must not change what is charged.
 export function markupMultiplier(env = process.env) {
   const raw = env.CREDIT_MARKUP_PERCENT;
-  const percent = raw === undefined || raw === '' ? 100 : Number(raw);
-  return Number.isFinite(percent) && percent >= 0 ? 1 + percent / 100 : 2;
+  const percent = raw === undefined || raw === '' ? 60 : Number(raw);
+  return Number.isFinite(percent) && percent >= 0 ? 1 + percent / 100 : 1.6;
 }
 
 export function usdToCredits(usd, env = process.env) {
