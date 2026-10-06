@@ -98,7 +98,7 @@ export async function POST(request) {
         message: 'Kredensial BYTEPLUS_API_KEY belum dikonfigurasi. Menggunakan preview studio komersial.',
         prompt: finalPrompt,
         preset: scenePreset,
-        referenceMode: useReferenceImage ? 'guided' : 'creative_3d',
+        referenceMode: referenceMode || 'creative_3d',
         aspectRatio,
         outputs: [
           {
@@ -136,6 +136,42 @@ export async function POST(request) {
     const outputImages = results.flatMap((r) => r?.outputs || []);
     if (!outputImages.length) {
       return Response.json({ error: 'BytePlus tidak mengembalikan hasil gambar' }, { status: 502 });
+    }
+
+    // Unduh & simpan permanen ke disk lokal agar URL tidak pernah expired
+    let localSavedOutputs = outputImages;
+    try {
+      const path = require("path");
+      const crypto = require("crypto");
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "product-studio");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      localSavedOutputs = await Promise.all(
+        outputImages.map(async (img) => {
+          if (!img.url || !img.url.startsWith("http")) return img;
+          try {
+            const imgRes = await fetch(img.url);
+            if (imgRes.ok) {
+              const buf = Buffer.from(await imgRes.arrayBuffer());
+              const ext = img.url.includes(".png") ? "png" : "jpg";
+              const filename = `studio-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
+              fs.writeFileSync(path.join(uploadDir, filename), buf);
+              return {
+                ...img,
+                url: `/uploads/product-studio/${filename}`,
+                originalRemoteUrl: img.url,
+              };
+            }
+          } catch (e) {
+            console.warn("Gagal simpan gambar lokal:", e.message);
+          }
+          return img;
+        })
+      );
+    } catch (err) {
+      console.warn("Gagal inisialisasi direktori upload:", err.message);
     }
 
     // Simpan gambar ke workspace assets jika user terautentikasi (opsional)
@@ -179,9 +215,9 @@ export async function POST(request) {
       provider: 'byteplus',
       prompt: finalPrompt,
       preset: scenePreset,
-      referenceMode: useReferenceImage ? 'guided' : 'creative_3d',
+      referenceMode: referenceMode || 'creative_3d',
       aspectRatio,
-      outputs: persistedOutputs,
+      outputs: localSavedOutputs,
     });
   } catch (error) {
     console.error('Marketplace generate error:', error);

@@ -132,6 +132,11 @@ function BatchGenerationCard({
   onFullscreen,
 }) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const [imageErrors, setImageErrors] = useState({});
+
+  const handleImageError = (index) => {
+    setImageErrors((prev) => ({ ...prev, [index]: true }));
+  };
 
   const photos = Array.isArray(batch.photos) && batch.photos.length > 0
     ? batch.photos
@@ -191,11 +196,21 @@ function BatchGenerationCard({
         className="relative aspect-square w-full overflow-hidden bg-neutral-900 cursor-pointer flex items-center justify-center"
         onClick={() => onFullscreen(batch, activeSlideIndex)}
       >
-        <img
-          src={activePhoto.url}
-          alt={activePhoto.title || batch.title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-        />
+        {imageErrors[activeSlideIndex] ? (
+          <div className="flex flex-col items-center justify-center p-4 text-center text-white/70 gap-1.5 select-none">
+            <span className="text-[11px] font-semibold text-neutral-300">Link Sesi Kedaluwarsa</span>
+            <span className="text-[9px] text-neutral-500 max-w-[150px] leading-tight">
+              URL sementara BytePlus telah habis masa aktifnya.
+            </span>
+          </div>
+        ) : (
+          <img
+            src={activePhoto.url}
+            alt={activePhoto.title || batch.title}
+            onError={() => handleImageError(activeSlideIndex)}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        )}
 
         {/* Top Badges Overlay */}
         <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
