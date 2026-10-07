@@ -53,6 +53,7 @@ async function withSchema(t, fullBaseline, run) {
       await client.query(minimalSchema);
       await client.query(await readFile(new URL('013_generation_outputs_usage.sql', migrations), 'utf8'));
       await client.query(await readFile(new URL('029_generation_pricing_snapshot.sql', migrations), 'utf8'));
+      await client.query(await readFile(new URL('041_generation_environment.sql',migrations),'utf8'));
     }
     const workspaceId = randomUUID();
     await client.query(`INSERT INTO workspaces (id, name, slug) VALUES ($1, 'Quote test', $2)`, [workspaceId, schema]);

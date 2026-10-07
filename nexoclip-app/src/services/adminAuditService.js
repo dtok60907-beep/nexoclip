@@ -1,3 +1,4 @@
+import { requirePlatformOperator } from '../lib/auth/platformOperator.js';
 import { getPool } from '../db/pool.js';
 import { listGenerationJobs, listProviderUsage, getCreditAudit } from '../repositories/adminAuditRepository.js';
 
@@ -14,11 +15,11 @@ function filters(input = {}) {
   return result;
 }
 function result(data, page, pageSize) { const total = Number(data.total || 0); return { items: data.rows, pagination: { page, pageSize, total, totalPages: total ? Math.ceil(total / pageSize) : 0 } }; }
-export function createAdminAuditService({ repositories }) {
-  async function list(kind, { workspaceId, role, filters: input }) { if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 }); authorize(role); const query = filters(input); const data = await repositories[kind](workspaceId, query); return result(data, Math.max(1, Number.parseInt(query.page, 10) || 1), query.pageSize); }
+export function createAdminAuditService({ repositories, env = process.env }) {
+  async function list(kind, { workspaceId, userId, role, filters: input }) { requirePlatformOperator(userId, env); if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 }); authorize(role); const query = filters(input); const data = await repositories[kind](workspaceId, query); return result(data, Math.max(1, Number.parseInt(query.page, 10) || 1), query.pageSize); }
   return {
     listJobs: (args) => list('listGenerationJobs', args), listUsage: (args) => list('listProviderUsage', args),
-    async listCredits({ workspaceId, role, filters: input }) { if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 }); authorize(role); const query = filters(input); const data = await repositories.getCreditAudit(workspaceId, query); return { balance: data.balance, ...result(data, Math.max(1, Number.parseInt(query.page, 10) || 1), query.pageSize) }; },
+    async listCredits({ workspaceId, userId, role, filters: input }) { requirePlatformOperator(userId, env); if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 }); authorize(role); const query = filters(input); const data = await repositories.getCreditAudit(workspaceId, query); return { balance: data.balance, ...result(data, Math.max(1, Number.parseInt(query.page, 10) || 1), query.pageSize) }; },
   };
 }
 export const adminAuditService = createAdminAuditService({ repositories: { listGenerationJobs, listProviderUsage, getCreditAudit } });

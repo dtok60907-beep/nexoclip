@@ -31,6 +31,6 @@ export function coverageReasons(coverage = {}) {
   if (coverage.allocationMismatchJobs > 0) reasons.push('Alokasi kredit perlu diperiksa');
   return reasons;
 }
-export function economicsPath({ from, to, groupBy, page = 1 }) {
-  return `/api/admin/economics?${new URLSearchParams({ from, to, groupBy, page: String(page), pageSize: '25' })}`;
+export function economicsPath({ from, to, groupBy, page = 1,environment }) {
+  return `/api/admin/economics?${new URLSearchParams({ from, to, groupBy, page: String(page), pageSize: '25',...(environment ? {environment} : {}) })}`;
 }

@@ -13,19 +13,20 @@ const aggregateSql = summedFields.map((name) => `COALESCE(SUM(${name}), 0) AS ${
 // Reporting uses terminal jobs as a stable cohort. Request observations are
 // consolidated by the cost-event view, while worker-attempt coverage comes
 // from all immutable observations, including attempt-start markers.
-export async function getEconomicsReport(pool, { workspaceId, since, until, groupBy = 'model', model, provider, page = 1, pageSize = 25 }) {
+export async function getEconomicsReport(pool, { workspaceId, since, until, groupBy = 'model', model, provider, environment='all',page = 1, pageSize = 25 }) {
   const values = [workspaceId, since, until];
   const conditions = ["gj.workspace_id = $1", "gj.status IN ('succeeded', 'failed')", 'COALESCE(gj.finished_at, gj.created_at) >= $2::timestamptz', 'COALESCE(gj.finished_at, gj.created_at) < $3::timestamptz'];
   for (const [name, value] of [['model', model], ['provider', provider]]) {
     if (value) { values.push(value); conditions.push(`gj.${name} = $${values.length}`); }
   }
+  if (environment!=='all') {values.push(environment);conditions.push(`gj.environment = $${values.length}`);}
   values.push(pageSize, (page - 1) * pageSize);
   const limit = `$${values.length - 1}`;
   const offset = `$${values.length}`;
   const groupField = groupBy === 'provider' ? 'provider' : 'model';
   const result = await pool.query(
     `WITH cohort AS (
-       SELECT gj.id, gj.workspace_id, gj.model, gj.provider, gj.kind, gj.status, gj.settlement_status,
+       SELECT gj.id, gj.workspace_id, gj.model, gj.provider, gj.kind, gj.status, gj.settlement_status,gj.environment,
               gj.attempt_count, COALESCE(gj.finished_at, gj.created_at) AS cohort_at,
               CASE WHEN gj.settlement_status = 'pending' THEN 0::numeric ELSE ${CREDIT_CHARGE_SQL} END AS charged_credits
        FROM generation_jobs gj

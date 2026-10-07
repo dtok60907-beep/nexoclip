@@ -2,6 +2,12 @@
 
 This runbook defines the **production deployment contract** for `docker-compose.prod.yml` and `scripts/deploy.sh`.
 
+### Billing environment preflight
+
+Before production deployment, run `NODE_ENV=production npm run config:check` with the production environment loaded. `NEXOCLIP_ENVIRONMENT` must explicitly be `production`. When BytePlus credentials are enabled, both `BYTEPLUS_BILLING_ACCOUNT_ID` and `BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID` must contain the same verified numeric provider account ID. Verify ownership in the provider console; the check validates configuration consistency, not API-key ownership remotely.
+
+The production Compose web, image-worker and video-worker services pass these settings. Workers reject missing or mismatched production BytePlus account IDs before connecting to Redis or starting work. Local development may leave its account identity unknown until verified, but must not reuse an account explicitly reserved for production. Errors never include credential or account values. No production values are supplied by this change.
+
 ## 1) Service and database ownership (split DB contract)
 
 Use three separate PostgreSQL URLs (Neon or equivalent):

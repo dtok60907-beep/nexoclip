@@ -16,6 +16,16 @@ async function jobFor() {
 }
 
 const observation = { provider: 'byteplus', providerRequestId: 'req-1', dispatchId: 'dispatch-1', eventType: 'succeeded' };
+test('provider account identity comes from worker config, never provider payload, and missing identity stays unknown',async()=>{
+  const pool=poolFor(),job=await jobFor();
+  await recordGenerationCostObservation(pool,{job,observation:{...observation,providerAccountId:'999'},env:{BYTEPLUS_BILLING_ACCOUNT_ID:'123'}});
+  assert.equal(pool.calls[0].values[13],'123');
+  await recordGenerationCostObservation(pool,{job,observation,env:{}});
+  assert.equal(pool.calls[1].values[13],null);
+  await recordGenerationCostObservation(pool,{job,observation:{...observation,provider:'openrouter'},env:{BYTEPLUS_BILLING_ACCOUNT_ID:'123'}});
+  assert.equal(pool.calls[2].values[13],null);
+  await assert.rejects(recordGenerationCostObservation(pool,{job,observation,env:{BYTEPLUS_BILLING_ACCOUNT_ID:'invalid'}}),/configuration/);
+});
 
 test('records known zero USD without replacing unknown usage with a guessed zero', async () => {
   const job = await jobFor();

@@ -151,7 +151,8 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
         }),
       });
     } catch (error) { throw transientError('byteplus', error); }
-    if (!response.ok) throw transientError('byteplus', response, await readErrorDetail(response));
+    if (!response.ok) throw Object.assign(transientError('byteplus', response, await readErrorDetail(response)),
+      {providerRequestId:responseRequestId(null,response)});
     const payload = await response.json();
     const outputs = normalizeImagePayload(payload);
     const providerRequestId = responseRequestId(payload, response);

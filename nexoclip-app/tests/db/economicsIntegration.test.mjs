@@ -28,7 +28,7 @@ async function fixture(run) {
         created_at TIMESTAMPTZ DEFAULT '2026-09-01T00:00:00Z', finished_at TIMESTAMPTZ DEFAULT '2026-10-05T12:00:00Z',
         UNIQUE(workspace_id,id)
       );`);
-    for (const name of ['007_credits.sql', '031_generation_cost_events.sql', '032_credit_lots.sql', '033_payment_fee_reconciliation.sql', '036_credit_revenue_simulation.sql']) {
+    for (const name of ['007_credits.sql', '031_generation_cost_events.sql', '032_credit_lots.sql', '033_payment_fee_reconciliation.sql', '036_credit_revenue_simulation.sql','041_generation_environment.sql']) {
       await client.query(await readFile(new URL(name, migrations), 'utf8'));
     }
     const workspaceId = randomUUID();
@@ -39,11 +39,11 @@ async function fixture(run) {
         VALUES($1,$2,1000,$3,$4,$5::jsonb) RETURNING id`, [workspace, amount, reason, randomUUID(), JSON.stringify(metadata)]);
       return result.rows[0].id;
     }
-    async function job({ consumed = 5, reserved = 10, model = 'model-a', status = 'succeeded', settlement = 'captured', attempts = 1, workspace = workspaceId, finishedAt = '2026-10-05T12:00:00Z' } = {}) {
+    async function job({ environment='unclassified',consumed = 5, reserved = 10, model = 'model-a', status = 'succeeded', settlement = 'captured', attempts = 1, workspace = workspaceId, finishedAt = '2026-10-05T12:00:00Z' } = {}) {
       const id = randomUUID();
       const reservation = await ledger(-reserved, 'generation_reservation', {}, workspace);
-      await client.query(`INSERT INTO generation_jobs(id,workspace_id,model,provider,status,settlement_status,estimated_cost,reservation_ledger_id,attempt_count,finished_at)
-        VALUES($1,$2,$3,'provider-a',$4,$5,$6,$7,$8,$9)`, [id, workspace, model, status, settlement, reserved, reservation, attempts, finishedAt]);
+      await client.query(`INSERT INTO generation_jobs(id,workspace_id,model,provider,status,settlement_status,estimated_cost,reservation_ledger_id,attempt_count,finished_at,environment)
+        VALUES($1,$2,$3,'provider-a',$4,$5,$6,$7,$8,$9,$10)`, [id, workspace, model, status, settlement, reserved, reservation, attempts, finishedAt,environment]);
       if (settlement === 'captured' && consumed < reserved) await ledger(reserved - consumed, 'generation_capture', { generationId: id }, workspace);
       return id;
     }
@@ -215,3 +215,24 @@ test('specific trial simulation recognizes only consumed credits and preserves r
   assert.equal((await client.query('SELECT source_type,amount_idr FROM credit_lots WHERE id=$1',[lot])).rows[0].source_type,'promo');
  });
 });
+
+ test('Economics isolates production, development and unclassified jobs without rewriting provenance',{skip},async()=>{
+  await fixture(async({client,job,allocation,event,report})=>{
+    let production;
+    for(const environment of ['production','development','unclassified']){
+      const id=await job({environment});await allocation(id);await event(id);
+      if(environment==='production')production=id;
+      assert.equal((await report({environment})).items.length,1);
+    }
+    for(const environment of ['production','development','unclassified']){
+      const result=await report({environment});assert.equal(Number(result.totals.job_count),1);
+      assert.equal(Number(result.totals.recognized_revenue_idr),500);
+      assert.equal(Number(result.totals.provider_cost_idr),150);
+      assert.equal(result.items[0].environment,environment);
+    }
+    assert.equal(Number((await report({environment:'all'})).totals.job_count),3);
+    await client.query('SAVEPOINT environment_edit');
+    await assert.rejects(client.query("UPDATE generation_jobs SET environment='development' WHERE id=$1",[production]),/immutable/);
+    await client.query('ROLLBACK TO SAVEPOINT environment_edit');
+  });
+ });

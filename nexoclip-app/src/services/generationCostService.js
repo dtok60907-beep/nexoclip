@@ -45,8 +45,11 @@ function completeTokenImageUsage(job, usage) {
 }
 
 export async function recordGenerationCostObservation(pool, {
-  job, observation, priceProviderUsage = actualGenerationCostUsd,
+  job, observation, priceProviderUsage = actualGenerationCostUsd, env = process.env,
 }) {
+  const account=observation.provider==='byteplus' ? String(env.BYTEPLUS_BILLING_ACCOUNT_ID || '').trim() : '';
+  if (account && !/^[0-9]{1,32}$/.test(account)) throw new Error('Invalid BytePlus billing account configuration');
+  const providerAccountId=account || null;
   const usage = sanitizeProviderCostUsage(observation.usage);
   const reported = amount(usage.costUsd) ?? amount(usage.cost);
   let costUsd = null;
@@ -67,7 +70,7 @@ export async function recordGenerationCostObservation(pool, {
   const providerRequestId = typeof observation.providerRequestId === 'string' && observation.providerRequestId.trim()
     ? observation.providerRequestId.trim() : null;
   const fact = {
-    eventType: observation.eventType, usage, costUsd, costIdr, usdIdrRate, costSource,
+    eventType: observation.eventType, usage, costUsd, costIdr, usdIdrRate, costSource,providerAccountId,
   };
   const observationFingerprint = createHash('sha256').update(JSON.stringify(fact)).digest('hex');
   return appendGenerationCostEvent(pool, {

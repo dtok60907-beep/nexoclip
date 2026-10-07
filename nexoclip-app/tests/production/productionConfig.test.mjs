@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateProductionEnvironment } from '../../scripts/production-config.mjs';
+test('production preflight requires an explicit environment and does not disclose account/key values',()=>{
+  const missing=validateProductionEnvironment({NODE_ENV:'production'});
+  assert.match(missing.errors.join(' '),/NEXOCLIP_ENVIRONMENT/);
+  const mismatch=validateProductionEnvironment({NODE_ENV:'production',NEXOCLIP_ENVIRONMENT:'production',BYTEPLUS_API_KEY:'secret-fake-key',BYTEPLUS_BILLING_ACCOUNT_ID:'111111',BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID:'222222'});
+  assert.match(mismatch.errors.join(' '),/does not match/);
+  assert.doesNotMatch(mismatch.errors.join(' '),/secret-fake-key|111111|222222/);
+});
 
 test('accepts the minimum full-stack production environment for realtime deployment', () => {
   assert.deepEqual(validateProductionEnvironment({
     NODE_ENV: 'production',
+    NEXOCLIP_ENVIRONMENT: 'production',
     DATABASE_URL_NEXOCLIP: 'postgres://user:pass@db.example/nexoclip',
     DATABASE_URL_SPITE: 'postgres://user:pass@db.example/spite',
     LOCAL_OBJECT_STORAGE_SECRET: 'long-production-secret',
@@ -20,6 +28,7 @@ test('accepts the minimum full-stack production environment for realtime deploym
 test('rejects missing realtime secrets and public database credentials without echoing values', () => {
   const result = validateProductionEnvironment({
     NODE_ENV: 'production',
+    NEXOCLIP_ENVIRONMENT: 'production',
     DATABASE_URL_NEXOCLIP: 'postgres://user:pass@db.example/nexoclip',
     DATABASE_URL_SPITE: 'postgres://user:pass@db.example/spite',
     MUAPI_API_KEY: 'secret-value',
@@ -47,6 +56,7 @@ test('does not require production-only values for development', () => {
 test('MUAPI_API_KEY is optional: unset or empty does not fail the production check', () => {
   const base = {
     NODE_ENV: 'production',
+    NEXOCLIP_ENVIRONMENT: 'production',
     DATABASE_URL_SPITE: 'postgres://user:pw@db.example/spite',
     LOCAL_OBJECT_STORAGE_SECRET: 'long-production-secret',
     CANVAS_AUTH_URL: 'http://spite-realtime:3007/internal/authorize',

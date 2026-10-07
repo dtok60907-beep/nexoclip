@@ -18,9 +18,9 @@ test('workspace/customer membership and typed credit source are mandatory',async
 });
 test('session identity is server-owned, POST requires same origin, errors do not leak SQL',async()=>{
  let called=false;
- const handlers=createBackofficeHandlers({sessionLookup:async()=>({user_id:operator}),service:{read:async v=>{assert.equal(v.userId,operator);return {};},mutate:async v=>{called=true;assert.equal(v.userId,operator);throw Error('secret SQL');}}});
+ const handlers=createBackofficeHandlers({env,sessionLookup:async()=>({user_id:operator}),service:{read:async v=>{assert.equal(v.userId,operator);return {};},mutate:async v=>{called=true;assert.equal(v.userId,operator);throw Error('secret SQL');}}});
  const req=(origin)=>{const r=new Request('http://localhost/api/admin/backoffice',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({userId:customer})});r.cookies={get:()=>({value:'session'})};return r;};
  assert.equal((await handlers.POST(req('https://hostile.example'))).status,403);assert.equal(called,false);
  const result=await handlers.POST(req('http://localhost'));assert.equal(result.status,500);assert.doesNotMatch(await result.text(),/secret SQL/);
- const unauth=createBackofficeHandlers({sessionLookup:async()=>null});assert.equal((await unauth.POST(req('http://localhost'))).status,401);
+ const unauth=createBackofficeHandlers({env,sessionLookup:async()=>null});assert.equal((await unauth.POST(req('http://localhost'))).status,401);
 });

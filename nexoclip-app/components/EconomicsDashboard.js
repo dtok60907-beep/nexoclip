@@ -23,6 +23,7 @@ export function EconomicsReport({ data, onPage }) {
   const incomplete = !totals.coverage.complete;
   const reasons = coverageReasons(totals.coverage);
   return <>
+    <p className="mt-4 rounded-lg border border-white/10 p-3 text-xs leading-5 text-white/60">Lingkungan laporan: {{production:'Production',development:'Development',unclassified:'Belum diklasifikasi',all:'Semua lingkungan'}[data.environment || 'all']}. Filter Production hanya memasukkan job yang ditandai production saat dibuat. Data lama tanpa klasifikasi tidak otomatis dianggap production.</p>
     {simulation && <div className="mt-6 rounded-xl border border-cyan-300/25 bg-cyan-300/5 p-4 text-sm text-cyan-100"><p className="font-semibold">Simulasi: kredit trial 750 diasumsikan bernilai Rp149.000</p><p className="mt-1 text-xs">Pendapatan simulasi mengikuti kredit yang dikonsumsi dari grant tersebut. Pendapatan aktual tetap {idr(totals.recognizedRevenueIdr)}; ini bukan pembayaran nyata. Saldo dan sumber kredit trial tidak berubah.</p></div>}
     <div className={`mt-6 rounded-xl border p-4 text-sm ${incomplete ? 'border-amber-300/25 bg-amber-300/5 text-amber-100' : 'border-emerald-300/20 bg-emerald-300/5 text-emerald-100'}`}>
       <p className="font-semibold">{incomplete ? 'Data biaya atau pendapatan belum lengkap' : 'Data provider dan kredit sudah lengkap'}</p>
@@ -109,6 +110,7 @@ export default function EconomicsDashboard({ initialRange }) {
   const [workspaceId, setWorkspaceId] = useState('');
   const [range, setRange] = useState(initialRange);
   const [groupBy, setGroupBy] = useState('model');
+  const [environment,setEnvironment]=useState('production');
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState(null);
@@ -128,14 +130,15 @@ export default function EconomicsDashboard({ initialRange }) {
     if (!workspaceId) return;
     let cancelled = false;
     setData(null); setError(null);
-    saasFetch(economicsPath({ ...range, groupBy, page }), { headers: { 'x-workspace-id': workspaceId } })
+    saasFetch(economicsPath({ ...range, groupBy, page,environment }), { headers: { 'x-workspace-id': workspaceId } })
       .then(result => { if (!cancelled) setData(result); })
       .catch(reason => { if (!cancelled) setError(reason.message); });
     return () => { cancelled = true; };
-  }, [workspaceId, range, groupBy, page, revision]);
+  }, [workspaceId, range, groupBy, page, revision,environment]);
   function chooseWorkspace(value) { setData(null); setPage(1); setWorkspaceId(value); setStoredWorkspaceId(value); }
   return <AdminShell active="/admin/economics" title="COGS & kontribusi" description="Pantau nilai kredit yang digunakan, biaya provider, dan biaya pembayaran per workspace.">
       <div className={adminStyles.filters}>
+        <label className={adminStyles.label}>Lingkungan<select aria-label="Lingkungan Economics" className={fieldClass} value={environment} onChange={event=>{setPage(1);setEnvironment(event.target.value);}}><option value="production">Production</option><option value="development">Development</option><option value="unclassified">Belum diklasifikasi</option><option value="all">Semua lingkungan</option></select></label>
         <label className={adminStyles.label}>Workspace<select className={fieldClass} value={workspaceId} onChange={event => chooseWorkspace(event.target.value)}>{workspaces.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         <label className={adminStyles.label}>Dari (UTC)<input type="date" className={fieldClass} value={range.from} onChange={event => { setPage(1); setRange(current => ({ ...current, from: event.target.value })); }} /></label>
         <label className={adminStyles.label}>Sampai (UTC)<input type="date" className={fieldClass} value={range.to} onChange={event => { setPage(1); setRange(current => ({ ...current, to: event.target.value })); }} /></label>
@@ -143,6 +146,7 @@ export default function EconomicsDashboard({ initialRange }) {
         <button className={`${buttonClass} self-end`} type="button" onClick={() => setRevision(value => value + 1)}>Muat ulang</button>
       </div>
       <p className="my-4 text-sm text-white/50">Ringkasan model di bawah hanya berasal dari job pada periode ini. <Link href="/admin/models" className="text-cyan-200 hover:underline">Lihat semua model dan tarif →</Link></p>
+      <p className="my-4 text-sm text-white/50">Periksa biaya tertagih dan selisih usage di <Link href="/admin/provider-billing" className="text-cyan-200 hover:underline">Billing provider →</Link></p>
       {error && <div role="alert" className={adminStyles.error}>{error}</div>}
       {!data && !error && <p role="status" className={adminStyles.loading}>Memuat laporan…</p>}
       {data && <EconomicsReport data={data} onPage={setPage} />}

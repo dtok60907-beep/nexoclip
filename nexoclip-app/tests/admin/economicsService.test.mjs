@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+test('Economics accepts explicit environment filters and rejects arbitrary SQL-like input',()=>{
+  for(const environment of ['all','production','development','unclassified'])assert.equal(economicsFilters({environment}).environment,environment);
+  assert.throws(()=>economicsFilters({environment:"production' OR true"}),error=>error.status===400);
+});
 import { createEconomicsService, economicsFilters, isPlatformOperator, mapEconomicsTotals } from '../../src/services/economicsService.js';
 
 const env = { NEXOCLIP_OPERATOR_USER_IDS: ' operator-a, operator-b, ' };

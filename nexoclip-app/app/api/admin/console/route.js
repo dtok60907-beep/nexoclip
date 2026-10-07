@@ -1,8 +1,9 @@
+import { requirePlatformOperator } from '../../../../src/lib/auth/platformOperator.js';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { adminConsoleService } from '../../../../src/services/adminConsoleService.js';
 
-export function createAdminConsoleGetHandler({ resolveContext = resolveTenantContext, service = adminConsoleService } = {}) {
+export function createAdminConsoleGetHandler({ resolveContext = resolveTenantContext, service = adminConsoleService, env = process.env } = {}) {
   return async function GET(request) {
     const headers = { 'Cache-Control': 'private, no-store' };
     try {
@@ -10,6 +11,7 @@ export function createAdminConsoleGetHandler({ resolveContext = resolveTenantCon
       const workspaceId = request.headers.get('x-workspace-id');
       if (!workspaceId) return Response.json({ error: 'workspace_id is required' }, { status: 400, headers });
       const tenant = await resolveContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId });
+      requirePlatformOperator(tenant.user.id, env);
       const data = await service.read({ userId: tenant.user.id, workspaceId: tenant.workspace.id, section: url.searchParams.get('section') || 'overview', input: Object.fromEntries(url.searchParams) });
       return Response.json(data, { headers });
     } catch (error) {

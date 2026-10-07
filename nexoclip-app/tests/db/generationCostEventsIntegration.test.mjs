@@ -25,6 +25,7 @@ test('append-only cost facts deduplicate resumed requests and keep failed, fallb
     const migration = await readFile(new URL('../../src/db/migrations/031_generation_cost_events.sql', import.meta.url), 'utf8');
     await client.query(migration);
     await client.query(migration);
+    await client.query(await readFile(new URL('../../src/db/migrations/039_generation_provider_account.sql',import.meta.url),'utf8'));
     const workspaceId = randomUUID();
     const otherWorkspaceId = randomUUID();
     const generationId = randomUUID();

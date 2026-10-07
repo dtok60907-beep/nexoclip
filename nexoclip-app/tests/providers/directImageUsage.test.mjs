@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openAIImageUsage, googleImageUsage, createOpenAIImageAdapter, createBytePlusImageAdapter } from '../../src/providers/direct/imageAdapters.js';
+test('BytePlus failed HTTP request preserves response identity for cost reconciliation',async()=>{
+  const adapter=createBytePlusImageAdapter({apiKey:'fake',baseUrl:'https://provider.test',fetch:async()=>new Response(JSON.stringify({error:{message:'Rejected'}}),{status:400,headers:{'x-tt-logid':'failed-request-123'}})});
+  await assert.rejects(adapter.generate({model:'seedream-test',prompt:'test'}),error=>error.providerRequestId==='failed-request-123' && error.status===400);
+});
 
 test('direct image usage distinguishes explicit zero from absent or invalid token counts', () => {
   assert.deepEqual(openAIImageUsage({}), {});

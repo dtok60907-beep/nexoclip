@@ -1,17 +1,10 @@
 import { getPool } from '../db/pool.js';
 import { getEconomicsReport } from '../repositories/economicsRepository.js';
+import { isPlatformOperator, operatorError } from '../lib/auth/platformOperator.js';
+export { isPlatformOperator, operatorError } from '../lib/auth/platformOperator.js';
 
 const DAY_MS = 86_400_000;
 const MAX_PERIOD_DAYS = 366;
-
-export function operatorError() {
-  return Object.assign(new Error('Platform operator access required'), { status: 403, code: 'PLATFORM_OPERATOR_REQUIRED' });
-}
-
-export function isPlatformOperator(userId, env = process.env) {
-  if (typeof userId !== 'string' || !userId) return false;
-  return String(env.NEXOCLIP_OPERATOR_USER_IDS || '').split(',').map((id) => id.trim()).filter(Boolean).includes(userId);
-}
 
 function inputError(message) {
   return Object.assign(new Error(message), { status: 400, code: 'INVALID_ECONOMICS_QUERY' });
@@ -51,6 +44,10 @@ export function economicsFilters(input = {}, now = new Date()) {
     page: positiveInteger(input.page, 'page', 1, 100000),
     pageSize: positiveInteger(input.pageSize, 'pageSize', 25, 100),
   };
+  if (input.environment) {
+    if (!['all','development','production','unclassified'].includes(input.environment)) throw inputError('Lingkungan tidak valid');
+    filters.environment=input.environment;
+  }
   for (const key of ['model', 'provider']) {
     if (input[key] !== undefined && input[key] !== '') {
       if (typeof input[key] !== 'string' || input[key].length > 160) throw inputError(`${key} is invalid`);
@@ -111,11 +108,11 @@ export function createEconomicsService({ repository, env = process.env, now = ()
       const data = await repository({ workspaceId, ...filters });
       const total = number(data.total);
       return {
-        period: { since: filters.since, until: filters.until, basis: 'terminal_job' }, groupBy: filters.groupBy,
+        period: { since: filters.since, until: filters.until, basis: 'terminal_job' }, groupBy: filters.groupBy,environment:filters.environment || 'all',
         totals: { ...mapEconomicsTotals(data.totals), excludedSandboxJobs: number(data.excludedSandboxJobs) },
         breakdown: (data.breakdown || []).map((row) => ({ key: row.group_key || '(unknown)', ...mapEconomicsTotals(row) })),
         items: (data.items || []).map((row) => ({
-          id: row.id, model: row.model, provider: row.provider || null, kind: row.kind, status: row.status,
+          id: row.id, model: row.model, provider: row.provider || null, kind: row.kind, status: row.status,environment:row.environment || 'unclassified',
           settlementStatus: row.settlement_status, cohortAt: row.cohort_at, ...mapEconomicsTotals(row),
         })),
         pagination: { page: filters.page, pageSize: filters.pageSize, total, totalPages: total ? Math.ceil(total / filters.pageSize) : 0 },

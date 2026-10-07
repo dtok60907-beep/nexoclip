@@ -1,12 +1,14 @@
+import { requirePlatformOperator } from '../../../../src/lib/auth/platformOperator.js';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { getCurrentSession } from '../../../../src/services/authService.js';
 import { backofficeService } from '../../../../src/services/backofficeService.js';
-export function createBackofficeHandlers({ sessionLookup=getCurrentSession,service=backofficeService }={}) {
+export function createBackofficeHandlers({ sessionLookup=getCurrentSession,service=backofficeService,env=process.env }={}) {
  const headers={'Cache-Control':'private, no-store','Vary':'Cookie'};
  const handle=method=>async request=>{
   try {
    const session=await sessionLookup(request.cookies.get(SESSION_COOKIE)?.value);
    if(!session)return Response.json({error:'Authentication required'},{status:401,headers});
+   requirePlatformOperator(session.user_id,env);
    if(method==='POST'){
     if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origin tidak valid'},{status:403,headers});
     if(!request.headers.get('content-type')?.startsWith('application/json'))return Response.json({error:'JSON diperlukan'},{status:415,headers});

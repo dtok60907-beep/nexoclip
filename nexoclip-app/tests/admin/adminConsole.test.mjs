@@ -18,7 +18,7 @@ test('filters reject invalid dates, pagination, IDs and statuses', () => {
 test('route uses authenticated workspace and actor, not query identities', async () => {
   let received;
   const service = createAdminConsoleService({ env, repository: { list: async (...input) => { received = input; return { items: [], pagination: {} }; } } });
-  const handler = createAdminConsoleGetHandler({ service, resolveContext: async () => ({ user: { id: 'operator' }, workspace: { id: 'verified' } }) });
+  const handler = createAdminConsoleGetHandler({ env, service, resolveContext: async () => ({ user: { id: 'operator' }, workspace: { id: 'verified' } }) });
   const request = new Request('http://app/api/admin/console?section=jobs&userId=forged&workspace_id=forged', { headers: { 'x-workspace-id': 'untrusted' } }); request.cookies = { get: () => ({ value: 'token' }) };
   const response = await handler(request);
   assert.equal(response.status, 200); assert.equal(received[0], 'verified'); assert.equal(response.headers.get('cache-control'), 'private, no-store');

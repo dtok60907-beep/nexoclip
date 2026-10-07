@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { deploymentEnvironment } from '../../src/lib/deploymentEnvironment.js';
 import assert from 'node:assert/strict';
 import { createImageGeneration, createVimaxGeneration, findGeneration, findGenerationByIdempotencyKey } from '../../src/repositories/generationRepository.js';
 
@@ -13,7 +14,7 @@ test('creates a queued image generation scoped to a workspace', async () => {
     workspaceId: 'w1', createdByUserId: 'u1', projectId: 'p1', prompt: 'fox', model: 'flux-dev', parameters: { aspectRatio: '1:1' },
   });
   assert.equal(generation.status, 'queued');
-  assert.deepEqual(client.calls[0].values, ['w1', 'u1', 'p1', 'image', 'fox', 'flux-dev', '{"aspectRatio":"1:1"}']);
+  assert.deepEqual(client.calls[0].values, ['w1', 'u1', 'p1', 'image', 'fox', 'flux-dev', '{"aspectRatio":"1:1"}',deploymentEnvironment()]);
   assert.match(client.calls[0].text, /INSERT INTO generation_jobs/);
   assert.match(client.calls[0].text, /created_by_user_id/);
   assert.match(client.calls[0].text, /RETURNING[\s\S]*estimated_provider_cost_usd, pricing_snapshot/);
@@ -31,9 +32,9 @@ test('stores the USD estimate and accepted pricing snapshot in the reserved job 
   assert.equal(client.calls.length, 1, 'quote and reservation fields must be written in one INSERT');
   assert.deepEqual(client.calls[0].values, [
     'w1', 'u1', 'p1', 'image', 'fox', 'flux-dev', '{}', 'request-1', 1.24, 'pv1', 'ledger-1',
-    0.005, JSON.stringify(snapshot),
+    0.005, JSON.stringify(snapshot),deploymentEnvironment(),
   ]);
-  assert.match(client.calls[0].text, /reservation_ledger_id, estimated_provider_cost_usd, pricing_snapshot\)/);
+  assert.match(client.calls[0].text, /reservation_ledger_id, estimated_provider_cost_usd, pricing_snapshot,environment\)/);
   assert.match(client.calls[0].text, /\$11, \$12, \$13::jsonb/);
 });
 
@@ -43,7 +44,7 @@ test('keeps optional quote fields unknown for a legacy reserved caller', async (
     workspaceId: 'w1', projectId: null, prompt: 'fox', model: 'flux-dev', parameters: {},
     idempotencyKey: 'request-1', estimatedCost: 1, pricingVersionId: 'pv1', reservationLedgerId: 'ledger-1',
   });
-  assert.deepEqual(client.calls[0].values.slice(-2), [null, null], 'SQL NULL must not become a JSON null snapshot');
+  assert.deepEqual(client.calls[0].values.slice(11,13), [null, null], 'SQL NULL must not become a JSON null snapshot');
 });
 
 test('preserves a known zero provider estimate', async () => {
@@ -53,7 +54,7 @@ test('preserves a known zero provider estimate', async () => {
     idempotencyKey: 'request-1', estimatedCost: 0, pricingVersionId: 'pv1', reservationLedgerId: null,
     estimatedProviderCostUsd: 0, pricingSnapshot: {},
   });
-  assert.deepEqual(client.calls[0].values.slice(-2), [0, '{}']);
+  assert.deepEqual(client.calls[0].values.slice(11,13), [0, '{}']);
 });
 
 test('creates a ViMax generation with explicit durable-kind fields', async () => {
@@ -69,7 +70,7 @@ test('creates a ViMax generation with explicit durable-kind fields', async () =>
   assert.doesNotMatch(client.calls[0].text.split('RETURNING')[0], /estimated_provider_cost_usd|pricing_snapshot/);
   assert.deepEqual(client.calls[0].values, [
     'w1', 'u1', null, 'vimax_render_video', 'Render ViMax storyboard video', 'vimax', '{"sessionId":"s1","input":{}}',
-    'request-1', 0, 'pv1', 'ledger-1', 's1', 'vimax',
+    'request-1', 0, 'pv1', 'ledger-1', 's1', 'vimax',deploymentEnvironment(),
   ]);
 });
 
