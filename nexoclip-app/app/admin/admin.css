@@ -1,0 +1,9 @@
+.admin-console table { width: 100%; text-align: left; font-size: 0.875rem; }
+.admin-console thead { background: rgba(255,255,255,.025); color: rgba(255,255,255,.55); font-size: .75rem; }
+.admin-console th { padding: 1rem; white-space: nowrap; font-weight: 500; }
+.admin-console td { padding: 1rem; }
+.admin-console tbody tr { border-top: 1px solid rgba(255,255,255,.08); }
+.admin-console tbody tr:hover { background: rgba(255,255,255,.025); }
+.admin-console td[colspan] { padding: 2rem 1rem; font-size: .875rem; color: rgba(255,255,255,.5); }
+.admin-console button:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+.admin-console input[type="date"] { color-scheme: dark; }

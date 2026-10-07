@@ -33,3 +33,13 @@ test('returns durable queued job when publication is deferred', async () => {
   assert.equal(response.status, 201);
   assert.equal((await response.json()).generation.id, 'g1');
 });
+
+test('customer response includes reserved credits without exposing internal COGS', async () => {
+  const handler = createGenerationsPostHandler({
+    resolveContext: async () => ({ user: { id: 'u1' }, workspace: { id: 'w1' } }),
+    reserve: async () => ({ id: 'g1', estimated_cost: '6.4', estimated_provider_cost_usd: '0.04', pricing_snapshot: { markupMultiplier: 1.6 } }),
+    publish: async () => {}, pool: {},
+  });
+  const response = await handler(request({ prompt: 'fox', model: 'model-1' }));
+  assert.deepEqual((await response.json()).generation, { id: 'g1', estimated_cost: '6.4' });
+});

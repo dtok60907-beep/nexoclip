@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { saasFetch } from '../../src/lib/saas/api.js';
 import { getAuthRequest, validateAuthFields } from '../../src/lib/saas/authForm.js';
+import { postLoginDestination, safeAuthReturnTo } from '../../src/lib/saas/authDestination.js';
 import AuthShell, {
   AuthAlert, AuthDivider, AuthLegal, PasswordToggle, inputClass, labelClass, primaryButtonClass, secondaryButtonClass,
 } from './AuthShell.js';
@@ -27,7 +28,7 @@ function readQuery() {
   const params = new URLSearchParams(window.location.search);
   const next = params.get('next');
   return {
-    returnTo: next?.startsWith('/') && !next.startsWith('//') ? next : '/studio',
+    returnTo: safeAuthReturnTo(next),
     urlError: URL_ERRORS[params.get('error')] || null,
   };
 }
@@ -51,8 +52,8 @@ export default function LoginForm() {
     setError(null);
     try {
       const { path, options } = getAuthRequest('login', values);
-      await saasFetch(path, options);
-      router.push(returnTo);
+      const result = await saasFetch(path, options);
+      router.push(postLoginDestination(result, returnTo));
     } catch (cause) {
       setError(cause?.status === 401 ? 'Email or password is incorrect.' : cause?.message || 'We could not sign you in. Please try again.');
       setLoading(false);

@@ -11,6 +11,7 @@ import { recoverQueuedGenerations, generationQueueName } from './generationQueue
 import { createGenerationProcessor } from './generationWorker.js';
 import { recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 import { recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
+import { recordGenerationCostObservation } from '../services/generationCostService.js';
 
 // A worker killed mid-job (deploys restart this service) leaves the job
 // 'running'. Recover it once its lease has been expired for a grace period;
@@ -42,6 +43,7 @@ export async function createVideoWorker({
   recoverExpired = recoverExpiredGenerationJobs, releaseCredits = releaseGenerationReservation,
   settleUnreserved = settleUnreservedGeneration,
   persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
+  recordCost = recordGenerationCostObservation,
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   findBytePlusAssetLink: findAssetLink = findBytePlusAssetLink,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
@@ -67,7 +69,7 @@ export async function createVideoWorker({
   const processor = createGenerationProcessor({
     pool,
     handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage), findBytePlusAssetLink: findAssetLink, env, maxPolls: config.maxPolls, pollIntervalMs: config.pollIntervalMs }),
-    provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs,
+    provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs, recordCost,
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
   let closed = false;

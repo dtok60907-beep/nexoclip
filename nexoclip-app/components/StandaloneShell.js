@@ -504,7 +504,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
     async function restoreSaaSSession() {
       try {
-        const sessionResponse = await fetch('/api/auth/session', { credentials: 'include' });
+        const sessionResponse = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
         const session = await sessionResponse.json();
         if (!session.authenticated) {
           if (!cancelled) router.replace('/login');
@@ -718,7 +718,7 @@ export default function StandaloneShell({ initialTab, children }) {
             >
               ?
             </button>
-            <AccountMenu />
+            <AccountMenu showAdminLink />
           </div>
         </header>
       )}

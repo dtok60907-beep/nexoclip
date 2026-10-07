@@ -24,5 +24,5 @@ test('records estimated and actual provider usage without credentials', async ()
     estimatedCost: 0.1, actualCost: 0.12, units: { seconds: 4 }, rawUsage: { total_cost: 0.12 },
   });
   assert.match(client.calls[0].text, /ON CONFLICT \(workspace_id, generation_job_id, provider_request_id\)/);
-  assert.deepEqual(client.calls[0].values, ['w1', 'g1', 'muapi', 'req1', 0.1, 0.12, '{"seconds":4}', '{"total_cost":0.12}']);
+  assert.deepEqual(client.calls[0].values, ['w1', 'g1', 'muapi', 'req1', 0.1, 0.12, '{"seconds":4}', '{"total_cost":0.12}', 'USD', 'reported']);
 });

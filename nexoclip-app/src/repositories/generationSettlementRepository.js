@@ -22,9 +22,24 @@ export async function settleUnreservedGeneration(client, workspaceId, generation
 
 export async function findPendingTerminalGenerations(pool) {
   const result = await pool.query(
-    `SELECT id, workspace_id, status, reservation_ledger_id
-     FROM generation_jobs
-     WHERE settlement_status = 'pending' AND status IN ('succeeded', 'failed')`,
+    `SELECT generation.id, generation.workspace_id, generation.status, generation.reservation_ledger_id,
+            generation.kind, generation.model, generation.parameters, generation.estimated_cost,
+            generation.pricing_snapshot,
+            usage.actual_cost AS provider_actual_cost, usage.cost_currency AS provider_cost_currency,
+            usage.cost_source AS provider_cost_source, usage.raw_usage AS provider_raw_usage
+     FROM generation_jobs generation
+     LEFT JOIN LATERAL (
+       SELECT actual_cost, cost_currency, cost_source, raw_usage
+       FROM provider_usage usage
+       WHERE usage.workspace_id = generation.workspace_id
+         AND usage.generation_job_id = generation.id
+         AND usage.provider = COALESCE(generation.provider, 'muapi')
+         AND usage.provider_request_id = COALESCE(generation.provider_request_id,
+               COALESCE(generation.provider, 'muapi') || ':' || generation.id::text)
+       ORDER BY usage.updated_at DESC, usage.id DESC
+       LIMIT 1
+     ) usage ON generation.status = 'succeeded'
+     WHERE generation.settlement_status = 'pending' AND generation.status IN ('succeeded', 'failed')`,
   );
   return result.rows;
 }

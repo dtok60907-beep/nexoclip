@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getAuthRequest, validateAuthFields } from '../../src/lib/saas/authForm.js';
+import { postLoginDestination } from '../../src/lib/saas/authDestination.js';
 
 test('validates required email and password fields', () => {
   assert.deepEqual(validateAuthFields({ email: '', password: '' }), {
@@ -13,8 +14,9 @@ test('validates required email and password fields', () => {
   });
 });
 
-test('successful auth redirects to the existing studio entry point', () => {
-  assert.equal('/studio', '/studio');
+test('normal auth keeps the studio entry point and trusted operators enter economics', () => {
+  assert.equal(postLoginDestination({ user: { isPlatformOperator: false } }), '/studio');
+  assert.equal(postLoginDestination({ user: { isPlatformOperator: true } }), '/admin/economics');
 });
 
 test('builds login and register requests without credentials or provider keys', () => {

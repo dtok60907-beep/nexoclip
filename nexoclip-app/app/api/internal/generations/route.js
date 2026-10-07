@@ -1,6 +1,6 @@
 import { getPool } from '../../../../src/db/pool.js';
 import { getDefaultWorkspace } from '../../../../src/services/workspaceService.js';
-import { createImageGenerationJobWithReservation, getGenerationJob } from '../../../../src/services/generationService.js';
+import { createImageGenerationJobWithReservation, getGenerationJob, toPublicGeneration } from '../../../../src/services/generationService.js';
 import { createStorage } from '../../../../src/services/assetService.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../../src/queue/bullmqGenerationQueue.js';
@@ -77,7 +77,7 @@ export function createInternalGenerationHandler({
       } catch (error) {
         logError({ event: 'generation_publication_deferred', generationId: generation.id, errorName: error?.name || 'Error', errorCode: error?.code || null });
       }
-      return Response.json({ generation }, { status: 201 });
+      return Response.json({ generation: toPublicGeneration(generation) }, { status: 201 });
     }
 
     if (typeof body.generationId !== 'string' || !body.generationId) {
@@ -102,7 +102,7 @@ export function createInternalGenerationHandler({
       }, { userId: body.userId, allowLegacyCanvasReferences: true });
       try { await publish({ pool, kind: 'video' }); }
       catch (error) { logError({ event: 'generation_publication_deferred', generationId: finalGeneration.id, errorName: error?.name || 'Error', errorCode: error?.code || null }); }
-      return Response.json({ generation: finalGeneration }, { status: 201 });
+      return Response.json({ generation: toPublicGeneration(finalGeneration) }, { status: 201 });
     }
     if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
     return Response.json({ generation: canvasGeneration(generation, workspace.id) });
@@ -122,7 +122,7 @@ export function createInternalGenerationHandler({
 
 function canvasGeneration(generation, workspaceId) {
   return {
-    ...generation,
+    ...toPublicGeneration(generation),
     outputs: (generation.outputs || []).map((output) => ({
       ...output,
       download: { url: `/api/assets/${output.assetId}/download?workspace_id=${encodeURIComponent(workspaceId)}` },

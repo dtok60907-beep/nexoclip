@@ -62,6 +62,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      NEXOCLIP_OPERATOR_USER_IDS: ${NEXOCLIP_OPERATOR_USER_IDS:-}
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
     depends_on:
       nexoclip-postgres:

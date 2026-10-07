@@ -53,9 +53,9 @@ function providerFailure(status) {
   });
 }
 
-export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest }) {
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest, onProviderUsage = null }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
-  const submitToProvider = async (job) => {
+  const submitToProvider = async (job, observe) => {
     let hasTrustedAsset = false;
     const trustedMappings = [];
     const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
@@ -103,7 +103,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     if (frameTask) request.frameTask = true;
     let submitted;
     try {
-      submitted = await providerRouter.submitVideo(hasTrustedAsset ? markTrustedAssetRequest(request) : request);
+      submitted = await providerRouter.submitVideo(hasTrustedAsset ? markTrustedAssetRequest(request) : request,
+        observe ? { onProviderUsage: observe } : undefined);
     } catch (error) {
       if (!error?.assetNotFound || trustedMappings.length === 0) throw error;
       await Promise.all(trustedMappings.map(mapping => markBytePlusAssetLinkStale(pool, {
@@ -143,14 +144,24 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     }
   };
 
-  return async (job) => {
+  return async (job, _message, context = {}) => {
+    const observer = context.onProviderUsage || onProviderUsage;
+    let latestObservation = null;
+    const observe = observer ? async (observation) => {
+      latestObservation = observation;
+      return observer(observation);
+    } : null;
     // A job that already reached the provider (its worker died mid-poll, e.g.
     // during a deploy) resumes polling that same task instead of submitting
     // and paying for the generation again.
     const resumed = job.provider_request_id
       ? { provider: job.provider || 'byteplus', providerRequestId: job.provider_request_id, usage: {} }
       : null;
-    const { provider, providerRequestId, usage } = resumed || await submitToProvider(job);
+    const { provider, providerRequestId, usage } = resumed || await submitToProvider(job, observe);
+    const dispatchId = latestObservation?.dispatchId || randomUUID();
+    let observedUsage = usage;
+    const observeRequest = observe ? (eventType) => observe({ provider, providerRequestId, dispatchId, eventType, usage: observedUsage }) : null;
+    if (observeRequest) await observeRequest('submitted');
     if (!resumed && job.claim_token) {
       try {
         await recordProviderRequest(pool, { generationId: job.id, claimToken: job.claim_token, provider, providerRequestId });
@@ -159,35 +170,52 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
       }
     }
     let status;
-    for (let attempt = 0; attempt < maxPolls; attempt += 1) {
-      status = await providerRouter.pollVideo(provider, providerRequestId);
-      if (status?.status === 'completed') break;
-      if (TERMINAL_FAILURES.has(status?.status)) throw providerFailure(status);
-      await sleep(pollIntervalMs);
-    }
-    if (status?.status !== 'completed') throw Object.assign(new Error('Video provider generation timed out'), { code: 'GENERATION_TIMEOUT' });
-    const output = await providerRouter.downloadVideo(provider, providerRequestId, 0);
-    const key = `${job.workspace_id}/${randomUUID()}`;
-    const contentType = output.contentType || 'video/mp4';
-    if (typeof storage.createUploadUrl === 'function') {
-      const upload = await storage.createUploadUrl({ key, contentType });
-      await storage.put(upload.url || upload, output.buffer, contentType);
-    } else {
-      await storage.put(key, output.buffer, contentType);
-    }
-    const client = await pool.connect();
+    let completedAtProvider = false;
+    let terminalAtProvider = false;
     try {
-      const asset = await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}.mp4`, contentType, sizeBytes: output.buffer.length });
-      const outputs = [{ assetId: asset.id }];
-      // Output 2: the last frame, kept so the next shot can start from it.
-      const lastFrame = job.parameters?.returnLastFrame ? await saveLastFrame(job, status, client) : null;
-      if (lastFrame) outputs.push({ assetId: lastFrame.id });
-      // BytePlus reports the billed tokens on the finished task.
-      return { status: 'succeeded', provider, providerRequestId, outputs, usage: { ...usage, ...(status?.usage && typeof status.usage === 'object' ? status.usage : {}) } };
-    } finally { client.release(); }
+      for (let attempt = 0; attempt < maxPolls; attempt += 1) {
+        status = await providerRouter.pollVideo(provider, providerRequestId);
+        if (status?.usage && typeof status.usage === 'object') observedUsage = { ...observedUsage, ...status.usage };
+        if (status?.status === 'completed') {
+          completedAtProvider = true;
+          terminalAtProvider = true;
+          if (observeRequest) await observeRequest('succeeded');
+          break;
+        }
+        if (TERMINAL_FAILURES.has(status?.status)) terminalAtProvider = true;
+        if (observeRequest) await observeRequest(terminalAtProvider ? 'failed' : 'poll');
+        if (TERMINAL_FAILURES.has(status?.status)) throw providerFailure(status);
+        await sleep(pollIntervalMs);
+      }
+      if (status?.status !== 'completed') throw Object.assign(new Error('Video provider generation timed out'), { code: 'GENERATION_TIMEOUT' });
+      const output = await providerRouter.downloadVideo(provider, providerRequestId, 0);
+      const key = `${job.workspace_id}/${randomUUID()}`;
+      const contentType = output.contentType || 'video/mp4';
+      if (typeof storage.createUploadUrl === 'function') {
+        const upload = await storage.createUploadUrl({ key, contentType });
+        await storage.put(upload.url || upload, output.buffer, contentType);
+      } else {
+        await storage.put(key, output.buffer, contentType);
+      }
+      const client = await pool.connect();
+      try {
+        const asset = await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}.mp4`, contentType, sizeBytes: output.buffer.length });
+        const outputs = [{ assetId: asset.id }];
+        // Output 2: the last frame, kept so the next shot can start from it.
+        const lastFrame = job.parameters?.returnLastFrame ? await saveLastFrame(job, status, client) : null;
+        if (lastFrame) outputs.push({ assetId: lastFrame.id });
+        // BytePlus reports the billed tokens on the finished task.
+        return { status: 'succeeded', provider, providerRequestId, outputs, usage: observedUsage };
+      } finally { client.release(); }
+    } catch (error) {
+      if (error?.usage && typeof error.usage === 'object') observedUsage = { ...observedUsage, ...error.usage };
+      if (observeRequest) await observeRequest(error?.code === 'GENERATION_TIMEOUT' ? 'timeout'
+        : (completedAtProvider ? 'output_failed' : (terminalAtProvider ? 'failed' : 'interrupted')));
+      throw error;
+    }
   };
 }
 
-export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env, maxPolls, pollIntervalMs }) {
-  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter, findBytePlusAssetLink, env, ...(maxPolls ? { maxPolls } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}) });
+export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env, maxPolls, pollIntervalMs, onProviderUsage = null }) {
+  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter, findBytePlusAssetLink, env, onProviderUsage, ...(maxPolls ? { maxPolls } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}) });
 }

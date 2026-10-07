@@ -1,6 +1,7 @@
 import { getPool } from '../db/pool.js';
 import { createImageGeneration, createVimaxGeneration, findGeneration, findGenerationByIdempotencyKey } from '../repositories/generationRepository.js';
 import { createCreditAccount, insertCreditEntry, lockCreditAccount, updateCreditBalance } from '../repositories/creditRepository.js';
+import { reserveCreditLotsInTransaction } from './creditLotService.js';
 import { findPricingRule } from '../repositories/pricingRepository.js';
 import { estimateCost } from './pricingService.js';
 import { estimateGenerationCredits } from './generationPricing.js';
@@ -203,6 +204,8 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
     await enforceGenerationLimits(client, workspaceId, Number(estimate.amount));
     await createCreditAccount(client, workspaceId);
     const account = await lockCreditAccount(client, workspaceId);
+    const concurrentExisting = await findGenerationByIdempotencyKey(client, workspaceId, input.idempotencyKey);
+    if (concurrentExisting) { await client.query('COMMIT'); return concurrentExisting; }
     const balance = Number(account.balance);
     const cost = Number(estimate.amount);
     if (balance < cost) throw new Error('Insufficient credits');
@@ -216,7 +219,14 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
     const job = await createImageGeneration(client, {
       workspaceId, createdByUserId: userId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
+      estimatedProviderCostUsd: modelPrice.usd ?? null,
+      pricingSnapshot: modelPrice.pricingSnapshot ? {
+        ...modelPrice.pricingSnapshot,
+        pricingVersionId: estimate.pricingVersionId,
+        pricingVersion: estimate.pricingVersion,
+      } : null,
     });
+    await reserveCreditLotsInTransaction(client, { workspaceId, generationId: job.id, credits: estimate.amount });
     await client.query('COMMIT');
     return job;
   } catch (error) { await client.query('ROLLBACK'); throw error; }
@@ -242,6 +252,8 @@ export async function createVimaxGenerationJobWithReservation(pool, workspaceId,
     if (cost !== 0) {
       await createCreditAccount(client, workspaceId);
       const account = await lockCreditAccount(client, workspaceId);
+      const concurrentExisting = await findGenerationByIdempotencyKey(client, workspaceId, input.idempotencyKey);
+      if (concurrentExisting) { await client.query('COMMIT'); return concurrentExisting; }
       const balance = Number(account.balance);
       if (balance < cost) throw new Error('Insufficient credits');
       const nextBalance = balance - cost;
@@ -257,6 +269,7 @@ export async function createVimaxGenerationJobWithReservation(pool, workspaceId,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger?.id || null,
       vimaxSessionId: validated.parameters.sessionId,
     });
+    if (ledger) await reserveCreditLotsInTransaction(client, { workspaceId, generationId: job.id, credits: estimate.amount });
     await client.query('COMMIT');
     return job;
   } catch (error) {
@@ -279,4 +292,12 @@ export async function getGenerationJob(workspaceId, generationId, storage = null
       download: await storage.createDownloadUrl({ key: output.storageKey }),
     }))),
   };
+}
+
+// COGS and the commercial rate card are internal accounting data. Keep the
+// existing response shape for customer fields while withholding new costs.
+export function toPublicGeneration(generation) {
+  if (!generation) return generation;
+  const { pricing_snapshot, estimated_provider_cost_usd, ...publicGeneration } = generation;
+  return publicGeneration;
 }

@@ -80,6 +80,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
+      NEXOCLIP_OPERATOR_USER_IDS: ${NEXOCLIP_OPERATOR_USER_IDS:-}
       DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
       SPITE_OWNER_USER_ID: ${SPITE_OWNER_USER_ID}
     depends_on:
