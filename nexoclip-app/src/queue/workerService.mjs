@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { waitForMigrations } from '../db/migrate.js';
 import { createImageWorker } from './imageWorker.mjs';
 import { createVideoWorker } from './videoWorker.mjs';
 
@@ -7,6 +8,7 @@ const createWorker = kind === 'image' ? createImageWorker : kind === 'video' ? c
 
 if (!createWorker) throw new Error('GENERATION_WORKER_KIND must be image or video');
 
+await waitForMigrations();
 const worker = await createWorker();
 const server = http.createServer((request, response) => {
   if (request.url === '/healthz') {

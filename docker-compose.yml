@@ -254,7 +254,8 @@ services:
       HOST: 0.0.0.0
       PORT: 3007
       DATABASE_URL_SPITE: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
-      DATABASE_URL: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
+      # Login-session checks read the SaaS auth tables; Canvas data uses DATABASE_URL_SPITE.
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
       CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
       REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
@@ -267,6 +268,8 @@ services:
       spite-realtime-migrate:
         condition: service_completed_successfully
       spite-ownership-migrate:
+        condition: service_completed_successfully
+      nexoclip-migrate:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
