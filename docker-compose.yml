@@ -292,6 +292,7 @@ services:
     environment:
       NODE_ENV: production
       CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
+      NEXOCLIP_OPERATOR_USER_IDS: ${NEXOCLIP_OPERATOR_USER_IDS:-}
       DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
