@@ -1,6 +1,6 @@
 import { SESSION_COOKIE } from '../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../src/services/tenantContext.js';
-import { createImageGenerationJobWithReservation } from '../../../src/services/generationService.js';
+import { createImageGenerationJobWithReservation, toPublicGeneration } from '../../../src/services/generationService.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../src/queue/bullmqGenerationQueue.js';
 import { Queue, Worker } from 'bullmq';
@@ -44,7 +44,7 @@ export function createGenerationsPostHandler({
       } catch (error) {
         logError({ event: 'generation_publication_deferred', generationId: generation.id, errorName: error?.name || 'Error', errorCode: error?.code || null });
       }
-      return Response.json({ generation }, { status: 201 });
+      return Response.json({ generation: toPublicGeneration(generation) }, { status: 201 });
     } catch (error) { return errorResponse(error); }
   };
 }

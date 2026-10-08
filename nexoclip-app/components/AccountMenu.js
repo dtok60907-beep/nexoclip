@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 // Header account control: avatar button + dropdown (Account, Log out).
 // Self-contained — fetches the session and handles logout on its own so it can
 // drop into any header (Studio shell, AI Storyboard, …).
-export default function AccountMenu() {
+export default function AccountMenu({ admin = false, showAdminLink = false }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [open, setOpen] = useState(false);
@@ -17,7 +17,7 @@ export default function AccountMenu() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/session', { credentials: 'include' });
+        const res = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
         const session = await res.json();
         if (!cancelled && session.authenticated) setUser(session.user || null);
       } catch {
@@ -78,7 +78,7 @@ export default function AccountMenu() {
             <p className="truncate text-[13px] font-semibold text-white">{user?.displayName || 'Nexoclip user'}</p>
             {user?.email && <p className="truncate text-[11px] text-white/40">{user.email}</p>}
           </div>
-          <a
+          {!admin && <a
             href="/account"
             role="menuitem"
             className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-white/75 transition-colors hover:bg-white/[0.05] hover:text-white"
@@ -88,7 +88,8 @@ export default function AccountMenu() {
               <circle cx="12" cy="7" r="4" />
             </svg>
             Account
-          </a>
+          </a>}
+          {showAdminLink && user?.isPlatformOperator === true && <a href="/admin" role="menuitem" className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-cyan-200 transition-colors hover:bg-white/[0.05]">Buka Admin console ↗</a>}
           <button
             type="button"
             role="menuitem"

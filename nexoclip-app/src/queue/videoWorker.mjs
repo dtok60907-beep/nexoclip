@@ -11,6 +11,8 @@ import { recoverQueuedGenerations, generationQueueName } from './generationQueue
 import { createGenerationProcessor } from './generationWorker.js';
 import { recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 import { recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
+import { recordGenerationCostObservation } from '../services/generationCostService.js';
+import { deploymentEnvironment } from '../lib/deploymentEnvironment.js';
 
 // A worker killed mid-job (deploys restart this service) leaves the job
 // 'running'. Recover it once its lease has been expired for a grace period;
@@ -26,6 +28,7 @@ const DEFAULT_VIDEO_TIMEOUT_MINUTES = 30;
 const VIDEO_POLL_INTERVAL_MS = 5_000;
 
 export function videoWorkerConfig(env = process.env) {
+  deploymentEnvironment(env);
   if (!env.REDIS_URL) throw new Error('REDIS_URL is required');
   const concurrency = Number(env.VIDEO_WORKER_CONCURRENCY || 3);
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) throw new Error('VIDEO_WORKER_CONCURRENCY must be an integer between 1 and 8');
@@ -42,6 +45,7 @@ export async function createVideoWorker({
   recoverExpired = recoverExpiredGenerationJobs, releaseCredits = releaseGenerationReservation,
   settleUnreserved = settleUnreservedGeneration,
   persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
+  recordCost = recordGenerationCostObservation,
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   findBytePlusAssetLink: findAssetLink = findBytePlusAssetLink,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
@@ -67,7 +71,7 @@ export async function createVideoWorker({
   const processor = createGenerationProcessor({
     pool,
     handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage), findBytePlusAssetLink: findAssetLink, env, maxPolls: config.maxPolls, pollIntervalMs: config.pollIntervalMs }),
-    provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs,
+    provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs, recordCost:(pool,input)=>recordCost(pool,{...input,env}),
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
   let closed = false;

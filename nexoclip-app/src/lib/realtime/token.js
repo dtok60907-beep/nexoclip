@@ -23,13 +23,13 @@ function requireIdentity(value, field) {
   return value;
 }
 
-export async function issueRealtimeToken({ userId, projectId }, secret) {
+export async function issueRealtimeToken({ userId, projectId, sessionId }, secret) {
   const subject = requireIdentity(userId, 'userId');
   const roomProjectId = requireIdentity(projectId, 'projectId');
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + REALTIME_TOKEN_TTL_SECONDS;
 
-  const token = await new SignJWT({ projectId: roomProjectId })
+  const token = await new SignJWT({ projectId: roomProjectId, sessionId: requireIdentity(sessionId, 'sessionId') })
     .setProtectedHeader({ alg: REALTIME_TOKEN_ALGORITHM, typ: 'JWT' })
     .setSubject(subject)
     .setIssuer(REALTIME_TOKEN_ISSUER)
@@ -65,11 +65,16 @@ export async function verifyRealtimeToken(token, expectedProjectId, secret) {
       return null;
     }
 
+    if (typeof payload.sessionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.sessionId)) {
+      return null;
+    }
+
     if (typeof payload.sub !== 'string' || typeof payload.iat !== 'number' || typeof payload.exp !== 'number') {
       return null;
     }
 
     return {
+      sessionId: payload.sessionId,
       userId: payload.sub,
       projectId: payload.projectId,
       issuedAt: payload.iat,

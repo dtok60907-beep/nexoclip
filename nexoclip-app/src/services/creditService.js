@@ -5,8 +5,9 @@ import {
   lockCreditAccount,
   updateCreditBalance,
 } from '../repositories/creditRepository.js';
+import { debitCreditLotsInTransaction, grantCreditLotInTransaction } from './creditLotService.js';
 
-export async function appendCreditEntryInTransaction(client, { workspaceId, amount, reason, idempotencyKey, metadata = {} }) {
+export async function appendCreditEntryInTransaction(client, { workspaceId, amount, reason, idempotencyKey, metadata = {}, creditLot = null }) {
   if (!workspaceId || !idempotencyKey || !reason || !Number.isFinite(amount) || amount === 0) {
     throw new Error('Credit entry is invalid');
   }
@@ -21,9 +22,12 @@ export async function appendCreditEntryInTransaction(client, { workspaceId, amou
   if (nextBalance < 0) throw new Error('Insufficient credits');
 
   await updateCreditBalance(client, workspaceId, nextBalance);
-  return insertCreditEntry(client, {
+  const entry = await insertCreditEntry(client, {
     workspaceId, amount, balanceAfter: nextBalance, reason, idempotencyKey, metadata,
   });
+  if (amount > 0) await grantCreditLotInTransaction(client, { workspaceId, entry, credits: amount, reason, creditLot });
+  else await debitCreditLotsInTransaction(client, { workspaceId, credits: -amount });
+  return entry;
 }
 
 export async function appendCreditEntry(pool, entry) {

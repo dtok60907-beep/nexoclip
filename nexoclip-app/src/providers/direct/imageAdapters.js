@@ -39,6 +39,18 @@ function transientError(provider, error, detail) {
   return Object.assign(new Error(`${provider} image request failed${suffix}`), { provider, status: error?.status || 503, code: `${provider.toUpperCase()}_IMAGE_FAILED` });
 }
 
+function usageCount(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
+function responseRequestId(payload, response) {
+  const id = payload?.id || payload?.responseId || response.headers?.get?.('x-request-id') || response.headers?.get?.('x-tt-logid');
+  return typeof id === 'string' && id.trim() ? id.trim() : null;
+}
+
 async function readErrorDetail(response) {
   try {
     const body = await response.json();
@@ -58,23 +70,35 @@ async function fetchAsBlob(url, fetchImpl) {
 // what the provider actually used.
 export function openAIImageUsage(usage) {
   if (!usage || typeof usage !== 'object') return {};
-  return { inputTokens: Number(usage.input_tokens) || 0, imageOutputTokens: Number(usage.output_tokens) || 0 };
+  const inputTokens = usageCount(usage.input_tokens);
+  const imageOutputTokens = usageCount(usage.output_tokens);
+  return {
+    ...(inputTokens === null ? {} : { inputTokens }),
+    ...(imageOutputTokens === null ? {} : { imageOutputTokens }),
+  };
 }
 
 export function googleImageUsage(metadata) {
   if (!metadata || typeof metadata !== 'object') return {};
-  let imageOutputTokens = 0;
-  let textOutputTokens = Number(metadata.thoughtsTokenCount) || 0;
+  let imageOutputTokens = null;
+  let textOutputTokens = usageCount(metadata.thoughtsTokenCount);
   const details = Array.isArray(metadata.candidatesTokensDetails) ? metadata.candidatesTokensDetails : [];
   if (details.length) {
     for (const detail of details) {
-      if (String(detail?.modality).toUpperCase() === 'IMAGE') imageOutputTokens += Number(detail.tokenCount) || 0;
-      else textOutputTokens += Number(detail?.tokenCount) || 0;
+      const count = usageCount(detail?.tokenCount);
+      if (count === null) continue;
+      if (String(detail?.modality).toUpperCase() === 'IMAGE') imageOutputTokens = (imageOutputTokens ?? 0) + count;
+      else textOutputTokens = (textOutputTokens ?? 0) + count;
     }
   } else {
-    imageOutputTokens = Number(metadata.candidatesTokenCount) || 0;
+    imageOutputTokens = usageCount(metadata.candidatesTokenCount);
   }
-  return { inputTokens: Number(metadata.promptTokenCount) || 0, imageOutputTokens, textOutputTokens };
+  const inputTokens = usageCount(metadata.promptTokenCount);
+  return {
+    ...(inputTokens === null ? {} : { inputTokens }),
+    ...(imageOutputTokens === null ? {} : { imageOutputTokens }),
+    ...(textOutputTokens === null ? {} : { textOutputTokens }),
+  };
 }
 
 export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai.com/v1', fetch: fetchImpl = globalThis.fetch } = {}) {
@@ -100,8 +124,10 @@ export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai
     if (!response.ok) throw transientError('openai', response, await readErrorDetail(response));
     const payload = await response.json();
     const outputs = normalizeImagePayload(payload);
-    if (!outputs.length) throw Object.assign(new Error('OpenAI returned no images'), { code: 'OPENAI_INVALID_RESPONSE', status: 502 });
-    return { provider: 'openai', status: 'succeeded', outputs, usage: openAIImageUsage(payload?.usage) };
+    const providerRequestId = responseRequestId(payload, response);
+    const usage = openAIImageUsage(payload?.usage);
+    if (!outputs.length) throw Object.assign(new Error('OpenAI returned no images'), { code: 'OPENAI_INVALID_RESPONSE', status: 502, providerRequestId, usage });
+    return { provider: 'openai', status: 'succeeded', providerRequestId, outputs, usage };
   } };
 }
 
@@ -125,11 +151,15 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
         }),
       });
     } catch (error) { throw transientError('byteplus', error); }
-    if (!response.ok) throw transientError('byteplus', response, await readErrorDetail(response));
+    if (!response.ok) throw Object.assign(transientError('byteplus', response, await readErrorDetail(response)),
+      {providerRequestId:responseRequestId(null,response)});
     const payload = await response.json();
     const outputs = normalizeImagePayload(payload);
-    if (!outputs.length) throw Object.assign(new Error('BytePlus returned no images'), { code: 'BYTEPLUS_INVALID_RESPONSE', status: 502 });
-    return { provider: 'byteplus', status: 'succeeded', outputs, usage: { generated_images: Number(payload?.usage?.generated_images) || outputs.length } };
+    const providerRequestId = responseRequestId(payload, response);
+    const reportedImages = usageCount(payload?.usage?.generated_images);
+    const usage = reportedImages === null && !outputs.length ? {} : { generated_images: reportedImages ?? outputs.length };
+    if (!outputs.length) throw Object.assign(new Error('BytePlus returned no images'), { code: 'BYTEPLUS_INVALID_RESPONSE', status: 502, providerRequestId, usage });
+    return { provider: 'byteplus', status: 'succeeded', providerRequestId, outputs, usage };
   } };
 }
 
@@ -172,7 +202,9 @@ export function createGoogleImageAdapter({ apiKey, baseUrl = 'https://generative
     }
     const payload = await response.json();
     const outputs = normalizeImagePayload(payload);
-    if (!outputs.length) throw Object.assign(new Error('Google returned no images'), { code: 'GOOGLE_INVALID_RESPONSE', status: 502 });
-    return { provider: 'google', status: 'succeeded', outputs, usage: googleImageUsage(payload?.usageMetadata) };
+    const providerRequestId = responseRequestId(payload, response);
+    const usage = googleImageUsage(payload?.usageMetadata);
+    if (!outputs.length) throw Object.assign(new Error('Google returned no images'), { code: 'GOOGLE_INVALID_RESPONSE', status: 502, providerRequestId, usage });
+    return { provider: 'google', status: 'succeeded', providerRequestId, outputs, usage };
   } };
 }

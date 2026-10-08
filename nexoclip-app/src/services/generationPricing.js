@@ -5,7 +5,8 @@
 // Charge = provider cost (USD) x markup (1.6x by default) x CREDITS_PER_USD
 // x FX factor. A job reserves an upper-bound estimate up front; on success it
 // is settled at the actual provider usage when the provider reports it (the
-// difference is refunded).
+// difference is refunded). Each new quote freezes provider rates, markup and
+// FX so later price changes cannot alter an accepted customer quote.
 //
 // Sources:
 // - Seedance video and Seedream images: BytePlus ModelArk list prices.
@@ -202,6 +203,16 @@ function inputImageCount(parameters = {}) {
 }
 
 export function perSecondVideoCostUsd(model, parameters = {}) {
+  const basis = videoSecondCostBasis(model, parameters);
+  if (!basis) return null;
+  const entry = PER_SECOND_VIDEO_PRICES.find((candidate) => candidate.match.test(String(model)));
+  const duration = Number(parameters.duration);
+  const assumed = entry.sourceLength ? ASSUMED_INPUT_VIDEO_SECONDS : ASSUMED_PER_SECOND_VIDEO_SECONDS;
+  const seconds = Number.isFinite(duration) && duration > 0 ? duration : assumed;
+  return Math.max(basis.minimumUsd, basis.usdPerSecond * seconds + basis.inputImageCount * basis.usdPerInputImage);
+}
+
+function videoSecondCostBasis(model, parameters = {}) {
   const entry = PER_SECOND_VIDEO_PRICES.find((candidate) => candidate.match.test(String(model)));
   if (!entry) return null;
   const resolution = String(parameters.resolution || '1080p').toLowerCase();
@@ -209,10 +220,14 @@ export function perSecondVideoCostUsd(model, parameters = {}) {
   const tiers = entry.imageTiers && images > 0 ? entry.imageTiers
     : entry.audio ? (parameters.generateAudio === false ? entry.silent : entry.audio)
       : entry.tiers;
-  const duration = Number(parameters.duration);
-  const assumed = entry.sourceLength ? ASSUMED_INPUT_VIDEO_SECONDS : ASSUMED_PER_SECOND_VIDEO_SECONDS;
-  const seconds = Number.isFinite(duration) && duration > 0 ? duration : assumed;
-  return Math.max(entry.minimum || 0, tierPrice(tiers, resolution) * seconds + images * (entry.perInputImage || 0));
+  return {
+    type: 'video_seconds',
+    source: 'video-rate-table',
+    usdPerSecond: tierPrice(tiers, resolution),
+    minimumUsd: entry.minimum || 0,
+    usdPerInputImage: entry.perInputImage || 0,
+    inputImageCount: images,
+  };
 }
 
 export function estimateVideoCostUsd({ model, parameters = {} }) {
@@ -224,11 +239,11 @@ export function estimateVideoCostUsd({ model, parameters = {} }) {
 // OpenRouter reports the USD charge as usage.cost; BytePlus reports tokens.
 // A zero cost (a provider free quota) is not what the user is charged.
 export function actualVideoCostUsd({ model, parameters = {} }, usage = {}) {
-  const cost = Number(usage.costUsd ?? usage.cost);
-  if (Number.isFinite(cost) && cost > 0) return cost;
-  const tokens = Number(usage.completion_tokens ?? usage.total_tokens);
+  const cost = reportedCostUsd(usage);
+  if (cost > 0) return cost;
+  const tokens = usageCount(usage.completion_tokens ?? usage.total_tokens);
   const rate = seedanceRatePerMillion(model, parameters);
-  if (rate === null || !Number.isFinite(tokens) || tokens <= 0) return null;
+  if (rate === null || tokens === null || tokens <= 0) return null;
   return (tokens * rate) / 1e6;
 }
 
@@ -281,7 +296,7 @@ const OPENROUTER_IMAGE_SNAPSHOT = {
 // Output tokens per generated image, used for the reservation only (the
 // settlement uses the provider's reported usage). Upper ends of the
 // providers' published per-image token counts.
-function estimatedImageOutputTokens(model, parameters = {}) {
+export function estimatedImageOutputTokens(model, parameters = {}) {
   const id = String(model);
   const resolution = String(parameters.resolution || '1K').toUpperCase();
   if (/gemini-2\.5-flash-image/.test(id)) return 1290;
@@ -290,7 +305,7 @@ function estimatedImageOutputTokens(model, parameters = {}) {
   return 4160;
 }
 
-const ESTIMATED_INPUT_TOKENS_PER_REFERENCE = 1300;
+export const ESTIMATED_INPUT_TOKENS_PER_REFERENCE = 1300;
 
 let openRouterCache = { expiresAt: 0, prices: null };
 const OPENROUTER_TTL_MS = 60 * 60 * 1000;
@@ -298,8 +313,8 @@ const OPENROUTER_TTL_MS = 60 * 60 * 1000;
 function parsePricing(pricing = {}) {
   const out = {};
   for (const key of ['prompt', 'completion', 'image', 'image_token', 'image_output', 'request']) {
-    const value = Number(pricing[key]);
-    if (Number.isFinite(value) && value >= 0) out[key] = value;
+    const value = nonNegativeNumber(pricing[key]);
+    if (value !== null) out[key] = value;
   }
   return out;
 }
@@ -337,7 +352,7 @@ function tokenPricing(model, livePrices = {}) {
 
 export function estimateTokenImageCostUsd({ model, prompt = '', parameters = {} }, livePrices = {}) {
   const pricing = tokenPricing(model, livePrices);
-  if (!pricing) return null;
+  if (!hasImageOutputRate(pricing)) return null;
   const references = Array.isArray(parameters.referenceImages) ? parameters.referenceImages.length : 0;
   const promptTokens = Math.ceil(String(prompt).length / 3);
   // Models that list `image_token` price `image` per input image, not per token.
@@ -352,43 +367,197 @@ export function estimateTokenImageCostUsd({ model, prompt = '', parameters = {} 
 // Actual cost from the usage a provider reported. OpenRouter reports USD
 // directly; Google and OpenAI report token counts. A zero cost is not used.
 export function actualTokenImageCostUsd({ model }, usage = {}, livePrices = {}) {
-  if (Number(usage.costUsd) > 0) return Number(usage.costUsd);
+  const cost = nonNegativeNumber(usage.costUsd);
+  if (cost > 0) return cost;
   const pricing = tokenPricing(model, livePrices);
   if (!pricing) return null;
-  const imageOutput = Number(usage.imageOutputTokens) || 0;
-  const textOutput = Number(usage.textOutputTokens) || 0;
-  const input = Number(usage.inputTokens) || 0;
-  if (!imageOutput && !textOutput && !input) return null;
-  return input * (pricing.prompt || 0)
-    + imageOutput * (pricing.image_output ?? pricing.completion ?? 0)
-    + textOutput * (pricing.completion || 0)
-    + (pricing.request || 0);
+  return tokenImageUsageCostUsd(usage, pricing, false);
 }
 
 // ---------------------------------------------------------------- jobs -----
 
 // Provider cost estimate (USD) for a validated generation, or null when the
 // model has no known price (the caller then refuses the job).
-export async function estimateGenerationCostUsd({ kind, model, prompt, parameters = {} }, { fetchImpl, env = process.env } = {}) {
-  if (kind === 'video') return estimateVideoCostUsd({ model, parameters });
+async function quoteGenerationCost({ kind, model, prompt, parameters = {} }, { fetchImpl } = {}) {
+  if (kind === 'video') {
+    const usd = estimateVideoCostUsd({ model, parameters });
+    if (usd === null) return null;
+    const rate = seedanceRatePerMillion(model, parameters);
+    const costBasis = rate !== null
+      ? { type: 'video_tokens', source: 'byteplus-rate-table', usdPerMillionTokens: rate }
+      : videoSecondCostBasis(model, parameters);
+    return { usd, costBasis };
+  }
   const seedream = seedreamCostUsd(model, parameters);
-  if (seedream !== null) return seedream;
+  if (seedream !== null) return { usd: seedream, costBasis: { type: 'images', source: 'byteplus-rate-table', usdPerImage: seedream } };
   // Only OpenRouter-style ids (author/slug) can have an OpenRouter price.
   if (!OPENROUTER_IMAGE_SNAPSHOT[model] && !/^[a-z0-9-]+\/[^/\s]+$/i.test(String(model))) return null;
   const live = await loadOpenRouterImagePrices({ fetchImpl });
-  return estimateTokenImageCostUsd({ model, prompt, parameters }, live);
+  const pricing = tokenPricing(model, live);
+  if (!hasImageOutputRate(pricing)) return null;
+  return {
+    usd: estimateTokenImageCostUsd({ model, prompt, parameters }, live),
+    costBasis: { type: 'image_tokens', source: live[model] ? 'openrouter-catalog' : 'image-rate-table', rates: parsePricing(pricing) },
+  };
+}
+
+export async function estimateGenerationCostUsd(input, options = {}) {
+  return (await quoteGenerationCost(input, options))?.usd ?? null;
 }
 
 export async function estimateGenerationCredits(input, options = {}) {
-  const usd = await estimateGenerationCostUsd(input, options);
-  if (usd === null) return null;
+  const quote = await quoteGenerationCost(input, options);
+  if (!quote) return null;
+  const { usd, costBasis } = quote;
   const env = options.env || process.env;
-  return { usd, credits: usdToCredits(usd, env, await loadUsdIdrRate({ fetchImpl: options.fetchImpl, env })) };
+  const usdIdrRate = await loadUsdIdrRate({ fetchImpl: options.fetchImpl, env });
+  const credits = usdToCredits(usd, env, usdIdrRate);
+  if (costBasis.rates) Object.freeze(costBasis.rates);
+  const pricingSnapshot = Object.freeze({
+    schemaVersion: 1,
+    kind: input.kind,
+    model: input.model,
+    quotedAt: new Date(options.now ?? Date.now()).toISOString(),
+    usdIdrRate,
+    referenceUsdIdrRate: PRICING_REFERENCE_USD_IDR,
+    creditsPerUsd: CREDITS_PER_USD,
+    markupMultiplier: markupMultiplier(env),
+    estimatedProviderCostUsd: usd,
+    quotedCredits: credits,
+    costBasis: Object.freeze(costBasis),
+  });
+  return { usd, credits, pricingSnapshot };
+}
+
+// Provider-reported zero is valid COGS. Missing, nonnumeric and negative
+// amounts are unknown; never coerce null, blanks or booleans into zero.
+function nonNegativeNumber(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function reportedCostUsd(usage) {
+  return nonNegativeNumber(usage.costUsd) ?? nonNegativeNumber(usage.cost);
+}
+
+function hasImageOutputRate(pricing) {
+  return pricing && nonNegativeNumber(pricing.image_output ?? pricing.completion) !== null;
+}
+
+function usageCount(value) {
+  const count = nonNegativeNumber(value);
+  return Number.isSafeInteger(count) ? count : null;
+}
+
+function tokenImageUsageCostUsd(usage, pricing, includeZero) {
+  if (!hasImageOutputRate(pricing)) return null;
+  const keys = ['inputTokens', 'imageOutputTokens', 'textOutputTokens'];
+  const counts = keys.map((key) => usage[key] === undefined ? 0 : usageCount(usage[key]));
+  if (!keys.some((key) => usage[key] !== undefined) || counts.some((count) => count === null)) return null;
+  const [input, imageOutput, textOutput] = counts;
+  if (!includeZero && !input && !imageOutput && !textOutput) return null;
+  const cost = input * (pricing.prompt || 0)
+    + imageOutput * (pricing.image_output ?? pricing.completion ?? 0)
+    + textOutput * (pricing.completion || 0)
+    + (pricing.request || 0);
+  return nonNegativeNumber(cost);
+}
+
+function readPricingSnapshot(job) {
+  if (job.pricing_snapshot === undefined || job.pricing_snapshot === null) return null;
+  let snapshot;
+  try {
+    snapshot = typeof job.pricing_snapshot === 'string' ? JSON.parse(job.pricing_snapshot) : job.pricing_snapshot;
+  } catch {
+    throw new Error('Generation pricing snapshot is invalid');
+  }
+  const invalid = () => { throw new Error('Generation pricing snapshot is invalid'); };
+  if (!snapshot || snapshot.schemaVersion !== 1 || snapshot.kind !== job.kind || snapshot.model !== job.model) invalid();
+  for (const key of ['usdIdrRate', 'referenceUsdIdrRate', 'creditsPerUsd', 'markupMultiplier', 'estimatedProviderCostUsd', 'quotedCredits']) {
+    if (typeof snapshot[key] !== 'number' || nonNegativeNumber(snapshot[key]) === null) invalid();
+  }
+  if (!snapshot.usdIdrRate || !snapshot.referenceUsdIdrRate || !snapshot.creditsPerUsd || snapshot.markupMultiplier < 1) invalid();
+  const basis = snapshot.costBasis;
+  if (!basis || typeof basis !== 'object') invalid();
+  const basisFields = {
+    video_tokens: ['usdPerMillionTokens'],
+    video_seconds: ['usdPerSecond', 'minimumUsd', 'usdPerInputImage', 'inputImageCount'],
+    images: ['usdPerImage'],
+    image_tokens: [],
+  };
+  if (!Object.hasOwn(basisFields, basis.type) || (job.kind === 'video') !== basis.type.startsWith('video_')) invalid();
+  for (const key of basisFields[basis.type]) {
+    if (typeof basis[key] !== 'number' || nonNegativeNumber(basis[key]) === null) invalid();
+  }
+  if (basis.type === 'image_tokens') {
+    if (!basis.rates || typeof basis.rates !== 'object' || Array.isArray(basis.rates)) invalid();
+    for (const value of Object.values(basis.rates)) {
+      if (typeof value !== 'number' || nonNegativeNumber(value) === null) invalid();
+    }
+    if (!hasImageOutputRate(basis.rates)) invalid();
+  }
+  return snapshot;
+}
+
+function snapshotUsageCostUsd(snapshot, usage, includeZero) {
+  const cost = reportedCostUsd(usage);
+  if (cost !== null && (includeZero || cost > 0)) return cost;
+  const basis = snapshot.costBasis;
+  let derived = null;
+  if (basis.type === 'video_tokens') {
+    const tokens = usageCount(usage.completion_tokens ?? usage.total_tokens);
+    if (tokens !== null) derived = (tokens * basis.usdPerMillionTokens) / 1e6;
+  } else if (basis.type === 'images') {
+    const images = usageCount(usage.generated_images);
+    if (images !== null) derived = images * basis.usdPerImage;
+  } else if (basis.type === 'image_tokens') {
+    derived = tokenImageUsageCostUsd(usage, basis.rates, includeZero);
+  }
+  derived = nonNegativeNumber(derived);
+  return derived !== null && (includeZero || derived > 0) ? derived : null;
+}
+
+function snapshotUsdToCredits(usd, snapshot) {
+  const credits = usd * snapshot.markupMultiplier * snapshot.creditsPerUsd
+    * (snapshot.usdIdrRate / snapshot.referenceUsdIdrRate);
+  if (!Number.isFinite(credits) || credits < 0) throw new Error('Generation pricing snapshot is invalid');
+  return Math.ceil(credits * CREDIT_PRECISION - 1e-9) / CREDIT_PRECISION;
+}
+
+// Actual provider COGS in USD, separate from the customer credit charge.
+// Token counts may reconstruct an actual cost, but an estimate must never
+// fill an unknown provider charge. Snapshot jobs require no pricing fetch.
+export async function actualGenerationCostUsd(job, usage = {}, { fetchImpl } = {}) {
+  const snapshot = readPricingSnapshot(job);
+  if (snapshot) return snapshotUsageCostUsd(snapshot, usage, true);
+  const reported = reportedCostUsd(usage);
+  if (reported !== null) return reported;
+  const parameters = typeof job.parameters === 'string' ? JSON.parse(job.parameters) : (job.parameters || {});
+  if (job.kind === 'video') {
+    const rate = seedanceRatePerMillion(job.model, parameters);
+    const tokens = usageCount(usage.completion_tokens ?? usage.total_tokens);
+    return rate === null || tokens === null ? null : nonNegativeNumber(tokens * rate / 1e6);
+  }
+  const seedream = seedreamCostUsd(job.model, parameters);
+  if (seedream !== null) {
+    const images = usageCount(usage.generated_images);
+    return images === null ? null : nonNegativeNumber(seedream * images);
+  }
+  if (!['inputTokens', 'imageOutputTokens', 'textOutputTokens'].some((key) => usage[key] !== undefined)) return null;
+  const pricing = tokenPricing(job.model, await loadOpenRouterImagePrices({ fetchImpl }));
+  return pricing ? tokenImageUsageCostUsd(usage, pricing, true) : null;
 }
 
 // Credits to capture for a finished job, from provider usage. Returns null
 // when the provider reported nothing usable (the reservation is kept).
 export async function actualGenerationCredits(job, usage = {}, { fetchImpl, env = process.env } = {}) {
+  const snapshot = readPricingSnapshot(job);
+  if (snapshot) {
+    const usd = snapshotUsageCostUsd(snapshot, usage, false);
+    return usd === null ? null : snapshotUsdToCredits(usd, snapshot);
+  }
   const parameters = typeof job.parameters === 'string' ? JSON.parse(job.parameters) : (job.parameters || {});
   const input = { model: job.model, parameters };
   let usd = null;

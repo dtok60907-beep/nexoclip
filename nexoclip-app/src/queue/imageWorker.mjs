@@ -9,8 +9,11 @@ import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
 import { recoverQueuedGenerations, generationQueueName } from './generationQueue.js';
 import { createGenerationProcessor } from './generationWorker.js';
 import { recoverUnreservedGenerations } from '../services/generationCreditSettlementService.js';
+import { recordGenerationCostObservation } from '../services/generationCostService.js';
+import { deploymentEnvironment } from '../lib/deploymentEnvironment.js';
 
 export function imageWorkerConfig(env = process.env) {
+  deploymentEnvironment(env);
   if (!env.REDIS_URL) throw new Error('REDIS_URL is required');
   const concurrency = Number(env.IMAGE_WORKER_CONCURRENCY || 3);
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 32) throw new Error('IMAGE_WORKER_CONCURRENCY must be an integer between 1 and 32');
@@ -22,6 +25,7 @@ export async function createImageWorker({
   createQueue = createBullMqGenerationQueue, createHandler = createDefaultSaasImageHandler,
   recover = recoverQueuedGenerations, recoverUnreserved = recoverUnreservedGenerations,
   persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
+  recordCost = recordGenerationCostObservation,
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
 } = {}) {
@@ -37,7 +41,7 @@ export async function createImageWorker({
   const processor = createGenerationProcessor({
     pool,
     handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage) }),
-    provider: 'openrouter', persistResult, onError,
+    provider: 'openrouter', persistResult, onError, recordCost:(pool,input)=>recordCost(pool,{...input,env}),
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
   let closed = false;

@@ -29,6 +29,7 @@ release/
 
 # Next.js
 .next/
+.next-hydration-backup-*/
 out/
 
 # Misc

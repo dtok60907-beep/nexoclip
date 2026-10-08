@@ -16,6 +16,7 @@ export async function findActiveSession(client, tokenHash) {
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1
+       AND u.suspended_at IS NULL
        AND s.revoked_at IS NULL
        AND s.expires_at > now()
      LIMIT 1`,

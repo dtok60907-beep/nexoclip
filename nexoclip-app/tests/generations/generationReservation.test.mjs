@@ -127,3 +127,15 @@ test('refuses a model with no price instead of reserving the flat rule', async (
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
   assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
 });
+
+test('stores provider USD and immutable pricing context with the reservation, ignoring client snapshot', async () => {
+  const pool = poolFor({ balance: '1000' });
+  const snapshot = { schemaVersion: 1, usdIdrRate: 17915, quotedCredits: 6.4, estimatedProviderCostUsd: 0.04 };
+  await createImageGenerationJobWithReservation(pool, 'w1', {
+    prompt: 'fox', model: 'byteplus/seedream-4-5-251128', idempotencyKey: 'snapshot-1',
+    pricingSnapshot: { markupMultiplier: 0 }, estimatedProviderCostUsd: 0,
+  }, { userId: 'u1', priceGeneration: async () => ({ usd: 0.04, credits: 6.4, pricingSnapshot: snapshot }) });
+  const insert = pool.calls.find(({ text }) => text.includes('INSERT INTO generation_jobs'));
+  assert.equal(insert.values[11], 0.04);
+  assert.deepEqual(JSON.parse(insert.values[12]), { ...snapshot, pricingVersionId: 'pv1', pricingVersion: 3 });
+});

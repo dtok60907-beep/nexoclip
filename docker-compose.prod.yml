@@ -80,6 +80,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
+      NEXOCLIP_OPERATOR_USER_IDS: ${NEXOCLIP_OPERATOR_USER_IDS:-}
       DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
       SPITE_OWNER_USER_ID: ${SPITE_OWNER_USER_ID}
     depends_on:
@@ -107,6 +108,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      NEXOCLIP_ENVIRONMENT: production
+      BYTEPLUS_BILLING_ACCOUNT_ID: ${BYTEPLUS_BILLING_ACCOUNT_ID:-}
+      BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID: ${BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID:-}
       NEXT_PUBLIC_SPITE_URL: /canvas
       SPITE_INTERNAL_URL: http://spite:3005
       CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
@@ -236,6 +240,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      NEXOCLIP_ENVIRONMENT: production
+      BYTEPLUS_BILLING_ACCOUNT_ID: ${BYTEPLUS_BILLING_ACCOUNT_ID:-}
+      BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID: ${BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID:-}
       CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -275,6 +282,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      NEXOCLIP_ENVIRONMENT: production
+      BYTEPLUS_BILLING_ACCOUNT_ID: ${BYTEPLUS_BILLING_ACCOUNT_ID:-}
+      BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID: ${BYTEPLUS_PRODUCTION_BILLING_ACCOUNT_ID:-}
       CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
       DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0

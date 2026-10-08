@@ -42,7 +42,7 @@ export function createRealtimeTokenHandler({
     } catch {
       return Response.json({ error: 'Realtime authorization failed' }, { status: 502 });
     }
-    if (!session?.user_id) {
+    if (!session?.user_id || !UUID_PATTERN.test(String(session.id || ''))) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
@@ -103,7 +103,7 @@ export function createRealtimeTokenHandler({
 
     let issued;
     try {
-      issued = await issueToken({ userId: session.user_id, projectId }, env.REALTIME_TOKEN_SECRET);
+      issued = await issueToken({ userId: session.user_id, projectId, sessionId: session.id }, env.REALTIME_TOKEN_SECRET);
     } catch {
       return Response.json({ error: 'Realtime token issuance failed' }, { status: 500 });
     }

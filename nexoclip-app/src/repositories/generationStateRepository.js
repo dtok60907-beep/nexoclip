@@ -10,7 +10,10 @@ export async function transitionGenerationJob(pool, { workspaceId, generationId,
   const [claimedAttempt, token] = fence({ attempt, claimToken });
   const result = await pool.query(
     `UPDATE generation_jobs
-     SET status = $4, timeout_at = $5, updated_at = now()
+     SET status = $4, timeout_at = $5,
+         finished_at = CASE WHEN $4 IN ('succeeded', 'failed', 'canceled')
+                            THEN COALESCE(finished_at, now()) ELSE finished_at END,
+         updated_at = now()
      WHERE workspace_id = $1 AND id = $2 AND status = $3
        AND attempt_count = $6 AND claim_token = $7
      RETURNING id, workspace_id, status, attempt_count, max_attempts, next_attempt_at, timeout_at`,

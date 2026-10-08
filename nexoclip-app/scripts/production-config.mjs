@@ -1,3 +1,4 @@
+import { deploymentEnvironment } from '../src/lib/deploymentEnvironment.js';
 const requiredProduction = [
   'POSTGRES_PASSWORD',
   'DATABASE_URL_SPITE',
@@ -15,6 +16,8 @@ export function validateProductionEnvironment(env = process.env) {
   if (env.NODE_ENV !== 'production') return { ok: true, errors: [] };
 
   const errors = [];
+  if (env.NEXOCLIP_ENVIRONMENT!=='production') errors.push('NEXOCLIP_ENVIRONMENT must explicitly be production for production deployment');
+  try {deploymentEnvironment(env);} catch(error) {errors.push(error.message);}
   for (const name of requiredProduction) {
     if (!String(env[name] || '').trim()) errors.push(`${name} is required`);
   }

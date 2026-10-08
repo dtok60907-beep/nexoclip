@@ -1,6 +1,6 @@
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
-import { getGenerationJob } from '../../../../src/services/generationService.js';
+import { getGenerationJob, toPublicGeneration } from '../../../../src/services/generationService.js';
 import { createStorage } from '../../../../src/services/assetService.js';
 
 function workspaceId(request) {
@@ -25,7 +25,7 @@ export function createGenerationStatusHandler({
       const { generationId } = await params;
       const generation = await getGeneration(tenant.workspace.id, generationId, loadStorage());
       if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
-      return Response.json({ generation });
+      return Response.json({ generation: toPublicGeneration(generation) });
     } catch (error) { return errorResponse(error); }
   };
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  actualGenerationCredits, estimateGenerationCredits, estimateVideoCostUsd, loadOpenRouterImagePrices,
+  actualGenerationCredits, actualGenerationCostUsd, estimateGenerationCredits, estimateVideoCostUsd, loadOpenRouterImagePrices,
   resetOpenRouterPriceCache, usdToCredits, fxFactor, loadUsdIdrRate, resetUsdIdrRateCache, PRICING_REFERENCE_USD_IDR,
 } from '../../src/services/generationPricing.js';
 import { googleImageUsage, openAIImageUsage } from '../../src/providers/direct/imageAdapters.js';
@@ -212,4 +212,210 @@ test('estimates and settlements apply the live rate', async () => {
   assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, { env: weak }), 203.4);
   const priced = await estimateGenerationCredits({ kind: 'image', model: 'byteplus/seedream-4-5-251128', prompt: 'x', parameters: {} }, { env: weak });
   assert.equal(priced.credits, 7.1);
+});
+
+const noSettlementFetch = async () => { assert.fail('Snapshot settlement must not fetch provider prices or exchange rates'); };
+
+test('quotes contain immutable provider pricing, currency and sale conversion details', async () => {
+  const input = { kind: 'image', model: 'byteplus/seedream-4-5-251128', parameters: {} };
+  const quote = await estimateGenerationCredits(input, { env: FX, fetchImpl: noSettlementFetch, now: 0 });
+  assert.deepEqual(quote.pricingSnapshot, {
+    schemaVersion: 1,
+    kind: input.kind,
+    model: input.model,
+    quotedAt: '1970-01-01T00:00:00.000Z',
+    usdIdrRate: 17915,
+    referenceUsdIdrRate: 17915,
+    creditsPerUsd: 100,
+    markupMultiplier: 1.6,
+    estimatedProviderCostUsd: 0.04,
+    quotedCredits: 6.4,
+    costBasis: { type: 'images', source: 'byteplus-rate-table', usdPerImage: 0.04 },
+  });
+  assert.ok(Object.isFrozen(quote.pricingSnapshot));
+  assert.ok(Object.isFrozen(quote.pricingSnapshot.costBasis));
+  assert.throws(() => { quote.pricingSnapshot.markupMultiplier = 3; }, TypeError);
+});
+
+test('Seedance snapshots settle with the reserved rate, FX and markup after configuration changes', async () => {
+  const input = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
+  const quote = await estimateGenerationCredits(input, { env: FX, fetchImpl: noSettlementFetch });
+  // Altering job parameters cannot replace the rate selected at reservation.
+  const job = { ...input, parameters: { resolution: '1080p' }, pricing_snapshot: quote.pricingSnapshot };
+  const changed = { env: { CREDIT_MARKUP_PERCENT: '200', USD_IDR_RATE: '25000' }, fetchImpl: noSettlementFetch };
+  assert.equal(quote.pricingSnapshot.costBasis.usdPerMillionTokens, 10.7);
+  assert.equal(await actualGenerationCredits(job, { completion_tokens: 108000 }, changed), 184.9);
+  assert.equal(await actualGenerationCostUsd(job, { completion_tokens: 108000 }, changed), 1.1556);
+});
+
+test('image snapshots freeze the live token rates and never reload prices during settlement', async () => {
+  resetOpenRouterPriceCache();
+  const input = { kind: 'image', model: 'google/gemini-2.5-flash-image', prompt: '', parameters: {} };
+  const oldPrice = async () => new Response(JSON.stringify({ data: [{ id: input.model, pricing: { prompt: '0.0000003', completion: '0.0000025', image_output: '0.00003' } }] }));
+  const quote = await estimateGenerationCredits(input, { fetchImpl: oldPrice, env: FX });
+  assert.ok(Object.isFrozen(quote.pricingSnapshot.costBasis.rates));
+  assert.throws(() => { quote.pricingSnapshot.costBasis.rates.image_output = 1; }, TypeError);
+
+  resetOpenRouterPriceCache();
+  const changedPrice = async () => new Response(JSON.stringify({ data: [{ id: input.model, pricing: { prompt: '0.01', image_output: '0.1' } }] }));
+  assert.equal((await loadOpenRouterImagePrices({ fetchImpl: changedPrice }))[input.model].image_output, 0.1);
+  const job = { ...input, pricing_snapshot: JSON.stringify(quote.pricingSnapshot) };
+  const changed = { env: { USD_IDR_RATE: '25000', CREDIT_MARKUP_PERCENT: '200' }, fetchImpl: noSettlementFetch };
+  const usage = { inputTokens: 100, imageOutputTokens: 1290 };
+  close(await actualGenerationCostUsd(job, usage, changed), 0.03873, 1e-12);
+  assert.equal(await actualGenerationCredits(job, usage, changed), 6.2);
+  assert.equal(await actualGenerationCredits(job, { costUsd: 0.039 }, changed), 6.3);
+  assert.equal(await actualGenerationCredits(job, { cost: 0.039 }, changed), 6.3);
+  resetOpenRouterPriceCache();
+});
+
+test('per-image snapshots use frozen rates and quoted FX for multiple generated outputs', async () => {
+  const input = { kind: 'image', model: 'byteplus/seedream-5.0-pro-unfiltered', parameters: { resolution: '2K' } };
+  const quote = await estimateGenerationCredits(input, { env: { USD_IDR_RATE: String(PRICING_REFERENCE_USD_IDR * 1.1), CREDIT_MARKUP_PERCENT: '50' }, fetchImpl: noSettlementFetch });
+  const job = { ...input, parameters: {}, pricing_snapshot: quote.pricingSnapshot };
+  const options = { env: { USD_IDR_RATE: '10000', CREDIT_MARKUP_PERCENT: '0' }, fetchImpl: noSettlementFetch };
+  assert.equal(await actualGenerationCostUsd(job, { generated_images: 2 }, options), 0.18);
+  assert.equal(await actualGenerationCredits(job, { generated_images: 2 }, options), 29.7);
+});
+
+test('per-second video snapshots retain selected tier, reference fees and minimum charge', async () => {
+  const grok = { kind: 'video', model: 'x-ai/grok-imagine-video-1.5', parameters: { resolution: '480p', duration: 8, referenceImages: ['a', 'b'] } };
+  const quote = await estimateGenerationCredits(grok, { env: FX, fetchImpl: noSettlementFetch });
+  assert.deepEqual(quote.pricingSnapshot.costBasis, {
+    type: 'video_seconds', source: 'video-rate-table', usdPerSecond: 0.08,
+    minimumUsd: 0, usdPerInputImage: 0.01, inputImageCount: 2,
+  });
+  const job = { ...grok, pricing_snapshot: quote.pricingSnapshot };
+  const options = { env: { USD_IDR_RATE: '25000', CREDIT_MARKUP_PERCENT: '200' }, fetchImpl: noSettlementFetch };
+  assert.equal(await actualGenerationCostUsd(job, { cost: '0.66' }, options), 0.66);
+  assert.equal(await actualGenerationCredits(job, { cost: '0.66' }, options), 105.6);
+  assert.equal(await actualGenerationCostUsd(job, {}, options), null);
+  const aleph = await estimateGenerationCredits({ kind: 'video', model: 'runway/aleph-2', parameters: { duration: 1 } }, { env: FX });
+  assert.equal(aleph.pricingSnapshot.costBasis.minimumUsd, 0.56);
+});
+
+test('reported zero USD is actual COGS while promotional provider usage keeps the customer charge', async () => {
+  const input = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p', duration: 5 } };
+  const quote = await estimateGenerationCredits(input, { env: FX, fetchImpl: noSettlementFetch });
+  const job = { ...input, pricing_snapshot: quote.pricingSnapshot };
+  const options = { fetchImpl: noSettlementFetch };
+  for (const zero of [0, '0']) {
+    assert.equal(await actualGenerationCostUsd(job, { costUsd: zero, completion_tokens: 108000 }, options), 0);
+    assert.equal(await actualGenerationCredits(job, { costUsd: zero, completion_tokens: 108000 }, options), 184.9);
+    assert.equal(await actualGenerationCostUsd(job, { cost: zero }, options), 0);
+    assert.equal(await actualGenerationCredits(job, { cost: zero }, options), null);
+  }
+});
+
+test('unknown and invalid reported costs remain unknown instead of becoming zero or an estimate', async () => {
+  const input = { kind: 'image', model: 'byteplus/seedream-4-5-251128', parameters: {} };
+  const quote = await estimateGenerationCredits(input, { env: FX });
+  const options = { fetchImpl: noSettlementFetch };
+  for (const pricing_snapshot of [undefined, quote.pricingSnapshot]) {
+    const job = { ...input, pricing_snapshot };
+    assert.equal(await actualGenerationCostUsd(job, {}, options), null);
+    for (const value of [null, undefined, '', '   ', false, [], {}, -1, '-1', Infinity, 'Infinity', NaN, 'bad']) {
+      assert.equal(await actualGenerationCostUsd(job, { costUsd: value }, options), null);
+      assert.equal(await actualGenerationCostUsd(job, { cost: value }, options), null);
+    }
+    assert.equal(await actualGenerationCostUsd(job, { costUsd: '0.035' }, options), 0.035);
+    assert.equal(await actualGenerationCostUsd(job, { cost: 0.04 }, options), 0.04);
+  }
+});
+
+test('legacy jobs normalize reported or counted USD without treating their credit estimate as cost', async () => {
+  const video = { kind: 'video', model: 'byteplus/seedance-2.5-unfiltered', parameters: { resolution: '720p' }, estimated_cost: 184.9 };
+  assert.equal(await actualGenerationCostUsd(video, { completion_tokens: 108000 }), 1.1556);
+  assert.equal(await actualGenerationCostUsd(video, { completion_tokens: 0 }), 0);
+  assert.equal(await actualGenerationCostUsd(video, {}), null);
+  const seedream = { kind: 'image', model: 'byteplus/seedream-4-5-251128', parameters: '{}' };
+  assert.equal(await actualGenerationCostUsd(seedream, { generated_images: 2 }), 0.08);
+  assert.equal(await actualGenerationCostUsd(seedream, { costUsd: 0, generated_images: 2 }), 0);
+
+  resetOpenRouterPriceCache();
+  const catalog = async () => new Response(JSON.stringify({ data: [] }));
+  const tokenImage = { kind: 'image', model: 'google/gemini-2.5-flash-image', parameters: {} };
+  close(await actualGenerationCostUsd(tokenImage, { inputTokens: 100, imageOutputTokens: 1290 }, { fetchImpl: catalog }), 0.03873, 1e-12);
+  assert.equal(await actualGenerationCostUsd(tokenImage, { cost: 0.04 }, { fetchImpl: noSettlementFetch }), 0.04);
+  assert.equal(await actualGenerationCostUsd(tokenImage, {}, { fetchImpl: noSettlementFetch }), null);
+  resetOpenRouterPriceCache();
+});
+
+test('unknown image output prices are refused while an explicitly reported zero rate remains known', async () => {
+  const input = { kind: 'image', model: 'example/unknown-output-image', prompt: 'x', parameters: {} };
+  for (const pricing of [{}, { prompt: '0.1' }, { image_output: null }, { image_output: '-1' }]) {
+    resetOpenRouterPriceCache();
+    const catalog = async () => new Response(JSON.stringify({ data: [{ id: input.model, pricing }] }));
+    assert.equal(await estimateGenerationCredits(input, { fetchImpl: catalog, env: FX }), null);
+    assert.equal(await actualGenerationCostUsd(input, { imageOutputTokens: 1290 }, { fetchImpl: catalog }), null);
+  }
+  resetOpenRouterPriceCache();
+  const zeroRate = async () => new Response(JSON.stringify({ data: [{ id: input.model, pricing: { image_output: '0' } }] }));
+  const quote = await estimateGenerationCredits(input, { fetchImpl: zeroRate, env: FX });
+  assert.equal(quote.usd, 0);
+  assert.equal(quote.pricingSnapshot.costBasis.rates.image_output, 0);
+  const job = { ...input, pricing_snapshot: quote.pricingSnapshot };
+  assert.equal(await actualGenerationCostUsd(job, { imageOutputTokens: 1290 }, { fetchImpl: noSettlementFetch }), 0);
+  assert.equal(await actualGenerationCredits(job, { imageOutputTokens: 1290 }, { fetchImpl: noSettlementFetch }), null);
+
+  const corrupt = { ...job, pricing_snapshot: { ...quote.pricingSnapshot, costBasis: { type: 'image_tokens', rates: {} } } };
+  await assert.rejects(actualGenerationCostUsd(corrupt, { imageOutputTokens: 1290 }, { fetchImpl: noSettlementFetch }), /pricing snapshot is invalid/);
+  await assert.rejects(actualGenerationCredits(corrupt, { costUsd: 0.04 }, { fetchImpl: noSettlementFetch }), /pricing snapshot is invalid/);
+  resetOpenRouterPriceCache();
+});
+
+test('USD aliases prefer a valid costUsd value and accept a valid cost when costUsd is unusable', async () => {
+  const input = { kind: 'image', model: 'byteplus/seedream-4-5-251128', parameters: {} };
+  const quote = await estimateGenerationCredits(input, { env: FX });
+  const job = { ...input, pricing_snapshot: quote.pricingSnapshot };
+  const options = { fetchImpl: noSettlementFetch };
+  assert.equal(await actualGenerationCostUsd(job, { costUsd: 0.04, cost: 1 }, options), 0.04);
+  assert.equal(await actualGenerationCostUsd(job, { costUsd: 0, cost: 1 }, options), 0);
+  assert.equal(await actualGenerationCostUsd(job, { costUsd: -1, cost: 0.04 }, options), 0.04);
+  assert.equal(await actualGenerationCredits(job, { costUsd: 'bad', cost: 0.04 }, options), 6.4);
+});
+
+test('invalid token and image counters cannot reduce provider COGS or customer credits', async () => {
+  resetOpenRouterPriceCache();
+  const input = { kind: 'image', model: 'google/gemini-2.5-flash-image', parameters: {} };
+  const catalog = async () => new Response(JSON.stringify({ data: [] }));
+  const quote = await estimateGenerationCredits(input, { env: FX, fetchImpl: catalog });
+  const job = { ...input, pricing_snapshot: quote.pricingSnapshot };
+  const options = { fetchImpl: noSettlementFetch };
+  for (const badCount of [-100, 'bad', Infinity, null, false, '', Number.MAX_VALUE]) {
+    const usage = { inputTokens: badCount, imageOutputTokens: badCount };
+    assert.equal(await actualGenerationCostUsd(job, usage, options), null);
+    assert.equal(await actualGenerationCredits(job, usage, options), null);
+  }
+  assert.equal(await actualGenerationCostUsd(job, { imageOutputTokens: 0 }, options), 0);
+  assert.equal(await actualGenerationCredits(job, { imageOutputTokens: 0 }, options), null);
+
+  const seedream = { kind: 'image', model: 'byteplus/seedream-4-5-251128', parameters: {} };
+  const seedreamQuote = await estimateGenerationCredits(seedream, { env: FX });
+  seedream.pricing_snapshot = seedreamQuote.pricingSnapshot;
+  assert.equal(await actualGenerationCostUsd(seedream, { generated_images: -1 }, options), null);
+  assert.equal(await actualGenerationCostUsd(seedream, { generated_images: 0 }, options), 0);
+  assert.equal(await actualGenerationCredits(seedream, { generated_images: 0 }, options), null);
+  resetOpenRouterPriceCache();
+});
+
+test('corrupt or mismatched snapshots fail closed without fetching replacement prices', async () => {
+  const input = { kind: 'image', model: 'byteplus/seedream-4-5-251128', parameters: {} };
+  const { pricingSnapshot } = await estimateGenerationCredits(input, { env: FX });
+  const invalid = [
+    'not-json',
+    {},
+    { ...pricingSnapshot, model: 'another/model' },
+    { ...pricingSnapshot, kind: 'video' },
+    { ...pricingSnapshot, usdIdrRate: 0 },
+    { ...pricingSnapshot, creditsPerUsd: null },
+    { ...pricingSnapshot, markupMultiplier: -1 },
+    { ...pricingSnapshot, costBasis: { type: 'images', usdPerImage: -1 } },
+    { ...pricingSnapshot, costBasis: { type: 'video_tokens', usdPerMillionTokens: 10.7 } },
+  ];
+  for (const pricing_snapshot of invalid) {
+    const job = { ...input, pricing_snapshot };
+    await assert.rejects(actualGenerationCredits(job, { costUsd: 0.04 }, { fetchImpl: noSettlementFetch }), /pricing snapshot is invalid/);
+    await assert.rejects(actualGenerationCostUsd(job, { costUsd: 0.04 }, { fetchImpl: noSettlementFetch }), /pricing snapshot is invalid/);
+  }
 });

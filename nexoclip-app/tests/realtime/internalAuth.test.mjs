@@ -91,13 +91,14 @@ test('constantTimeEqual handles equal, different length, and first/last byte mis
 });
 
 test('issueRealtimeToken issues a valid 60-second room-bound JWT', async () => {
-  const issued = await issueRealtimeToken({ userId: USER_ID, projectId: PROJECT_ID }, JWT_SECRET);
+  const issued = await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: USER_ID, projectId: PROJECT_ID }, JWT_SECRET);
   const verified = await verifyRealtimeToken(issued.token, PROJECT_ID, JWT_SECRET);
 
   assert.ok(verified);
   assert.deepEqual(verified, {
     userId: USER_ID,
     projectId: PROJECT_ID,
+    sessionId: '550e8400-e29b-41d4-a716-446655440010',
     issuedAt: verified.issuedAt,
     expiresAt: verified.expiresAt,
   });
@@ -107,11 +108,11 @@ test('issueRealtimeToken issues a valid 60-second room-bound JWT', async () => {
 
 test('verifyRealtimeToken rejects wrong algorithm, signature, issuer, audience, expiry, and project', async () => {
   const now = NOW_SECONDS();
-  const wrongSignature = await issueRealtimeToken({ userId: USER_ID, projectId: PROJECT_ID }, 'other-secret');
+  const wrongSignature = await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: USER_ID, projectId: PROJECT_ID }, 'other-secret');
   const wrongIssuer = await signManualRealtimeToken({ issuer: 'other-issuer' });
   const wrongAudience = await signManualRealtimeToken({ audience: 'other-audience' });
   const expired = await signManualRealtimeToken({ iat: now - 120, exp: now - 60 });
-  const wrongProject = await issueRealtimeToken({ userId: USER_ID, projectId: '550e8400-e29b-41d4-a716-446655440099' }, JWT_SECRET);
+  const wrongProject = await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: USER_ID, projectId: '550e8400-e29b-41d4-a716-446655440099' }, JWT_SECRET);
   const wrongAlgorithm = new UnsecuredJWT({ projectId: PROJECT_ID })
     .setSubject(USER_ID)
     .setIssuer('nexoclip')
@@ -126,4 +127,14 @@ test('verifyRealtimeToken rejects wrong algorithm, signature, issuer, audience, 
   assert.equal(await verifyRealtimeToken(expired, PROJECT_ID, JWT_SECRET), null);
   assert.equal(await verifyRealtimeToken(wrongProject.token, PROJECT_ID, JWT_SECRET), null);
   assert.equal(await verifyRealtimeToken(wrongAlgorithm, PROJECT_ID, JWT_SECRET), null);
+});
+
+test('realtime rejects a previously valid JWT without its login session binding', async () => {
+  const now = NOW_SECONDS();
+  const token = await new SignJWT({ projectId: PROJECT_ID })
+    .setProtectedHeader({ alg: 'HS256' }).setSubject(USER_ID)
+    .setIssuer('nexoclip').setAudience('nexoclip-realtime')
+    .setIssuedAt(now).setExpirationTime(now + 60)
+    .sign(new TextEncoder().encode(JWT_SECRET));
+  assert.equal(await verifyRealtimeToken(token, PROJECT_ID, JWT_SECRET), null);
 });

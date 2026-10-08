@@ -2,7 +2,7 @@ import { transitionGeneration, isRetryableFailure, retryDelayMs } from './genera
 import { captureGenerationCredits, recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 import { transitionGenerationJob, retryGenerationJob, failGenerationJob, completeGenerationJob } from '../repositories/generationStateRepository.js';
 import { randomUUID } from 'node:crypto';
-import { actualGenerationCredits } from '../services/generationPricing.js';
+import { actualGenerationCredits, actualGenerationCostUsd } from '../services/generationPricing.js';
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
@@ -26,7 +26,8 @@ async function claimGeneration(pool, generationId, leaseMs = DEFAULT_LEASE_MS) {
                  AND active.status IN ('running', 'processing')) <
               (SELECT max_concurrent FROM workspace_generation_limits l WHERE l.workspace_id = generation_jobs.workspace_id))
        RETURNING id, workspace_id, project_id, kind, status, prompt, model, parameters,
-                 estimated_cost, pricing_version_id, reservation_ledger_id, created_at,
+                 estimated_cost, estimated_provider_cost_usd, pricing_snapshot,
+                 pricing_version_id, reservation_ledger_id, created_at,
                  updated_at, started_at, attempt_count, max_attempts, claim_token,
                  provider, provider_request_id`, 
       [generationId, leaseMs],
@@ -80,6 +81,8 @@ export function createGenerationProcessor({
   releaseCredits = releaseGenerationReservation,
   settleUnreserved = settleUnreservedGeneration,
   priceActualUsage = actualGenerationCredits,
+  priceProviderUsage = actualGenerationCostUsd,
+  recordCost = null,
 }) {
   if (!pool || typeof handler !== 'function') throw new TypeError('pool and handler are required');
 
@@ -97,9 +100,28 @@ export function createGenerationProcessor({
     const claimToken = job.claim_token || randomUUID();
     const limit = Number(job.max_attempts || maxAttempts);
     let terminal = false;
+    let timeout;
+    let latestObservation = null;
+    const attemptDispatchId = randomUUID();
+    const onProviderUsage = recordCost ? async (observation) => {
+      latestObservation = observation;
+      try {
+        return await recordCost(pool, { job, observation });
+      } catch (cause) {
+        const error = Object.assign(new Error('Provider cost observation could not be recorded', { cause }), {
+          code: 'COST_RECORDING_FAILED', retryable: false,
+        });
+        onError(error, job);
+        // Do not send new paid requests without a durable dispatch marker.
+        // Once dispatched, preserve generation progress and leave unknown COGS
+        // explicit; later observations can still reconcile the same request.
+        if (['dispatch', 'attempt_started'].includes(observation.eventType)) throw error;
+        return null;
+      }
+    } : null;
     try {
-      let timeout;
-      const timedHandler = Promise.resolve().then(() => handler(job, message));
+      if (onProviderUsage) await onProviderUsage({ provider: 'worker', dispatchId: attemptDispatchId, eventType: 'attempt_started', usage: {} });
+      const timedHandler = Promise.resolve().then(() => handler(job, message, { onProviderUsage }));
       const timedOut = new Promise((_, reject) => {
         timeout = setTimeout(() => reject(Object.assign(new Error('Generation timed out'), { code: 'GENERATION_TIMEOUT' })), timeoutMs);
         timeout.unref?.();
@@ -107,6 +129,15 @@ export function createGenerationProcessor({
       const result = await Promise.race([timedHandler, timedOut]);
       clearTimeout(timeout);
       const nextStatus = result?.status || 'succeeded';
+      if (onProviderUsage && nextStatus === 'succeeded') {
+        const observed = latestObservation?.eventType !== 'attempt_started' ? latestObservation : null;
+        await onProviderUsage({
+          provider: result.provider || observed?.provider || job.provider || provider,
+          providerRequestId: observed ? (observed.providerRequestId || null) : (result.providerRequestId || job.provider_request_id || null),
+          dispatchId: observed?.dispatchId || attemptDispatchId,
+          eventType: 'succeeded', usage: result.usage || observed?.usage || {},
+        });
+      }
       if (nextStatus === 'succeeded') {
         const completion = {
           workspaceId, generationId: job.id, provider: result.provider || job.provider || provider,
@@ -114,10 +145,19 @@ export function createGenerationProcessor({
           providerRequestId: result.providerRequestId || null,
         };
         if (persistResult) {
+          // The reservation is a customer credit amount, never a provider USD
+          // estimate. Unknown provider usage remains null for honest COGS.
+          let actualCostUsd = null;
+          try {
+            actualCostUsd = await priceProviderUsage(job, result.usage || {});
+          } catch (error) {
+            console.error('[pricing] could not normalize provider cost', job.id, error?.message);
+          }
           await persistResult(pool, {
             workspaceId, generationId: job.id, provider: completion.provider,
             providerRequestId: result.providerRequestId || `${completion.provider}:${job.id}`,
-            estimatedCost: job.estimated_cost ?? null, outputs: result.outputs || [], usage: result.usage || {},
+            estimatedCostUsd: job.estimated_provider_cost_usd ?? null,
+            actualCostUsd, outputs: result.outputs || [], usage: result.usage || {},
           });
         }
         const completed = await completeGenerationJob(pool, completion);
@@ -137,6 +177,15 @@ export function createGenerationProcessor({
       }
       return true;
     } catch (error) {
+      if (onProviderUsage && latestObservation && latestObservation.eventType !== 'attempt_started') {
+        const providerWasFinal = ['succeeded', 'output_failed', 'failed', 'reconciled'].includes(latestObservation.eventType);
+        await onProviderUsage({
+          ...latestObservation,
+          eventType: error?.code === 'GENERATION_TIMEOUT' ? 'timeout'
+            : (providerWasFinal ? (latestObservation.eventType === 'failed' ? 'failed' : 'output_failed') : 'interrupted'),
+          usage: error?.usage || latestObservation.usage || {},
+        });
+      }
       if (terminal) {
         onError(error, job);
         return false;
@@ -162,6 +211,8 @@ export function createGenerationProcessor({
       }
       onError(error, job);
       return false;
+    } finally {
+      clearTimeout(timeout);
     }
   };
 }
@@ -182,10 +233,11 @@ export function createGenerationWorker({
   settleCredits = true,
   settleUnreserved = settleUnreservedGeneration,
   recoverUnreserved = recoverUnreservedGenerations,
+  recordCost = null,
 }) {
   if (!queue?.dequeue) throw new TypeError('queue.dequeue is required');
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be positive');
-  const process = createGenerationProcessor({ pool, handler, onError, timeoutMs, baseDelayMs, maxDelayMs, maxAttempts, persistResult, provider, settleCredits, settleUnreserved });
+  const process = createGenerationProcessor({ pool, handler, onError, timeoutMs, baseDelayMs, maxDelayMs, maxAttempts, persistResult, provider, settleCredits, settleUnreserved, recordCost });
   let stopped = false;
   let active = new Set();
 

@@ -4,6 +4,7 @@ import { confirmDialog } from "./confirmDialog.jsx";
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateSaasImage, uploadFile } from "../generationClient.js";
+import { assetPreviewUrl } from "../assetPreviewUrl.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DurableJobHistory from "../../../../components/DurableJobHistory.js";
@@ -317,7 +318,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
     </div>
   ) : label === "Swap Face" ? (
     hasSelection ? (
-      <img src={selectedEntries[0].url} alt="" className="w-full h-full object-cover" />
+      <img src={assetPreviewUrl(selectedEntries[0].url)} alt="" className="w-full h-full object-cover" />
     ) : (
       <span className="text-[10px] font-bold text-white/50">Face</span>
     )
@@ -469,7 +470,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
                   >
                     {entry.url ? (
                       <img
-                        src={entry.url}
+                        src={assetPreviewUrl(entry.url)}
                         alt={entry.name}
                         className="w-full h-full object-cover"
                       />
@@ -1381,7 +1382,7 @@ export default function ImageStudio({
                 onClick={() => setFullscreenUrl(entry.url)}
               >
                 <img
-                  src={entry.url}
+                  src={assetPreviewUrl(entry.url)}
                   alt={entry.prompt?.substring(0, 30) || "Generated image"}
                   className="w-full aspect-square object-cover bg-black/40 hover:opacity-80 transition-opacity"
                 />
@@ -1521,7 +1522,7 @@ export default function ImageStudio({
             <div className="flex items-center gap-2.5 flex-wrap">
               {uploadedImageUrls && uploadedImageUrls.length > 0 && uploadedImageUrls.map((url, idx) => (
                 <div key={url} className={PROMPT_MEDIA_PREVIEW_CLASS}>
-                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <img src={assetPreviewUrl(url)} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => {
@@ -1884,7 +1885,7 @@ export default function ImageStudio({
             </svg>
           </button>
           <img 
-            src={fullscreenUrl} 
+            src={assetPreviewUrl(fullscreenUrl)}
             alt="Fullscreen Preview" 
             className="max-w-[95vw] max-h-[95vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
             onClick={(e) => e.stopPropagation()}

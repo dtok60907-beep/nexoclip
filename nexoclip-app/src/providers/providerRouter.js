@@ -6,6 +6,7 @@ import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
 import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
 import { getDirectProvider, resolveDirectProviderModel, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
+import { randomUUID } from 'node:crypto';
 
 const TRUSTED_ASSET_REQUEST = Symbol('trustedBytePlusAssetRequest');
 
@@ -58,8 +59,43 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
   const openrouterImage = () => createOpenRouterImageAdapter({ apiKey: env.OPENROUTER_API_KEY, fetch: fetchImpl });
   const openrouterVideo = () => createOpenRouterVideoAdapter({ apiKey: env.OPENROUTER_API_KEY, fetch: fetchImpl });
 
-  async function withFallback(operation, params, primary) {
-    try { return await primary(); } catch (error) {
+  async function observeDispatch(operation, provider, invoke, { onProviderUsage } = {}) {
+    if (!onProviderUsage) return invoke();
+    const dispatchId = randomUUID();
+    const observe = async (eventType, details = {}) => {
+      const observation = { provider, dispatchId, eventType, usage: {}, ...details };
+      if (eventType === 'dispatch') {
+        try { await onProviderUsage(observation); } catch (cause) {
+          throw Object.assign(new Error('Provider cost recording is unavailable', { cause }), {
+            code: 'COST_RECORDING_FAILED', retryable: false,
+          });
+        }
+      } else {
+        // The request has already reached the provider. Keep the dispatch's
+        // durable unknown marker if its later observation cannot be saved.
+        try { await onProviderUsage(observation); } catch {
+          console.error('[cogs] provider observation could not be saved', { provider, dispatchId, eventType });
+        }
+      }
+    };
+    await observe('dispatch');
+    let result;
+    try { result = await invoke(); } catch (error) {
+      await observe('failed', {
+        providerRequestId: error?.providerRequestId || error?.requestId || null,
+        usage: error?.usage || {},
+      });
+      throw error;
+    }
+    await observe(operation === 'image' ? 'succeeded' : 'submitted', {
+      providerRequestId: result?.providerRequestId || result?.id || null,
+      usage: result?.usage || {},
+    });
+    return result;
+  }
+
+  async function withFallback(operation, params, primary, options) {
+    try { return await observeDispatch(operation, 'openrouter', primary, options); } catch (error) {
       const mapping = getDirectProvider(params.model);
       // OpenRouter's 400 wording for "I don't carry this model" isn't a stable contract to pattern-match,
       // so any 400 is treated as a routing gap (not a malformed request) once the model is already on the
@@ -76,12 +112,13 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       const adapter = directAdapter(env, mapping.provider, operation, fetchImpl);
       if (!adapter) throw createDirectProviderUnavailableError(params.model, mapping.provider);
       const directModel = resolveDirectProviderModel(mapping, env);
-      const result = operation === 'image' ? await adapter.generate({ ...params, model: directModel }) : await adapter.submit({ ...params, model: directModel });
+      const result = await observeDispatch(operation, mapping.provider,
+        () => operation === 'image' ? adapter.generate({ ...params, model: directModel }) : adapter.submit({ ...params, model: directModel }), options);
       return { ...result, provider: mapping.provider };
     }
   }
 
-  async function run(operation, params, primary) {
+  async function run(operation, params, primary, options) {
     if (operation === 'video' && hasAssetUri(params) && !isTrustedAssetRequest(params)) {
       throw Object.assign(new Error('Provider asset references must be resolved by the workspace service'), {
         code: 'INVALID_REFERENCE_IMAGE', status: 400,
@@ -98,14 +135,15 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       const adapter = directAdapter(env, 'byteplus', operation, fetchImpl);
       const directModel = resolveDirectProviderModel(mapping, env);
       const directParams = { ...params, model: directModel };
-      return operation === 'image' ? adapter.generate(directParams) : adapter.submit(directParams);
+      return observeDispatch(operation, 'byteplus',
+        () => operation === 'image' ? adapter.generate(directParams) : adapter.submit(directParams), options);
     }
-    return withFallback(operation, params, primary);
+    return withFallback(operation, params, primary, options);
   }
 
   return {
-    generateImage: (params) => run('image', params, () => openrouterImage().generate(params)),
-    submitVideo: (params) => run('video', params, () => openrouterVideo().submit(params)),
+    generateImage: (params, options) => run('image', params, () => openrouterImage().generate(params), options),
+    submitVideo: (params, options) => run('video', params, () => openrouterVideo().submit(params), options),
     pollVideo: async (provider, id) => {
       if (provider === 'openrouter') return openrouterVideo().poll(id);
       const status = await directAdapter(env, provider, 'video', fetchImpl).poll(id);

@@ -88,6 +88,15 @@ test('repeated capture is idempotent and does not mutate the ledger again', asyn
   assert.equal(pool.calls.filter(({ text }) => /INSERT INTO credit_ledger/.test(text)).length, 0);
 });
 
+test('invalid or unknown settlement amounts cannot silently refund a customer generation', async () => {
+  for (const actualCost of [null, '', ' ', false, [], -1, Infinity, NaN]) {
+    const pool = poolFor();
+    await assert.rejects(captureGenerationCredits(pool, { workspaceId: 'w1', generationId: 'g1', actualCost }), /Settlement amount is invalid/);
+    assert.equal(pool.calls.filter(({ text }) => /INSERT INTO credit_ledger|UPDATE credit_accounts|finalize_generation_credit_lots/.test(text)).length, 0);
+    assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
+  }
+});
+
 test('failed generation releases the reservation and timeout refund is idempotent', async () => {
   const releasePool = poolFor({ generationStatus: 'failed', estimatedCost: '10' });
   await releaseGenerationReservation(releasePool, { workspaceId: 'w1', generationId: 'g1' });

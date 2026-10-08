@@ -74,18 +74,28 @@ export function createOpenRouterImageAdapter({ baseUrl = DEFAULT_BASE_URL, apiKe
       }
       if (!response.ok) throw await normalizeError(response);
       const payload = await response.json();
-      const outputs = (payload.data || []).map(normalizeImage);
-      if (!outputs.length) throw Object.assign(new Error('OpenRouter returned no images'), { code: 'OPENROUTER_INVALID_RESPONSE' });
+      // A creation timestamp is not a request identity: retries can share it.
+      const providerRequestId = payload.id || response.headers?.get?.('x-request-id') || null;
+      const rawCost = payload.usage?.cost;
+      const validCost = (typeof rawCost === 'number' || (typeof rawCost === 'string' && rawCost.trim()))
+        && Number.isFinite(Number(rawCost)) && Number(rawCost) >= 0;
+      const usage = payload.usage && typeof payload.usage === 'object' ? {
+        ...(validCost ? { cost: rawCost, costUsd: Number(rawCost) } : {}),
+        ...(payload.usage.total_tokens !== undefined ? { total_tokens: payload.usage.total_tokens } : {}),
+      } : {};
+      let outputs;
+      try {
+        outputs = (payload.data || []).map(normalizeImage);
+        if (!outputs.length) throw Object.assign(new Error('OpenRouter returned no images'), { code: 'OPENROUTER_INVALID_RESPONSE' });
+      } catch (error) {
+        throw Object.assign(error, { providerRequestId, usage });
+      }
       return {
         provider: 'openrouter',
         status: 'succeeded',
-        providerRequestId: payload.id || (payload.created == null ? null : String(payload.created)),
+        providerRequestId,
         outputs,
-        usage: payload.usage && typeof payload.usage === 'object' ? {
-          // OpenRouter reports the charge in USD.
-          ...(payload.usage.cost !== undefined ? { cost: payload.usage.cost, costUsd: Number(payload.usage.cost) } : {}),
-          ...(payload.usage.total_tokens !== undefined ? { total_tokens: payload.usage.total_tokens } : {}),
-        } : {},
+        usage,
       };
     },
   };

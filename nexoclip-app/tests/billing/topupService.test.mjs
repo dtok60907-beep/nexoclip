@@ -5,7 +5,7 @@ import { createTopupService } from '../../src/services/topupService.js';
 // In-memory stand-in for the credit_topups, credit_accounts and credit_ledger
 // tables, matched on the SQL each repository function sends.
 function fakeDatabase() {
-  const state = { topups: new Map(), balance: 0, ledger: [] };
+  const state = { topups: new Map(), balance: 0, ledger: [], lots: [] };
   const query = async (text, values = []) => {
     if (text.includes('INSERT INTO credit_topups')) {
       const [workspace_id, user_id, package_code, amount_idr, credits, order_id] = values;
@@ -37,6 +37,14 @@ function fakeDatabase() {
       return { rows: [row] };
     }
     if (text.includes('INSERT INTO credit_accounts')) return { rows: [{ workspace_id: values[0], balance: String(state.balance) }] };
+    if (text.includes('INSERT INTO credit_lots')) {
+      const [workspace_id, source_ledger_id, credits, source_type, amount_idr, payment_fee_idr] = values;
+      const existing = state.lots.find((lot) => lot.source_ledger_id === source_ledger_id);
+      if (existing) return { rows: [] };
+      const lot = { workspace_id, source_ledger_id, granted_credits: credits, source_type, amount_idr, payment_fee_idr };
+      state.lots.push(lot);
+      return { rows: [lot] };
+    }
     if (text.includes('FROM credit_ledger')) return { rows: state.ledger.filter((entry) => entry.idempotency_key === values[1]) };
     if (text.includes('FROM credit_accounts')) return { rows: [{ workspace_id: values[0], balance: String(state.balance) }] };
     if (text.includes('UPDATE credit_accounts')) { state.balance = values[1]; return { rows: [{ balance: String(values[1]) }] }; }
@@ -104,11 +112,17 @@ test('grants credits once when Pakasir confirms the payment', async () => {
   assert.equal(db.state.balance, 750);
   assert.equal(db.state.ledger.length, 1);
   assert.equal(db.state.ledger[0].idempotency_key, `topup:${row.id}`);
+  assert.equal(db.state.lots.length, 1);
+  assert.deepEqual(db.state.lots[0], {
+    workspace_id: 'w1', source_ledger_id: db.state.ledger[0].id, granted_credits: 750,
+    source_type: 'paid', amount_idr: 149000, payment_fee_idr: null,
+  });
 
   // A repeated webhook or poll does not add credits again.
   await service.settleByTxnId('txn-1');
   assert.equal(db.state.balance, 750);
   assert.equal(db.state.ledger.length, 1);
+  assert.equal(db.state.lots.length, 1);
 });
 
 test('does not grant credits while the payment is still pending', async () => {
@@ -138,6 +152,9 @@ test('refuses sandbox payments unless explicitly allowed', async () => {
   assert.equal(settled.status, 'completed');
   assert.equal(settled.is_sandbox, true);
   assert.equal(db.state.balance, 750);
+  assert.equal(db.state.lots[0].source_type, 'sandbox');
+  assert.equal(db.state.lots[0].amount_idr, 0);
+  assert.equal(db.state.lots[0].payment_fee_idr, 0);
 });
 
 test('marks a top-up canceled when Pakasir cancels it', async () => {

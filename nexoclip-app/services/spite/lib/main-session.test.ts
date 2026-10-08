@@ -43,6 +43,7 @@ test('forwards only nexoclip_session and ignores client-supplied identity header
   assert.equal(calls.length, 1)
   assert.equal(calls[0]?.url, 'http://nexoclip.internal/api/auth/session')
   assert.deepEqual(calls[0]?.init, {
+    cache: 'no-store',
     headers: {
       cookie: 'nexoclip_session=session-token',
     },
@@ -66,7 +67,6 @@ test('fails closed when introspection is unavailable or invalid', async () => {
 test('does not authenticate a legacy Spite session without a main-app user', async () => {
   const isRequestAuthenticated = createRequestAuthenticationChecker({
     getAuthenticatedUser: async () => null,
-    isSessionValid: async () => true,
   })
 
   assert.equal(await isRequestAuthenticated(makeRequest({ cookie: 'spite_session=legacy-session' })), false)
@@ -88,4 +88,13 @@ test('returns null when nexoclip_session is absent and returns the trusted user 
   assert.equal(await getAuthenticatedUser(makeRequest({ cookie: 'spite_session=spite-only' })), null)
   assert.deepEqual(await getAuthenticatedUser(makeRequest()), { id: '550e8400-e29b-41d4-a716-446655440002' })
   assert.equal(fetchCalls, 1)
+})
+
+test('returns the trusted session binding and never reads it from browser identity headers', async () => {
+  const sessionId = '550e8400-e29b-41d4-a716-446655440010'
+  const resolve = createAuthenticatedUserResolver({
+    env: { NEXOCLIP_INTERNAL_URL: 'http://nexoclip.internal' },
+    fetchFn: async () => Response.json({ authenticated: true, user: { id: 'trusted-user' }, sessionId }),
+  })
+  assert.deepEqual(await resolve(makeRequest({ headers: { 'x-session-id': 'forged' } })), { id: 'trusted-user', sessionId })
 })

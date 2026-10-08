@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminAuditService } from '../../src/services/adminAuditService.js';
 
+const env = { NEXOCLIP_OPERATOR_USER_IDS: 'operator' };
 function repos(overrides = {}) {
   return {
     listGenerationJobs: async (workspaceId, filters) => ({ rows: [{ id: 'job-1', workspace_id: workspaceId, status: filters.status || 'succeeded', model: 'flux-dev' }], total: 1 }),
@@ -11,14 +12,14 @@ function repos(overrides = {}) {
   };
 }
 
-test('allows only workspace owners and admins to read bounded audit data', async () => {
+test('allows platform operators with workspace admin permission to read bounded audit data', async () => {
   const calls = [];
-  const service = createAdminAuditService({
+  const service = createAdminAuditService({ env,
     repositories: repos({
       listGenerationJobs: async (...args) => { calls.push(args); return { rows: [], total: 0 }; },
     }),
   });
-  const result = await service.listJobs({ workspaceId: 'workspace-a', role: 'admin', filters: { page: '2', pageSize: '500', status: 'running' } });
+  const result = await service.listJobs({ userId: 'operator', workspaceId: 'workspace-a', role: 'admin', filters: { page: '2', pageSize: '500', status: 'running' } });
 
   assert.deepEqual(result, { items: [], pagination: { page: 2, pageSize: 100, total: 0, totalPages: 0 } });
   assert.deepEqual(calls[0], ['workspace-a', { page: 2, pageSize: 100, status: 'running' }]);
@@ -26,20 +27,20 @@ test('allows only workspace owners and admins to read bounded audit data', async
 
 test('rejects members and never queries repositories for unauthorized workspaces', async () => {
   let queried = false;
-  const service = createAdminAuditService({ repositories: repos({ listGenerationJobs: async () => { queried = true; } }) });
+  const service = createAdminAuditService({ env, repositories: repos({ listGenerationJobs: async () => { queried = true; } }) });
   await assert.rejects(
-    service.listJobs({ workspaceId: 'workspace-b', role: 'member', filters: {} }),
+    service.listJobs({ userId: 'operator', workspaceId: 'workspace-b', role: 'member', filters: {} }),
     (error) => error.status === 403 && error.code === 'ADMIN_REQUIRED',
   );
   assert.equal(queried, false);
 });
 
 test('returns jobs, provider usage, and credits without raw sensitive payloads', async () => {
-  const service = createAdminAuditService({ repositories: repos() });
+  const service = createAdminAuditService({ env, repositories: repos() });
   const [jobs, usage, credits] = await Promise.all([
-    service.listJobs({ workspaceId: 'w1', role: 'owner', filters: {} }),
-    service.listUsage({ workspaceId: 'w1', role: 'owner', filters: {} }),
-    service.listCredits({ workspaceId: 'w1', role: 'owner', filters: {} }),
+    service.listJobs({ userId: 'operator', workspaceId: 'w1', role: 'owner', filters: {} }),
+    service.listUsage({ userId: 'operator', workspaceId: 'w1', role: 'owner', filters: {} }),
+    service.listCredits({ userId: 'operator', workspaceId: 'w1', role: 'owner', filters: {} }),
   ]);
 
   assert.equal(jobs.items[0].prompt, undefined);

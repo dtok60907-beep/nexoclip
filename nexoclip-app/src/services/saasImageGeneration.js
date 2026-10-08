@@ -130,9 +130,15 @@ async function downloadOutput(output) {
   return { body: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get('content-type') || output?.mimeType || 'image/png' };
 }
 
-export function createSaasImageHandler({ providerRouter, provider, storage, referenceStorage = storage, pool }) {
+export function createSaasImageHandler({ providerRouter, provider, storage, referenceStorage = storage, pool, onProviderUsage = null }) {
   if ((!providerRouter && !provider) || !storage || !pool) throw new TypeError('provider router, storage, and pool are required');
-  return async (job) => {
+  return async (job, _message, context = {}) => {
+    const observer = context.onProviderUsage || onProviderUsage;
+    let latestObservation = null;
+    const observe = observer ? async (observation) => {
+      latestObservation = observation;
+      return observer(observation);
+    } : null;
     const referenceImages = await resolveReferenceImages({
       workspaceId: job.workspace_id,
       referenceImages: job.parameters?.referenceImages,
@@ -140,33 +146,46 @@ export function createSaasImageHandler({ providerRouter, provider, storage, refe
       storage,
       referenceStorage,
     });
+    const dispatchId = randomUUID();
+    if (!providerRouter && observe) await observe({ provider: 'muapi', dispatchId, eventType: 'dispatch', usage: {} });
     const result = providerRouter
-      ? await providerRouter.generateImage(imageRequest(job, referenceImages))
+      ? await providerRouter.generateImage(imageRequest(job, referenceImages), observe ? { onProviderUsage: observe } : undefined)
       : await provider.submitGeneration({ model: job.model, payload: { prompt: job.prompt, ...(job.parameters || {}) } });
+    const providerCostObservation = {
+      provider: result.provider || 'muapi', dispatchId: latestObservation?.dispatchId || dispatchId,
+      providerRequestId: result.providerRequestId || null, usage: result.usage || {},
+    };
+    // Save the provider charge before downloading or persisting its output.
+    if (observe) await observe({ ...providerCostObservation, eventType: 'succeeded' });
     const providerRequestId = result.providerRequestId || `${result.provider || 'provider'}:${job.id}`;
     const savedOutputs = [];
-    for (const [index, output] of (result.outputs || []).entries()) {
-      const { body, contentType } = await downloadOutput(output);
-      const key = `${job.workspace_id}/${randomUUID()}`;
-      if (typeof storage.createUploadUrl === 'function') {
-        const upload = await storage.createUploadUrl({ key, contentType });
-        await storage.put(upload.url || upload, body, contentType);
-      } else {
-        await storage.put(key, body, contentType);
+    try {
+      for (const [index, output] of (result.outputs || []).entries()) {
+        const { body, contentType } = await downloadOutput(output);
+        const key = `${job.workspace_id}/${randomUUID()}`;
+        if (typeof storage.createUploadUrl === 'function') {
+          const upload = await storage.createUploadUrl({ key, contentType });
+          await storage.put(upload.url || upload, body, contentType);
+        } else {
+          await storage.put(key, body, contentType);
+        }
+        const client = await pool.connect();
+        try {
+          const asset = await createGeneratedAsset(client, {
+            workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}-${index}.png`, contentType, sizeBytes: body.length,
+          });
+          savedOutputs.push({ assetId: asset.id });
+        } finally { client.release(); }
       }
-      const client = await pool.connect();
-      try {
-        const asset = await createGeneratedAsset(client, {
-          workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}-${index}.png`, contentType, sizeBytes: body.length,
-        });
-        savedOutputs.push({ assetId: asset.id });
-      } finally { client.release(); }
+      if (!savedOutputs.length) throw Object.assign(new Error('Provider returned no image outputs'), { code: 'PROVIDER_INVALID_RESPONSE' });
+      return { status: 'succeeded', provider: result.provider || 'muapi', providerRequestId, outputs: savedOutputs, usage: result.usage || {} };
+    } catch (error) {
+      if (observe) await observe({ ...providerCostObservation, eventType: 'output_failed' });
+      throw error;
     }
-    if (!savedOutputs.length) throw Object.assign(new Error('Provider returned no image outputs'), { code: 'PROVIDER_INVALID_RESPONSE' });
-    return { status: 'succeeded', provider: result.provider || 'muapi', providerRequestId, outputs: savedOutputs, usage: result.usage || {} };
   };
 }
 
-export function createDefaultSaasImageHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter() }) {
-  return createSaasImageHandler({ pool, storage, referenceStorage, providerRouter });
+export function createDefaultSaasImageHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), onProviderUsage = null }) {
+  return createSaasImageHandler({ pool, storage, referenceStorage, providerRouter, onProviderUsage });
 }

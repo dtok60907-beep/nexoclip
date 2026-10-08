@@ -1,7 +1,7 @@
 import { SESSION_COOKIE } from '../../../../../src/lib/auth/session.js';
 import { getCurrentSession } from '../../../../../src/services/authService.js';
 import { getDefaultWorkspace } from '../../../../../src/services/workspaceService.js';
-import { getGenerationJob } from '../../../../../src/services/generationService.js';
+import { getGenerationJob, toPublicGeneration } from '../../../../../src/services/generationService.js';
 import { createStorage } from '../../../../../src/services/assetService.js';
 
 export const runtime = 'nodejs';
@@ -23,7 +23,7 @@ export function createVimaxJobStatusHandler({
     const { generationId } = await params;
     const generation = await getJob(workspace.id, generationId);
     if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
-    return Response.json({ generation });
+    return Response.json({ generation: toPublicGeneration(generation) });
   };
 }
 

@@ -320,6 +320,7 @@ test('private /internal/authorize inserts nonce before ownership lookup and reje
   database.allow(PROJECT_ID, OWNER_USER_ID)
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -405,6 +406,7 @@ test('GET /healthz returns ok without touching realtime authorization', async ()
   const database = new FakeAuthorizationDatabase()
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -450,6 +452,7 @@ test('private /internal/document exports and patches authoritative documents', a
   database.allow(PROJECT_ID, OWNER_USER_ID)
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -547,6 +550,7 @@ test('private /internal/document applies committed updates to the live room only
 
   const runtime = new DeferredRuntime()
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -560,7 +564,7 @@ test('private /internal/document applies committed updates to the live room only
 
   await server.listen()
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const observer = await connectProvider({
     url: server.wsUrl,
     name: roomName(PROJECT_ID),
@@ -654,6 +658,7 @@ test('private /internal/document leaves the live room unchanged when enqueue rej
   database.allow(PROJECT_ID, OWNER_USER_ID)
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -667,7 +672,7 @@ test('private /internal/document leaves the live room unchanged when enqueue rej
 
   await server.listen()
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const observer = await connectProvider({
     url: server.wsUrl,
     name: roomName(PROJECT_ID),
@@ -747,6 +752,7 @@ test('private /internal/document maps validation, read-only conflicts, service u
 
   let runtimeMode: 'read-only' | 'shutdown' | 'backend' = 'read-only'
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -866,6 +872,7 @@ test('private /internal/document rejects action bodies that do not match the sig
   database.allow(PROJECT_ID, OWNER_USER_ID)
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -954,6 +961,7 @@ test('unauthorized websocket connections receive no room access, no hydration, a
   const runtime = new FakeRuntime()
   const events: Array<{ type: string; connectionId?: string }> = []
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -981,11 +989,11 @@ test('unauthorized websocket connections receive no room access, no hydration, a
     },
     {
       name: 'non-owner token',
-      token: (await issueRealtimeToken({ userId: OTHER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token,
+      token: (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OTHER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token,
     },
     {
       name: 'wrong-project token',
-      token: (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: OTHER_PROJECT_ID }, JWT_SECRET)).token,
+      token: (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: OTHER_PROJECT_ID }, JWT_SECRET)).token,
     },
   ]
 
@@ -1038,6 +1046,7 @@ test('authorized owners hydrate only after authorization, more than three client
   const runtime = new FakeRuntime()
   const events: Array<{ type: string; connectionId?: string }> = []
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -1054,7 +1063,7 @@ test('authorized owners hydrate only after authorization, more than three client
 
   await server.listen()
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const clients = await Promise.all([
     connectProvider({ url: server.wsUrl, name: roomName(PROJECT_ID), token }),
     connectProvider({ url: server.wsUrl, name: roomName(PROJECT_ID), token }),
@@ -1126,3 +1135,53 @@ test('authorized owners hydrate only after authorization, more than three client
     await server.destroy()
   }
 })
+
+for (const mode of ['idle revocation', 'mutation revocation', 'database failure'] as const) {
+  test(`realtime disconnects on ${mode}, denies old tokens, and preserves other sessions`, async () => {
+    const sessionId = '550e8400-e29b-41d4-a716-446655440010'
+    const otherSessionId = '550e8400-e29b-41d4-a716-446655440011'
+    const repository = new FakeRealtimeRepository()
+    repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+    repository.setDocument(PROJECT_ID, createCanvasDocument())
+    const runtime = new FakeRuntime()
+    let revoked = false
+    const server = createRealtimeServer({
+      address: '127.0.0.1', port: 0, repository,
+      database: new FakeAuthorizationDatabase(),
+      env: { REALTIME_TOKEN_SECRET: JWT_SECRET },
+      sessionCheckIntervalMs: mode === 'mutation revocation' ? 60_000 : 20,
+      checkSession: async identity => {
+        assert.equal(identity.userId, OWNER_USER_ID)
+        if (identity.sessionId !== sessionId) return true
+        if (revoked && mode === 'database failure') throw new Error('private database credentials')
+        return !revoked
+      },
+      createRuntime: () => runtime,
+    })
+    await server.listen()
+    const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID, sessionId }, JWT_SECRET)).token
+    const otherToken = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID, sessionId: otherSessionId }, JWT_SECRET)).token
+    const client = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+    const other = await connectProvider({ url: server.wsUrl, name: roomName(), token: otherToken })
+    try {
+      await Promise.all([client.synced, other.synced])
+      assert.equal(server.getConnectionCount(), 2)
+      const baseline = runtime.enqueueCalls.length
+      revoked = true
+      if (mode === 'mutation revocation') client.document.getMap('attack').set('write', 'blocked')
+      await waitFor(() => server.getConnectionCount() === 1)
+      assert.equal(runtime.enqueueCalls.length, baseline, 'invalid session persisted a write')
+      assert.equal(other.provider.isAuthenticated, true)
+      const retry = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+      try { assert.notEqual(await retry.outcome, 'authenticated') } finally { retry.provider.destroy() }
+      assert.equal(server.getConnectionCount(), 1)
+      // Reactivation/new login cannot restore the revoked session; only a new session token works.
+      other.document.getMap('valid').set('write', 'allowed')
+      await waitFor(() => runtime.enqueueCalls.length > baseline)
+    } finally {
+      client.provider.destroy()
+      other.provider.destroy()
+      await server.destroy()
+    }
+  })
+}

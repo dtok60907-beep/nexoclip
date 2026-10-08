@@ -83,6 +83,11 @@ export function createTopupService({ pool = getPool(), gateway = pakasirClient, 
         reason: 'topup',
         idempotencyKey: `topup:${topup.id}`,
         metadata: { topupId: topup.id, orderId: topup.order_id, txnId, amountIdr: Number(topup.amount_idr), provider: PROVIDER_KEY, sandbox: Boolean(remote.is_sandbox) },
+        creditLot: {
+          sourceType: remote.is_sandbox ? 'sandbox' : 'paid',
+          amountIdr: remote.is_sandbox ? 0 : topup.amount_idr,
+          paymentFeeIdr: remote.is_sandbox ? 0 : null,
+        },
       });
       return repository.markTopupCompleted(client, topup.id, {
         creditLedgerId: entry.id,
