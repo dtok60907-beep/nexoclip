@@ -98,23 +98,127 @@ export function createProviderBillingRepository(pool) {
         count(*) FILTER (WHERE provider_account_id=$3 AND provider_request_id IS NULL)::integer AS missing_request_ids
         FROM requests`,[bill.period_start,bill.period_end,bill.provider_account_id])).rows[0];
     },
-    async requestInventory(bill,db=pool) {
-      const result=await db.query(`SELECT e.id::text AS observation_id,e.workspace_id,e.generation_job_id,
+    async requestInventory(bill,db=pool,{page=1,search='',status='all'}={}) {
+      const limit=50;
+      const result=(await db.query(`WITH inventory AS (
+        SELECT e.id::text AS observation_id,e.workspace_id,e.generation_job_id,
         e.provider_account_id,e.provider_request_id,e.dispatch_id,e.event_type,e.cost_source,
-        e.cost_usd::text,gj.model,COALESCE(dispatch.dispatched_at,e.created_at) AS request_time,
+        e.cost_usd::text,gj.model,gj.environment,COALESCE(dispatch.dispatched_at,e.created_at) AS request_time,
         (dispatch.dispatched_at IS NULL) AS time_is_fallback,
         CASE WHEN e.provider_account_id IS NULL THEN 'unknown'
-          WHEN e.provider_account_id=$3 THEN 'matching' ELSE 'other' END AS account_match
+          WHEN e.provider_account_id=$3 THEN 'matching' ELSE 'other' END AS account_match,
+        CASE WHEN reconciled.has_corrections THEN 'corrected' WHEN reconciled.id IS NOT NULL THEN 'reconciled' ELSE 'unreconciled' END AS reconciliation_status,
+        elsewhere.import_id AS other_reconciliation_import_id,
+        (SELECT count(DISTINCT (other.workspace_id,other.generation_job_id)) FROM generation_cost_events other
+          WHERE other.provider=e.provider AND other.provider_account_id=e.provider_account_id
+            AND other.provider_request_id=e.provider_request_id) AS matching_jobs
         FROM latest_generation_cost_observations e
         JOIN generation_jobs gj ON gj.workspace_id=e.workspace_id AND gj.id=e.generation_job_id
         LEFT JOIN LATERAL (SELECT min(d.created_at) AS dispatched_at FROM generation_cost_events d
           WHERE d.workspace_id=e.workspace_id AND d.generation_job_id=e.generation_job_id
             AND d.provider=e.provider AND d.dispatch_id=e.dispatch_id AND d.event_type='dispatch') dispatch ON true
+        LEFT JOIN LATERAL (SELECT r.id,
+          EXISTS(SELECT 1 FROM provider_request_cost_corrections c WHERE c.reconciliation_id=r.id) AS has_corrections
+          FROM provider_request_reconciliations r JOIN generation_cost_events original ON original.id=r.cost_event_id
+          WHERE r.import_id=$7::uuid AND r.provider_account_id=e.provider_account_id AND r.provider_request_id=e.provider_request_id
+            AND original.workspace_id=e.workspace_id AND original.generation_job_id=e.generation_job_id) reconciled ON true
+        LEFT JOIN provider_request_reconciliations elsewhere ON elsewhere.provider_account_id=e.provider_account_id
+          AND elsewhere.provider_request_id=e.provider_request_id AND elsewhere.import_id<>$7::uuid
         WHERE e.provider='byteplus' AND COALESCE(dispatch.dispatched_at,e.created_at)>=$1::timestamptz
           AND COALESCE(dispatch.dispatched_at,e.created_at)<$2::timestamptz
-        ORDER BY COALESCE(dispatch.dispatched_at,e.created_at) DESC,e.id DESC LIMIT 101`,
-        [bill.period_start,bill.period_end,bill.provider_account_id]);
-      return {rows:result.rows.slice(0,100),truncated:result.rows.length>100,limit:100};
+          AND ($4='' OR strpos(lower(COALESCE(e.provider_request_id,'')),lower($4))>0
+            OR strpos(lower(gj.model),lower($4))>0
+            OR strpos(e.generation_job_id::text,lower($4))>0
+            OR strpos(e.workspace_id::text,lower($4))>0
+            OR strpos(COALESCE(e.provider_account_id,''),$4)>0
+            OR strpos(e.dispatch_id::text,lower($4))>0)
+      ), filtered AS (SELECT * FROM inventory WHERE $8='all' OR reconciliation_status=$8)
+        SELECT (SELECT count(*)::integer FROM filtered) AS total,
+        (SELECT jsonb_build_object('unreconciled',count(*) FILTER(WHERE reconciliation_status='unreconciled'),
+          'reconciled',count(*) FILTER(WHERE reconciliation_status='reconciled'),
+          'corrected',count(*) FILTER(WHERE reconciliation_status='corrected')) FROM inventory) AS status_counts,
+        COALESCE((SELECT jsonb_agg(to_jsonb(paged) ORDER BY paged.request_time DESC,paged.observation_id::bigint DESC)
+          FROM (SELECT * FROM filtered ORDER BY request_time DESC,observation_id::bigint DESC LIMIT $5 OFFSET $6) paged),'[]'::jsonb) AS rows`,
+        [bill.period_start,bill.period_end,bill.provider_account_id,search,limit,(page-1)*limit,bill.id,status])).rows[0];
+      return {rows:result.rows,limit,truncated:false,search,status,statusCounts:result.status_counts,pagination:{page,total:result.total,totalPages:Math.max(1,Math.ceil(result.total/limit))}};
+    },
+    async reconciliationExportSnapshot(id) {
+      return this.transaction(async db=>{
+        await db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+        const detail=await this.detail(id,db);
+        if(!detail)throw Object.assign(new Error('Tagihan tidak ditemukan'),{status:404});
+        const count=(await db.query(`SELECT
+          (SELECT count(*) FROM provider_request_reconciliations WHERE import_id=$1) +
+          (SELECT count(*) FROM provider_request_cost_corrections c JOIN provider_request_reconciliations r ON r.id=c.reconciliation_id WHERE r.import_id=$1) AS rows`,[id])).rows[0];
+        if(Number(count.rows)>9999)throw Object.assign(new Error('Ekspor audit maksimal 10.000 baris termasuk ringkasan tagihan'),{status:413});
+        return {...detail,mappings:await this.mappings(id,db),payments:await this.paymentEvidence(id,db),reconciliations:await this.requestReconciliations(id,db),corrections:await this.requestCorrectionHistory(id,db)};
+      });
+    },
+    async requestReconciliations(id,db=pool) {
+      return (await db.query(`SELECT r.id::text,COALESCE(c.payment_evidence_id,r.payment_evidence_id)::text AS payment_evidence_id,
+        r.cost_event_id::text,COALESCE(c.cost_event_id,r.cost_event_id)::text AS current_cost_event_id,
+        r.provider_account_id,r.provider_request_id,COALESCE(c.group_key,r.group_key) AS group_key,
+        COALESCE(c.cost_usd,r.cost_usd)::text AS cost_usd,r.cost_usd::text AS original_cost_usd,initial.cost_idr::text AS original_cost_idr,COALESCE(c.created_by,r.created_by) AS current_created_by,COALESCE(c.created_at,r.created_at) AS current_created_at,r.evidence_reference AS original_evidence_reference,r.note AS original_note,r.created_by AS original_created_by,
+        COALESCE(c.evidence_reference,r.evidence_reference) AS evidence_reference,
+        COALESCE(c.note,r.note) AS note,r.created_at,e.workspace_id,e.generation_job_id,job.model,
+        e.cost_idr::text,e.usd_idr_rate::text,c.id::text AS latest_correction_id
+        FROM provider_request_reconciliations r
+        LEFT JOIN LATERAL (SELECT * FROM provider_request_cost_corrections revisions
+          WHERE revisions.reconciliation_id=r.id ORDER BY revisions.id DESC LIMIT 1) c ON true
+        JOIN generation_cost_events e ON e.id=COALESCE(c.cost_event_id,r.cost_event_id)
+        JOIN generation_cost_events initial ON initial.id=r.cost_event_id
+        JOIN generation_jobs job ON job.workspace_id=e.workspace_id AND job.id=e.generation_job_id
+        WHERE r.import_id=$1 ORDER BY r.id DESC`,[id])).rows;
+    },
+    async requestCorrectionHistory(id,db=pool) {
+      return (await db.query(`SELECT c.id::text,c.reconciliation_id::text,c.previous_cost_event_id::text,
+        c.cost_event_id::text,c.payment_evidence_id::text,c.group_key,c.cost_usd::text,c.evidence_reference,
+        c.note,c.created_by,c.created_at,r.provider_request_id,e.cost_idr::text,e.usd_idr_rate::text,
+        previous.cost_usd::text AS previous_cost_usd,previous.cost_idr::text AS previous_cost_idr
+        FROM provider_request_cost_corrections c JOIN provider_request_reconciliations r ON r.id=c.reconciliation_id
+        JOIN generation_cost_events e ON e.id=c.cost_event_id
+        JOIN generation_cost_events previous ON previous.id=c.previous_cost_event_id
+        WHERE r.import_id=$1 ORDER BY c.id DESC`,[id])).rows;
+    },
+    async requestReconciliationById(id,importId,db=pool) {
+      return (await db.query('SELECT *,id::text,cost_event_id::text FROM provider_request_reconciliations WHERE id=$1 AND import_id=$2',[id,importId])).rows[0] || null;
+    },
+    async correctRequestCost(db,{parent,previousCostEventId,paymentId,groupKey,request,evidence,fingerprint,userId}) {
+      const event=await this.appendReconciledCost(db,{id:parent.import_id,request,evidence,fingerprint,previousCostEventId});
+      await db.query(`INSERT INTO provider_request_cost_corrections
+        (reconciliation_id,previous_cost_event_id,cost_event_id,payment_evidence_id,group_key,cost_usd,evidence_reference,note,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[parent.id,previousCostEventId,event.id,paymentId,groupKey,evidence.costUsd,evidence.evidenceReference,evidence.note,userId]);
+    },
+    async reconciliationForRequest(account,request,db=pool) {
+      return (await db.query(`SELECT *,cost_usd::text,payment_evidence_id::text FROM provider_request_reconciliations
+        WHERE provider_account_id=$1 AND provider_request_id=$2`,[account,request])).rows[0] || null;
+    },
+    async requestObservation(observationId,db=pool) {
+      return (await db.query(`SELECT e.*,gj.model,gj.environment,COALESCE(dispatch.dispatched_at,e.created_at) AS request_time,
+        (dispatch.dispatched_at IS NULL) AS time_is_fallback,
+        (SELECT count(DISTINCT (other.workspace_id,other.generation_job_id)) FROM generation_cost_events other
+          WHERE other.provider=e.provider AND other.provider_account_id=e.provider_account_id
+            AND other.provider_request_id=e.provider_request_id) AS matching_jobs
+        FROM generation_cost_events e JOIN generation_jobs gj ON gj.workspace_id=e.workspace_id AND gj.id=e.generation_job_id
+        LEFT JOIN LATERAL (SELECT min(d.created_at) AS dispatched_at FROM generation_cost_events d
+          WHERE d.workspace_id=e.workspace_id AND d.generation_job_id=e.generation_job_id
+            AND d.provider=e.provider AND d.dispatch_id=e.dispatch_id AND d.event_type='dispatch') dispatch ON true
+        WHERE e.id=$1 AND e.provider='byteplus' AND e.event_type<>'attempt_started'`,[observationId])).rows[0] || null;
+    },
+    async appendReconciledCost(db,{id,request,evidence,fingerprint,previousCostEventId}) {
+      return (await db.query(`INSERT INTO generation_cost_events
+        (workspace_id,generation_job_id,provider,provider_account_id,provider_request_id,dispatch_id,worker_attempt,
+         event_type,observation_fingerprint,cost_usd,cost_idr,usd_idr_rate,cost_source,usage)
+        VALUES($1,$2,'byteplus',$3,$4,$5,$6,'reconciled',$7,$8,$9,$10,'reported',$11::jsonb) RETURNING id`,
+        [request.workspace_id,request.generation_job_id,request.provider_account_id,request.provider_request_id,
+         request.dispatch_id,request.worker_attempt,fingerprint,evidence.costUsd,evidence.costIdr,evidence.usdIdrRate,
+         JSON.stringify({billingImportId:id,evidenceReference:evidence.evidenceReference,source:'operator_request_evidence',...(previousCostEventId ? {previousCostEventId} : {})})])).rows[0];
+    },
+    async reconcileRequest(db,{id,paymentId,groupKey,request,evidence,fingerprint,userId}) {
+      const event=await this.appendReconciledCost(db,{id,request,evidence,fingerprint});
+      await db.query(`INSERT INTO provider_request_reconciliations
+        (import_id,payment_evidence_id,cost_event_id,provider_account_id,provider_request_id,group_key,cost_usd,evidence_reference,note,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[id,paymentId,event.id,request.provider_account_id,request.provider_request_id,groupKey,evidence.costUsd,evidence.evidenceReference,evidence.note,userId]);
     },
     async review(db, { id, note, comparison, reviewHash, userId }) {
       await db.query(`INSERT INTO provider_billing_reviews
@@ -132,6 +236,24 @@ export function createProviderBillingRepository(pool) {
     async classifyEnvironment(db,{id,environment,note,userId}) {
       await db.query(`INSERT INTO provider_billing_environments(import_id,environment,note,created_by)
         VALUES($1,$2,$3,$4)`,[id,environment,note,userId]);
+    },
+    async paymentEvidence(id,db=pool) {
+      return (await db.query(`SELECT id::text,kind,amount_usd::text,amount_idr::text,paid_at,reference,note,created_at
+        FROM provider_payment_evidence WHERE import_id=$1 ORDER BY id DESC`,[id])).rows;
+    },
+    async addPaymentEvidence(db,{id,evidence,userId}) {
+      await db.query(`INSERT INTO provider_payment_evidence(import_id,kind,amount_usd,amount_idr,paid_at,reference,note,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,evidence.kind,evidence.amountUsd,evidence.amountIdr,evidence.paidAt,evidence.reference,evidence.note,userId]);
+    },
+    async packageAllocations(id,db=pool) {
+      return (await db.query(`SELECT id::text,payment_evidence_id::text,group_key,usage_unit,total_quota::text,
+        consumed_quota::text,allocated_usd::text,allocated_idr::text,note,created_at
+        FROM provider_package_allocations WHERE import_id=$1 ORDER BY id`,[id])).rows;
+    },
+    async allocatePackage(db,{id,paymentId,groupKey,allocation,userId}) {
+      await db.query(`INSERT INTO provider_package_allocations
+        (import_id,payment_evidence_id,group_key,usage_unit,total_quota,consumed_quota,allocated_usd,allocated_idr,note,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[id,paymentId,groupKey,allocation.usageUnit,allocation.totalQuota,allocation.consumedQuota,allocation.allocatedUsd,allocation.allocatedIdr,allocation.note,userId]);
     },
     async mapSku(db,{id,groupKey,group,model,note,userId}) {
       await db.query(`INSERT INTO provider_billing_sku_mappings

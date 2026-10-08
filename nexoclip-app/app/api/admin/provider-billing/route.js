@@ -31,7 +31,12 @@ export function createProviderBillingHandlers({sessionLookup=getCurrentSession,s
       requirePlatformOperator(session.user_id,env);
       if(method==='GET'){
         const params=new URL(request.url).searchParams;
-        return Response.json(await service.read({userId:session.user_id,id:params.get('id'),page:params.get('page')||1,environment:params.get('environment')||'all'}),{headers});
+        if(params.has('export')) {
+          if(params.get('export')!=='reconciliation-csv')throw Object.assign(new Error('Format ekspor tidak valid'),{status:400});
+          const result=await service.exportReconciliation({userId:session.user_id,id:params.get('id')});
+          return new Response(result.csv,{headers:{...headers,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="${result.filename}"`,'X-Content-Type-Options':'nosniff'}});
+        }
+        return Response.json(await service.read({userId:session.user_id,id:params.get('id'),page:params.get('page')||1,environment:params.get('environment')||'all',requestPage:params.get('requestPage')??1,requestSearch:params.get('requestSearch')??'',requestStatus:params.get('requestStatus')??'all'}),{headers});
       }
       if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origin tidak valid'},{status:403,headers});
       const input=await readJson(request);

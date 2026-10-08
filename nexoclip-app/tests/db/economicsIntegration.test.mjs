@@ -28,7 +28,7 @@ async function fixture(run) {
         created_at TIMESTAMPTZ DEFAULT '2026-09-01T00:00:00Z', finished_at TIMESTAMPTZ DEFAULT '2026-10-05T12:00:00Z',
         UNIQUE(workspace_id,id)
       );`);
-    for (const name of ['007_credits.sql', '031_generation_cost_events.sql', '032_credit_lots.sql', '033_payment_fee_reconciliation.sql', '036_credit_revenue_simulation.sql','041_generation_environment.sql']) {
+    for (const name of ['007_credits.sql', '031_generation_cost_events.sql', '032_credit_lots.sql', '033_payment_fee_reconciliation.sql', '036_credit_revenue_simulation.sql','039_generation_provider_account.sql','041_generation_environment.sql']) {
       await client.query(await readFile(new URL(name, migrations), 'utf8'));
     }
     const workspaceId = randomUUID();
@@ -55,10 +55,10 @@ async function fixture(run) {
         VALUES($1,$2,$3,$4,$5,$6,$7)`, [workspaceId, generationId, lot, reserved, finalized ? consumed : 0, finalized ? reserved - consumed : 0, finalized ? new Date('2026-10-05T12:00:00Z') : null]);
       return lot;
     }
-    async function event(generationId, { request = randomUUID(), dispatch = randomUUID(), attempt = 1, type = 'succeeded', usd = 0.01, idr = 150, source = 'reported', workspace = workspaceId } = {}) {
+    async function event(generationId, { request = randomUUID(), dispatch = randomUUID(), attempt = 1, type = 'succeeded', usd = 0.01, idr = 150, source = 'reported', workspace = workspaceId, account = null } = {}) {
       const fingerprint = createHash('sha256').update(String(sequence++)).digest('hex');
-      await client.query(`INSERT INTO generation_cost_events(workspace_id,generation_job_id,provider,provider_request_id,dispatch_id,worker_attempt,event_type,observation_fingerprint,cost_usd,cost_idr,usd_idr_rate,cost_source)
-        VALUES($1,$2,'provider-a',$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [workspace, generationId, request, dispatch, attempt, type, fingerprint, usd, idr, idr !== null && usd !== null && usd > 0 ? idr / usd : null, source]);
+      await client.query(`INSERT INTO generation_cost_events(workspace_id,generation_job_id,provider,provider_request_id,dispatch_id,worker_attempt,event_type,observation_fingerprint,cost_usd,cost_idr,usd_idr_rate,cost_source,provider_account_id)
+        VALUES($1,$2,'provider-a',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [workspace, generationId, request, dispatch, attempt, type, fingerprint, usd, idr, idr !== null && usd !== null && usd > 0 ? idr / usd : null, source, account]);
     }
     const report = (extra = {}) => getEconomicsReport(client, { workspaceId, since: '2026-10-01T00:00:00Z', until: '2026-10-08T00:00:00Z', ...extra });
     await run({ client, workspaceId, job, allocation, event, report });
@@ -236,3 +236,21 @@ test('specific trial simulation recognizes only consumed credits and preserves r
     await client.query('ROLLBACK TO SAVEPOINT environment_edit');
   });
  });
+
+ test('terminal costs from another provider account cannot finalize a provisional request', { skip }, async () => {
+  await fixture(async ({ job, allocation, event, report }) => {
+    const id = await job();
+    await allocation(id);
+    const request = randomUUID();
+    await event(id, { request, account: '123', type: 'succeeded' });
+    await event(id, { request, account: '456', type: 'poll' });
+    let totals = mapEconomicsTotals((await report()).totals);
+    assert.equal(totals.providerCostIdr, 300);
+    assert.equal(totals.coverage.provisionalProviderRequests, 1);
+    assert.equal(totals.contributionIdr, null);
+    await event(id, { request, account: '456', type: 'succeeded' });
+    totals = mapEconomicsTotals((await report()).totals);
+    assert.equal(totals.coverage.provisionalProviderRequests, 0);
+    assert.equal(totals.contributionIdr, 150);
+  });
+});

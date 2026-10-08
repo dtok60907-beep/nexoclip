@@ -67,6 +67,7 @@ export async function getEconomicsReport(pool, { workspaceId, since, until, grou
                   SELECT 1 FROM generation_cost_events terminal
                   WHERE terminal.workspace_id = e.workspace_id AND terminal.generation_job_id = e.generation_job_id
                     AND terminal.provider = e.provider AND terminal.cost_usd = e.cost_usd
+                    AND terminal.provider_account_id IS NOT DISTINCT FROM e.provider_account_id
                     AND terminal.event_type IN ('succeeded', 'failed', 'output_failed', 'reconciled')
                     AND ((e.provider_request_id IS NOT NULL AND terminal.provider_request_id = e.provider_request_id)
                       OR (e.provider_request_id IS NULL AND terminal.provider_request_id IS NULL AND terminal.dispatch_id = e.dispatch_id))

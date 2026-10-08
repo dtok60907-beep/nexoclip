@@ -44,7 +44,7 @@ async function withDatabase(run, beforeLots = async () => {}) {
       await client.query(`CREATE SCHEMA ${schema}`);
       await client.query(`SET search_path TO ${schema}, public`);
       await client.query(schemaSql);
-      for (const filename of ['007_credits.sql', '008_pricing.sql', '013_generation_outputs_usage.sql', '016_generation_limits.sql', '027_credit_topups.sql', '029_generation_pricing_snapshot.sql']) {
+      for (const filename of ['007_credits.sql', '008_pricing.sql', '013_generation_outputs_usage.sql', '016_generation_limits.sql', '027_credit_topups.sql', '029_generation_pricing_snapshot.sql', '041_generation_environment.sql']) {
         await client.query(await migration(filename));
       }
       const version = (await client.query(`INSERT INTO pricing_versions (version) VALUES (1) RETURNING id`)).rows[0];

@@ -28,6 +28,13 @@ function detail(overrides = {}) {
 }
 
 const renderDetail = data => renderToStaticMarkup(React.createElement(module.exports.ProviderBillingDetail, { data }));
+test('payment form explains evidence-only scope and escapes bank reference and notes',()=>{
+  const data={bill:{environment:'development'},paymentEvidence:[{id:'1',kind:'invoice_payment',reference:'<script>',note:'<img>',amount_usd:'1',amount_idr:'17000',effectiveFx:'17000',paid_at:'2026-10-08T00:00:00Z'}]};
+  const html=renderToStaticMarkup(React.createElement(module.exports.ProviderPaymentEvidence,{data,disabled:false,onSave:()=>{}}));
+  assert.match(html,/Simpan bukti pembayaran/);assert.match(html,/belum mengubah COGS/);
+  assert.match(html,/17.000/);assert.match(html,/&lt;script&gt;/);assert.match(html,/&lt;img&gt;/);
+  assert.doesNotMatch(html,/<script>|<img>/);
+});
 test('development invoice is explicitly separated from production evidence',()=>{
   const data=detail();data.bill.environment='development';
   assert.match(renderDetail(data),/Tagihan pengembangan; bukan bukti biaya production/);
@@ -105,4 +112,59 @@ test('uploaded CSV text and operator notes are escaped in billing detail', () =>
   assert.doesNotMatch(html, /<script>|<img/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+});
+
+test('package allocation form states scope and escapes evidence',()=>{
+ const data={bill:{environment:'development'},paymentEvidence:[{id:'1',kind:'package_purchase',reference:'<proof>',amount_usd:'1'}],groups:[{groupKey:'a',configuration:'<sku>',usage_unit:'Piece',package_usage:'1'}],packageAllocations:[{id:'1',payment_evidence_id:'1',group_key:'a',consumed_quota:'1',total_quota:'3',usage_unit:'Piece',allocated_usd:'0.33333333',allocated_idr:'0.333333',note:'<note>'}]};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderPackageAllocation,{data,onSave:()=>{}}));
+ assert.match(html,/Simpan alokasi paket/);assert.match(html,/Biaya per job belum berubah/);assert.match(html,/&lt;proof&gt;/);assert.match(html,/&lt;note&gt;/);
+});
+
+test('request reconciliation form explains permanent cost update and escapes charge evidence',()=>{
+ const data={bill:{environment:'development'},paymentEvidence:[],groups:[],requestInventory:{rows:[],truncated:true},requestReconciliations:[{id:'1',provider_request_id:'<req>',generation_job_id:'job',cost_usd:'0.4',cost_idr:'6800',evidence_reference:'<proof>',note:'<note>'}]};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderRequestReconciliation,{data,onSave:()=>{}}));
+ assert.match(html,/Simpan pencocokan biaya job/);assert.match(html,/memperbarui biaya job di Economics/);assert.match(html,/100 request terbaru/);assert.match(html,/&lt;proof&gt;/);assert.match(html,/&lt;req&gt;/);
+});
+
+
+test('correction form shows initial and effective values plus escaped audit evidence',()=>{
+ const data={paymentEvidence:[{id:'1',kind:'invoice_payment',reference:'BANK',effectiveFx:'17000'}],groups:[{groupKey:'a',package_usage:'0',configuration:'Model',mapping:{model:'test'}}],requestReconciliations:[{id:'1',current_cost_event_id:'2',payment_evidence_id:'1',group_key:'a',provider_request_id:'<request>',generation_job_id:'job',original_cost_usd:'0.4',original_evidence_reference:'<initial>',original_note:'<old>',cost_usd:'0.6'}],requestCorrectionHistory:[{id:'1',provider_request_id:'<request>',previous_cost_usd:'0.4',cost_usd:'0.6',previous_cost_idr:'6800',cost_idr:'10200',evidence_reference:'<proof>',note:'<reason>',created_by:'operator',created_at:'2026-10-08T00:00:00Z'}]};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderRequestCostCorrections,{data,onSave:()=>{}}));
+ assert.match(html,/Simpan koreksi biaya/);assert.match(html,/versi biaya/);assert.match(html,/nilai sebelumnya tetap tersimpan/);assert.match(html,/&lt;initial&gt;/);assert.match(html,/&lt;reason&gt;/);assert.match(html,/operator/);assert.match(html,/6.800/);assert.match(html,/10.200/);
+});
+
+
+test('request search and pagination display total coverage without old 100-row limit',()=>{
+ const inventory={rows:[],limit:50,truncated:false,search:'<req>',pagination:{page:2,total:111,totalPages:3}};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderBillingRequests,{inventory,onPage:()=>{},onSearch:()=>{}}));
+ assert.match(html,/Cari request/);assert.match(html,/Request sebelumnya/);assert.match(html,/Request berikutnya/);assert.match(html,/Halaman 2 \/ 3/);assert.match(html,/111 request/);assert.match(html,/&lt;req&gt;/);assert.match(html,/Ringkasan biaya tetap mencakup seluruh periode/);assert.doesNotMatch(html,/100 request terbaru/);
+});
+
+
+test('audit CSV button explains full-invoice scope independently of request filters',()=>{
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderBillingDetail,{data:detail(),onExport:()=>{},disabled:false}));
+ assert.match(html,/Ekspor CSV audit/);assert.match(html,/Ekspor tidak mengikuti filter request/);assert.match(html,/nilai awal dan terkini/);
+});
+
+
+test('status filter distinguishes corrected zero costs and displays search coverage',()=>{
+ const inventory={rows:[{observation_id:'1',provider_request_id:'req',generation_job_id:'job',workspace_id:'workspace',model:'test',cost_usd:'0.00000000',cost_source:'reported',reconciliation_status:'corrected',account_match:'matching'}],status:'corrected',statusCounts:{unreconciled:110,reconciled:0,corrected:1},search:'',pagination:{page:1,total:1,totalPages:1}};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderBillingRequests,{inventory,onPage:()=>{},onSearch:()=>{}}));
+ assert.match(html,/Status rekonsiliasi/);assert.match(html,/Belum dicocokkan/);assert.match(html,/Dicocokkan tanpa koreksi/);assert.match(html,/<option value="corrected" selected="">Dikoreksi/);assert.match(html,/dikoreksi 1/);assert.match(html,/belum dicocokkan 110/);assert.match(html,/termasuk biaya nol/);assert.match(html,/Reset filter/);
+});
+
+
+test('request prerequisite column shows multiple blockers and escapes their text',()=>{
+ const inventory={rows:[{observation_id:'1',provider_request_id:'req',model:'test',cost_source:'unknown',reconciliation_status:'unreconciled',readiness:{canReconcile:false,reasons:[{code:'missing_account',message:'Akun provider belum diketahui'},{code:'missing_mapping',message:'<unsafe> model mapping'}]}}]};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderBillingRequests,{inventory}));
+ assert.match(html,/Prasyarat pencocokan/);assert.match(html,/Akun provider belum diketahui/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/Prasyarat tersedia/);
+ inventory.rows[0].readiness={canReconcile:true,reasons:[],eligibleGroupKeys:['sku']};
+ const ready=renderToStaticMarkup(React.createElement(module.exports.ProviderBillingRequests,{inventory}));
+ assert.match(ready,/Prasyarat tersedia/);assert.match(ready,/Masukkan biaya dan bukti provider/);
+});
+
+test('reconciliation selector excludes blocked and already reconciled requests',()=>{
+ const data={bill:{environment:'development'},paymentEvidence:[{id:'1',kind:'invoice_payment'}],groups:[],requestInventory:{rows:[{observation_id:'1',provider_request_id:'eligible-request',model:'test',readiness:{canReconcile:true,eligibleGroupKeys:['sku']}},{observation_id:'2',provider_request_id:'blocked-request',readiness:{canReconcile:false,reasons:[{code:'missing_account',message:'Missing account'}]}},{observation_id:'3',provider_request_id:'reconciled-request',readiness:{canReconcile:false,reasons:[{code:'use_correction',message:'Use correction'}]}}]}};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderRequestReconciliation,{data,onSave:()=>{}}));
+ assert.match(html,/eligible-request/);assert.doesNotMatch(html,/blocked-request/);assert.doesNotMatch(html,/reconciled-request/);
 });

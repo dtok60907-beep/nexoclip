@@ -1,3 +1,5 @@
+import { requestReconciliationReadiness } from '../lib/providerReconciliationReadiness.js';
+import { providerBillingAuditCsv } from '../lib/providerBillingAuditCsv.js';
 import { createHash } from 'node:crypto';
 import { getPool } from '../db/pool.js';
 import { requirePlatformOperator } from '../lib/auth/platformOperator.js';
@@ -7,6 +9,9 @@ import { billingGroupRates } from '../lib/providerBillingRates.js';
 import { modelRateCatalog } from './modelRatesService.js';
 import { getDirectProvider } from '../providers/providerRegistry.js';
 import { providerBillingSummary } from '../lib/providerBillingSummary.js';
+import { validatePaymentEvidence,evidenceFx } from '../lib/providerPaymentEvidence.js';
+import { validateRequestReconciliation } from '../lib/providerRequestReconciliation.js';
+import { calculatePackageAllocation } from '../lib/providerPackageAllocation.js';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -57,17 +62,30 @@ export function createProviderBillingService({ repository, env=process.env, pars
     if (environment==='development' && productionAccount && productionAccount===account) throw fail('Akun production tidak boleh diklasifikasikan sebagai development',409);
   }
   return {
-    async read({userId,id,page=1,environment='all'}) {
+    async exportReconciliation({userId,id}) {
+      requirePlatformOperator(userId,env);
+      if(!uuid(id))throw fail('ID tagihan tidak valid');
+      const snapshot=await repo().reconciliationExportSnapshot(id);
+      return {filename:`byteplus-reconciliation-${id.toLowerCase()}.csv`,csv:providerBillingAuditCsv({...snapshot,groups:snapshot.groups.map(group=>({...group,groupKey:billingSkuKey(group)}))})};
+    },
+    async read({userId,id,page=1,environment='all',requestPage=1,requestSearch='',requestStatus='all'}) {
       requirePlatformOperator(userId,env);
       const r=repo();
       if (id) {
+        if(!['all','unreconciled','reconciled','corrected'].includes(requestStatus))throw fail('Status rekonsiliasi request tidak valid');
+        if(!/^[1-9][0-9]{0,5}$/.test(String(requestPage)) || Number(requestPage)>100000)throw fail('Halaman request tidak valid');
+        if(typeof requestSearch!=='string' || requestSearch.length>128 || /[\x00-\x1f\x7f]/.test(requestSearch))throw fail('Pencarian request maksimal 128 karakter tanpa karakter kontrol');
         if (!uuid(id)) throw fail('ID tagihan tidak valid');
         const detail=await r.detail(id);
         if (!detail) throw fail('Tagihan tidak ditemukan',404);
         const rows=await r.comparison(detail.bill);
         const mappings=await r.mappings?.(id) || [];
         const accountCoverage=await r.accountCoverage?.(detail.bill) || null;
-        const requestInventory=await r.requestInventory?.(detail.bill) || null;
+        const requestInventoryRaw=await r.requestInventory?.(detail.bill,undefined,{page:Number(requestPage),search:requestSearch.trim(),status:requestStatus}) || null;
+        const paymentEvidence=(await r.paymentEvidence?.(id) || []).map(row=>({...row,effectiveFx:evidenceFx(row)}));
+        const requestCorrectionHistory=await r.requestCorrectionHistory?.(id) || [];
+        const requestReconciliations=await r.requestReconciliations?.(id) || [];
+        const packageAllocations=await r.packageAllocations?.(id) || [];
         const accountRows=accountCoverage ? await r.comparison(detail.bill,undefined,true) : [];
         const accountComparison=accountCoverage ? {...comparisonFor(detail.bill,accountRows,mappings),scope:'verified_billing_account_dispatch_comparator'} : null;
         const comparison=comparisonFor(detail.bill,rows,mappings);
@@ -76,7 +94,8 @@ export function createProviderBillingService({ repository, env=process.env, pars
           const mapping=mappings.find(row=>row.group_key===groupKey);
           return {...billingGroupRates(group),groupKey,mapping:mapping || null};
         });
-        return {...detail,mappings,accountCoverage,accountComparison,requestInventory,modelOptions:catalog(),groups,modelSummary:providerBillingSummary(groups,rows),comparison,warnings:[...warnings,
+        const requestInventory=requestInventoryRaw ? {...requestInventoryRaw,rows:requestInventoryRaw.rows.map(request=>({...request,readiness:requestReconciliationReadiness({bill:detail.bill,request,groups,payments:paymentEvidence})}))} : null;
+        return {...detail,mappings,paymentEvidence,packageAllocations,requestReconciliations,requestCorrectionHistory,accountCoverage,accountComparison,requestInventory,modelOptions:catalog(),groups,modelSummary:providerBillingSummary(groups,rows),comparison,warnings:[...warnings.map((warning,index)=>index===0 && requestReconciliations.length ? `${requestReconciliations.length} request sudah dicocokkan berdasarkan bukti admin. Sisa tagihan belum dialokasikan; CSV agregat tidak memuat request ID.` : warning),
           ...(comparison.missingDispatchRequests>0?[`${comparison.missingDispatchRequests} request tidak memiliki waktu dispatch; pembanding memakai tanggal pencatatan sebagai fallback.`]:[]),
           ...(comparison.unknownRequests>0?[`${comparison.unknownRequests} request belum memiliki biaya. Selisih hanya membandingkan komponen biaya yang diketahui.`]:[]),
           ...(detail.bill.package_row_count>0?['Penggunaan paket terdeteksi. Nilai tagihan nol belum mencakup biaya pembelian paket; COGS penuh belum diketahui.']:[]),
@@ -107,6 +126,112 @@ export function createProviderBillingService({ repository, env=process.env, pars
           const created=await r.insert(db,{parsed,userId,reference});
           await r.classifyEnvironment(db,{id:created.id,environment,note:'Lingkungan dipilih saat impor billing',userId});
           return {id:created.id,replayed:false};
+        });
+      }
+      if(input.action==='correct-request-cost') {
+        if(!uuid(input.id) || ![input.reconciliationId,input.previousCostEventId,input.paymentId].every(value=>typeof value==='string' && /^[1-9][0-9]{0,18}$/.test(value)))throw fail('ID pencocokan, versi biaya, atau pembayaran tidak valid');
+        const r=repo();
+        return r.transaction(async db=>{
+          const initial=await r.detail(input.id,db);
+          if(!initial)throw fail('Tagihan tidak ditemukan',404);
+          await r.lockAccount(db,initial.bill.provider_account_id);
+          await r.lockImport(db,input.id);
+          const detail=await r.detail(input.id,db);
+          const parent=await r.requestReconciliationById(input.reconciliationId,input.id,db);
+          if(!parent)throw fail('Pencocokan tidak ditemukan pada tagihan ini',404);
+          const request=await r.requestObservation(parent.cost_event_id,db);
+          if(request && Number(request.matching_jobs)!==1)throw fail('Request terhubung ke beberapa job; perlu pemeriksaan manual',409);
+          const group=detail.groups.find(row=>billingSkuKey(row)===input.groupKey);
+          if(!group)throw fail('SKU tidak ditemukan');
+          const mapping=(await r.mappings(input.id,db)).find(row=>row.group_key===input.groupKey);
+          const payment=(await r.paymentEvidence(input.id,db)).find(row=>row.id===input.paymentId);
+          const rows=await r.requestReconciliations(input.id,db);
+          const others=rows.filter(row=>row.id!==parent.id && row.group_key===input.groupKey);
+          const history=await r.requestCorrectionHistory(input.id,db);
+          const existing=history.find(row=>row.reconciliation_id===parent.id && row.previous_cost_event_id===input.previousCostEventId);
+          const evidence=validateRequestReconciliation({bill:detail.bill,request,group,mapping,payment,allocatedUsd:existing ? '0' : sumDecimals(others.map(row=>row.cost_usd)),input});
+          if(existing) {
+            if(existing.payment_evidence_id!==input.paymentId || existing.group_key!==input.groupKey || existing.cost_usd!==evidence.costUsd || existing.evidence_reference!==evidence.evidenceReference || existing.note!==evidence.note)throw fail('Versi biaya sudah dikoreksi dengan nilai berbeda; muat ulang',409);
+            return {corrected:true,replayed:true};
+          }
+          const current=rows.find(row=>row.id===parent.id);
+          if(!current || current.current_cost_event_id!==input.previousCostEventId)throw fail('Versi biaya berubah; muat ulang sebelum mengoreksi',409);
+          await r.correctRequestCost(db,{parent,previousCostEventId:input.previousCostEventId,paymentId:input.paymentId,groupKey:input.groupKey,request,evidence,fingerprint:hash({reconciliation:parent.id,previous:input.previousCostEventId,evidence}),userId});
+          return {corrected:true,replayed:false};
+        });
+      }
+      if(input.action==='reconcile-request') {
+        if(!uuid(input.id) || !/^[1-9][0-9]{0,18}$/.test(String(input.observationId)) || !/^[1-9][0-9]{0,18}$/.test(String(input.paymentId)))throw fail('ID request atau bukti pembayaran tidak valid');
+        const r=repo();
+        return r.transaction(async db=>{
+          const initial=await r.detail(input.id,db);
+          if(!initial)throw fail('Tagihan tidak ditemukan',404);
+          await r.lockAccount(db,initial.bill.provider_account_id);
+          await r.lockImport(db,input.id);
+          const detail=await r.detail(input.id,db);
+          const request=await r.requestObservation(input.observationId,db);
+          if(request && Number(request.matching_jobs)!==1)throw fail('Request provider terhubung ke beberapa job; perlu pemeriksaan manual',409);
+          const group=detail.groups.find(row=>billingSkuKey(row)===input.groupKey);
+          if(!group)throw fail('SKU tidak ditemukan');
+          const mapping=(await r.mappings(input.id,db)).find(row=>row.group_key===input.groupKey);
+          const payment=(await r.paymentEvidence(input.id,db)).find(row=>row.id===String(input.paymentId));
+          const existing=request ? await r.reconciliationForRequest(request.provider_account_id,request.provider_request_id,db) : null;
+          if(existing && existing.import_id!==input.id)throw fail('Request sudah dicocokkan pada tagihan lain',409);
+          const rows=(await r.requestReconciliations(input.id,db)).filter(row=>row.group_key===input.groupKey && row.provider_request_id!==request?.provider_request_id);
+          const evidence=validateRequestReconciliation({bill:detail.bill,request,group,mapping,payment,allocatedUsd:existing ? '0' : sumDecimals(rows.map(row=>row.cost_usd)),input});
+          if(existing) {
+            if(existing.group_key!==input.groupKey || existing.payment_evidence_id!==String(input.paymentId) || existing.cost_usd!==evidence.costUsd || existing.evidence_reference!==evidence.evidenceReference || existing.note!==evidence.note)throw fail('Pencocokan sudah tersimpan dengan bukti berbeda',409);
+            return {reconciled:true,replayed:true};
+          }
+          await r.reconcileRequest(db,{id:input.id,paymentId:input.paymentId,groupKey:input.groupKey,request,evidence,fingerprint:hash({billing:input.id,request:request.provider_request_id,evidence}),userId});
+          return {reconciled:true,replayed:false};
+        });
+      }
+      if(input.action==='allocate-package') {
+        if(!uuid(input.id) || typeof input.paymentId!=='string' || !/^[1-9][0-9]{0,18}$/.test(input.paymentId))throw fail('ID bukti paket tidak valid');
+        const r=repo();
+        return r.transaction(async db=>{
+          await r.lockImport(db,input.id);
+          const detail=await r.detail(input.id,db);
+          if(!detail)throw fail('Tagihan tidak ditemukan',404);
+          if(!['development','production'].includes(detail.bill.environment))throw fail('Lingkungan tagihan belum diklasifikasi',409);
+          const payment=(await r.paymentEvidence(input.id,db)).find(row=>row.id===input.paymentId);
+          if(!payment)throw fail('Bukti paket tidak ditemukan pada tagihan');
+          const group=detail.groups.find(row=>billingSkuKey(row)===input.groupKey);
+          if(!group)throw fail('SKU tidak ditemukan');
+          const allocations=await r.packageAllocations(input.id,db);
+          const existing=allocations.find(row=>row.payment_evidence_id===input.paymentId && row.group_key===input.groupKey);
+          const allocation=calculatePackageAllocation({payment,group,allocations:existing ? allocations.filter(row=>row.id!==existing.id) : allocations,input});
+          if(existing) {
+            if(existing.total_quota!==allocation.totalQuota || existing.consumed_quota!==allocation.consumedQuota || existing.note!==allocation.note)throw fail('Alokasi sudah tersimpan dengan nilai berbeda dan tidak dapat ditimpa',409);
+            return {allocated:true,replayed:true};
+          }
+          await r.allocatePackage(db,{id:input.id,paymentId:input.paymentId,groupKey:input.groupKey,allocation,userId});
+          return {allocated:true,replayed:false};
+        });
+      }
+      if (input.action==='payment-evidence') {
+        if (!uuid(input.id)) throw fail('ID tagihan tidak valid');
+        const evidence=validatePaymentEvidence(input);
+        const r=repo();
+        return r.transaction(async db=>{
+          await r.lockImport(db,input.id);
+          const detail=await r.detail(input.id,db);
+          if(!detail)throw fail('Tagihan tidak ditemukan',404);
+          if(!['development','production'].includes(detail.bill.environment))throw fail('Klasifikasikan lingkungan tagihan sebelum mencatat pembayaran',409);
+          const rows=await r.paymentEvidence(input.id,db);
+          const existing=rows.find(row=>row.kind===evidence.kind && row.reference===evidence.reference);
+          if(existing) {
+            const identical=existing.amount_usd===evidence.amountUsd && existing.amount_idr===evidence.amountIdr && new Date(existing.paid_at).toISOString()===evidence.paidAt && existing.note===evidence.note;
+            if(!identical)throw fail('Referensi sudah tercatat dengan nilai berbeda; bukti tidak dapat ditimpa',409);
+            return {recorded:true,replayed:true};
+          }
+          if(evidence.kind==='invoice_payment') {
+            const total=sumDecimals([...rows.filter(row=>row.kind==='invoice_payment').map(row=>row.amount_usd),evidence.amountUsd]);
+            if(subtractDecimals(detail.bill.total_usd,total).startsWith('-'))throw fail('Total pembayaran USD melebihi nilai tagihan; catat biaya paket secara terpisah',409);
+          }
+          await r.addPaymentEvidence(db,{id:input.id,evidence,userId});
+          return {recorded:true,replayed:false};
         });
       }
       if (input.action==='classify-environment') {
