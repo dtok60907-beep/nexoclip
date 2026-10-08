@@ -503,6 +503,7 @@ test('real realtime collaboration converges across more than three clients for e
   repository.seedProject(PROJECT_ID, seeded)
 
   const createServer = (port = 0) => createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port,
     env: {
@@ -517,7 +518,7 @@ test('real realtime collaboration converges across more than three clients for e
   let server = createServer()
   await server.listen()
   const restartPort = Number(new URL(server.wsUrl).port)
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const clients = await Promise.all([
     connectProvider({ url: server.wsUrl, name: roomName(), token }),
     connectProvider({ url: server.wsUrl, name: roomName(), token }),
@@ -592,6 +593,7 @@ test('same-user sockets get separate participant identities and disconnect clean
   repository.seedProject(PROJECT_ID, createCanvasDocument())
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -604,7 +606,7 @@ test('same-user sockets get separate participant identities and disconnect clean
   })
 
   await server.listen()
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const alpha = await connectProvider({ url: server.wsUrl, name: roomName(), token })
   const beta = await connectProvider({ url: server.wsUrl, name: roomName(), token })
   const observer = await connectProvider({ url: server.wsUrl, name: roomName(), token })
@@ -658,6 +660,7 @@ test('same provider reconnects after forced socket/server closes, reruns async J
   repository.seedProject(PROJECT_ID, createCanvasDocument())
 
   const createServer = (port = 0) => createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port,
     env: {
@@ -676,7 +679,7 @@ test('same provider reconnects after forced socket/server closes, reruns async J
   let tokenCalls = 0
   const token = async () => {
     tokenCalls += 1
-    return (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+    return (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   }
 
   const client = await connectProvider({
@@ -717,7 +720,7 @@ test('same provider reconnects after forced socket/server closes, reruns async J
     const verifier = await connectProvider({
       url: server.wsUrl,
       name: roomName(),
-      token: (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token,
+      token: (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token,
     })
     try {
       await verifier.synced
@@ -739,6 +742,7 @@ test('hard restart rehydrates from snapshot plus updates and catches projection 
   repository.seedProject(PROJECT_ID, createCanvasDocument())
 
   const createServer = () => createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -752,7 +756,7 @@ test('hard restart rehydrates from snapshot plus updates and catches projection 
 
   let server = createServer()
   await server.listen()
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const first = await connectProvider({ url: server.wsUrl, name: roomName(), token })
 
   try {
@@ -812,6 +816,7 @@ databaseIntegrationTest('DB-backed hard restart rehydrates from snapshot plus up
   projectIds.push(projectId)
 
   const createServer = () => createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -825,7 +830,7 @@ databaseIntegrationTest('DB-backed hard restart rehydrates from snapshot plus up
 
   let server = createServer()
   await server.listen()
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId }, JWT_SECRET)).token
   const first = await connectProvider({ url: server.wsUrl, name: roomName(projectId), token })
 
   try {
@@ -885,6 +890,7 @@ test('persistence outage degrades to bounded read-only and recovers back to pers
   repository.appendFailuresRemaining = 1_000
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -900,7 +906,7 @@ test('persistence outage degrades to bounded read-only and recovers back to pers
   })
 
   await server.listen()
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const first = await connectProvider({ url: server.wsUrl, name: roomName(), token })
   let second = await connectProvider({ url: server.wsUrl, name: roomName(), token })
 

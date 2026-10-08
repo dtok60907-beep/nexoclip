@@ -160,11 +160,53 @@ test('request prerequisite column shows multiple blockers and escapes their text
  assert.match(html,/Prasyarat pencocokan/);assert.match(html,/Akun provider belum diketahui/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/Prasyarat tersedia/);
  inventory.rows[0].readiness={canReconcile:true,reasons:[],eligibleGroupKeys:['sku']};
  const ready=renderToStaticMarkup(React.createElement(module.exports.ProviderBillingRequests,{inventory}));
- assert.match(ready,/Prasyarat tersedia/);assert.match(ready,/Masukkan biaya dan bukti provider/);
+ assert.match(ready,/Prasyarat tersedia/);assert.match(ready,/biaya dan bukti masih harus diperiksa/);assert.match(ready,/CSV agregat saja belum cukup/);
 });
 
 test('reconciliation selector excludes blocked and already reconciled requests',()=>{
  const data={bill:{environment:'development'},paymentEvidence:[{id:'1',kind:'invoice_payment'}],groups:[],requestInventory:{rows:[{observation_id:'1',provider_request_id:'eligible-request',model:'test',readiness:{canReconcile:true,eligibleGroupKeys:['sku']}},{observation_id:'2',provider_request_id:'blocked-request',readiness:{canReconcile:false,reasons:[{code:'missing_account',message:'Missing account'}]}},{observation_id:'3',provider_request_id:'reconciled-request',readiness:{canReconcile:false,reasons:[{code:'use_correction',message:'Use correction'}]}}]}};
  const html=renderToStaticMarkup(React.createElement(module.exports.ProviderRequestReconciliation,{data,onSave:()=>{}}));
  assert.match(html,/eligible-request/);assert.doesNotMatch(html,/blocked-request/);assert.doesNotMatch(html,/reconciled-request/);
+});
+
+test('package job allocation form states cost basis, limits and escapes provider evidence',()=>{
+  const data={bill:{environment:'development'},requestInventory:{rows:[]},requestReconciliations:[{id:'1',package_allocation_id:'2',provider_request_id:'<script>',generation_job_id:'job',package_consumed_quota:'1',cost_usd:'1',cost_idr:'17000',evidence_reference:'<img>',note:'Verified package usage'}]};
+  const html=renderToStaticMarkup(React.createElement(module.exports.ProviderPackageRequestAllocation,{data,disabled:false,onSave:()=>{}}));
+  assert.match(html,/Alokasi biaya paket ke job/);assert.match(html,/Sisa usage tetap belum dialokasikan/);assert.match(html,/Perubahan usage menggunakan form koreksi/);
+  assert.match(html,/&lt;script&gt;/);assert.match(html,/&lt;img&gt;/);assert.doesNotMatch(html,/<script>|<img>/);
+});
+
+test('package correction shows original/current quota and escaped immutable history',()=>{
+ const row={id:'1',package_allocation_id:'2',provider_request_id:'<script>',current_cost_event_id:'4',package_consumed_quota:'0',original_package_consumed_quota:'1',cost_usd:'0',cost_idr:'0',original_cost_usd:'1',original_cost_idr:'17000'};
+ const history={id:'5',package_allocation_id:'2',provider_request_id:'<img>',previous_package_consumed_quota:'1',package_consumed_quota:'0',previous_cost_usd:'1',cost_usd:'0',previous_cost_idr:'17000',cost_idr:'0',evidence_reference:'<script>',note:'Verified cancel',created_by:'operator',created_at:'2026-10-08T00:00:00Z'};
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderPackageRequestCorrections,{data:{requestReconciliations:[row],requestCorrectionHistory:[history]},disabled:false,onSave:()=>{}}));
+ assert.match(html,/Simpan koreksi usage paket/);assert.match(html,/Usage 0 membatalkan/);assert.match(html,/Usage awal 1/);assert.match(html,/operator/);assert.match(html,/&lt;script&gt;/);assert.match(html,/&lt;img&gt;/);assert.doesNotMatch(html,/<script>|<img>/);
+});
+
+test('job context presents evidence-based invoice choices and explains full-invoice summary scope',()=>{
+ const scope={workspaceId:'workspace',jobId:'job'};
+ const render=context=>renderToStaticMarkup(React.createElement(module.exports.ProviderBillingJobContext,{scope,context}));
+ const empty=render({invoices:[]});
+ assert.match(empty,/Belum ada tagihan yang cocok/);assert.match(empty,/waktu dispatch/);assert.match(empty,/ekspor tetap mencakup seluruh tagihan/);
+ const choices=render({invoices:[{id:'one',reference:'Invoice A',billing_cycle:'2026-10',provider_account_id:'123'},{id:'two',reference:'Invoice B',billing_cycle:'2026-11',provider_account_id:'456'}]});
+ assert.match(choices,/Buka Invoice A/);assert.match(choices,/Buka Invoice B/);assert.match(choices,/Tampilkan semua job/);
+});
+
+test('request guidance selects the package form, escapes blockers and distinguishes corrections',()=>{
+ const render=request=>renderToStaticMarkup(React.createElement(module.exports.ProviderRequestGuidance,{request}));
+ const packageReady=render({packageReadiness:{canReconcile:true,reasons:[]},readiness:{canReconcile:false,reasons:[{code:'package_unsupported',message:'Direct route blocked'}]}});
+ assert.match(packageReady,/href="#provider-package-request"/);assert.match(packageReady,/paket, SKU, satuan, dan kuota/);assert.doesNotMatch(packageReady,/Direct route blocked/);
+ const blocked=render({readiness:{canReconcile:false,reasons:[{code:'missing_mapping',message:'<script>missing mapping</script>'}]}});
+ assert.match(blocked,/&lt;script&gt;/);assert.match(blocked,/href="#provider-sku-mapping"/);assert.doesNotMatch(blocked,/Buka form pencocokan/);
+ const recorded=render({reconciliation_status:'corrected',readiness:{canReconcile:true}});
+ assert.match(recorded,/bukti baru dan alasan koreksi/);assert.match(recorded,/href="#provider-package-corrections"/);assert.doesNotMatch(recorded,/Buka form pencocokan/);
+});
+
+test('guide explains the sequence and its anchor actions point to the actual panels',()=>{
+ const html=renderToStaticMarkup(React.createElement(module.exports.ProviderReconciliationGuide));
+ for(const text of ['Langkah melengkapi biaya job','Jangan membagi total invoice secara perkiraan','Job gagal juga perlu bukti biaya provider','belum menyatakan COGS atau margin sudah final'])assert.ok(html.includes(text),text);
+ const data={...detail(),bill:{...detail().bill,environment:'development'},modelOptions:[],mappings:[],paymentEvidence:[],packageAllocations:[],requestReconciliations:[],requestCorrectionHistory:[],requestInventory:{rows:[]}};
+ for(const [name,target] of [['ProviderBillingMappings','provider-sku-mapping'],['ProviderPaymentEvidence','provider-payment-evidence'],['ProviderPackageAllocation','provider-package-allocation'],['ProviderPackageRequestAllocation','provider-package-request'],['ProviderPackageRequestCorrections','provider-package-corrections'],['ProviderRequestReconciliation','provider-request-reconciliation'],['ProviderRequestCostCorrections','provider-cost-corrections']]) {
+  const panel=renderToStaticMarkup(React.createElement(module.exports[name],{data}));assert.ok(panel.includes(`id="${target}"`),name);
+ }
 });

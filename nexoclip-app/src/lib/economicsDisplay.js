@@ -31,6 +31,10 @@ export function coverageReasons(coverage = {}) {
   if (coverage.allocationMismatchJobs > 0) reasons.push('Alokasi kredit perlu diperiksa');
   return reasons;
 }
-export function economicsPath({ from, to, groupBy, page = 1,environment }) {
-  return `/api/admin/economics?${new URLSearchParams({ from, to, groupBy, page: String(page), pageSize: '25',...(environment ? {environment} : {}) })}`;
+export function economicsPath({ from, to, groupBy, page = 1,environment,costStatus,issue }) {
+  return `/api/admin/economics?${new URLSearchParams({ from, to, groupBy, page: String(page), pageSize: '25',...(environment ? {environment} : {}),...(costStatus ? {costStatus} : {}),...(issue ? {issue} : {}) })}`;
+}
+
+export function costEvidenceLabel(evidence) {
+ return {unavailable:'Status bukti belum tersedia',no_activity:'Belum ada aktivitas',incomplete:'Data biaya belum lengkap',reconciled:'Semua request dicocokkan',mixed:'Sebagian request dicocokkan',unreconciled:'Belum dicocokkan dengan bukti'}[evidence?.status] || 'Status bukti belum tersedia';
 }

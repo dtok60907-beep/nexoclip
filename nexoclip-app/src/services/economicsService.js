@@ -1,3 +1,6 @@
+import { economicsIssuesCsv } from '../lib/economicsIssuesCsv.js';
+import { mapEconomicsAttention, isEconomicsIssueFilter } from '../lib/economicsJobIssues.js';
+import { isEconomicsCostFilter } from '../lib/economicsCostFilters.js';
 import { getPool } from '../db/pool.js';
 import { getEconomicsReport } from '../repositories/economicsRepository.js';
 import { isPlatformOperator, operatorError } from '../lib/auth/platformOperator.js';
@@ -44,6 +47,14 @@ export function economicsFilters(input = {}, now = new Date()) {
     page: positiveInteger(input.page, 'page', 1, 100000),
     pageSize: positiveInteger(input.pageSize, 'pageSize', 25, 100),
   };
+  if(input.issue !== undefined) {
+    if(!isEconomicsIssueFilter(input.issue))throw inputError('Penyebab masalah tidak valid');
+    filters.issue=input.issue;
+  }
+  if (input.costStatus !== undefined) {
+    if(!isEconomicsCostFilter(input.costStatus))throw inputError('Status biaya tidak valid');
+    filters.costStatus=input.costStatus;
+  }
   if (input.environment) {
     if (!['all','development','production','unclassified'].includes(input.environment)) throw inputError('Lingkungan tidak valid');
     filters.environment=input.environment;
@@ -80,6 +91,17 @@ export function mapEconomicsTotals(row = {}) {
   const providerCostIdr = number(row.provider_cost_idr);
   const knownPaymentFeeIdr = number(row.payment_fee_idr);
   const contributionIdr = coverage.complete ? recognizedRevenueIdr - providerCostIdr - knownPaymentFeeIdr : null;
+  const evidenceAvailable=Object.hasOwn(row,'estimated_request_count');
+  const costEvidence={available:evidenceAvailable,
+    estimated:{requests:number(row.estimated_request_count),knownCostIdr:number(row.estimated_cost_idr)},
+    providerReported:{requests:number(row.provider_reported_request_count),knownCostIdr:number(row.provider_reported_cost_idr)},
+    matched:{requests:number(row.matched_request_count),knownCostIdr:number(row.matched_cost_idr)},
+    packageMatched:{requests:number(row.package_matched_request_count),knownCostIdr:number(row.package_matched_cost_idr)},
+    unknownRequests:coverage.unknownProviderRequests,
+  };
+  const matched=costEvidence.matched.requests+costEvidence.packageMatched.requests;
+  const requestCount=number(row.provider_request_count);
+  costEvidence.status=!evidenceAvailable?'unavailable':!number(row.job_count)?'no_activity':!coverage.costComplete?'incomplete':requestCount>0&&matched===requestCount?'reconciled':matched>0?'mixed':'unreconciled';
   return {
     jobCount: number(row.job_count), failedJobCount: number(row.failed_job_count),
     providerRequestCount: number(row.provider_request_count), creditsConsumed: number(row.credits_consumed),
@@ -94,6 +116,7 @@ export function mapEconomicsTotals(row = {}) {
       knownContributionIdr: recognizedRevenueIdr + number(row.simulated_revenue_addition_idr) - providerCostIdr - knownPaymentFeeIdr,
       contributionIdr: coverage.complete ? recognizedRevenueIdr + number(row.simulated_revenue_addition_idr) - providerCostIdr - knownPaymentFeeIdr : null,
     } : null,
+    costEvidence,
     costSources: { reported: number(row.reported_request_count), calculated: number(row.calculated_request_count), unknown: number(row.unknown_provider_requests) },
     coverage,
   };
@@ -101,6 +124,19 @@ export function mapEconomicsTotals(row = {}) {
 
 export function createEconomicsService({ repository, env = process.env, now = () => new Date() }) {
   return {
+    async exportIssues({workspaceId,userId,filters:input={}}) {
+      if(!isPlatformOperator(userId,env))throw operatorError();
+      if(!workspaceId)throw inputError('workspace_id is required');
+      // Pagination is a screen concern. One repository statement gives a
+      // consistent snapshot for all exported rows and their totals.
+      const filters=economicsFilters({...input,page:1,pageSize:100},now());
+      filters.issue=!filters.issue || filters.issue==='all' ? 'any' : filters.issue;
+      const maxJobs=5000;
+      const data=await repository({workspaceId,...filters,page:1,pageSize:maxJobs+1});
+      if(number(data.total)>maxJobs)throw Object.assign(new Error('Ekspor maksimal 5.000 job. Persempit periode atau filter.'),{status:413});
+      if((data.items || []).length!==number(data.total))throw Object.assign(new Error('Snapshot ekspor tidak lengkap'),{status:500});
+      return {filename:`economics-job-issues-${filters.since.slice(0,10)}.csv`,csv:economicsIssuesCsv({workspaceId,filters,data,mapTotals:mapEconomicsTotals,exportedAt:now()})};
+    },
     async getReport({ workspaceId, userId, filters: input = {} }) {
       if (!isPlatformOperator(userId, env)) throw operatorError();
       if (!workspaceId) throw inputError('workspace_id is required');
@@ -108,7 +144,7 @@ export function createEconomicsService({ repository, env = process.env, now = ()
       const data = await repository({ workspaceId, ...filters });
       const total = number(data.total);
       return {
-        period: { since: filters.since, until: filters.until, basis: 'terminal_job' }, groupBy: filters.groupBy,environment:filters.environment || 'all',
+        workspaceId, issue:filters.issue || 'all', attention:mapEconomicsAttention(data.attention), period: { since: filters.since, until: filters.until, basis: 'terminal_job' }, groupBy: filters.groupBy,costStatus:filters.costStatus || 'all',environment:filters.environment || 'all',
         totals: { ...mapEconomicsTotals(data.totals), excludedSandboxJobs: number(data.excludedSandboxJobs) },
         breakdown: (data.breakdown || []).map((row) => ({ key: row.group_key || '(unknown)', ...mapEconomicsTotals(row) })),
         items: (data.items || []).map((row) => ({

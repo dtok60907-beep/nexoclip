@@ -15,7 +15,7 @@ function matchingJobs(value) {
 
 // Availability of prerequisites only; invoice proof and the proposed charge still
 // require validation when the operator submits a reconciliation.
-export function requestReconciliationReadiness({ bill = {}, request = {}, groups = [], payments = [] } = {}) {
+export function requestReconciliationReadiness({ bill = {}, request = {}, groups = [], payments = [], mode = 'direct', allocations = [] } = {}) {
   bill ||= {};
   request ||= {};
   const reasons = [];
@@ -63,14 +63,16 @@ export function requestReconciliationReadiness({ bill = {}, request = {}, groups
   const mappedGroups = Array.isArray(groups) && hasText(request.model)
     ? groups.filter(group => group?.mapping?.model === request.model)
     : [];
-  const eligibleGroups = mappedGroups.filter(group => !(Number(group.package_usage) > 0 || Number(group.savings_plan_gross_usd) > 0));
+  const eligibleGroups = mappedGroups.filter(group => mode==='package'
+    ? !(Number(group.savings_plan_gross_usd)>0) && allocations.some(row=>row.group_key===group.groupKey && (row.remainingQuota==null || Number(row.remainingQuota)>0) && payments.some(payment=>payment.id===row.payment_evidence_id && payment.kind==='package_purchase'))
+    : !(Number(group.package_usage) > 0 || Number(group.savings_plan_gross_usd) > 0));
   if (!mappedGroups.length) {
     add('missing_mapping', 'Petakan SKU tagihan ke model job terlebih dahulu.');
   } else if (!eligibleGroups.length) {
-    add('package_unsupported', 'Semua SKU model memakai paket atau savings plan; pencocokan request langsung belum didukung.');
+    add('package_unsupported', mode==='package' ? 'Tambahkan alokasi pembelian paket pada SKU model ini; savings plan belum didukung.' : 'Semua SKU model memakai paket atau savings plan; pencocokan request langsung belum didukung.');
   }
-  if (!Array.isArray(payments) || !payments.some(payment => payment?.kind === 'invoice_payment')) {
-    add('missing_payment', 'Tambahkan bukti pembayaran tagihan untuk dasar kurs terlebih dahulu.');
+  if (!Array.isArray(payments) || !payments.some(payment => payment?.kind === (mode==='package'?'package_purchase':'invoice_payment'))) {
+    add('missing_payment', mode==='package' ? 'Tambahkan bukti pembelian paket terlebih dahulu.' : 'Tambahkan bukti pembayaran tagihan untuk dasar kurs terlebih dahulu.');
   }
 
   return {

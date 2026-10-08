@@ -16,11 +16,11 @@ function request(body: unknown): Request {
 
 test('issues a project-bound token only for the authenticated owner', async () => {
   const POST = createRealtimeTokenHandler({
-    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getAuthenticatedUser: async () => ({ id: OWNER_ID, sessionId: '550e8400-e29b-41d4-a716-446655440010' }),
     getDb: () => ({}) as any,
     userOwnsProject: async () => true,
-    issueRealtimeToken: async ({ userId, projectId }) => ({
-      token: `${userId}:${projectId}`,
+    issueRealtimeToken: async ({ userId, projectId, sessionId }) => ({
+      token: `${userId}:${projectId}:${sessionId}`,
       expiresAt: 123,
     }),
     env: { REALTIME_TOKEN_SECRET: 'secret' },
@@ -30,7 +30,7 @@ test('issues a project-bound token only for the authenticated owner', async () =
 
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), {
-    token: `${OWNER_ID}:${PROJECT_ID}`,
+    token: `${OWNER_ID}:${PROJECT_ID}:550e8400-e29b-41d4-a716-446655440010`,
     expiresAt: 123,
   })
 })
@@ -45,7 +45,7 @@ test('rejects an unauthenticated realtime token request', async () => {
 
 test('hides a project not owned by the authenticated user', async () => {
   const POST = createRealtimeTokenHandler({
-    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getAuthenticatedUser: async () => ({ id: OWNER_ID, sessionId: '550e8400-e29b-41d4-a716-446655440010' }),
     getDb: () => ({}) as any,
     userOwnsProject: async () => false,
     env: { REALTIME_TOKEN_SECRET: 'secret' },
@@ -56,7 +56,7 @@ test('hides a project not owned by the authenticated user', async () => {
 
 test('rejects a realtime token request without a project id', async () => {
   const POST = createRealtimeTokenHandler({
-    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getAuthenticatedUser: async () => ({ id: OWNER_ID, sessionId: '550e8400-e29b-41d4-a716-446655440010' }),
   })
 
   assert.equal((await POST(request({}))).status, 400)
@@ -64,7 +64,7 @@ test('rejects a realtime token request without a project id', async () => {
 
 test('does not expose a missing realtime secret', async () => {
   const POST = createRealtimeTokenHandler({
-    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getAuthenticatedUser: async () => ({ id: OWNER_ID, sessionId: '550e8400-e29b-41d4-a716-446655440010' }),
     env: {},
   })
 
@@ -72,4 +72,9 @@ test('does not expose a missing realtime secret', async () => {
 
   assert.equal(response.status, 500)
   assert.doesNotMatch(await response.text(), /secret/i)
+})
+
+test('rejects a user without a verified login session binding', async () => {
+  const POST = createRealtimeTokenHandler({ getAuthenticatedUser: async () => ({ id: OWNER_ID }) })
+  assert.equal((await POST(request({ projectId: PROJECT_ID }))).status, 401)
 })

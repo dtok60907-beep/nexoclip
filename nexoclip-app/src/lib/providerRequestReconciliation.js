@@ -6,11 +6,7 @@ function decimal(value) {
 }
 function fixed(value,places) {const text=value.toString().padStart(places+1,'0');return `${text.slice(0,-places)}.${text.slice(-places)}`;}
 export function validateRequestReconciliation({bill,request,group,mapping,payment,allocatedUsd,input}) {
- if(!request || !request.provider_request_id)throw fail('Request provider tidak ditemukan atau belum memiliki ID');
- if(request.provider_account_id!==bill.provider_account_id)throw fail('Akun request tidak cocok dengan tagihan');
- if(!['development','production'].includes(bill.environment)||request.environment!==bill.environment)throw fail('Lingkungan job dan tagihan harus cocok dan sudah diklasifikasi');
- if(request.time_is_fallback || new Date(request.request_time)<new Date(bill.period_start) || new Date(request.request_time)>=new Date(bill.period_end))throw fail('Waktu dispatch request di luar periode atau belum diketahui');
- if(!mapping || mapping.model!==request.model)throw fail('Pemetaan SKU harus cocok dengan model job');
+ validateRequestIdentity({bill,request,mapping});
  if(!payment || payment.kind!=='invoice_payment')throw fail('Pilih bukti pembayaran tagihan untuk dasar kurs');
  if(BigInt(group.package_usage.replace('.',''))>0n || Number(group.savings_plan_gross_usd || '0')>0)throw fail('SKU dengan usage paket belum mendukung pencocokan request langsung');
  const amount=decimal(input.costUsd),prior=decimal(allocatedUsd);
@@ -23,4 +19,12 @@ export function validateRequestReconciliation({bill,request,group,mapping,paymen
  const idr=(amount*rate+50000000n)/100000000n;
  if(idr>=10n**20n || rate>=10n**20n)throw fail('Biaya IDR melebihi batas pencatatan');
  return {costUsd:fixed(amount,8),costIdr:fixed(idr,6),usdIdrRate:fx,evidenceReference,note};
+}
+
+export function validateRequestIdentity({bill,request,mapping}) {
+ if(!request || !request.provider_request_id)throw fail('Request provider tidak ditemukan atau belum memiliki ID');
+ if(request.provider_account_id!==bill.provider_account_id)throw fail('Akun request tidak cocok dengan tagihan');
+ if(!['development','production'].includes(bill.environment)||request.environment!==bill.environment)throw fail('Lingkungan job dan tagihan harus cocok dan sudah diklasifikasi');
+ if(request.time_is_fallback !== false || !Number.isFinite(new Date(request.request_time).getTime()) || !Number.isFinite(new Date(bill.period_start).getTime()) || !Number.isFinite(new Date(bill.period_end).getTime()) || new Date(bill.period_start)>=new Date(bill.period_end) || new Date(request.request_time)<new Date(bill.period_start) || new Date(request.request_time)>=new Date(bill.period_end))throw fail('Waktu dispatch request di luar periode atau belum diketahui');
+ if(!mapping || mapping.model!==request.model)throw fail('Pemetaan SKU harus cocok dengan model job');
 }

@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { getEconomicsReport } from '../../src/repositories/economicsRepository.js';
-import { mapEconomicsTotals } from '../../src/services/economicsService.js';
+import { mapEconomicsTotals, createEconomicsService } from '../../src/services/economicsService.js';
 
 const databaseUrl = process.env.NEXOCLIP_TEST_DATABASE_URL;
 const skip = !databaseUrl && 'NEXOCLIP_TEST_DATABASE_URL is required (dedicated test database)';
@@ -28,7 +28,7 @@ async function fixture(run) {
         created_at TIMESTAMPTZ DEFAULT '2026-09-01T00:00:00Z', finished_at TIMESTAMPTZ DEFAULT '2026-10-05T12:00:00Z',
         UNIQUE(workspace_id,id)
       );`);
-    for (const name of ['007_credits.sql', '031_generation_cost_events.sql', '032_credit_lots.sql', '033_payment_fee_reconciliation.sql', '036_credit_revenue_simulation.sql','039_generation_provider_account.sql','041_generation_environment.sql']) {
+    for (const name of ['007_credits.sql', '031_generation_cost_events.sql', '032_credit_lots.sql', '033_payment_fee_reconciliation.sql', '036_credit_revenue_simulation.sql','039_generation_provider_account.sql','041_generation_environment.sql','037_provider_billing_imports.sql','038_provider_billing_sku_mappings.sql','040_provider_billing_environments.sql','042_provider_payment_evidence.sql','043_provider_package_allocations.sql','044_provider_request_reconciliations.sql','045_provider_request_cost_corrections.sql','046_provider_package_request_allocations.sql','047_provider_package_request_corrections.sql']) {
       await client.query(await readFile(new URL(name, migrations), 'utf8'));
     }
     const workspaceId = randomUUID();
@@ -55,10 +55,11 @@ async function fixture(run) {
         VALUES($1,$2,$3,$4,$5,$6,$7)`, [workspaceId, generationId, lot, reserved, finalized ? consumed : 0, finalized ? reserved - consumed : 0, finalized ? new Date('2026-10-05T12:00:00Z') : null]);
       return lot;
     }
-    async function event(generationId, { request = randomUUID(), dispatch = randomUUID(), attempt = 1, type = 'succeeded', usd = 0.01, idr = 150, source = 'reported', workspace = workspaceId, account = null } = {}) {
+    async function event(generationId, { request = randomUUID(), dispatch = randomUUID(), attempt = 1, type = 'succeeded', usd = 0.01, idr = 150, source = 'reported', workspace = workspaceId, account = null, provider = 'provider-a' } = {}) {
       const fingerprint = createHash('sha256').update(String(sequence++)).digest('hex');
-      await client.query(`INSERT INTO generation_cost_events(workspace_id,generation_job_id,provider,provider_request_id,dispatch_id,worker_attempt,event_type,observation_fingerprint,cost_usd,cost_idr,usd_idr_rate,cost_source,provider_account_id)
-        VALUES($1,$2,'provider-a',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [workspace, generationId, request, dispatch, attempt, type, fingerprint, usd, idr, idr !== null && usd !== null && usd > 0 ? idr / usd : null, source, account]);
+      const inserted=await client.query(`INSERT INTO generation_cost_events(workspace_id,generation_job_id,provider,provider_request_id,dispatch_id,worker_attempt,event_type,observation_fingerprint,cost_usd,cost_idr,usd_idr_rate,cost_source,provider_account_id)
+        VALUES($1,$2,$13,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id::text`, [workspace, generationId, request, dispatch, attempt, type, fingerprint, usd, idr, idr !== null && usd !== null && usd > 0 ? idr / usd : null, source, account,provider]);
+      return inserted.rows[0].id;
     }
     const report = (extra = {}) => getEconomicsReport(client, { workspaceId, since: '2026-10-01T00:00:00Z', until: '2026-10-08T00:00:00Z', ...extra });
     await run({ client, workspaceId, job, allocation, event, report });
@@ -253,4 +254,127 @@ test('specific trial simulation recognizes only consumed credits and preserves r
     assert.equal(totals.coverage.provisionalProviderRequests, 0);
     assert.equal(totals.contributionIdr, 150);
   });
+});
+
+test('evidence categories partition costs and follow corrected package events without claiming invoice finality', { skip },async()=>{
+ await fixture(async({client,workspaceId,job,allocation,event,report})=>{
+   const id=await job();await allocation(id);
+   await event(id,{source:'calculated',usd:0.01,idr:150});
+   await event(id,{source:'reported',usd:0.02,idr:300});
+   // Metadata/event labels alone cannot claim provider billing evidence.
+   await event(id,{type:'reconciled',source:'reported',usd:0.03,idr:450});
+   const actor=randomUUID();await client.query('INSERT INTO users VALUES($1)',[actor]);
+   const bill=(await client.query(`INSERT INTO provider_billing_imports(provider_account_id,billing_cycle,currency,file_hash,reference,period_start,period_end,row_count,package_row_count,gross_usd,savings_plan_gross_usd,discount_usd,coupon_usd,truncated_usd,pre_tax_usd,tax_usd,total_usd,created_by) VALUES('123','2026-10','USD',$1,'SYNTHETIC-INVOICE','2026-10-01','2026-10-08',1,1,10,0,0,0,0,10,0,10,$2) RETURNING id`,['a'.repeat(64),actor])).rows[0];
+   const pay=(await client.query(`INSERT INTO provider_payment_evidence(import_id,kind,amount_usd,amount_idr,paid_at,reference,note,created_by) VALUES($1,'package_purchase',10,150000,'2026-10-08','SYNTHETIC-PAY','Verified synthetic provider payment',$2) RETURNING id::text`,[bill.id,actor])).rows[0];
+   const invoicePayment=(await client.query(`INSERT INTO provider_payment_evidence(import_id,kind,amount_usd,amount_idr,paid_at,reference,note,created_by) VALUES($1,'invoice_payment',1,15000,'2026-10-08','SYNTHETIC-INVOICE-PAY','Verified synthetic invoice payment',$2) RETURNING id::text`,[bill.id,actor])).rows[0];
+   const sku=(await client.query(`INSERT INTO provider_package_allocations(import_id,payment_evidence_id,group_key,usage_unit,total_quota,consumed_quota,allocated_usd,allocated_idr,note,created_by) VALUES($1,$2,$3,'Piece',250,3,0.12,1800,'Verified synthetic package quota',$4) RETURNING id::text`,[bill.id,pay.id,'b'.repeat(64),actor])).rows[0];
+   const matchedRequest=randomUUID(),packagedRequest=randomUUID();
+   async function linked(request,costEvent,paymentId=pay.id,usd='0.04') {
+     return (await client.query(`INSERT INTO provider_request_reconciliations(import_id,payment_evidence_id,cost_event_id,provider_account_id,provider_request_id,group_key,cost_usd,evidence_reference,note,created_by) VALUES($1,$2,$3,'123',$4,$5,$7,'SYNTHETIC-REQUEST','Verified synthetic request cost',$6) RETURNING id::text`,[bill.id,paymentId,costEvent,request,'b'.repeat(64),actor,usd])).rows[0];
+   }
+   const matchedEvent=await event(id,{request:matchedRequest,provider:'byteplus',account:'123',type:'reconciled',usd:0.04,idr:600});
+   await linked(matchedRequest,matchedEvent,invoicePayment.id);
+   const packageEvent=await event(id,{request:packagedRequest,provider:'byteplus',account:'123',type:'reconciled',source:'calculated',usd:0.04,idr:600});
+   const parent=await linked(packagedRequest,packageEvent);
+   await client.query('INSERT INTO provider_package_request_allocations VALUES($1,$2,1)',[parent.id,sku.id]);
+   let data=await report(),totals=mapEconomicsTotals(data.totals);
+   assert.equal(totals.costEvidence.status,'mixed');
+   assert.deepEqual(totals.costEvidence.estimated,{requests:1,knownCostIdr:150});
+   assert.deepEqual(totals.costEvidence.providerReported,{requests:2,knownCostIdr:750});
+   assert.deepEqual(totals.costEvidence.matched,{requests:1,knownCostIdr:600});
+   assert.deepEqual(totals.costEvidence.packageMatched,{requests:1,knownCostIdr:600});
+   assert.equal(totals.providerRequestCount,5);assert.equal(totals.providerCostIdr,2100);
+   assert.equal(mapEconomicsTotals(data.breakdown[0]).costEvidence.status,'mixed');
+   assert.equal(mapEconomicsTotals(data.items[0]).costEvidence.packageMatched.requests,1);
+   const correctedEvent=await event(id,{request:packagedRequest,provider:'byteplus',account:'123',type:'reconciled',source:'calculated',usd:0,idr:0});
+   const correction=(await client.query(`INSERT INTO provider_request_cost_corrections(reconciliation_id,previous_cost_event_id,cost_event_id,payment_evidence_id,group_key,cost_usd,evidence_reference,note,created_by) VALUES($1,$2,$3,$4,$5,0,'CANCEL-PACKAGE','Provider corrected package usage to zero',$6) RETURNING id::text`,[parent.id,packageEvent,correctedEvent,pay.id,'b'.repeat(64),actor])).rows[0];
+   await client.query('INSERT INTO provider_package_request_corrections VALUES($1,$2,1,0)',[correction.id,sku.id]);
+   totals=mapEconomicsTotals((await report()).totals);
+   assert.equal(totals.providerCostIdr,1500);assert.equal(totals.providerRequestCount,5);
+   assert.deepEqual(totals.costEvidence.packageMatched,{requests:1,knownCostIdr:0});
+   assert.equal(totals.costEvidence.estimated.requests+totals.costEvidence.providerReported.requests+totals.costEvidence.matched.requests+totals.costEvidence.packageMatched.requests,5);
+   const verifiedJob=await job({model:'verified'});await allocation(verifiedJob);
+   const verifiedRequest=randomUUID();
+   const verifiedEvent=await event(verifiedJob,{request:verifiedRequest,provider:'byteplus',account:'123',type:'reconciled',usd:0,idr:0});
+   await linked(verifiedRequest,verifiedEvent,invoicePayment.id,'0');
+   const unknownJob=await job({model:'unknown'});await allocation(unknownJob);
+   const fxJob=await job({model:'missing-fx'});await allocation(fxJob);await event(fxJob,{usd:0.01,idr:null});
+   const estimateJob=await job({model:'estimate-only'});await allocation(estimateJob);await event(estimateJob,{source:'calculated'});
+   const sandboxJob=await job({model:'sandbox'});await allocation(sandboxJob,{source:'sandbox',amountIdr:0,feeIdr:0});await event(sandboxJob);
+   const all=await report();assert.equal(Number(all.total),5);
+   assert.equal(Number(all.attention.total_jobs),5);assert.equal(Number(all.attention.attention_jobs),4);
+   assert.equal(Number(all.attention.provider_evidence),3);assert.equal(Number(all.attention.unknown_fx),1);
+   assert.equal(Number(all.attention.unobserved_cost),1);assert.equal(Number(all.attention.missing_attempt),1);
+   assert.ok(Object.entries(all.attention).filter(([key])=>!['total_jobs','attention_jobs'].includes(key)).reduce((sum,[,value])=>sum+Number(value),0)>Number(all.attention.attention_jobs));
+   const needs=await report({costStatus:'needs_reconciliation'});
+   assert.equal(Number(needs.total),4);assert.equal(Number(needs.totals.job_count),4);
+   assert.equal(Number(needs.totals.provider_cost_idr),1650);
+   assert.deepEqual(new Set(needs.items.map(row=>row.id)),new Set([id,unknownJob,fxJob,estimateJob]));
+   assert.ok(needs.breakdown.every(row=>!['verified','sandbox'].includes(row.group_key)));
+   const next=await report({costStatus:'needs_reconciliation',page:2,pageSize:1});
+   assert.deepEqual(next.attention,needs.attention);
+   assert.equal(Number(next.attention.attention_jobs),4);
+   assert.equal(Number(next.total),4);assert.equal(next.items.length,1);assert.equal(next.items[0].id,needs.items[1].id);
+   assert.equal(Number(next.totals.provider_cost_idr),Number(needs.totals.provider_cost_idr));
+   const verified=await report({costStatus:'reconciled'});
+   assert.equal(Number(verified.total),1);assert.equal(verified.items[0].id,verifiedJob);
+   assert.equal(mapEconomicsTotals(verified.totals).costEvidence.status,'reconciled');
+   const incomplete=await report({costStatus:'incomplete'});
+   assert.deepEqual(new Set(incomplete.items.map(row=>row.id)),new Set([unknownJob,fxJob]));
+   const estimated=await report({costStatus:'estimated'});
+   assert.deepEqual(new Set(estimated.items.map(row=>row.id)),new Set([id,estimateJob]));
+   assert.equal(Number(estimated.totals.provider_cost_idr),1650);
+   const reported=await report({costStatus:'provider_reported'});
+   assert.deepEqual(new Set(reported.items.map(row=>row.id)),new Set([id,fxJob]));
+   const empty=await report({costStatus:'needs_reconciliation',model:'verified'});
+   assert.equal(Number(empty.total),0);assert.equal(Number(empty.totals.job_count),0);assert.equal(empty.breakdown.length,0);
+   assert.equal(Number(empty.attention.attention_jobs),0);assert.equal(Number(empty.attention.total_jobs),0);
+   // Fully evidenced provider costs can still have independent revenue/fee problems.
+   const fxOnly=await report({issue:'unknown_fx',costStatus:'needs_reconciliation',page:2,pageSize:1});
+   assert.equal(Number(fxOnly.total),1);assert.equal(Number(fxOnly.attention.total_jobs),1);assert.equal(fxOnly.items.length,0);
+   assert.equal(Number(fxOnly.attention.unknown_fx),1);
+   const unmatched=await report({issue:'provider_evidence'});
+   assert.equal(Number(unmatched.total),3);assert.equal(Number(unmatched.totals.provider_cost_idr),1650);
+   assert.equal(Number((await report({issue:'any'})).total),4);
+   assert.equal(Number((await report({model:'verified',issue:'any'})).total),0);
+   const financeJob=await job({model:'finance-only'});await allocation(financeJob,{source:'legacy',amountIdr:null,feeIdr:null});
+   const financeRequest=randomUUID();const financeEvent=await event(financeJob,{request:financeRequest,provider:'byteplus',account:'123',type:'reconciled',usd:0,idr:0});
+   await linked(financeRequest,financeEvent,invoicePayment.id,'0');
+   const finance=await report({model:'finance-only',costStatus:'reconciled'});
+   assert.equal(Number(finance.attention.attention_jobs),1);assert.equal(Number(finance.attention.unknown_revenue),1);assert.equal(Number(finance.attention.unknown_fee),1);assert.equal(Number(finance.attention.provider_evidence),0);
+   const feeFilter=await report({issue:'unknown_fee',costStatus:'reconciled'});
+   assert.deepEqual(feeFilter.items.map(row=>row.id),[financeJob]);assert.equal(Number(feeFilter.attention.unknown_fee),1);
+   assert.equal(Number((await report({issue:'unknown_revenue',costStatus:'reconciled'})).total),1);
+   assert.equal(Number((await report({issue:'unobserved_cost'})).total),1);
+   assert.equal(Number((await report({issue:'missing_attempt'})).total),1);
+   const failed=await job({model:'failed-but-complete',status:'failed',consumed:0});await allocation(failed,{consumed:0,source:'promo',amountIdr:0,feeIdr:0});
+   const failedRequest=randomUUID();const failedEvent=await event(failed,{request:failedRequest,provider:'byteplus',account:'123',type:'reconciled',usd:0,idr:0});
+   await linked(failedRequest,failedEvent,invoicePayment.id,'0');
+   const failedReport=await report({model:'failed-but-complete'});assert.equal(Number(failedReport.totals.failed_job_count),1);assert.equal(Number(failedReport.attention.attention_jobs),0);
+   const unknownCostJob=await job({model:'unknown-cost'});await allocation(unknownCostJob);await event(unknownCostJob,{usd:null,idr:null,source:'unknown'});
+   assert.deepEqual((await report({issue:'unknown_provider'})).items.map(row=>row.id),[unknownCostJob]);
+   const pendingJob=await job({model:'pending',settlement:'pending',consumed:0});await allocation(pendingJob,{finalized:false});await event(pendingJob,{type:'poll'});
+   assert.deepEqual((await report({issue:'pending_settlement'})).items.map(row=>row.id),[pendingJob]);
+   assert.deepEqual((await report({issue:'provisional_cost'})).items.map(row=>row.id),[pendingJob]);
+   const mismatchJob=await job({model:'mismatch'});await allocation(mismatchJob,{consumed:3});await event(mismatchJob);
+   assert.deepEqual((await report({issue:'allocation_mismatch'})).items.map(row=>row.id),[mismatchJob]);
+   const allIssues=await report({issue:'any',pageSize:1});assert.equal(Number(allIssues.total),8);assert.equal(Number(allIssues.attention.attention_jobs),8);assert.equal(allIssues.items.length,1);
+   const otherWorkspace=randomUUID();await client.query('INSERT INTO workspaces VALUES($1)',[otherWorkspace]);await job({workspace:otherWorkspace,model:'foreign-job'});
+   const foreign=await report({model:'foreign-job'});assert.equal(Number(foreign.attention.total_jobs),0);
+   const exporter=createEconomicsService({env:{NEXOCLIP_OPERATOR_USER_IDS:actor},repository:input=>getEconomicsReport(client,input),now:()=>new Date('2026-10-08T00:00:00Z')});
+   const exported=await exporter.exportIssues({workspaceId,userId:actor,filters:{from:'2026-10-01',to:'2026-10-07',issue:'all',page:2,pageSize:1}});
+   const rows=exported.csv.split('\r\n').filter(line=>line.startsWith('"job",'));
+   assert.equal(rows.length,8);
+   for(const jobId of [id,unknownJob,fxJob,estimateJob,financeJob,unknownCostJob,pendingJob,mismatchJob])assert.ok(exported.csv.includes(jobId));
+   for(const jobId of [verifiedJob,sandboxJob,failed])assert.ok(!exported.csv.includes(jobId));
+   assert.ok(!exported.csv.includes('foreign-job'));
+   const feesCsv=await exporter.exportIssues({workspaceId,userId:actor,filters:{from:'2026-10-01',to:'2026-10-07',issue:'unknown_fee',costStatus:'reconciled'}});
+   assert.ok(feesCsv.csv.includes(financeJob));assert.ok(!feesCsv.csv.includes(mismatchJob));
+   const before=(await client.query('SELECT count(*)::int AS n FROM generation_cost_events')).rows[0].n;
+   await exporter.exportIssues({workspaceId,userId:actor,filters:{from:'2026-10-01',to:'2026-10-07',model:'verified'}});
+   assert.equal((await client.query('SELECT count(*)::int AS n FROM generation_cost_events')).rows[0].n,before);
+
+
+
+ });
 });

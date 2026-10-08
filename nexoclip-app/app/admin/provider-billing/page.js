@@ -3,7 +3,8 @@ import ProviderBillingDashboard from '../../../components/ProviderBillingDashboa
 
 export const metadata = { title: 'Billing provider | NexoClip Admin' };
 
-export default async function Page() {
+export default async function Page({ searchParams }) {
   await requireAdminPage();
-  return <ProviderBillingDashboard/>;
+  const params = await searchParams || {};
+  return <ProviderBillingDashboard initialJobScope={params.jobId !== undefined || params.workspaceId !== undefined ? {jobId:params.jobId,workspaceId:params.workspaceId} : null}/>;
 }

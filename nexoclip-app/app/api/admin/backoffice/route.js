@@ -19,7 +19,12 @@ export function createBackofficeHandlers({ sessionLookup=getCurrentSession,servi
     return Response.json(await service.mutate({userId:session.user_id,workspaceId:input.workspaceId,input}),{headers});
    }
    const p=new URL(request.url).searchParams;
-   return Response.json(await service.read({userId:session.user_id,workspaceId:p.get('workspaceId'),customerId:p.get('customerId'),q:p.get('q')}),{headers});
+   if(p.has('export')){
+    if(p.get('export')!=='history-csv')throw Object.assign(new Error('Format ekspor tidak valid'),{status:400});
+    const result=await service.exportHistory({userId:session.user_id,workspaceId:p.get('workspaceId'),customerId:p.get('customerId'),history:p.get('history'),from:p.get('from'),to:p.get('to'),category:p.get('category')});
+    return new Response(result.csv,{headers:{...headers,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="${result.filename}"`,'X-Content-Type-Options':'nosniff'}});
+   }
+   return Response.json(await service.read({userId:session.user_id,workspaceId:p.get('workspaceId'),customerId:p.get('customerId'),q:p.get('q'),status:p.get('status'),page:p.get('page'),pageSize:p.get('pageSize'),history:p.get('history'),from:p.get('from'),to:p.get('to'),category:p.get('category')}),{headers});
   }catch(e){const status=e.status||(e.code==='23505'?409:500);return Response.json({error:status>=500?'Backoffice tidak dapat diproses':e.code==='23505'?'Referensi pembayaran sudah digunakan':e.message},{status,headers});}
  };
  return {GET:handle('GET'),POST:handle('POST')};

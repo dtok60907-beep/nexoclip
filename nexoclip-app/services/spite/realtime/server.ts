@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { Pool } from 'pg'
 
 import { Server, type onAuthenticatePayload, type onRequestPayload } from '@hocuspocus/server'
 import * as Y from 'yjs'
@@ -21,8 +22,10 @@ import {
   type ProjectRuntimeState,
 } from './project-runtime'
 import { YjsRepository } from './yjs-repository'
+import { createSessionAccessCheck, type SessionAccessCheck } from './session-access'
 
 type RealtimeEnvironment = {
+  DATABASE_URL?: string
   REALTIME_TOKEN_SECRET?: string
   CANVAS_AUTH_SECRET?: string
   PORT?: string
@@ -48,6 +51,7 @@ type RuntimeFactory = (options: {
 }) => RealtimeRuntime
 
 type ConnectionContext = {
+  sessionId: string
   projectId: string
   userId: string
 }
@@ -55,6 +59,7 @@ type ConnectionContext = {
 type RealtimeConnection = {
   socketId: string
   readOnly: boolean
+  close(event?: { code: number; reason: string }): void
   sendStateless(payload: string): void
 }
 
@@ -115,6 +120,8 @@ export type RealtimeServerOptions = {
   env?: RealtimeEnvironment
   repository?: RealtimeRepository
   database?: DatabaseAdapter
+  checkSession?: SessionAccessCheck
+  sessionCheckIntervalMs?: number
   verifyToken?: typeof verifyRealtimeToken
   verifyCanvasRequest?: typeof verifyCanvasAuthorization
   createRuntime?: RuntimeFactory
@@ -154,6 +161,52 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
   const connectionContexts = new Map<string, ConnectionContext>()
   const rooms = new Map<string, RoomState>()
 
+  let authDatabase: DatabaseAdapter | undefined
+  const checkSession: SessionAccessCheck = options.checkSession ?? (async identity => {
+    if (!env.DATABASE_URL) throw new Error('SaaS auth database is required')
+    if (!authDatabase) {
+      const pool = new Pool({ connectionString: env.DATABASE_URL, connectionTimeoutMillis: 3_000, query_timeout: 3_000 })
+      // Idle connection failures are handled by subsequent fail-closed checks.
+      pool.on('error', () => {})
+      authDatabase = createDatabaseAdapter({ pool, ownsPool: true })
+    }
+    return createSessionAccessCheck(authDatabase)(identity)
+  })
+  const accessInterval = options.sessionCheckIntervalMs ?? 5_000
+  if (!Number.isFinite(accessInterval) || accessInterval < 10) throw new Error('Invalid session check interval')
+  let accessTimer: ReturnType<typeof setTimeout> | undefined
+
+  async function requireActiveSession(context: ConnectionContext): Promise<void> {
+    try {
+      if (await checkSession(context)) return
+    } catch {
+      // Fail closed without exposing database details.
+    }
+    throw forbidden('login session unavailable')
+  }
+
+  function scheduleAccessSweep(): void {
+    accessTimer = setTimeout(async () => {
+      try {
+        for (const room of rooms.values()) {
+          for (const connection of room.doc.getConnections()) {
+            const context = connectionContexts.get(connection.socketId)
+            try {
+              if (!context) throw forbidden('missing login session')
+              await requireActiveSession(context)
+            } catch {
+              connection.readOnly = true
+              connection.close({ code: 4403, reason: 'Login session unavailable' })
+            }
+          }
+        }
+      } finally {
+        if (!shuttingDown) scheduleAccessSweep()
+      }
+    }, accessInterval)
+    accessTimer.unref()
+  }
+
   let shuttingDown = false
   let destroyPromise: Promise<void> | null = null
   let signalHandlersRegistered = false
@@ -186,6 +239,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         env,
         repository,
         verifyToken,
+        requireActiveSession,
         emit,
         rooms,
         isShuttingDown: () => shuttingDown,
@@ -200,8 +254,19 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
       })
       return context
     },
+    beforeHandleMessage: async (payload) => {
+      const context = requireDocumentContext(payload.documentName, payload.context)
+      try {
+        await requireActiveSession(context)
+      } catch (error) {
+        payload.connection.readOnly = true
+        payload.connection.close({ code: 4403, reason: 'Login session unavailable' })
+        throw error
+      }
+    },
     onLoadDocument: async (payload) => {
       const context = requireConnectionContext(payload.socketId, connectionContexts, payload.documentName)
+      await requireActiveSession(context)
       emit({
         type: 'ws:load-document',
         projectId: context.projectId,
@@ -265,6 +330,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
     },
     connected: async (payload) => {
       const context = requireDocumentContext(payload.documentName, payload.context)
+      await requireActiveSession(context)
       const room = rooms.get(context.projectId)
       if (!room) {
         return
@@ -345,6 +411,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
   const handle: RealtimeServerHandle = {
     async listen(port?: number): Promise<void> {
       await hocuspocusServer.listen(port ?? options.port ?? readPort(env.PORT))
+      scheduleAccessSweep()
       registerSignalHandlers()
     },
 
@@ -396,6 +463,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
 
   async function shutdownServer(): Promise<void> {
     shuttingDown = true
+    clearTimeout(accessTimer)
     emit({ type: 'server:shutdown:start' })
 
     try {
@@ -414,8 +482,12 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         await database.close()
       }
     } finally {
-      unregisterSignalHandlers()
-      emit({ type: 'server:shutdown:complete' })
+      try {
+        await authDatabase?.close()
+      } finally {
+        unregisterSignalHandlers()
+        emit({ type: 'server:shutdown:complete' })
+      }
     }
   }
 
@@ -585,6 +657,7 @@ async function authenticateConnection(
     env,
     repository,
     verifyToken,
+    requireActiveSession,
     emit: _emit,
     rooms,
     isShuttingDown,
@@ -592,6 +665,7 @@ async function authenticateConnection(
     env: RealtimeEnvironment
     repository: RealtimeRepository
     verifyToken: typeof verifyRealtimeToken
+    requireActiveSession: (context: ConnectionContext) => Promise<void>
     emit: (event: RealtimeServerEvent) => void
     rooms: Map<string, RoomState>
     isShuttingDown: () => boolean
@@ -609,6 +683,8 @@ async function authenticateConnection(
     throw forbidden('invalid token')
   }
 
+  await requireActiveSession({ projectId, userId: claims.userId, sessionId: claims.sessionId })
+
   const ownsProject = await repository.ownsProject(projectId, claims.userId)
   if (!ownsProject) {
     throw forbidden('project access denied')
@@ -620,6 +696,7 @@ async function authenticateConnection(
   return {
     projectId,
     userId: claims.userId,
+    sessionId: claims.sessionId,
   }
 }
 
@@ -799,7 +876,7 @@ function buildInternalDocumentUpdate(
 function createInternalDocumentOrigin(projectId: string, userId: string): {
   source: 'local'
   reason: 'internal-document'
-  context: ConnectionContext
+  context: Pick<ConnectionContext, 'projectId' | 'userId'>
 } {
   return {
     source: 'local',

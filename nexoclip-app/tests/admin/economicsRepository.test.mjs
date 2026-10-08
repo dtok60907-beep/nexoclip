@@ -18,3 +18,19 @@ test('economics SQL binds tenant/time/filter values and separates observed costs
   assert.doesNotMatch(received.sql, /estimated_provider_cost_usd/);
   assert.equal(result.excludedSandboxJobs, '2');
 });
+
+test('cost evidence selection is parameterized before totals, breakdown and pagination',async()=>{
+ let received;const pool={query:async(sql,values)=>{received={sql,values};return {rows:[]};}};
+ await getEconomicsReport(pool,{workspaceId:'w',since:'2026-10-01',until:'2026-10-08',environment:'production',costStatus:'needs_reconciliation',page:2,pageSize:1});
+ assert.deepEqual(received.values,['w','2026-10-01','2026-10-08','production','needs_reconciliation',1,1]);
+ assert.match(received.sql,/CASE \$5::text/);assert.match(received.sql,/SELECT \* FROM classified WHERE sandbox_funded = false AND/);
+ await assert.rejects(getEconomicsReport(pool,{costStatus:"estimated' OR true"}),{status:400});
+});
+
+test('issue selection is bound alongside cost status before summaries and pagination',async()=>{
+ let selected;const pool={query:async(sql,values)=>{selected={sql,values};return {rows:[]};}};
+ await getEconomicsReport(pool,{workspaceId:'w',since:'2026-10-01',until:'2026-10-08',environment:'production',costStatus:'reconciled',issue:'unknown_fee',page:2,pageSize:1});
+ assert.deepEqual(selected.values,['w','2026-10-01','2026-10-08','production','reconciled','unknown_fee',1,1]);
+ assert.match(selected.sql,/CASE \$6::text/);
+ await assert.rejects(getEconomicsReport(pool,{issue:"unknown_fee' OR true"}),{status:400});
+});

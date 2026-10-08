@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 export interface AuthenticatedUser {
   id: string
+  sessionId?: string
 }
 
 export interface AuthenticatedUserResolverOptions {
@@ -47,6 +48,7 @@ export function createAuthenticatedUserResolver(options: AuthenticatedUserResolv
 
     try {
       const response = await fetchFn(`${baseUrl}/api/auth/session`, {
+        cache: 'no-store',
         headers: {
           cookie: `${MAIN_SESSION_COOKIE_NAME}=${sessionToken}`,
         },
@@ -55,6 +57,7 @@ export function createAuthenticatedUserResolver(options: AuthenticatedUserResolv
       if (!response.ok) return null
 
       const body = await response.json() as {
+        sessionId?: unknown
         authenticated?: boolean
         user?: { id?: unknown }
       }
@@ -63,7 +66,7 @@ export function createAuthenticatedUserResolver(options: AuthenticatedUserResolv
         return null
       }
 
-      return { id: body.user.id }
+      return { id: body.user.id, ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}) }
     } catch {
       return null
     }

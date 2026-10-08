@@ -185,3 +185,11 @@ test('returns multiple blockers in stable order while retaining available SKU ch
   assert.deepEqual(result.eligibleGroupKeys, ['payg']);
   assert.ok(result.reasons.every(reason => typeof reason.message === 'string' && reason.message.length > 0));
 });
+
+test('package prerequisites require a mapped allocation from a package purchase and never an invoice payment',()=>{
+ const f=fixture();f.mode='package';f.groups[0].package_usage='3';f.payments=[{id:'1',kind:'package_purchase'}];f.allocations=[{group_key:'payg',payment_evidence_id:'1'}];
+ assert.equal(readiness(f).canReconcile,true);
+ f.allocations=[];assert.equal(readiness(f).canReconcile,false);
+ f.allocations=[{group_key:'payg',payment_evidence_id:'1'}];f.payments[0].kind='invoice_payment';assert.equal(readiness(f).canReconcile,false);
+ f.payments[0].kind='package_purchase';f.groups[0].savings_plan_gross_usd='1';assert.equal(readiness(f).canReconcile,false);
+});

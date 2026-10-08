@@ -92,3 +92,40 @@ test('trial revenue simulation stays separate from actual revenue and does not h
  assert.ok(Math.abs(totals.simulation.knownContributionIdr-624.81)<0.000001);
  assert.equal(totals.contributionIdr,null);assert.equal(totals.simulation.contributionIdr,null);assert.equal(totals.coverage.costComplete,false);
 });
+
+test('cost evidence completeness stays distinct from financial calculation coverage',()=>{
+ const base={job_count:1,provider_request_count:2,recognized_revenue_idr:1000,provider_cost_idr:400,estimated_request_count:1,estimated_cost_idr:150,provider_reported_request_count:1,provider_reported_cost_idr:250};
+ let value=mapEconomicsTotals(base);assert.equal(value.coverage.complete,true);assert.equal(value.contributionIdr,600);assert.equal(value.costEvidence.status,'unreconciled');
+ value=mapEconomicsTotals({...base,estimated_request_count:0,provider_reported_request_count:0,matched_request_count:1,package_matched_request_count:1});assert.equal(value.costEvidence.status,'reconciled');
+ value=mapEconomicsTotals({...base,matched_request_count:1});assert.equal(value.costEvidence.status,'mixed');
+ value=mapEconomicsTotals({...base,unknown_fx_requests:1});assert.equal(value.costEvidence.status,'incomplete');assert.equal(value.contributionIdr,null);
+ assert.equal(mapEconomicsTotals({job_count:0,estimated_request_count:0}).costEvidence.status,'no_activity');
+ assert.equal(mapEconomicsTotals({job_count:1,reported_request_count:1}).costEvidence.status,'unavailable');
+});
+
+test('cost status filters validate exact choices and reach reports without weakening authorization',async()=>{
+ for(const costStatus of ['all','needs_reconciliation','reconciled','incomplete','estimated','provider_reported'])assert.equal(economicsFilters({costStatus}).costStatus,costStatus);
+ for(const costStatus of ['',null,1,[],"reconciled' OR true",'mixed'])assert.throws(()=>economicsFilters({costStatus}),{status:400});
+ let query;
+ const service=createEconomicsService({env,now:()=>now,repository:async input=>{query=input;return {totals:{},total:0};}});
+ const data=await service.getReport({workspaceId:'w',userId:'operator-a',filters:{costStatus:'estimated',page:2}});
+ assert.equal(query.costStatus,'estimated');assert.equal(query.page,2);assert.equal(data.costStatus,'estimated');
+ await assert.rejects(service.getReport({workspaceId:'w',userId:'customer',filters:{costStatus:'estimated'}}),{status:403});
+});
+
+test('attention summary comes from all filtered jobs rather than the paged item list',async()=>{
+ const service=createEconomicsService({env,now:()=>now,repository:async()=>({total:50,items:[{id:'one',job_count:1}],attention:{total_jobs:'50',attention_jobs:'30',unknown_provider:'25',unknown_fx:'12'}})});
+ const report=await service.getReport({workspaceId:'w1',userId:'operator-a',filters:{page:2,pageSize:1}});
+ assert.equal(report.attention.totalJobs,50);assert.equal(report.attention.attentionJobs,30);assert.equal(report.items.length,1);assert.equal(report.workspaceId,'w1');
+ assert.equal(report.attention.categories.find(item=>item.code==='unknown_provider').jobs,25);
+});
+
+test('issue filter validates known causes, forwards the selection, and leaves operator denial first',async()=>{
+ const {economicsIssueFilters}=await import('../../src/lib/economicsJobIssues.js');
+ for(const option of economicsIssueFilters)assert.equal(economicsFilters({issue:option.value}).issue,option.value);
+ for(const issue of ['',null,[],"unknown_fee' OR true",'unknown'])assert.throws(()=>economicsFilters({issue}),error=>error.status===400);
+ let selected;const service=createEconomicsService({env,now:()=>now,repository:async input=>{selected=input;return {total:0};}});
+ await assert.rejects(service.getReport({workspaceId:'w1',userId:'customer',filters:{issue:'unknown_fee'}}),{status:403});assert.equal(selected,undefined);
+ const data=await service.getReport({workspaceId:'w1',userId:'operator-a',filters:{issue:'unknown_fee',costStatus:'reconciled',page:3}});
+ assert.equal(selected.issue,'unknown_fee');assert.equal(selected.costStatus,'reconciled');assert.equal(selected.page,3);assert.equal(data.issue,'unknown_fee');
+});

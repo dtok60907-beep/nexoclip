@@ -33,7 +33,7 @@ export function createRealtimeTokenHandler(deps: RealtimeTokenHandlerDeps = {}) 
     }
 
     const user = await resolveUser(request)
-    if (!user) return unauthorizedResponse()
+    if (!user || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.sessionId ?? '')) return unauthorizedResponse()
 
     const secret = env.REALTIME_TOKEN_SECRET?.trim()
     if (!secret) {
@@ -44,7 +44,7 @@ export function createRealtimeTokenHandler(deps: RealtimeTokenHandlerDeps = {}) 
       return projectNotFoundResponse()
     }
 
-    const token = await issueToken({ userId: user.id, projectId }, secret)
+    const token = await issueToken({ userId: user.id, projectId, sessionId: user.sessionId! }, secret)
     return NextResponse.json(token)
   }
 }

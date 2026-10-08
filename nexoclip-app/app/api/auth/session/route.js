@@ -17,6 +17,7 @@ export function createSessionGetHandler({ sessionLookup = getCurrentSession, env
         displayName: session.display_name,
         isPlatformOperator: isPlatformOperator(session.user_id, env),
       },
+      sessionId: session.id,
       expiresAt: session.expires_at,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   };

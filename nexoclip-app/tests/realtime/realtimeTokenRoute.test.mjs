@@ -31,7 +31,7 @@ test('returns 401 when the session is missing or invalid', async () => {
 
 test('returns 400 when projectId is not a UUID', async () => {
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async () => { throw new Error('should not be called'); },
     issueToken: async () => { throw new Error('should not be called'); },
     env: {
@@ -49,7 +49,7 @@ test('returns 400 when projectId is not a UUID', async () => {
 
 test('returns 503 when realtime auth configuration is unavailable', async () => {
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async () => { throw new Error('should not be called'); },
     issueToken: async () => { throw new Error('should not be called'); },
     env: {},
@@ -63,7 +63,7 @@ test('returns 503 when realtime auth configuration is unavailable', async () => 
 
 test('returns 403 when Canvas Auth denies authorization', async () => {
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async () => Response.json({ error: 'forbidden: internal reason' }, { status: 403 }),
     issueToken: async () => { throw new Error('should not be called'); },
     env: {
@@ -84,7 +84,7 @@ test('returns 403 when Canvas Auth denies authorization', async () => {
 
 test('returns 502 without leaking internal details when Canvas Auth fails upstream', async () => {
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async () => Response.json({ error: 'upstream exploded at http://canvas-auth.internal/authorize' }, { status: 500 }),
     issueToken: async () => { throw new Error('should not be called'); },
     env: {
@@ -126,7 +126,7 @@ test('returns 502 safe JSON when session lookup rejects', async () => {
 
 test('returns 502 safe JSON when Canvas Auth signing throws', async () => {
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async () => { throw new Error('should not be called'); },
     issueToken: async () => { throw new Error('should not be called'); },
     env: {
@@ -152,7 +152,7 @@ test('returns 502 safe JSON when Canvas Auth signing throws', async () => {
 
 test('returns 500 safe JSON when JWT issuance throws', async () => {
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async () => Response.json({ authorized: true }, { status: 200 }),
     issueToken: async () => {
       throw new Error('jwt signing failed with REALTIME_TOKEN_SECRET=jwt-secret');
@@ -181,7 +181,7 @@ test('ignores browser userId, signs the trusted auth payload, and issues a JWT o
   const signedPayloads = [];
   let sawAuthorization = false;
   const handler = createRealtimeTokenHandler({
-    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    getSession: async () => ({ id: '550e8400-e29b-41d4-a716-446655440010', user_id: SESSION_USER_ID }),
     fetchFn: async (url, init) => {
       sawAuthorization = true;
       assert.equal(url, 'http://canvas-auth.internal/authorize');
@@ -196,8 +196,9 @@ test('ignores browser userId, signs the trusted auth payload, and issues a JWT o
       });
       return Response.json({ authorized: true }, { status: 200 });
     },
-    issueToken: async ({ userId, projectId }, secret) => {
+    issueToken: async ({ userId, projectId, sessionId }, secret) => {
       assert.equal(sawAuthorization, true);
+      assert.equal(sessionId, '550e8400-e29b-41d4-a716-446655440010');
       assert.equal(secret, 'jwt-secret');
       assert.deepEqual({ userId, projectId }, { userId: SESSION_USER_ID, projectId: PROJECT_ID });
       return { token: 'jwt-token', expiresAt: 1700000060 };

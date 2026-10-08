@@ -12,11 +12,14 @@ function loginRequest(body = {}) {
 
 test('session capabilities derive from the authenticated user ID and fail closed', async () => {
   for (const [userId, configuration, expected] of [['operator-a', env, true], ['normal-user', env, false], ['operator-a', {}, false]]) {
-    const handler = createSessionGetHandler({ env: configuration, sessionLookup: async () => ({ user_id: userId, email: 'test@example.com', display_name: 'Test', isPlatformOperator: true, role: 'owner' }) });
+    const handler = createSessionGetHandler({ env: configuration, sessionLookup: async () => ({ id: 'trusted-session-id', token_hash: 'private-hash', user_id: userId, email: 'test@example.com', display_name: 'Test', isPlatformOperator: true, role: 'owner' }) });
     const request = { cookies: { get: () => ({ value: 'opaque-session' }) } };
     const response = await handler(request);
     const body = await response.json();
     assert.equal(body.user.isPlatformOperator, expected);
+    assert.equal(body.sessionId, 'trusted-session-id');
+    assert.equal(body.token_hash, undefined);
+    assert.equal(body.user.token_hash, undefined);
     assert.equal(response.headers.get('cache-control'), 'private, no-store');
   }
   const anonymous = createSessionGetHandler({ env, sessionLookup: async () => null });

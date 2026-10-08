@@ -1,3 +1,6 @@
+import { accountHistoryCsv } from '../lib/accountHistoryCsv.js';
+import { accountHistoryFilters } from '../lib/accountHistoryFilters.js';
+import { accountDirectoryFilters } from '../lib/accountDirectoryFilters.js';
 import { randomUUID } from 'node:crypto';
 import { getPool } from '../db/pool.js';
 import { createBackofficeRepository } from '../repositories/backofficeRepository.js';
@@ -13,12 +16,26 @@ export function createBackofficeService({ repository, env=process.env, grant=app
  function authorize(userId) {if(!isPlatformOperator(userId,env))throw operatorError();}
  function ids(workspaceId,customerId) {if(!uuid(workspaceId)||(customerId&&!uuid(customerId)))throw fail('ID tidak valid');}
  return {
-  async read({userId,workspaceId,customerId,q}) {
+  async read({userId,workspaceId,customerId,q,status,page,pageSize,history,from,to,category}) {
    authorize(userId);
-   if(!workspaceId)return repo().directory(String(q||'').slice(0,120));
+   if(history!=null){
+    ids(workspaceId,customerId);if(!customerId)throw fail('ID akun diperlukan');
+    const result=await repo().history(workspaceId,customerId,accountHistoryFilters({history,page,pageSize,from,to,category}));
+    if(!result)throw fail('Pelanggan tidak ada pada workspace ini',404);return result;
+   }
+   if(!workspaceId)return repo().directory(accountDirectoryFilters({q,status,page,pageSize}));
    ids(workspaceId,customerId);
    if(customerId){const p=await repo().profile(workspaceId,customerId);if(!p)throw fail('Pelanggan tidak ada pada workspace ini',404);return {...p,economics:{...p.economics,totals:mapEconomicsTotals(p.economics.totals)}};}
    return {orders:await repo().orders(workspaceId)};
+  },
+  async exportHistory({userId,workspaceId,customerId,history,from,to,category}) {
+   authorize(userId);ids(workspaceId,customerId);if(!customerId)throw fail('ID akun diperlukan');
+   const filters=accountHistoryFilters({history,from,to,category});
+   const data=await repo().history(workspaceId,customerId,filters,{exportAll:true});
+   if(!data)throw fail('Pelanggan tidak ada pada workspace ini',404);
+   if(data.pagination.total>5000)throw fail('Ekspor maksimal 5.000 entri. Persempit rentang tanggal.',413);
+   if(data.rows.length!==data.pagination.total)throw fail('Data ekspor tidak lengkap',503);
+   return {csv:accountHistoryCsv({workspaceId,customerId,filters,data}),filename:`account-${history}-${customerId}-${from||'start'}-${to||'end'}.csv`};
   },
   async mutate({userId,workspaceId,input}) {
    authorize(userId);ids(workspaceId,input.customerId);

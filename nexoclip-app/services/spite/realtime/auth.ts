@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
 
 export interface RealtimeTokenClaims {
+  sessionId: string
   userId: string
   projectId: string
   issuedAt: number
@@ -22,7 +23,7 @@ function requireSecret(secret: string): Uint8Array {
   return textEncoder.encode(secret)
 }
 
-function requireIdentity(value: string, field: 'userId' | 'projectId'): string {
+function requireIdentity(value: string, field: 'userId' | 'projectId' | 'sessionId'): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`Realtime token ${field} is required`)
   }
@@ -31,7 +32,7 @@ function requireIdentity(value: string, field: 'userId' | 'projectId'): string {
 }
 
 export async function issueRealtimeToken(
-  { userId, projectId }: { userId: string; projectId: string },
+  { userId, projectId, sessionId }: { userId: string; projectId: string; sessionId: string },
   secret: string,
 ): Promise<{ token: string; expiresAt: number }> {
   const subject = requireIdentity(userId, 'userId')
@@ -39,7 +40,7 @@ export async function issueRealtimeToken(
   const issuedAt = Math.floor(Date.now() / 1000)
   const expiresAt = issuedAt + REALTIME_TOKEN_TTL_SECONDS
 
-  const token = await new SignJWT({ projectId: roomProjectId })
+  const token = await new SignJWT({ projectId: roomProjectId, sessionId: requireIdentity(sessionId, 'sessionId') })
     .setProtectedHeader({ alg: REALTIME_TOKEN_ALGORITHM, typ: 'JWT' })
     .setSubject(subject)
     .setIssuer(REALTIME_TOKEN_ISSUER)
@@ -79,11 +80,16 @@ export async function verifyRealtimeToken(
       return null
     }
 
+    if (typeof payload.sessionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.sessionId)) {
+      return null
+    }
+
     if (typeof payload.sub !== 'string' || typeof payload.iat !== 'number' || typeof payload.exp !== 'number') {
       return null
     }
 
     return {
+      sessionId: payload.sessionId,
       userId: payload.sub,
       projectId: payload.projectId,
       issuedAt: payload.iat,

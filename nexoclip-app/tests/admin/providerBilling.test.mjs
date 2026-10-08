@@ -196,7 +196,7 @@ test('identical reconciliation retries remain idempotent after corrections free 
   const input={action:'reconcile-request',id,observationId:'1',paymentId:'1',groupKey,costUsd:'0.4',evidenceReference:'ORIGINAL-CHARGE',note:'Original verified charge before correction'};
   const repository={transaction:async fn=>fn({}),lockAccount:async()=>{},lockImport:async()=>{},
     detail:async()=>({bill:{provider_account_id:'123',environment:'development',period_start:'2026-01-01',period_end:'2026-02-01'},groups:[group]}),
-    requestObservation:async()=>({provider_account_id:'123',provider_request_id:'request-1',matching_jobs:1,environment:'development',request_time:'2026-01-02',model:'test-model'}),
+    requestObservation:async()=>({provider_account_id:'123',provider_request_id:'request-1',matching_jobs:1,environment:'development',request_time:'2026-01-02',time_is_fallback:false,model:'test-model'}),
     mappings:async()=>[{group_key:groupKey,model:'test-model'}],
     paymentEvidence:async()=>[{id:'1',kind:'invoice_payment',amount_usd:'1.00000000',amount_idr:'17000.00'}],
     reconciliationForRequest:async()=>({import_id:id,group_key:groupKey,payment_evidence_id:'1',cost_usd:'0.40000000',evidence_reference:input.evidenceReference,note:input.note}),
@@ -207,4 +207,24 @@ test('identical reconciliation retries remain idempotent after corrections free 
   await assert.rejects(service.mutate({userId:operator,input:{...input,costUsd:'0.5'}}),{status:409});
   repository.reconciliationForRequest=async()=>null;
   await assert.rejects(service.mutate({userId:operator,input}),/melebihi/);
+});
+
+test('job navigation requires an operator and validates both exact identities before querying',async()=>{
+  let calls=0;
+  const repository={jobBillingContext:async(workspaceId,jobId)=>{calls++;return {job:{workspace_id:workspaceId,id:jobId},invoices:[]};}};
+  const service=createProviderBillingService({repository,env});
+  await assert.rejects(service.read({userId:customer,workspaceId:customer,jobId:id}),{status:403});
+  for(const scope of [{jobId:id},{workspaceId:customer},{workspaceId:customer,jobId:'invalid'},{workspaceId:[customer],jobId:id}])await assert.rejects(service.read({userId:operator,...scope}),{status:400});
+  assert.equal(calls,0);
+  const result=await service.read({userId:operator,workspaceId:customer,jobId:id});
+  assert.equal(result.job.id,id);assert.equal(result.job.workspace_id,customer);assert.deepEqual(result.invoices,[]);
+  repository.jobBillingContext=async()=>null;
+  await assert.rejects(service.read({userId:operator,workspaceId:customer,jobId:id}),{status:404});
+});
+
+test('API forwards the exact workspace/job scope without treating it as a substring search',async()=>{
+  let captured;
+  const handlers=createProviderBillingHandlers({env,sessionLookup:async()=>({user_id:operator}),service:{read:async input=>{captured=input;return {};}}});
+  const response=await handlers.GET({url:`http://localhost/api/admin/provider-billing?workspaceId=${customer}&jobId=${id}`,cookies:{get:()=>({value:'session'})}});
+  assert.equal(response.status,200);assert.equal(captured.workspaceId,customer);assert.equal(captured.jobId,id);assert.equal(captured.requestSearch,'');
 });

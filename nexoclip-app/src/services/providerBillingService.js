@@ -1,3 +1,4 @@
+import { allocatePackageRequest, packageRequestBalance } from '../lib/providerPackageRequestAllocation.js';
 import { requestReconciliationReadiness } from '../lib/providerReconciliationReadiness.js';
 import { providerBillingAuditCsv } from '../lib/providerBillingAuditCsv.js';
 import { createHash } from 'node:crypto';
@@ -68,9 +69,16 @@ export function createProviderBillingService({ repository, env=process.env, pars
       const snapshot=await repo().reconciliationExportSnapshot(id);
       return {filename:`byteplus-reconciliation-${id.toLowerCase()}.csv`,csv:providerBillingAuditCsv({...snapshot,groups:snapshot.groups.map(group=>({...group,groupKey:billingSkuKey(group)}))})};
     },
-    async read({userId,id,page=1,environment='all',requestPage=1,requestSearch='',requestStatus='all'}) {
+    async read({userId,id,page=1,environment='all',requestPage=1,requestSearch='',requestStatus='all',jobId=null,workspaceId=null}) {
       requirePlatformOperator(userId,env);
       const r=repo();
+      const scoped=jobId!==null || workspaceId!==null;
+      if(scoped && (!uuid(jobId) || !uuid(workspaceId)))throw fail('Job dan workspace harus berupa ID yang valid');
+      if(scoped && !id) {
+        const context=await r.jobBillingContext(workspaceId,jobId);
+        if(!context)throw fail('Job tidak ditemukan pada workspace ini',404);
+        return context;
+      }
       if (id) {
         if(!['all','unreconciled','reconciled','corrected'].includes(requestStatus))throw fail('Status rekonsiliasi request tidak valid');
         if(!/^[1-9][0-9]{0,5}$/.test(String(requestPage)) || Number(requestPage)>100000)throw fail('Halaman request tidak valid');
@@ -81,11 +89,11 @@ export function createProviderBillingService({ repository, env=process.env, pars
         const rows=await r.comparison(detail.bill);
         const mappings=await r.mappings?.(id) || [];
         const accountCoverage=await r.accountCoverage?.(detail.bill) || null;
-        const requestInventoryRaw=await r.requestInventory?.(detail.bill,undefined,{page:Number(requestPage),search:requestSearch.trim(),status:requestStatus}) || null;
+        const requestInventoryRaw=await r.requestInventory?.(detail.bill,undefined,{page:Number(requestPage),search:requestSearch.trim(),status:requestStatus,...(scoped?{jobId,workspaceId}:{})}) || null;
         const paymentEvidence=(await r.paymentEvidence?.(id) || []).map(row=>({...row,effectiveFx:evidenceFx(row)}));
         const requestCorrectionHistory=await r.requestCorrectionHistory?.(id) || [];
         const requestReconciliations=await r.requestReconciliations?.(id) || [];
-        const packageAllocations=await r.packageAllocations?.(id) || [];
+        const packageAllocations=(await r.packageAllocations?.(id) || []).map(row=>({...row,...packageRequestBalance(row,requestReconciliations)}));
         const accountRows=accountCoverage ? await r.comparison(detail.bill,undefined,true) : [];
         const accountComparison=accountCoverage ? {...comparisonFor(detail.bill,accountRows,mappings),scope:'verified_billing_account_dispatch_comparator'} : null;
         const comparison=comparisonFor(detail.bill,rows,mappings);
@@ -94,7 +102,7 @@ export function createProviderBillingService({ repository, env=process.env, pars
           const mapping=mappings.find(row=>row.group_key===groupKey);
           return {...billingGroupRates(group),groupKey,mapping:mapping || null};
         });
-        const requestInventory=requestInventoryRaw ? {...requestInventoryRaw,rows:requestInventoryRaw.rows.map(request=>({...request,readiness:requestReconciliationReadiness({bill:detail.bill,request,groups,payments:paymentEvidence})}))} : null;
+        const requestInventory=requestInventoryRaw ? {...requestInventoryRaw,rows:requestInventoryRaw.rows.map(request=>({...request,readiness:requestReconciliationReadiness({bill:detail.bill,request,groups,payments:paymentEvidence}),packageReadiness:requestReconciliationReadiness({bill:detail.bill,request,groups,payments:paymentEvidence,mode:'package',allocations:packageAllocations})}))} : null;
         return {...detail,mappings,paymentEvidence,packageAllocations,requestReconciliations,requestCorrectionHistory,accountCoverage,accountComparison,requestInventory,modelOptions:catalog(),groups,modelSummary:providerBillingSummary(groups,rows),comparison,warnings:[...warnings.map((warning,index)=>index===0 && requestReconciliations.length ? `${requestReconciliations.length} request sudah dicocokkan berdasarkan bukti admin. Sisa tagihan belum dialokasikan; CSV agregat tidak memuat request ID.` : warning),
           ...(comparison.missingDispatchRequests>0?[`${comparison.missingDispatchRequests} request tidak memiliki waktu dispatch; pembanding memakai tanggal pencatatan sebagai fallback.`]:[]),
           ...(comparison.unknownRequests>0?[`${comparison.unknownRequests} request belum memiliki biaya. Selisih hanya membandingkan komponen biaya yang diketahui.`]:[]),
@@ -139,6 +147,7 @@ export function createProviderBillingService({ repository, env=process.env, pars
           const detail=await r.detail(input.id,db);
           const parent=await r.requestReconciliationById(input.reconciliationId,input.id,db);
           if(!parent)throw fail('Pencocokan tidak ditemukan pada tagihan ini',404);
+          if((await r.packageRequestAllocations?.(input.id,db)||[]).some(row=>row.reconciliation_id===parent.id))throw fail('Koreksi alokasi paket per request belum didukung; bukti awal tetap tersimpan',409);
           const request=await r.requestObservation(parent.cost_event_id,db);
           if(request && Number(request.matching_jobs)!==1)throw fail('Request terhubung ke beberapa job; perlu pemeriksaan manual',409);
           const group=detail.groups.find(row=>billingSkuKey(row)===input.groupKey);
@@ -158,6 +167,71 @@ export function createProviderBillingService({ repository, env=process.env, pars
           if(!current || current.current_cost_event_id!==input.previousCostEventId)throw fail('Versi biaya berubah; muat ulang sebelum mengoreksi',409);
           await r.correctRequestCost(db,{parent,previousCostEventId:input.previousCostEventId,paymentId:input.paymentId,groupKey:input.groupKey,request,evidence,fingerprint:hash({reconciliation:parent.id,previous:input.previousCostEventId,evidence}),userId});
           return {corrected:true,replayed:false};
+        });
+      }
+      if(input.action==='correct-package-request') {
+        if(!uuid(input.id)||![input.reconciliationId,input.previousCostEventId].every(value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)))throw fail('ID pencocokan atau versi biaya tidak valid');
+        const r=repo();
+        return r.transaction(async db=>{
+          const initial=await r.detail(input.id,db);
+          if(!initial)throw fail('Tagihan tidak ditemukan',404);
+          await r.lockAccount(db,initial.bill.provider_account_id);
+          await r.lockImport(db,input.id);
+          const detail=await r.detail(input.id,db);
+          const parent=await r.requestReconciliationById(input.reconciliationId,input.id,db);
+          if(!parent)throw fail('Pencocokan tidak ditemukan',404);
+          const rows=await r.packageRequestAllocations(input.id,db);
+          const current=rows.find(row=>row.reconciliation_id===parent.id);
+          if(!current)throw fail('Request bukan alokasi paket',409);
+          const allocation=(await r.packageAllocations(input.id,db)).find(row=>row.id===current.package_allocation_id);
+          const group=detail.groups.find(row=>billingSkuKey(row)===allocation?.group_key);
+          if(!group)throw fail('SKU paket tidak ditemukan');
+          const mapping=(await r.mappings(input.id,db)).find(row=>row.group_key===allocation.group_key);
+          const payment=(await r.paymentEvidence(input.id,db)).find(row=>row.id===allocation.payment_evidence_id);
+          const request=await r.requestObservation(parent.cost_event_id,db);
+          const history=await r.requestCorrectionHistory(input.id,db);
+          const existing=history.find(row=>row.reconciliation_id===parent.id&&row.previous_cost_event_id===input.previousCostEventId);
+          if(!existing&&current.current_cost_event_id!==input.previousCostEventId)throw fail('Versi biaya berubah; muat ulang sebelum mengoreksi',409);
+          const others=rows.filter(row=>row.reconciliation_id!==parent.id&&row.package_allocation_id===allocation.id);
+          const evidence=allocatePackageRequest({bill:detail.bill,request,group,mapping,payment,allocation,rows:existing?[]:others,input:{...input,groupKey:allocation.group_key},allowZero:true,recordedCost:existing});
+          if(existing) {
+            if(existing.package_allocation_id!==allocation.id||existing.package_consumed_quota!==evidence.consumedQuota||existing.evidence_reference!==evidence.evidenceReference||existing.note!==evidence.note)throw fail('Versi biaya sudah dikoreksi dengan bukti berbeda',409);
+            return {corrected:true,replayed:true};
+          }
+          if(current.current_cost_event_id!==input.previousCostEventId)throw fail('Versi biaya berubah; muat ulang sebelum mengoreksi',409);
+          const correction=await r.correctRequestCost(db,{parent,previousCostEventId:input.previousCostEventId,paymentId:payment.id,groupKey:allocation.group_key,request,evidence,fingerprint:hash({reconciliation:parent.id,previous:input.previousCostEventId,evidence}),userId});
+          await r.recordPackageRequestCorrection(db,{correctionId:correction.id,allocationId:allocation.id,previousQuota:current.consumed_quota,consumedQuota:evidence.consumedQuota});
+          return {corrected:true,replayed:false};
+        });
+      }
+      if(input.action==='allocate-package-request') {
+        if(!uuid(input.id)||![input.observationId,input.allocationId].every(value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)))throw fail('ID request atau alokasi paket tidak valid');
+        const r=repo();
+        return r.transaction(async db=>{
+          const initial=await r.detail(input.id,db);
+          if(!initial)throw fail('Tagihan tidak ditemukan',404);
+          await r.lockAccount(db,initial.bill.provider_account_id);
+          await r.lockImport(db,input.id);
+          const detail=await r.detail(input.id,db);
+          const request=await r.requestObservation(input.observationId,db);
+          const allocation=(await r.packageAllocations(input.id,db)).find(row=>row.id===input.allocationId);
+          if(!allocation)throw fail('Alokasi paket tidak ditemukan pada tagihan ini',404);
+          const group=detail.groups.find(row=>billingSkuKey(row)===allocation.group_key);
+          if(!group)throw fail('SKU paket tidak ditemukan');
+          const mapping=(await r.mappings(input.id,db)).find(row=>row.group_key===allocation.group_key);
+          const payment=(await r.paymentEvidence(input.id,db)).find(row=>row.id===allocation.payment_evidence_id);
+          const existing=request?await r.reconciliationForRequest(request.provider_account_id,request.provider_request_id,db):null;
+          const rows=await r.packageRequestAllocations(input.id,db);
+          const prior=rows.find(row=>row.provider_request_id===request?.provider_request_id);
+          const assigned=existing?[]:rows.filter(row=>row.package_allocation_id===allocation.id);
+          const evidence=allocatePackageRequest({bill:detail.bill,request,group,mapping,payment,allocation,rows:assigned,input:{...input,groupKey:allocation.group_key},recordedCost:existing&&prior?{cost_usd:prior.original_cost_usd,cost_idr:prior.original_cost_idr}:undefined});
+          if(existing) {
+            if(existing.import_id!==input.id||!prior||prior.package_allocation_id!==allocation.id||prior.initial_consumed_quota!==evidence.consumedQuota||prior.initial_evidence_reference!==evidence.evidenceReference||prior.initial_note!==evidence.note)throw fail('Request sudah memiliki pencocokan dengan bukti berbeda',409);
+            return {allocated:true,replayed:true};
+          }
+          const created=await r.reconcileRequest(db,{id:input.id,paymentId:payment.id,groupKey:allocation.group_key,request,evidence,fingerprint:hash({billing:input.id,allocation:allocation.id,request:request.provider_request_id,evidence}),userId});
+          await r.recordPackageRequestAllocation(db,{reconciliationId:created.id,allocationId:allocation.id,consumedQuota:evidence.consumedQuota});
+          return {allocated:true,replayed:false};
         });
       }
       if(input.action==='reconcile-request') {

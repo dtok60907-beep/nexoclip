@@ -375,6 +375,7 @@ test('awareness sanitizes trusted user data, allocates room-scoped Guest N label
   clock.now = 1_000
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -388,7 +389,7 @@ test('awareness sanitizes trusted user data, allocates room-scoped Guest N label
     createRuntime: ({ doc }) => new StaticReadOnlyRuntime(),
   })
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   await server.listen()
 
   const alpha = await connectProvider({ url: server.wsUrl, name: roomName(), token })
@@ -476,6 +477,7 @@ test('two sockets forging the same participantId get distinct Guests, independen
   clock.now = 1_000
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -489,7 +491,7 @@ test('two sockets forging the same participantId get distinct Guests, independen
     createRuntime: ({ doc }) => new StaticReadOnlyRuntime(),
   })
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   await server.listen()
 
   const alpha = await connectProvider({ url: server.wsUrl, name: roomName(), token })
@@ -582,6 +584,7 @@ test('read-only rooms still admit awareness but reject document mutations before
 
   const runtime = new StaticReadOnlyRuntime()
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -593,7 +596,7 @@ test('read-only rooms still admit awareness but reject document mutations before
     createRuntime: () => runtime,
   })
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   await server.listen()
 
   const first = await connectProvider({ url: server.wsUrl, name: roomName(), token })
@@ -658,6 +661,7 @@ test('durable ACKs follow Yjs update -> enqueue -> Neon commit -> PERSISTED -> A
   }
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -675,7 +679,7 @@ test('durable ACKs follow Yjs update -> enqueue -> Neon commit -> PERSISTED -> A
     },
   })
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   await server.listen()
 
   const client = await connectProvider({ url: server.wsUrl, name: roomName(), token })
@@ -744,6 +748,7 @@ test('failed appends emit no PERSISTED status or ACK until a retry commits succe
   }
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -756,7 +761,7 @@ test('failed appends emit no PERSISTED status or ACK until a retry commits succe
       createRealtimeRuntime({ projectId, doc, repository: runtimeRepository as FakeRealtimeRepository, onStateChange }),
   })
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   await server.listen()
 
   const client = await connectProvider({ url: server.wsUrl, name: roomName(), token })
@@ -799,6 +804,7 @@ test('graceful shutdown flushes pending writes before close without sending a pr
   repository.appendBehavior = async () => appendDeferred.promise
 
   const server = createRealtimeServer({
+    checkSession: async () => true,
     address: '127.0.0.1',
     port: 0,
     env: {
@@ -811,7 +817,7 @@ test('graceful shutdown flushes pending writes before close without sending a pr
       createRealtimeRuntime({ projectId, doc, repository: runtimeRepository as FakeRealtimeRepository, onStateChange }),
   })
 
-  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const token = (await issueRealtimeToken({ sessionId: '550e8400-e29b-41d4-a716-446655440010', userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   await server.listen()
 
   const client = await connectProvider({ url: server.wsUrl, name: roomName(), token })
