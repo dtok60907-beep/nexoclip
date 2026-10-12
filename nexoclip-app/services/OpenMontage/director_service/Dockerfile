@@ -16,7 +16,8 @@ COPY director_service ./director_service
 RUN useradd --uid 1001 --no-create-home director
 USER 1001:1001
 
-# DIRECTOR_HOST=:: on Railway (its private network is IPv6); PORT defaults to 4760.
+# Bind IPv4 (0.0.0.0): Railway's healthcheck connects over IPv4 and its private network
+# reaches it too. `::` would be IPv6-only under asyncio. PORT defaults to 4760.
 ENV DIRECTOR_HOST=0.0.0.0 PORT=4760
 EXPOSE 4760
 CMD ["sh", "-c", "exec python -m uvicorn director_service.app:app --host \"$DIRECTOR_HOST\" --port \"$PORT\""]
