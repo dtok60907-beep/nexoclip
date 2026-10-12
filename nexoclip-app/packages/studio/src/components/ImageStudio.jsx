@@ -892,7 +892,10 @@ function SimpleDropdown({ title, options, selected, onSelect, onClose }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ImageStudio({
+  initialPrompt = '',
   apiKey,
+  beforeGenerate,
+  persistScope,
   onGenerationStart,
   onGenerationEnd,
   onGenerationComplete,
@@ -902,9 +905,9 @@ export default function ImageStudio({
   onFilesHandled,
 }) {
   const LEGACY_PERSIST_KEY = "hg_image_studio_persistent";
-  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, persistScope || apiKey);
   useEffect(() => {
-    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+    if (!persistScope) migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
   }, [PERSIST_KEY]);
 
   // ── Model / mode state ──────────────────────────────────────────────────
@@ -922,7 +925,10 @@ export default function ImageStudio({
   const [seedLocked, setSeedLocked] = useState(false); // when true, reuse `seed` instead of randomizing
 
   // ── Prompt / upload state ───────────────────────────────────────────────
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt);
+  useEffect(() => {
+    if (initialPrompt) setPrompt(initialPrompt);
+  }, [initialPrompt]);
   const [uploadedImageUrls, setUploadedImageUrls] = useState([]);
   const [swapImageUrl, setSwapImageUrl] = useState(null);
   const [uploadHistory, setUploadHistory] = useState([]); // persisted reference images history
@@ -1269,6 +1275,7 @@ export default function ImageStudio({
   const randomSeed = () => Math.floor(Math.random() * 2147483647);
 
   const handleGenerate = async () => {
+    if (beforeGenerate && !beforeGenerate()) return;
     if (generating) return;
 
     if (imageMode) {

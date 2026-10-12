@@ -843,12 +843,31 @@ function buildEdgeMap(edge: EdgeInput): Y.Map<unknown> {
   return map
 }
 
+// Components pass node data back as fresh objects, so arrays and objects
+// must be compared by value: rewriting an unchanged one is still a document
+// update, which re-renders every node and keeps the canvas "saving".
+function sameJson(current: unknown, next: unknown): boolean {
+  const plain = current instanceof Y.AbstractType ? current.toJSON() : current
+  if (Object.is(plain, next)) return true
+  if (!plain || !next || typeof plain !== 'object' || typeof next !== 'object') return false
+  if (Array.isArray(plain) !== Array.isArray(next)) return false
+  if (Array.isArray(plain)) {
+    const items = next as unknown[]
+    return plain.length === items.length && plain.every((item, index) => sameJson(item, items[index]))
+  }
+  const a = plain as JsonRecord
+  const b = next as JsonRecord
+  const keys = Object.keys(a).filter((key) => a[key] !== undefined)
+  if (keys.length !== Object.keys(b).filter((key) => b[key] !== undefined).length) return false
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && sameJson(a[key], b[key]))
+}
+
 function setOrDelete(map: Y.Map<unknown>, key: string, value: unknown): void {
   if (value === undefined) {
     if (map.has(key)) map.delete(key)
     return
   }
-  if (!Object.is(map.get(key), value)) {
+  if (!sameJson(map.get(key), value)) {
     map.set(key, value)
   }
 }
@@ -897,6 +916,7 @@ function setDataValue(data: Y.Map<unknown>, key: string, value: unknown): void {
   }
   if (key === 'mentions' && Array.isArray(value)) {
     const current = data.get(key)
+    if (sameJson(current, value)) return
     const mentions = current instanceof Y.Array ? current : new Y.Array<unknown>()
     if (!(current instanceof Y.Array)) {
       const prior = Array.isArray(current) ? current : []

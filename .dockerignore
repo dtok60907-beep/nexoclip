@@ -14,3 +14,8 @@
 **/.turbo
 **/.cache
 **/tsconfig.tsbuildinfo
+
+# AI Director: keep the OpenAI key file and local projects out of every image.
+**/director.env
+nexoclip-app/services/OpenMontage/projects
+nexoclip-app/services/OpenMontage/.venv

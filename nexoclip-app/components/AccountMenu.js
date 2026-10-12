@@ -11,6 +11,7 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
   const [user, setUser] = useState(null);
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
   const wrapRef = useRef(null);
 
   useEffect(() => {
@@ -38,13 +39,19 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
 
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
+    setLogoutError('');
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-    } catch {
-      // Sign out locally even if the request fails.
-    } finally {
+      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      if (!response.ok) throw new Error('Logout failed. Please try again.');
       if (typeof window !== 'undefined') window.sessionStorage.removeItem('nexoclip_workspace_id');
-      router.replace('/login');
+      setUser(null);
+      setOpen(false);
+      window.dispatchEvent(new Event('nexoclip:auth-logout'));
+      router.replace('/studio/home');
+    } catch {
+      setLogoutError('Logout failed. Please try again.');
+    } finally {
+      setLoggingOut(false);
     }
   }, [router]);
 
@@ -90,6 +97,7 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
             Account
           </a>}
           {showAdminLink && user?.isPlatformOperator === true && <a href="/admin" role="menuitem" className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-cyan-200 transition-colors hover:bg-white/[0.05]">Buka Admin console ↗</a>}
+          {logoutError && <p className="px-4 pt-2 text-[11px] text-red-300" role="alert">{logoutError}</p>}
           <button
             type="button"
             role="menuitem"

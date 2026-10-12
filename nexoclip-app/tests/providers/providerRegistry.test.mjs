@@ -26,6 +26,13 @@ test('only classifies transient failures as retryable', () => {
   assert.equal(isRetryableProviderError(new TypeError('fetch failed')), true);
 });
 
+test('a dead OpenRouter API key (401) is retryable for a mapped model, but a generic 401 is not', () => {
+  assert.equal(isRetryableProviderError({ status: 401, code: 'OPENROUTER_AUTHENTICATION_FAILED' }), true);
+  // Without that specific code, a 401 could mean anything (e.g. a provider's own auth
+  // rejecting a malformed request after a direct fallback) and must not be retried blindly.
+  assert.equal(isRetryableProviderError({ status: 401, code: 'SOME_OTHER_CODE' }), false);
+});
+
 test('creates safe unsupported direct provider error', () => {
   const error = createDirectProviderUnavailableError('unknown/model', null);
   assert.equal(error.code, 'DIRECT_PROVIDER_UNAVAILABLE');

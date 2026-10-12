@@ -6,9 +6,9 @@ import path from 'node:path';
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('root route enters hosted SaaS authentication while legacy studio stays explicit', () => {
+test('root route opens the public creative studio', () => {
   const source = read('app/page.js');
 
-  assert.match(source, /redirect\(['"]\/login['"]\)/);
-  assert.doesNotMatch(source, /redirect\(['"]\/studio['"]\)/);
+  assert.match(source, /<StandaloneShell initialTab="home"/);
+  assert.doesNotMatch(source, /redirect\(/);
 });

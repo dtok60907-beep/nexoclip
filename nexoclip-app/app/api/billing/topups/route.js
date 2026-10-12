@@ -24,8 +24,11 @@ function publicOrigin(request) {
 
 export async function GET(request) {
   try {
-    const tenant = await context(request);
+    const workspaceId = request.headers.get('x-workspace-id') || new URL(request.url).searchParams.get('workspace_id');
     const service = topupService();
+    // Package prices are public; payment history remains workspace-scoped.
+    if (!workspaceId) return NextResponse.json({ packages: service.listPackages(), topups: [] });
+    const tenant = await context(request);
     return NextResponse.json({
       packages: service.listPackages(),
       topups: await service.listTopups({ workspaceId: tenant.workspace.id }),

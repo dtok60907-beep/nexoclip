@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { uploadFile, generateMarketingStudioAd } from "../generationClient.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
+import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
@@ -275,6 +276,8 @@ function SimpleDropdown({ isOpen, title, options, selected, onSelect, onClose })
 
 export default function MarketingStudio({
   apiKey,
+  beforeGenerate,
+  persistScope,
   droppedFiles,
   onFilesHandled,
   onGenerationStart,
@@ -284,9 +287,9 @@ export default function MarketingStudio({
   historyItems,
 }) {
   const LEGACY_PERSIST_KEY = "hg_marketing_studio_persistent";
-  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, persistScope || apiKey);
   useEffect(() => {
-    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+    if (!persistScope) migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
   }, [PERSIST_KEY]);
   
   const [prompt, setPrompt] = useState("");
@@ -300,6 +303,18 @@ export default function MarketingStudio({
     videoUrl: ASSETS.ugc[0].url,
     res: "1080p",
     duration: 5
+  });
+
+  // Mirrors what handleGenerate submits, priced exactly like the server reservation.
+  const marketingCredits = useGenerationPrice({
+    kind: "video",
+    model: "byteplus/seedance-2.5-unfiltered",
+    parameters: {
+      resolution: params.res,
+      duration: params.duration,
+      referenceImages: [productImage, avatarImage, ...additionalImages].filter(Boolean).length,
+      referenceVideos: params.videoUrl ? 1 : 0,
+    },
   });
 
   const [localHistory, setLocalHistory] = useState([]);
@@ -383,6 +398,7 @@ export default function MarketingStudio({
   };
 
   const handleGenerate = async () => {
+    if (beforeGenerate && !beforeGenerate()) return;
     if (!prompt.trim()) return toast.error("Please enter an ad script.");
     if (!productImage) return toast.error("Please upload a product image.");
 
@@ -764,7 +780,7 @@ export default function MarketingStudio({
                   Generating...
                 </>
               ) : (
-                <span>Launch</span>
+                <span>{marketingCredits !== null ? `Generate · ${formatCredits(marketingCredits)} credits` : 'Generate'}</span>
               )}
             </PromptAction>
           </PromptFooter>

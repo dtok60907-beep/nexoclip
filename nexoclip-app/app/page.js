@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import StandaloneShell from '@/components/StandaloneShell';
 
 export default function Home() {
-  redirect('/login');
+  return <StandaloneShell initialTab="home" />;
 }

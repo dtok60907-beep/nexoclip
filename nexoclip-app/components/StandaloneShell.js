@@ -1,18 +1,32 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
-import BillingContent from './BillingContent';
+import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
+import PricingModal from './PricingModal';
 import StudioTour from './tour/StudioTour';
+import StudioHome from './StudioHome';
+import StudioAuthModal from './saas/StudioAuthModal';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
 const StudioLoading = () => (
   <div className="h-full w-full bg-black flex items-center justify-center text-white/20">Loading Studio...</div>
+);
+
+const ComingSoon = ({ title }) => (
+  <div className="h-full w-full bg-[#030303] flex items-center justify-center text-center px-6">
+    <div>
+      <div className="text-xs uppercase tracking-widest text-white/40 mb-3">Coming Soon</div>
+      <h2 className="text-2xl font-semibold text-white mb-2">{title}</h2>
+      <p className="text-white/50 max-w-md mx-auto">We&apos;re putting the finishing touches on this studio. Check back soon.</p>
+    </div>
+  </div>
 );
 
 // The rest are lazy-loaded so they only compile/download when their tab is opened.
@@ -23,16 +37,16 @@ const studioLazy = (name) => dynamic(() => import('studio').then(mod => mod[name
 
 const VideoStudio = studioLazy('VideoStudio');
 const VibeMotionStudio = studioLazy('VibeMotionStudio');
-const LipSyncStudio = studioLazy('LipSyncStudio');
-const RecastStudio = studioLazy('RecastStudio');
 const CinemaStudio = studioLazy('CinemaStudio');
 const AudioStudio = studioLazy('AudioStudio');
 const MarketingStudio = studioLazy('MarketingStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
+const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
 
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
 const TABS = [
+  { id: 'home', label: 'Home', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></svg> },
   {
     id: 'image',
     label: 'Image Studio',
@@ -57,7 +71,7 @@ const TABS = [
   {
     id: 'audio',
     label: 'Audio Studio',
-    hidden: true,
+    hidden: true, // pure-MuAPI, no fallback — see docs/2026-08-24-muapi-dependency-audit.md
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 18V5l12-2v13"/>
@@ -69,7 +83,7 @@ const TABS = [
   {
     id: 'vibe-motion',
     label: 'Vibe Motion',
-    hidden: true,
+    hidden: true, // pure-MuAPI, no fallback — see docs/2026-08-24-muapi-dependency-audit.md
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
@@ -79,7 +93,6 @@ const TABS = [
   {
     id: 'lipsync',
     label: 'Lip Sync',
-    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
@@ -91,7 +104,6 @@ const TABS = [
   {
     id: 'body-swap',
     label: 'Body Swap',
-    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -120,7 +132,6 @@ const TABS = [
   {
     id: 'marketing',
     label: 'Marketing Studio',
-    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -139,6 +150,34 @@ const TABS = [
         <rect x="9" y="15" width="6" height="6" rx="1"/>
         <path d="M6 9v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9"/>
         <path d="M12 13v2"/>
+      </svg>
+    )
+  },
+  {
+    // Full-page app served by Caddy at /storyboard (Jellyfish), like Canvas.
+    // Hidden while still being verified; the route and page stay reachable directly.
+    id: 'storyboard',
+    hidden: true,
+    label: 'AI Storyboards Director',
+    href: '/storyboard/',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M2 9h20"/>
+        <path d="M7 4l2 5M12 4l2 5M17 4l2 5"/>
+        <path d="M10 13l4 2.5-4 2.5z"/>
+      </svg>
+    )
+  },
+  {
+    // AI Director (OpenMontage pipeline): brief -> research -> script -> scene plan -> assets.
+    id: 'director',
+    label: 'AI Director',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>
+        <path d="m4 11-.8-3.4a1 1 0 0 1 .7-1.2l13.6-3.3a1 1 0 0 1 1.2.7L19.5 7z"/>
+        <path d="m8.5 5.6 2.3 3.3M13.6 4.4l2.3 3.3"/>
       </svg>
     )
   },
@@ -172,7 +211,7 @@ const TABS = [
         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
       </svg>
     )
-  }
+  },
 ];
 
 const NAVIGATION_CATEGORIES = [
@@ -283,21 +322,61 @@ export default function StandaloneShell({ initialTab, children }) {
     if (initialTab) return initialTab;
     const firstSegment = slug[0];
     if (firstSegment && TABS.find(t => t.id === firstSegment)) return firstSegment;
-    return 'image';
+    return 'home';
   };
   
   const apiKey = null;
   const [authStatus, setAuthStatus] = useState('loading');
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authError, setAuthError] = useState('');
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const pricingAfterAuth = useRef(false);
+  const [sessionVersion, setSessionVersion] = useState(0);
+  const authReturnTo = useRef('/studio/home');
+  const openAuth = useCallback((mode = 'login', error = '') => {
+    setAuthMode(mode);
+    setAuthError(error);
+    setAuthOpen(true);
+  }, []);
+  const requireAuth = useCallback(() => {
+    if (authStatus === 'authenticated') return true;
+    openAuth('login');
+    return false;
+  }, [authStatus, openAuth]);
+  const requestPricingAuth = useCallback(() => {
+    pricingAfterAuth.current = true;
+    setPricingOpen(false);
+    openAuth('login');
+  }, [openAuth]);
+  const finishAuthentication = useCallback(async (result) => {
+    const response = await fetch('/api/workspaces', { credentials: 'include', cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not load your workspace. Please try signing in again.');
+    const payload = await response.json();
+    const workspace = payload.workspaces?.[0];
+    if (!workspace?.id) throw new Error('No workspace is available for this account.');
+    window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
+    setAuthStatus('authenticated');
+    setSessionVersion(version => version + 1);
+    setAuthOpen(false);
+    if (pricingAfterAuth.current) {
+      pricingAfterAuth.current = false;
+      setPricingOpen(true);
+    }
+    if (result?.user?.isPlatformOperator) router.push('/admin/economics');
+    else if (authReturnTo.current !== '/studio/home') router.push(authReturnTo.current);
+    authReturnTo.current = '/studio/home';
+  }, [router]);
   const [activeTab, setActiveTab] = useState(getInitialTab());
+  const [imageVisited, setImageVisited] = useState(() => getInitialTab() === 'image');
+  const [studioPrompt, setStudioPrompt] = useState('');
+  // Tabs that take the whole width: no sidebar, a back button in the header instead.
+  const isFullWidthTab = activeTab === 'director';
 
   const [balance, setBalance] = useState(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
-  const [showPromoBanner, setShowPromoBanner] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('nexoclip_promo_banner_dismissed') !== '1';
-    return true;
-  });
 
   // Sidebar Collapsed & Mobile Drawer State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -305,6 +384,7 @@ export default function StandaloneShell({ initialTab, children }) {
     return false;
   });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [collapsedNavSections, setCollapsedNavSections] = useState({});
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed(prev => {
@@ -431,8 +511,9 @@ export default function StandaloneShell({ initialTab, children }) {
     const handlePopState = () => {
       const path = window.location.pathname;
       const segments = path.split('/').filter(Boolean);
-      const tabId = segments[1] || 'image';
+      const tabId = segments[1] || 'home';
       if (TABS.find(t => t.id === tabId)) {
+        if (tabId === 'image') setImageVisited(true);
         setActiveTab(tabId);
       }
     };
@@ -448,14 +529,21 @@ export default function StandaloneShell({ initialTab, children }) {
     setTourOpen(true);
   }, []);
 
-  const handleTabChange = useCallback((tabId) => {
+  const handleTabChange = useCallback((tabId, prompt = '') => {
+    if (['billing', 'usage', 'canvas', 'storyboard', 'director'].includes(tabId) && !requireAuth()) return;
     if (tabId === 'canvas') {
       window.location.assign('/canvas');
       return;
     }
+    if (tabId === 'storyboard') {
+      window.location.assign('/storyboard/');
+      return;
+    }
     window.history.pushState(null, '', `/studio/${tabId}`);
+    if (typeof prompt === 'string' && prompt.trim()) setStudioPrompt(prompt.trim());
+    if (tabId === 'image') setImageVisited(true);
     setActiveTab(tabId);
-  }, []);
+  }, [requireAuth]);
 
   const handleOpenNotification = useCallback((notification) => {
     handleTabChange(notification.tabId);
@@ -507,11 +595,13 @@ export default function StandaloneShell({ initialTab, children }) {
         const sessionResponse = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
         const session = await sessionResponse.json();
         if (!session.authenticated) {
-          if (!cancelled) router.replace('/login');
+          window.sessionStorage.removeItem('nexoclip_workspace_id');
+          if (!cancelled) setAuthStatus('guest');
           return;
         }
         const workspaceResponse = await fetch('/api/workspaces', { credentials: 'include' });
         const workspacePayload = await workspaceResponse.json();
+        if (!workspaceResponse.ok) throw new Error('Workspace unavailable');
         const workspace = workspacePayload.workspaces?.[0];
         if (workspace?.id && typeof window !== 'undefined') {
           window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
@@ -519,14 +609,56 @@ export default function StandaloneShell({ initialTab, children }) {
         }
         if (!cancelled) setAuthStatus('authenticated');
       } catch {
-        if (!cancelled) router.replace('/login');
+        window.sessionStorage.removeItem('nexoclip_workspace_id');
+        if (!cancelled) setAuthStatus('guest');
       }
     }
 
     setHasMounted(true);
     restoreSaaSSession();
     return () => { cancelled = true; };
-  }, [router, refreshBalance]);
+  }, [sessionVersion, refreshBalance]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const intent = params.get('auth');
+    if (intent === 'login' || intent === 'register') {
+      const next = params.get('next');
+      authReturnTo.current = next?.startsWith('/') && !next.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(next)
+        ? next
+        : intent === 'register' ? '/onboarding' : '/studio/home';
+      const errors = {
+        google: 'Google sign-in did not complete. Please try again.',
+        google_state: 'Your Google sign-in expired. Please try again.',
+        google_unconfigured: 'Google sign-in is unavailable right now. Use your email instead.',
+      };
+      openAuth(intent, errors[params.get('error')] || '');
+      params.delete('auth');
+      params.delete('next');
+      params.delete('error');
+      const query = params.toString();
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    }
+  }, [openAuth]);
+
+  useEffect(() => {
+    const handleLogout = () => {
+      setAuthStatus('guest');
+      setAuthOpen(false);
+      setAuthError('');
+      setBalance(null);
+      setActiveTab('home');
+      setSessionVersion(version => version + 1);
+    };
+    window.addEventListener('nexoclip:auth-logout', handleLogout);
+    return () => window.removeEventListener('nexoclip:auth-logout', handleLogout);
+  }, []);
+
+  useEffect(() => {
+    const onAuthRequired = () => { setAuthStatus('guest'); openAuth('login'); };
+    window.addEventListener('muapi:auth-required', onAuthRequired);
+    return () => window.removeEventListener('muapi:auth-required', onAuthRequired);
+  }, [openAuth]);
 
 
   // Drag and Drop Handlers
@@ -572,19 +704,9 @@ export default function StandaloneShell({ initialTab, children }) {
     </div>
   );
 
-  if (authStatus === 'loading') {
-    return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="animate-spin text-[#22d3ee] text-3xl">◌</div>
-      </div>
-    );
-  }
-
-  if (authStatus !== 'authenticated') return null;
-
   return (
     <div 
-      className="h-screen bg-[#030303] flex flex-col overflow-hidden text-white relative"
+      className="suite-shell suite-shell-split h-screen bg-[#030303] flex flex-col overflow-hidden text-white relative"
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -607,40 +729,26 @@ export default function StandaloneShell({ initialTab, children }) {
         </div>
       )}
 
-      {/* NexoClip promo banner */}
-      {showPromoBanner && (
-        <div className="flex-shrink-0 w-full bg-indigo-600 flex items-center justify-center px-4 py-2 gap-3 relative z-50">
-          <a
-            href="https://nexoclip.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[13px] font-bold text-white hover:opacity-80 transition-opacity text-center"
-          >
-            Turn product photos into scroll-stopping video ads in minutes → nexoclip.com ↗
-          </a>
-          <button
-            onClick={() => {
-              setShowPromoBanner(false);
-              localStorage.setItem('nexoclip_promo_banner_dismissed', '1');
-            }}
-            className="absolute right-3 text-white/60 hover:text-white transition-colors text-lg leading-none"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* Header */}
       {isHeaderVisible && (
-        <header className="flex-shrink-0 h-14 border-b border-white/[0.05] flex items-center justify-between px-4 bg-[#0a0a0b]/80 backdrop-blur-md z-50 gap-4">
+        <header className="suite-topbar flex-shrink-0 h-14 border-b border-white/[0.05] flex items-center justify-between px-4 bg-[#0a0a0b]/80 backdrop-blur-md z-50 gap-4">
           {/* Left: Mobile menu toggle + Logo + Desktop Sidebar Toggle */}
           <div className="flex items-center gap-3">
-            {/* Mobile drawer toggle */}
+            {/* The Director is a full-width workspace without the sidebar; this is its way out. */}
+            {isFullWidthTab ? (
+              <button type="button" onClick={() => handleTabChange('home')} aria-label="Kembali ke Studio" title="Kembali ke Studio"
+                className="flex h-9 items-center gap-1.5 rounded-[10px] border border-white/[0.08] bg-white/[0.03] px-2.5 text-[12px] text-white/70 transition-colors hover:border-white/20 hover:text-white">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+                Studio
+              </button>
+            ) : (
+            /* Mobile drawer toggle */
             <button
               onClick={() => setIsMobileOpen(!isMobileOpen)}
-              className="md:hidden p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+              className="suite-icon-button md:hidden"
               aria-label="Toggle Navigation Menu"
+              aria-expanded={isMobileOpen}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="12" x2="21" y2="12" />
@@ -648,63 +756,32 @@ export default function StandaloneShell({ initialTab, children }) {
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-
-            {/* Desktop Sidebar Toggle Button (Single Toggle Button) */}
-            <div className="hidden md:block relative group">
-              <button
-                onClick={toggleSidebar}
-                className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors border border-white/5"
-                aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className={`transition-transform duration-300 ${isSidebarCollapsed ? 'rotate-180' : ''}`}
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <path d="M9 3v18" />
-                  <path d="M14 9l-3 3 3 3" />
-                </svg>
-              </button>
-              {/* Custom Tooltip */}
-              <div className="absolute left-0 top-full mt-2 px-2.5 py-1 bg-[#121215]/95 backdrop-blur-md text-white text-[11px] font-medium rounded-md shadow-2xl border border-white/15 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 whitespace-nowrap">
-                {isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              </div>
-            </div>
+            )}
 
             {/* Logo & Title */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-[#22d3ee] rounded-lg flex items-center justify-center shadow-lg shadow-[#22d3ee]/20">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <span className="text-sm font-bold tracking-tight hidden sm:block text-white">
-                Nexoclip
-              </span>
-            </div>
+            <Link href="/" aria-label="Nexoclip home" className="suite-brand suite-mobile-brand">
+              <span className="suite-brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5h8a4 4 0 0 1 4 4v5m-9 0a4 4 0 0 1 0-8m10 0a4 4 0 0 1 0 8h-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/><path d="m14 4 3 3-3 3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+              <span className="suite-brand-word">nexo<span>clip</span><small>CREATIVE STUDIO</small></span>
+            </Link>
           </div>
 
-          {/* Active Tab Breadcrumb Badge */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.05] text-xs text-white/60">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22d3ee]" />
-            <span className="font-medium text-white/80">
-              {TABS.find(t => t.id === activeTab)?.label || 'Studio'}
-            </span>
-          </div>
+          <div className="suite-header-breadcrumb" aria-live="polite"><span className="suite-header-status-dot" /><strong>Nexo Studio</strong><span className="suite-header-separator">/</span><span>{activeTab === 'home' ? 'Dashboard' : TABS.find(tab => tab.id === activeTab)?.label || 'Dashboard'}</span></div>
 
           {/* Right: Actions */}
-          <div className="flex-shrink-0 flex items-center gap-3">
-            <button data-tour="credit-balance" onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
-              <span className="text-cyan-300">◈</span>
-              <span className="text-xs font-bold text-white/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
-            </button>
-            <button data-tour="top-up" onClick={() => handleTabChange('billing')} className="rounded-full bg-[#22d3ee] px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-cyan-300" aria-label="Top up credits">
-              Top up
+          <div className="suite-header-actions">
+            {authStatus !== 'authenticated' ? <>
+              <button type="button" className="suite-header-help" aria-label="Studio help" title="Studio help" onClick={() => setTourOpen(true)}>?</button>
+              <button type="button" data-tour="top-up" className="suite-header-link" onClick={() => setPricingOpen(true)}>Pricing</button>
+              <a className="suite-header-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
+              <button onClick={() => openAuth('login')} className="suite-login">Log in</button>
+              <button onClick={() => openAuth('login')} className="suite-primary suite-header-cta"><span>Start creating</span><span aria-hidden="true">↗</span></button>
+            </> : <>
+            <button type="button" className="suite-header-help" aria-label="Studio help" title="Studio help" onClick={() => setTourOpen(true)}>?</button>
+            <button type="button" data-tour="top-up" className="suite-header-link" onClick={() => setPricingOpen(true)}>Pricing</button>
+            <a className="suite-header-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
+            <button data-tour="credit-balance" onClick={() => handleTabChange('usage')} className="suite-credit-pill" aria-label="View credit usage">
+              <span className="suite-credit-gem">✧</span>
+              <span><strong>{balance !== null ? Number(balance).toLocaleString() : '—'}</strong><small>credits</small></span>
             </button>
 
             <div data-tour="jobs" className="flex"><JobListPanel /></div>
@@ -712,19 +789,20 @@ export default function StandaloneShell({ initialTab, children }) {
               type="button"
               data-tour="tour-button"
               onClick={() => setTourOpen(true)}
-              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/5 text-sm font-bold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              className="suite-icon-button suite-help-button"
               aria-label="Take the Studio tour"
               title="Take the Studio tour"
             >
               ?
             </button>
             <AccountMenu showAdminLink />
+            </>}
           </div>
         </header>
       )}
 
       {/* Main Body Layout: Left Sidebar + Studio Content Area */}
-      <div className="flex-1 min-h-0 flex relative overflow-hidden">
+      <div className="suite-body flex-1 min-h-0 flex relative overflow-hidden">
         {/* Mobile Backdrop Overlay */}
         {isMobileOpen && (
           <div 
@@ -734,20 +812,36 @@ export default function StandaloneShell({ initialTab, children }) {
         )}
 
         {/* Left Sidebar Navigation */}
-        {isHeaderVisible && (
+        {isHeaderVisible && !isFullWidthTab && (
           <aside
             className={`
-              fixed top-14 bottom-0 left-0 md:static md:h-full z-30 bg-[#0a0a0b]/95 backdrop-blur-md border-r border-white/[0.06] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
-              ${isMobileOpen ? 'translate-x-0 w-60 z-50' : '-translate-x-full md:translate-x-0'}
+              suite-sidebar fixed top-[68px] bottom-0 left-0 md:static md:h-full z-30 bg-[#0a0a0b]/95 backdrop-blur-md border-r border-white/[0.06] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
+              ${isSidebarCollapsed && !isMobileOpen ? 'suite-sidebar-collapsed' : ''}
+              ${isMobileOpen ? 'translate-x-0 w-60 z-50' : '-translate-x-[calc(100%+24px)] md:translate-x-0'}
               ${isSidebarCollapsed ? 'md:w-16' : 'md:w-52'}
             `}
           >
-            <nav data-tour="studio-nav" aria-label="Studio navigation" className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-3 px-2">
+            <div className="suite-sidebar-top">
+              <Link href="/" aria-label="Nexoclip home" className="suite-brand">
+                <span className="suite-brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5h8a4 4 0 0 1 4 4v5m-9 0a4 4 0 0 1 0-8m10 0a4 4 0 0 1 0 8h-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/><path d="m14 4 3 3-3 3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+                <span className="suite-brand-word">nexo<span>clip</span></span>
+              </Link>
+              <span className="suite-free-badge">Free</span>
+              <button type="button" className="suite-sidebar-collapse" onClick={toggleSidebar} aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m14 9-3 3 3 3"/></svg>
+              </button>
+            </div>
+            <button type="button" className="suite-project-switcher" onClick={() => authStatus === 'authenticated' ? router.push('/account') : openAuth('login')} aria-label="Personal project, open workspace">
+              <span className="suite-project-avatar">{authStatus === 'authenticated' ? 'N' : 'P'}</span>
+              <span><strong>Personal project</strong><small>{authStatus === 'authenticated' ? 'Your workspace' : 'Your creative space'}</small></span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>
+            </button>
+            <nav data-tour="studio-nav" aria-label="Studio navigation" className="suite-side-nav flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-3 px-2">
               {(() => {
                 const isCollapsed = isSidebarCollapsed && !isMobileOpen;
-
-                // One row = one studio. Shared between the grouped list and the footer links.
-                const renderStudioItem = (tab) => {
+                const tabFor = (id) => TABS.find((tab) => tab.id === id);
+                const renderStudioItem = (tab, label = tab?.label) => {
+                  if (!tab) return null;
                   const isActive = activeTab === tab.id;
                   return (
                     <a
@@ -755,89 +849,83 @@ export default function StandaloneShell({ initialTab, children }) {
                       href={`/studio/${tab.id}`}
                       onClick={(event) => handleNavigationItemClick(event, tab.id)}
                       aria-current={isActive ? 'page' : undefined}
-                      aria-label={tab.label}
-                      title={isCollapsed ? tab.label : undefined}
+                      aria-label={label}
+                      title={isCollapsed ? label : undefined}
                       className={`
                         group relative flex items-center rounded-lg transition-colors duration-150
-                        ${isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-2.5 py-2 text-[13px] font-medium'}
+                        ${isCollapsed ? 'suite-nav-link suite-nav-link-collapsed h-10 w-10 justify-center mx-auto' : 'suite-nav-link gap-3 px-2.5 py-2 text-[13px] font-medium'}
                         ${isActive
-                          ? 'bg-white/[0.07] text-[#22d3ee]'
+                          ? 'is-active bg-white/[0.07] text-[#22d3ee]'
                           : 'text-white/55 hover:text-white hover:bg-white/[0.04]'
                         }
                       `}
                     >
                       {isActive && (
-                        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#22d3ee]" aria-hidden="true" />
+                        <span className="suite-active-marker absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#22d3ee]" aria-hidden="true" />
                       )}
                       <span className={`flex-shrink-0 ${isActive ? 'text-[#22d3ee]' : 'text-white/45 group-hover:text-white/80'}`}>
                         {tab.icon}
                       </span>
-                      {!isCollapsed && <span className="truncate">{tab.label}</span>}
+                      {!isCollapsed && <><span className="truncate flex-1">{label}</span>{tab.id === 'video' && <span className="suite-nav-badge">HOT</span>}</>}
                     </a>
                   );
                 };
+                const renderAgentItem = (id, label, description, icon) => {
+                  const tab = tabFor(id);
+                  const isActive = activeTab === id;
+                  return <a key={id} href={`/studio/${id}`} onClick={event => handleNavigationItemClick(event, id)} aria-current={isActive ? 'page' : undefined} aria-label={label} title={isCollapsed ? label : undefined} className={`suite-agent-link ${isActive ? 'is-active' : ''} ${isCollapsed ? 'is-compact' : ''}`}>
+                    <span className={`suite-agent-icon ${icon}`}>{tab?.icon}</span>{!isCollapsed && <span className="suite-agent-copy"><strong>{label}</strong><small>{description}</small></span>}
+                  </a>;
+                };
+                const renderSectionTitle = (label, section) => !isCollapsed && <button type="button" className="suite-reference-nav-title" aria-expanded={!collapsedNavSections[section]} onClick={() => setCollapsedNavSections(current => ({ ...current, [section]: !current[section] }))}><span>{label}</span><svg className={collapsedNavSections[section] ? 'is-collapsed' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg></button>;
+                const toolItems = [
+                  ['video', 'Video'], ['image', 'Image'], ['cinema', 'World'], ['ai-influencer', 'Character'], ['audio', 'Audio'],
+                ];
 
                 return (
                   <>
-                    <div className={`space-y-0.5 ${isCollapsed ? 'mb-1' : 'mb-3 pb-3 border-b border-white/[0.06]'}`}>
-                      {(() => {
-                        const canvasTab = TABS.find((item) => item.id === 'canvas');
-                        if (!canvasTab) return null;
-                        return (
-                          <a
-                            href="/canvas"
-                            data-tour="canvas-link"
-                            aria-label={canvasTab.label}
-                            title={isCollapsed ? canvasTab.label : undefined}
-                            className={`
-                              group relative flex items-center rounded-lg text-[#22d3ee] bg-white/[0.07] transition-colors duration-150 hover:bg-white/[0.08]
-                              ${isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-2.5 py-2 text-[13px] font-medium'}
-                            `}
-                          >
-                            <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#22d3ee]" aria-hidden="true" />
-                            <span className="flex-shrink-0 text-[#22d3ee]">
-                              {canvasTab.icon}
-                            </span>
-                            {!isCollapsed && <span className="truncate">{canvasTab.label}</span>}
-                          </a>
-                        );
-                      })()}
-                    </div>
-
-                    {NAVIGATION_CATEGORIES.map((category) => {
-                      const visibleTabs = category.tabIds
-                        .map((tabId) => TABS.find((item) => item.id === tabId))
-                        .filter((tab) => tab && !tab.hidden);
-                      if (visibleTabs.length === 0) return null;
-                      return (
-                        <div key={category.id} className={isCollapsed ? 'mb-1' : 'mb-4'}>
-                          {!isCollapsed && (
-                            <p className="px-2.5 mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/35">
-                              {category.label}
-                            </p>
-                          )}
-                          <div className="space-y-0.5">
-                            {visibleTabs.map((tab) => renderStudioItem(tab))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="suite-reference-home">{renderStudioItem(tabFor('home'), 'Home')}</div>
+                    <section className="suite-reference-nav-section">{renderSectionTitle('Agents', 'agents')}
+                      {!collapsedNavSections.agents && <>{renderAgentItem('director', 'Director Mode', 'Brief → script → video', 'suite-agent-director')}</>}
+                    </section>
+                    <section className="suite-reference-nav-section">{renderSectionTitle('Tools', 'tools')}
+                      {!collapsedNavSections.tools && <>
+                      <div className="suite-tool-grid">{toolItems.map(([id, label]) => <Fragment key={id}>{renderStudioItem(tabFor(id), label)}</Fragment>)}
+                        {!isCollapsed && <button type="button" className="suite-tool-shortcut" title="MCP / CLI setup coming soon" disabled aria-disabled="true"><span>↗</span><span>MCP / CLI</span><small>10% Off</small></button>}
+                      </div>
+                      </>}
+                    </section>
+                    <section className="suite-reference-nav-section suite-pinned-section">{renderSectionTitle('Pinned Tools', 'pinned')}
+                      {!collapsedNavSections.pinned && renderStudioItem(tabFor('canvas'), 'Canvas')}
+                    </section>
                   </>
                 );
               })()}
             </nav>
+            {!(isSidebarCollapsed && !isMobileOpen) && <div className="suite-sidebar-account">
+              <button type="button" onClick={() => authStatus === 'authenticated' ? router.push('/account') : openAuth('login')} className="suite-sidebar-user-button">
+                <span className="suite-sidebar-user-avatar">{authStatus === 'authenticated' ? 'N' : 'G'}</span><span><strong>{authStatus === 'authenticated' ? 'Nexoclip Member' : 'Guest Creator'}</strong><small>{authStatus === 'authenticated' ? 'Personal workspace' : 'Free workspace'}</small></span>
+              </button>
+              <button type="button" className="suite-sidebar-settings" onClick={() => authStatus === 'authenticated' ? router.push('/account') : openAuth('login')} aria-label="Settings" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.6-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.6 1.4 2.4-1.4 1.1a7 7 0 0 1 0 1.7Z"/></svg></button>
+            </div>}
           </aside>
         )}
 
         {/* Studio Content */}
-        <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#030303] text-white">
-        {activeTab === 'billing' && <BillingContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} balance={balance} onCompleted={refreshBalance} />}
-        {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} onTopUp={() => handleTabChange('billing')} /> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
-          <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
+        <div className="suite-content flex-1 min-w-0 min-h-0 h-full relative overflow-hidden bg-[#030303] text-white">
+        {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} />}
+        {authStatus !== 'loading' && <>
+        {['billing', 'usage'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to view your credits and usage.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
+        {activeTab === 'director' && (authStatus === 'authenticated'
+          ? <div className="h-full w-full"><DirectorApp initialBrief={studioPrompt} /></div>
+          : <div className="suite-private"><h2>AI Director</h2><p>Sign in to plan and produce videos with the Director.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>)}
+        {activeTab === 'billing' && authStatus === 'authenticated' && <BillingContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} balance={balance} onCompleted={refreshBalance} />}
+        {activeTab === 'usage' && authStatus === 'authenticated' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} onTopUp={() => handleTabChange('billing')} /> : imageVisited && <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
+          <ImageStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
         {activeTab === 'video' && (
           <div className="h-full w-full">
-            <VideoStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
+            <VideoStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
           </div>
         )}
         {activeTab === 'vibe-motion' && (
@@ -847,17 +935,17 @@ export default function StandaloneShell({ initialTab, children }) {
         )}
         {activeTab === 'lipsync' && (
           <div className="h-full w-full">
-            <LipSyncStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('lipsync')} onGenerationEnd={makeGenerationEndCallback('lipsync')} onGenerationComplete={makeSuccessCallback('lipsync')} onGenerationError={makeErrorCallback('lipsync')} />
+            <ComingSoon title="Lip Sync" />
           </div>
         )}
         {activeTab === 'body-swap' && (
           <div className="h-full w-full">
-            <RecastStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('body-swap')} onGenerationEnd={makeGenerationEndCallback('body-swap')} onGenerationComplete={makeSuccessCallback('body-swap')} onGenerationError={makeErrorCallback('body-swap')} />
+            <ComingSoon title="Body Swap" />
           </div>
         )}
         {activeTab === 'cinema' && (
           <div className="h-full w-full">
-            <CinemaStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
+            <CinemaStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
           </div>
         )}
         {activeTab === 'audio' && (
@@ -867,7 +955,7 @@ export default function StandaloneShell({ initialTab, children }) {
         )}
         {activeTab === 'marketing' && (
           <div className="h-full w-full">
-            <MarketingStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
+            <MarketingStudio beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
           </div>
         )}
         {activeTab === 'canvas' && (
@@ -883,6 +971,7 @@ export default function StandaloneShell({ initialTab, children }) {
         {activeTab === 'ai-influencer' && (
           <div className="h-full w-full">
             <AiInfluencerStudio
+              beforeGenerate={requireAuth}
               apiKey={apiKey}
               onGenerationStart={makeGenerationStartCallback('ai-influencer')}
               onGenerationEnd={makeGenerationEndCallback('ai-influencer')}
@@ -891,11 +980,12 @@ export default function StandaloneShell({ initialTab, children }) {
             />
           </div>
         )}
+        </>}
       </div>
     </div>
 
       {/* Global generation activity and notification stack */}
-      {(activeGenerations.length > 0 || notifications.length > 0) && (
+      {authStatus === 'authenticated' && (activeGenerations.length > 0 || notifications.length > 0) && (
         <div
           aria-live="polite"
           aria-label="Generation activity and notifications"
@@ -1014,6 +1104,14 @@ export default function StandaloneShell({ initialTab, children }) {
         }
       `}</style>
 
+      {authOpen && <StudioAuthModal initialMode={authMode} initialError={authError} onClose={() => setAuthOpen(false)} onAuthenticated={finishAuthentication} />}
+      {pricingOpen && <PricingModal
+        workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null}
+        balance={balance}
+        onCompleted={refreshBalance}
+        onRequireAuth={requestPricingAuth}
+        onClose={() => setPricingOpen(false)}
+      />}
       <StudioTour open={tourOpen} onClose={() => setTourOpen(false)} activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );

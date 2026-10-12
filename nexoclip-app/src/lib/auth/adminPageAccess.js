@@ -8,7 +8,7 @@ import { getCurrentSession } from '../../services/authService.js';
 export function createAdminPageGuard({ cookieStore = cookies, sessionLookup = getCurrentSession, redirectTo = redirect, env = process.env } = {}) {
   return async function requireAdminPage() {
     const session = await sessionLookup((await cookieStore()).get(SESSION_COOKIE)?.value);
-    if (!session) return redirectTo('/login');
+    if (!session) return redirectTo('/studio/home?auth=login');
     if (!isPlatformOperator(session.user_id, env)) return redirectTo('/studio');
     return session;
   };

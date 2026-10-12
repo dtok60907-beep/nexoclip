@@ -32,6 +32,25 @@ test('falls back to direct OpenAI when OpenRouter has no route for the GPT image
   assert.match(calls[1], /api\.openai\.com\/v1\/images\/generations/);
 });
 
+test('falls back to direct OpenAI when the configured OpenRouter key itself is invalid (401)', async () => {
+  const calls = [];
+  const router = createProviderRouter({
+    env: { OPENROUTER_API_KEY: 'or-key-revoked', OPENAI_API_KEY: 'oa-key' },
+    fetch: async (url) => {
+      calls.push(url);
+      if (url.includes('openrouter.ai')) {
+        return { ok: false, status: 401, json: async () => ({ error: { code: 'OPENROUTER_AUTHENTICATION_FAILED', message: 'OpenRouter authentication failed' } }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: 'abc', mime_type: 'image/png' }] }) };
+    },
+  });
+
+  const result = await router.generateImage({ model: 'openai/gpt-5.4-image-2', prompt: 'a cat' });
+  assert.equal(result.provider, 'openai');
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /api\.openai\.com\/v1\/images\/generations/);
+});
+
 test('OpenAI adapter routes reference images through /images/edits as multipart, not /images/generations', async () => {
   let editsCall;
   const adapter = createOpenAIImageAdapter({

@@ -19,6 +19,10 @@ const NOTICE_STYLES = {
   error: 'border-red-400/20 bg-red-400/10 text-red-200',
 };
 
+export const ENTERPRISE_WHATSAPP_URL = `https://wa.me/6285183162659?text=${encodeURIComponent(
+  'Halo, saya tertarik dengan paket Enterprise Nexo Clip.'
+)}`;
+
 export function formatRupiah(value) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
@@ -50,7 +54,7 @@ function useExamplePrices() {
   return prices;
 }
 
-export default function BillingContent({ workspaceId, balance, onCompleted }) {
+export default function BillingContent({ workspaceId, balance, onCompleted, onRequireAuth, embedded = false }) {
   const [packages, setPackages] = useState(null);
   const [topups, setTopups] = useState([]);
   const [buying, setBuying] = useState(null);
@@ -59,7 +63,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
   const examples = useExamplePrices();
 
   const load = useCallback(async () => {
-    const data = await saasFetch('/api/billing/topups', { headers: { 'x-workspace-id': workspaceId } });
+    const data = await saasFetch('/api/billing/topups', { headers: workspaceId ? { 'x-workspace-id': workspaceId } : {} });
     setPackages(data.packages);
     setTopups(data.topups);
   }, [workspaceId]);
@@ -122,6 +126,10 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
   }, [workspaceId, load, onCompleted]);
 
   const buy = async (packageCode) => {
+    if (!workspaceId) {
+      onRequireAuth?.();
+      return;
+    }
     setBuying(packageCode);
     setError(null);
     try {
@@ -137,7 +145,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
     }
   };
 
-  return <main className="h-full overflow-auto p-5 text-white md:p-8">
+  return <main className={`${embedded ? 'h-full overflow-auto p-4 text-white sm:p-6' : 'h-full overflow-auto p-5 text-white md:p-8'}`}>
     <div className="mx-auto max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -153,7 +161,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
       {notice && <p className={`mt-6 rounded-lg border px-4 py-3 text-sm ${NOTICE_STYLES[notice.tone]}`}>{notice.text}</p>}
       {error && <p className="mt-6 rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{error}</p>}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`mt-6 grid gap-4 sm:grid-cols-2 ${embedded ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
         {packages === null && !error && [0, 1, 2, 3].map((key) => <div key={key} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/[.03]" />)}
         {packages?.map((pkg) => <div
           key={pkg.code}
@@ -179,11 +187,30 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
             {buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.name}`}
           </button>
         </div>)}
+        {!embedded && packages !== null && <div className="relative flex flex-col rounded-2xl border border-white/10 bg-white/[.03] p-5">
+          <p className="text-sm font-semibold text-white/80">Enterprise</p>
+          <p className="mt-3 text-3xl font-bold">Custom</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">Contact sales</p>
+          <p className="mt-3 text-sm text-white/55">High volume, custom production, or a clear SLA for your team or agency.</p>
+          <ul className="mt-3 flex-1 space-y-1 text-xs text-white/45">
+            <li>Custom credit quotas</li>
+            <li>Dedicated onboarding &amp; support</li>
+            <li>Monthly contract and invoicing</li>
+          </ul>
+          <a
+            href={ENTERPRISE_WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-5 w-full rounded-xl bg-white/[.08] px-4 py-2.5 text-center text-sm font-bold text-white transition hover:bg-white/[.12]"
+          >
+            Chat via WhatsApp
+          </a>
+        </div>}
       </div>
 
       <p className="mt-4 text-xs text-white/40">Pay with QRIS (any e-wallet or mobile banking) or a bank virtual account. Payments are processed by Pakasir; credits arrive within a minute of payment.</p>
 
-      <section className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-white/[.03]">
+      {!embedded && <section className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-white/[.03]">
         <h2 className="border-b border-white/10 p-3 text-sm font-bold">Payment history</h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
@@ -204,7 +231,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted }) {
             </tbody>
           </table>
         </div>
-      </section>
+      </section>}
     </div>
   </main>;
 }

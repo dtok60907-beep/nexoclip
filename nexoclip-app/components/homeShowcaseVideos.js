@@ -1,0 +1,85 @@
+export const HOME_VIDEO_SECTIONS = [
+  {
+    id: 'cinematic',
+    title: 'Cinematic ads',
+    description: 'Visual campaign films with a cinematic point of view.',
+    layout: 'wide',
+    videos: [
+      { id: 'cinematic-ads-10', title: 'Nescafe', url: 'https://assets.nexoclip.com/portfolio/cinematic-ads/Nescafe.mp4' },
+      { id: 'cinematic-ads-13', title: 'PUMA', url: 'https://assets.nexoclip.com/portfolio/cinematic-ads/PUMA.mp4' },
+      { id: 'cinematic-ads-14', title: 'Headset', url: 'https://assets.nexoclip.com/portfolio/cinematic-ads/Headset.mp4' },
+      { id: 'cinematic-ads-19', title: 'Erha Skincare', url: 'https://assets.nexoclip.com/portfolio/cinematic-ads/Erha%20skincare_.mp4' },
+    ],
+  },
+  {
+    id: 'ugc',
+    title: 'UGC commercial',
+    description: 'Creator-style product stories made for the feed.',
+    layout: 'portrait',
+    videos: [
+      { id: 'ugc-commercial-151', title: 'OOTD', url: 'https://assets.nexoclip.com/portfolio/ugc-commercial/OOTD.mp4' },
+      { id: 'ugc-commercial-152', title: 'Wardah', url: 'https://assets.nexoclip.com/portfolio/ugc-commercial/Wardah.mp4' },
+      { id: 'ugc-commercial-153', title: 'Skincare', url: 'https://assets.nexoclip.com/portfolio/ugc-commercial/Skincare_.mp4' },
+      { id: 'ugc-commercial-159', title: 'Honda', url: 'https://assets.nexoclip.com/portfolio/ugc-commercial/Honda.mp4' },
+      { id: 'ugc-commercial-161', title: 'Pizza Hut', url: 'https://assets.nexoclip.com/portfolio/ugc-commercial/Pizza%20Hut.mp4' },
+    ],
+  },
+  {
+    id: 'affiliate',
+    title: 'Affiliate UGC',
+    description: 'Product demos and everyday recommendations.',
+    layout: 'portrait',
+    videos: [
+      { id: 'affiliate-ugc-71', title: 'Affiliate Fashion', url: 'https://assets.nexoclip.com/portfolio/affiliate-ugc/Affiliate%20fashion(1).mp4' },
+      { id: 'affiliate-ugc-72', title: 'Talking Head · Fashion', url: 'https://assets.nexoclip.com/portfolio/affiliate-ugc/Talking%20head%20-%20fashion.mp4' },
+      { id: 'affiliate-ugc-79', title: 'Hijab Shopee', url: 'https://assets.nexoclip.com/portfolio/affiliate-ugc/hijab%20shoopee.mp4' },
+      { id: 'affiliate-ugc-81', title: 'Skincare Lazada', url: 'https://assets.nexoclip.com/portfolio/affiliate-ugc/skincare%20lazada.mp4' },
+    ],
+  },
+  {
+    id: 'food',
+    title: 'Food & beverage',
+    description: 'Crave-worthy spots, texture, and motion.',
+    layout: 'wide',
+    videos: [
+      { id: 'ads-fnb-65', title: 'Pizza Test', url: 'https://assets.nexoclip.com/portfolio/ads-fnb/Pizza%20test.mp4' },
+      { id: 'ads-fnb-67', title: 'Burger Test', url: 'https://assets.nexoclip.com/portfolio/ads-fnb/burger%20test.mp4' },
+      { id: 'ads-fnb-69', title: 'Burger King', url: 'https://assets.nexoclip.com/portfolio/ads-fnb/Burger%20King.mp4' },
+      { id: 'ads-fnb-70', title: 'Food Campaign', url: 'https://assets.nexoclip.com/portfolio/ads-fnb/Food%20campaign%20tets.mp4' },
+    ],
+  },
+  {
+    id: 'micro-drama',
+    title: 'Film & micro drama',
+    description: 'Trailers, character moments, and stories in motion.',
+    layout: 'wide',
+    videos: [
+      { id: 'micro-drama-movie-138', title: 'Dragon Warrior · Trailer', url: 'https://assets.nexoclip.com/portfolio/micro-drama-movie/Dragon%20warrior%20-%20trailer_.mp4' },
+      { id: 'micro-drama-movie-139', title: 'Micro Drama · Trailer', url: 'https://assets.nexoclip.com/portfolio/micro-drama-movie/Trailer.mp4' },
+      { id: 'micro-drama-movie-148', title: 'Dragon Warrior', url: 'https://assets.nexoclip.com/portfolio/micro-drama-movie/Dragon%20warrior%20trailer.mp4' },
+      { id: 'micro-drama-movie-149', title: 'Shadow Legacy', url: 'https://assets.nexoclip.com/portfolio/micro-drama-movie/Shadow%20legacy.mp4' },
+    ],
+  },
+  {
+    id: 'animation-vfx',
+    title: 'Animation & VFX',
+    description: 'Strange worlds, playful characters, and visual effects.',
+    layout: 'wide',
+    videos: [
+      { id: '3d-animation-3', title: 'Worlds of Robot', url: 'https://assets.nexoclip.com/portfolio/3d-animation/Worlds%20of%20Robot.mp4' },
+      { id: '3d-animation-6', title: 'Strawberry & Pineapple', url: 'https://assets.nexoclip.com/portfolio/3d-animation/strawberry%20%26%20pineapple.mp4' },
+      { id: 'experimental-vfx-94', title: 'Dragon Series', url: 'https://assets.nexoclip.com/portfolio/experimental-vfx/Dragon%20series.mp4' },
+      { id: 'experimental-vfx-98', title: 'Cinematic Cruise Ship', url: 'https://assets.nexoclip.com/portfolio/experimental-vfx/Cinematik%20cruise%20ship.mp4' },
+    ],
+  },
+  {
+    id: 'music-video',
+    title: 'Music video',
+    description: 'Rhythm-led visuals and performance concepts.',
+    layout: 'wide',
+    videos: [
+      { id: 'music-videos-166', title: 'Sample Dance', url: 'https://assets.nexoclip.com/portfolio/music-videos/Sample%20Dance.mp4' },
+      { id: 'music-videos-168', title: 'Tak Pernah Sampai', url: 'https://assets.nexoclip.com/portfolio/music-videos/Tak%20pernah%20sampai.mp4' },
+    ],
+  },
+];

@@ -227,6 +227,45 @@ test('binding ignores repeated React Flow measurements and positions that do not
   binding.destroy()
 })
 
+test('binding does not rewrite unchanged mentions, arrays or objects when patching other node data', () => {
+  const doc = createCanvasDocument()
+  upsertNode(doc, {
+    id: 'rich-node',
+    type: 'imageGen',
+    position: { x: 0, y: 0 },
+    data: {
+      sceneId: 'scene-1',
+      text: 'naren and kunna',
+      mentions: [{ id: 'm1', label: 'naren', start: 0, end: 5 }],
+      generations: [{ id: 'g1', url: '/a.png' }],
+      settings: { resolution: '2K', aspectRatio: '16:9' },
+    },
+  })
+
+  const binding = createReactFlowBinding(doc)
+  let documentUpdates = 0
+  doc.on('update', () => {
+    documentUpdates += 1
+  })
+
+  // Same values as fresh objects, the way React components pass them back.
+  binding.patchNodeData('rich-node', {
+    mentions: [{ id: 'm1', label: 'naren', start: 0, end: 5 }],
+    generations: [{ id: 'g1', url: '/a.png' }],
+    settings: { aspectRatio: '16:9', resolution: '2K' },
+  })
+  binding.updateNodeData('rich-node', (data) => ({ ...data }))
+  assert.equal(documentUpdates, 0)
+
+  // A real change writes once and leaves the other fields alone.
+  binding.patchNodeData('rich-node', { height: 240 })
+  assert.equal(documentUpdates, 1)
+  const data = readCanvasProjection(doc).nodes.find((node) => node.id === 'rich-node')?.data as Record<string, unknown>
+  assert.deepEqual(data.mentions, [{ id: 'm1', label: 'naren', start: 0, end: 5 }])
+  assert.deepEqual(data.settings, { resolution: '2K', aspectRatio: '16:9' })
+  binding.destroy()
+})
+
 test('binding supports every durable canvas mutation category on the authoritative Yjs document', () => {
   const doc = createCanvasDocument()
   setScenes(doc, [

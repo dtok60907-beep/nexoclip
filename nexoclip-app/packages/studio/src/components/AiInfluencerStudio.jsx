@@ -343,6 +343,7 @@ function HoverPill({ label, img, onClick }) {
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function AiInfluencerStudio({
   apiKey,
+  beforeGenerate,
   onGenerate,
   onGenerationStart,
   onGenerationEnd,
@@ -410,6 +411,7 @@ export default function AiInfluencerStudio({
 
   // ── Generate ──────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
+    if (beforeGenerate && !beforeGenerate()) return;
     if (isGenerating) return;
     onGenerationStart?.();
     setIsGeneratingInternal(true);
@@ -489,12 +491,12 @@ export default function AiInfluencerStudio({
   const TAGS_VISIBLE = 7; // how many pills to show before "show more"
 
   return (
-    <div className="flex h-full bg-[#0a0a0a] text-white overflow-hidden select-none font-sans">
+    <div className="flex flex-col lg:flex-row h-full bg-[#0a0a0a] text-white overflow-y-auto lg:overflow-hidden select-none font-sans">
 
       {/* ════════════════════════════════════════════════════════════
           LEFT — Builder / Options Panel
       ════════════════════════════════════════════════════════════ */}
-      <div data-tour="influencer-builder" className="flex flex-col w-[320px] shrink-0 border-r border-white/[0.07] bg-[#111111] overflow-hidden">
+      <div data-tour="influencer-builder" className="flex flex-col w-full lg:w-[320px] h-[360px] lg:h-auto shrink-0 border-r border-white/[0.07] bg-[#111111] overflow-hidden">
 
         {/* Builder header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
@@ -581,10 +583,10 @@ export default function AiInfluencerStudio({
       {/* ════════════════════════════════════════════════════════════
           CENTER — Current Character Preview
       ════════════════════════════════════════════════════════════ */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-[#0a0a0a]">
+      <div className="order-first lg:order-none flex flex-col flex-1 shrink-0 min-h-[480px] lg:min-h-0 min-w-0 overflow-hidden bg-[#0a0a0a]">
 
         {/* Center top bar: aspect ratio + generate */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-white/[0.07] shrink-0">
+        <div className="flex flex-wrap gap-3 items-center justify-between px-3 lg:px-6 py-3 border-b border-white/[0.07] shrink-0">
           {/* Aspect ratio */}
           <div className="flex gap-0.5 bg-white/[0.05] border border-white/[0.08] rounded-xl p-1">
             {["3:4", "1:1", "9:16", "16:9"].map((r) => (
@@ -726,7 +728,7 @@ export default function AiInfluencerStudio({
       {/* ════════════════════════════════════════════════════════════
           RIGHT — Generated Characters History Gallery
       ════════════════════════════════════════════════════════════ */}
-      <div data-tour="influencer-gallery" className="flex flex-col w-[160px] shrink-0 border-l border-white/[0.07] bg-[#111111] overflow-hidden">
+      <div data-tour="influencer-gallery" className="flex flex-col w-full lg:w-[160px] min-h-[160px] shrink-0 border-l border-white/[0.07] bg-[#111111] overflow-hidden">
 
         {/* Gallery header */}
         <div className="px-3 py-3 border-b border-white/[0.07] shrink-0">

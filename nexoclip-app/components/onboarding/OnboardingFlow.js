@@ -146,7 +146,7 @@ export default function OnboardingFlow() {
     (async () => {
       try {
         const session = await fetch('/api/auth/session', { credentials: 'include' }).then((res) => res.json());
-        if (!session.authenticated) return router.replace('/login?next=/onboarding');
+        if (!session.authenticated) return router.replace('/studio/home?auth=login&next=%2Fonboarding');
         const state = await fetch('/api/onboarding', { credentials: 'include' }).then((res) => res.json());
         if (cancelled) return;
         if (state.status) return router.replace('/studio');

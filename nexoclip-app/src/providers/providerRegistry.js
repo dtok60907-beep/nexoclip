@@ -111,6 +111,11 @@ export function isDirectBytePlusSeedance(model, env = process.env) {
 export function isRetryableProviderError(error) {
   const status = Number(error?.status);
   if (status === 403 && error?.code === 'OPENROUTER_AUTHORIZATION_FAILED') return true;
+  // A bare 401 means the configured OPENROUTER_API_KEY itself is invalid/revoked, not that this
+  // particular request was malformed. For a model with a direct-provider mapping, that's still a
+  // routing gap the direct fallback exists to cover — otherwise a dead OpenRouter key silently
+  // blocks every mapped model even though a working direct provider is configured.
+  if (status === 401 && error?.code === 'OPENROUTER_AUTHENTICATION_FAILED') return true;
   // OpenRouter returns 400 when it has no route for a model it doesn't carry;
   // that's a routing gap, not a malformed request, so a mapped direct provider may still serve it.
   if (status === 400 && error?.code === 'OPENROUTER_MODEL_UNAVAILABLE') return true;

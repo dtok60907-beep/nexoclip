@@ -89,14 +89,19 @@ export async function generateImage(_apiKey, params) {
 
 async function submitSaasGeneration({ kind, model, params }, { maxAttempts = 180, interval = 2000 } = {}) {
     const workspaceId = params.workspace_id || (typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null);
-    if (!workspaceId) throw new Error('Select a workspace before generating');
+    if (!workspaceId) {
+        notifyAuthRequired(401, 'Sign in to generate');
+        throw new Error('Sign in to generate');
+    }
+    const parameters = await resolveGuestMedia(params.parameters || {});
     const response = await fetch('/api/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-workspace-id': workspaceId, 'Idempotency-Key': params.idempotencyKey },
-        body: JSON.stringify({ kind, prompt: params.prompt || '', model, parameters: params.parameters || {}, idempotencyKey: params.idempotencyKey }),
+        body: JSON.stringify({ kind, prompt: params.prompt || '', model, parameters, idempotencyKey: params.idempotencyKey }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
+        if (response.status === 401) notifyAuthRequired(401, body.error);
         throw new Error(body.error || `Generation request failed: ${response.status}`);
     }
     const submitted = await response.json();
@@ -221,16 +226,27 @@ export async function generateI2V(apiKey, params) {
     return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
 }
 
-export async function generateMarketingStudioAd(apiKey, params) {
-    const endpoint = params.resolution === '1080p' ? 'sd-2-vip-omni-reference-1080p' : 'seedance-2-vip-omni-reference';
-    const payload = {
-        prompt: params.prompt,
-        aspect_ratio: params.aspect_ratio || '16:9',
-        duration: params.duration || 5,
-        images_list: params.images_list || [],
-        video_files: params.video_files || []
-    };
-    return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
+// Routed through the credited /api/generations pipeline (direct BytePlus, not
+// MuAPI) — "unfiltered" here means the dedicated endpoint, not content
+// filtering; omni-reference pricing/credit handling is generic to any
+// seedance-2.5* model id (see generationPricing.js's isSeedanceModel).
+export async function generateMarketingStudioAd(_apiKey, params) {
+    const result = await submitSaasGeneration({
+        kind: 'video',
+        model: 'byteplus/seedance-2.5-unfiltered',
+        params: {
+            idempotencyKey: params.idempotencyKey || crypto.randomUUID(),
+            parameters: {
+                aspectRatio: params.aspect_ratio || '16:9',
+                duration: params.duration || 5,
+                ...(params.resolution ? { resolution: params.resolution } : {}),
+                ...(params.images_list?.length ? { referenceImages: params.images_list } : {}),
+                ...(params.video_files?.length ? { referenceVideos: params.video_files } : {}),
+            },
+            prompt: params.prompt || '',
+        },
+    });
+    return { ...result, status: 'succeeded', url: result.outputs?.[0]?.url };
 }
 
 export async function processV2V(apiKey, params) {
@@ -298,7 +314,29 @@ export async function generateAudio(apiKey, params) {
 // Uploads reference files to our own R2-backed storage, not MuAPI — the app no
 // longer holds a client-side MuAPI key (see StandaloneShell.js), and this endpoint
 // is authenticated by session cookie + workspace, like the OpenRouter image route.
+// Guest references stay in this page until authentication and generation.
+// They are never submitted to a provider as browser-only blob URLs.
+async function resolveGuestMedia(value, uploads = new Map()) {
+    if (typeof value === 'string' && value.startsWith('blob:')) {
+        if (!uploads.has(value)) uploads.set(value, (async () => {
+            const response = await fetch(value);
+            const blob = await response.blob();
+            return uploadFile(null, new File([blob], 'reference', { type: blob.type }));
+        })());
+        return uploads.get(value);
+    }
+    if (Array.isArray(value)) return Promise.all(value.map(item => resolveGuestMedia(item, uploads)));
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(await Promise.all(Object.entries(value).map(async ([key, item]) => [key, await resolveGuestMedia(item, uploads)])));
+    }
+    return value;
+}
+
 export function uploadFile(_apiKey, file, onProgress) {
+    if (typeof window !== 'undefined' && !window.sessionStorage.getItem('nexoclip_workspace_id')) {
+        onProgress?.(100);
+        return Promise.resolve(URL.createObjectURL(file));
+    }
     return new Promise((resolve, reject) => {
         const workspaceId = typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null;
         const url = '/api/uploads';

@@ -458,7 +458,10 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function VideoStudio({
+  initialPrompt = '',
   apiKey,
+  beforeGenerate,
+  persistScope,
   onGenerationStart,
   onGenerationEnd,
   onGenerationComplete,
@@ -468,9 +471,9 @@ export default function VideoStudio({
   onFilesHandled,
 }) {
   const LEGACY_PERSIST_KEY = "hg_video_studio_persistent";
-  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, persistScope || apiKey);
   useEffect(() => {
-    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+    if (!persistScope) migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
   }, [PERSIST_KEY]);
 
   // ── mode state ──
@@ -539,8 +542,11 @@ export default function VideoStudio({
   const [openDropdown, setOpenDropdown] = useState(null); // 'model'|'ar'|'duration'|'resolution'|'quality'|'mode'|null
 
   // ── prompt ──
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [promptDisabled, setPromptDisabled] = useState(false);
+  useEffect(() => {
+    if (initialPrompt) setPrompt(initialPrompt);
+  }, [initialPrompt]);
 
   // Mirrors what Generate submits, priced exactly like the server reservation.
   const pricedResolutions = imageMode ? getResolutionsForI2VModel(selectedModel) : getResolutionsForVideoModel(selectedModel);
@@ -1149,6 +1155,7 @@ export default function VideoStudio({
 
   // ── generate ──────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
+    if (beforeGenerate && !beforeGenerate()) return;
     const currentModel = getCurrentModel();
     const isExtendMode = currentModel?.requiresRequestId;
     const trimmedPrompt = prompt.trim();
@@ -1370,6 +1377,7 @@ export default function VideoStudio({
       onGenerationEnd?.();
     }
   }, [
+    beforeGenerate,
     apiKey,
     prompt,
     v2vMode,

@@ -18,6 +18,10 @@ services:
         condition: service_started
       spite-realtime:
         condition: service_healthy
+      jellyfish-backend:
+        condition: service_started
+      jellyfish-front:
+        condition: service_started
     restart: unless-stopped
 
   nexoclip-postgres:
@@ -333,6 +337,9 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
       REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
+      # AI Director: /api/director/* is proxied to this service after the session check.
+      DIRECTOR_SERVICE_URL: http://director:4760
+      DIRECTOR_PROXY_SECRET: ${DIRECTOR_PROXY_SECRET:?DIRECTOR_PROXY_SECRET is required}
     volumes:
       - nexoclip-assets:/data
     depends_on:
@@ -344,6 +351,154 @@ services:
         condition: service_completed_successfully
       nexoclip-redis:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # AI Director (OpenMontage pipeline). Internal only: the browser reaches it
+  # through nexoclip-app's /api/director proxy, which checks the session and
+  # sends the user id plus DIRECTOR_PROXY_SECRET. Image/video generation and
+  # LLM usage are billed through the signed /api/internal/storyboard bridge.
+  # ---------------------------------------------------------------------------
+  director:
+    mem_limit: 512m
+    build:
+      context: ./nexoclip-app/services/OpenMontage
+      dockerfile: director_service/Dockerfile
+    env_file:
+      # DIRECTOR_OPENAI_API_KEY (and optional DIRECTOR_LLM_MODEL); gitignored.
+      - ./nexoclip-app/services/OpenMontage/director.env
+    environment:
+      DIRECTOR_PROXY_SECRET: ${DIRECTOR_PROXY_SECRET:?DIRECTOR_PROXY_SECRET is required}
+      NEXOCLIP_INTERNAL_URL: http://nexoclip-app:3000
+      NEXOCLIP_BRIDGE_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      # Own schema ("director") in nexoclip's database; migrated by the service on startup.
+      DIRECTOR_DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+    depends_on:
+      nexoclip-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # AI Storyboards Director (Jellyfish) — public path /storyboard via Caddy.
+  # Own MySQL + object storage; auth, credits and image/video generation come
+  # from nexoclip (forward_auth + signed /api/internal/storyboard bridge).
+  # ---------------------------------------------------------------------------
+  jellyfish-mysql:
+    image: mysql:9.0
+    mem_limit: 512m
+    environment:
+      MYSQL_ROOT_PASSWORD: ${JELLYFISH_MYSQL_ROOT_PASSWORD:-jellyfish_root_dev}
+      MYSQL_DATABASE: jellyfish
+      MYSQL_USER: jellyfish
+      MYSQL_PASSWORD: ${JELLYFISH_MYSQL_PASSWORD:-jellyfish_dev}
+    volumes:
+      - jellyfish-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  jellyfish-storage:
+    image: rustfs/rustfs:latest
+    mem_limit: 256m
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${JELLYFISH_S3_ACCESS_KEY:-jellyfish}
+      RUSTFS_SECRET_KEY: ${JELLYFISH_S3_SECRET_KEY:-jellyfish_dev_secret}
+      # Jellyfish's boto3 client uses virtual-hosted addressing (<bucket>.<host>).
+      RUSTFS_SERVER_DOMAINS: jellyfish-storage:9000,jellyfish-storage
+    networks:
+      default:
+        aliases:
+          - jellyfish-assets.jellyfish-storage
+    volumes:
+      - jellyfish-storage-data:/data
+    restart: unless-stopped
+
+  jellyfish-init:
+    build:
+      context: ./nexoclip-app/services/Jellyfish
+      dockerfile: deploy/docker/backend.Dockerfile
+    environment: &jellyfish-backend-env
+      DATABASE_URL: mysql+aiomysql://jellyfish:${JELLYFISH_MYSQL_PASSWORD:-jellyfish_dev}@jellyfish-mysql:3306/jellyfish
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379/3
+      DEBUG: "false"
+      API_V1_PREFIX: /api/v1
+      S3_ENDPOINT_URL: http://jellyfish-storage:9000
+      S3_REGION_NAME: us-east-1
+      S3_ACCESS_KEY_ID: ${JELLYFISH_S3_ACCESS_KEY:-jellyfish}
+      S3_SECRET_ACCESS_KEY: ${JELLYFISH_S3_SECRET_KEY:-jellyfish_dev_secret}
+      S3_BUCKET_NAME: jellyfish-assets
+      CORS_ORIGINS: ""
+      REQUIRE_NEXOCLIP_USER: "true"
+      NEXOCLIP_INTERNAL_URL: http://nexoclip-app:3000
+      NEXOCLIP_BRIDGE_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      STORYBOARD_TEXT_MODEL: ${STORYBOARD_TEXT_MODEL:-gpt-4.1}
+    command: ["sh", "-c", "uv run python init_db.py && uv run python init_storage.py"]
+    depends_on:
+      jellyfish-mysql:
+        condition: service_healthy
+      jellyfish-storage:
+        condition: service_started
+    restart: "no"
+
+  jellyfish-migrate:
+    image: mysql:9.0
+    environment:
+      MYSQL_PWD: ${JELLYFISH_MYSQL_PASSWORD:-jellyfish_dev}
+    volumes:
+      - ./nexoclip-app/services/Jellyfish/backend/sql:/sql:ro
+    command:
+      [
+        "bash",
+        "-c",
+        "set -e; for f in $$(find /sql -maxdepth 1 -type f -name '*.sql' | sort); do echo \"[jellyfish-migrate] applying $$f\"; mysql --default-character-set=utf8mb4 -h jellyfish-mysql -ujellyfish jellyfish < \"$$f\"; done",
+      ]
+    depends_on:
+      jellyfish-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  jellyfish-backend:
+    mem_limit: 512m
+    build:
+      context: ./nexoclip-app/services/Jellyfish
+      dockerfile: deploy/docker/backend.Dockerfile
+    environment: *jellyfish-backend-env
+    depends_on:
+      jellyfish-migrate:
+        condition: service_completed_successfully
+      nexoclip-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  jellyfish-worker:
+    mem_limit: 768m
+    build:
+      context: ./nexoclip-app/services/Jellyfish
+      dockerfile: deploy/docker/backend.Dockerfile
+    environment: *jellyfish-backend-env
+    command: ["uv", "run", "celery", "-A", "app.core.celery_app:celery_app", "worker", "-l", "info", "--concurrency", "${JELLYFISH_WORKER_CONCURRENCY:-2}"]
+    depends_on:
+      jellyfish-migrate:
+        condition: service_completed_successfully
+      nexoclip-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  jellyfish-front:
+    mem_limit: 128m
+    build:
+      context: ./nexoclip-app/services/Jellyfish
+      dockerfile: deploy/docker/front.Dockerfile
+      args:
+        VITE_APP_BASE: /storyboard/
+    environment:
+      # Same-origin API base behind Caddy (/storyboard/api/* -> jellyfish-backend).
+      BACKEND_URL: /storyboard
     restart: unless-stopped
 
 networks:
@@ -359,3 +514,5 @@ volumes:
   caddy-config:
   nexoclip-redis-data:
   nexoclip-assets:
+  jellyfish-mysql-data:
+  jellyfish-storage-data:

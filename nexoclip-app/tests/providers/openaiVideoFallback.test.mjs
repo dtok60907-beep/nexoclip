@@ -81,6 +81,23 @@ test('falls back to direct OpenAI when OpenRouter rejects Sora 2 Pro with 403', 
   assert.match(calls[2], /api\.openai\.com\/v1\/videos$/);
 });
 
+test('falls back to direct OpenAI when the configured OpenRouter key itself is invalid (401)', async () => {
+  const calls = [];
+  const router = createProviderRouter({
+    env: { OPENROUTER_API_KEY: 'or-key-revoked', OPENAI_API_KEY: 'oa-key' },
+    fetch: async (url) => {
+      calls.push(url);
+      if (url.includes('openrouter.ai')) return { ok: false, status: 401, json: async () => ({}) };
+      if (url === 'https://cdn.example.com/ref.jpg') return fixtureImageResponse();
+      return jsonResponse({ id: 'video_1', status: 'queued' });
+    },
+  });
+  const result = await router.submitVideo({ model: 'openai/sora-2-pro', prompt: 'a woman waving', referenceImages: ['https://cdn.example.com/ref.jpg'] });
+  assert.equal(result.provider, 'openai');
+  assert.equal(calls.length, 3);
+  assert.match(calls[2], /api\.openai\.com\/v1\/videos$/);
+});
+
 test('poll and download route to the direct OpenAI adapter once a job is tagged provider: openai', async () => {
   const calls = [];
   const router = createProviderRouter({

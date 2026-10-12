@@ -15,7 +15,7 @@ function decodeJwtPayload(idToken) {
 export function createGoogleCallbackHandler({ authenticate = loginWithGoogle, fetchImpl = globalThis.fetch, env = process.env } = {}) {
   return async function GET(request) {
     const url = request.nextUrl;
-    const loginUrl = new URL('/login', url.origin);
+    const loginUrl = new URL('/studio/home?auth=login', url.origin);
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     const cookieState = request.cookies.get('g_oauth_state')?.value;

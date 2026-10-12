@@ -77,6 +77,6 @@ test('Google state rejection happens before profile authentication or operator r
   let called = false;
   const handler = createGoogleCallbackHandler({ env, fetchImpl: async () => { called = true; }, authenticate: async () => { called = true; } });
   const response = await handler(googleRequest('forged-state'));
-  assert.equal(response.headers.get('location'), 'https://app.example/login?error=google_state');
+  assert.equal(response.headers.get('location'), 'https://app.example/studio/home?auth=login&error=google_state');
   assert.equal(called, false);
 });

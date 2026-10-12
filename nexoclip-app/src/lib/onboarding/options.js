@@ -72,6 +72,8 @@ export const TOOLS = {
   image: { label: 'Image Studio', path: '/studio/image', summary: 'Product photos and ad visuals in seconds, from about 2.5 credits each.' },
   cinema: { label: 'Cinema Studio', path: '/studio/cinema', summary: 'Cinematic scenes with camera, lens and lighting control.' },
   'ai-influencer': { label: 'AI Influencer Studio', path: '/studio/ai-influencer', summary: 'Design a virtual influencer and reuse the same face across content.' },
+  storyboard: { label: 'AI Storyboards Director', path: '/storyboard/', summary: 'Turn a script into shots, characters and scenes, then generate keyframes and shot videos with OpenAI.' },
+  director: { label: 'Director Studio', path: '/director/', summary: 'Chat with an AI director to plan, generate and batch-produce short videos end to end.' },
 };
 
 const pickIds = (list) => new Set(list.map((item) => item.id));

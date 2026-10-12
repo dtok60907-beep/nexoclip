@@ -533,7 +533,10 @@ function CameraControlsOverlay({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CinemaStudio({
+  initialPrompt = '',
   apiKey,
+  beforeGenerate,
+  persistScope,
   onGenerationStart,
   onGenerationEnd,
   onGenerationComplete,
@@ -541,20 +544,23 @@ export default function CinemaStudio({
   historyItems,
 }) {
   const LEGACY_PERSIST_KEY = "hg_cinema_studio_persistent";
-  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, persistScope || apiKey);
   useEffect(() => {
-    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+    if (!persistScope) migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
   }, [PERSIST_KEY]);
 
   // ── Settings state ──
   const [settings, setSettings] = useState({
-    prompt: "",
+    prompt: initialPrompt,
     aspect_ratio: "16:9",
     camera: CAMERAS[0],
     lens: LENSES[0],
     focal: 35,
     aperture: "f/1.4",
   });
+  useEffect(() => {
+    if (initialPrompt) setSettings(current => ({ ...current, prompt: initialPrompt }));
+  }, [initialPrompt]);
   const [resolution, setResolution] = useState("2K");
 
   // ── UI state ──
@@ -667,6 +673,7 @@ export default function CinemaStudio({
   // ── Textarea auto-height ──
   // ── Generate ──
   const handleGenerate = useCallback(async () => {
+    if (beforeGenerate && !beforeGenerate()) return;
     const basePrompt = settings.prompt.trim();
     if (!basePrompt || isGenerating) return;
 
@@ -737,6 +744,7 @@ export default function CinemaStudio({
       onGenerationEnd?.();
     }
   }, [
+    beforeGenerate,
     settings,
     resolution,
     apiKey,

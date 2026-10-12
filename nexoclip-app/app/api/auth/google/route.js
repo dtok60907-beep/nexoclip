@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
-    const loginUrl = new URL('/login', request.nextUrl.origin);
+    const loginUrl = new URL('/studio/home?auth=login', request.nextUrl.origin);
     loginUrl.searchParams.set('error', 'google_unconfigured');
     return NextResponse.redirect(loginUrl);
   }
