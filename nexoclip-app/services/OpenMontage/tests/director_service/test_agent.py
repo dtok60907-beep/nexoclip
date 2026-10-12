@@ -299,6 +299,7 @@ def test_proxy_secret_is_required_when_configured(client, monkeypatch):
     assert client.get("/api/director/projects", headers={"X-Director-Proxy-Secret": "wrong"}).status_code == 403
     assert client.get("/api/projects").status_code == 403
     assert client.get("/api/director/projects", headers={"X-Director-Proxy-Secret": "s3cret"}).status_code == 200
+    assert client.get("/api/director/health").status_code == 200  # platform healthcheck
 
 
 def test_skills_are_loaded_on_demand(client, fake_llm):

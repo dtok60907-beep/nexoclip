@@ -93,7 +93,8 @@ app = FastAPI(title="AI Director", docs_url=None, redoc_url=None, lifespan=lifes
 @app.middleware("http")
 async def require_proxy_secret(request: Request, call_next):
     expected = os.environ.get(PROXY_SECRET_ENV, "")
-    if expected:
+    # The platform healthcheck carries no secret; /health reveals nothing.
+    if expected and request.url.path != "/api/director/health":
         supplied = request.headers.get(PROXY_SECRET_HEADER, "")
         if not hmac.compare_digest(supplied.encode(), expected.encode()):
             return JSONResponse({"detail": "forbidden"}, status_code=403)
