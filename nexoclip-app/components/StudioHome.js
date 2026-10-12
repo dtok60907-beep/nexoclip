@@ -95,7 +95,7 @@ export default function StudioHome({ onNavigate }) {
       <div className="suite-video-sections">
         {HOME_VIDEO_SECTIONS.map((section, index) => <section className={`suite-video-section suite-video-section-${section.layout}`} key={section.id} aria-labelledby={`showcase-${section.id}`}>
           <div className="suite-section-heading suite-reference-heading">
-            <div><p className="suite-eyebrow">{String(index + 1).padStart(2, '0')} / VIDEO SHOWCASE</p><h2 id={`showcase-${section.id}`}>{section.title}</h2><p className="suite-video-section-description">{section.description}</p></div>
+            <div><h2 id={`showcase-${section.id}`}>{section.title}</h2><p className="suite-video-section-description">{section.description}</p></div>
             <button className="suite-video-section-action" onClick={() => onNavigate('video')}>Explore videos <span aria-hidden="true">↗</span></button>
           </div>
           <div className={`suite-video-row suite-video-row--${section.variant || CARD_VARIANTS[index % CARD_VARIANTS.length]}`}>
