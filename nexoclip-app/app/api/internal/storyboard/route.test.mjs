@@ -144,21 +144,9 @@ test('maps insufficient credits on submit to HTTP 402', async () => {
 });
 
 
-test('imports the Director final render as an MP4, but no other caller may import video', async () => {
-  const imported = [];
-  // handler() restores the secret after one call, so each request gets its own.
-  const post = (request) => handler({
-    importAsset: async (workspaceId, input) => { imported.push({ workspaceId, ...input }); return { asset: { id: 'asset-render' } }; },
-    createStorage: () => ({}),
-  })(request);
+test('the storyboard bridge imports images only (renders use the binary upload)', async () => {
+  const post = handler({ importAsset: async () => { throw new Error('must not import'); }, createStorage: () => ({}) });
   const dataBase64 = Buffer.from('mp4-bytes').toString('base64');
-  const render = await post(signedRequest({ action: 'import-asset', source: 'director', filename: 'final.mp4', contentType: 'video/mp4', dataBase64 }));
-  assert.equal(render.status, 201);
-  assert.equal((await render.json()).assetId, 'asset-render');
-  assert.equal(imported[0].allowVideo, true);
-  assert.equal(imported[0].contentType, 'video/mp4');
-
-  const other = await post(signedRequest({ action: 'import-asset', filename: 'x.mp4', contentType: 'video/mp4', dataBase64 }));
-  assert.equal(other.status, 400);
-  assert.equal(imported.length, 1);
+  const response = await post(signedRequest({ action: 'import-asset', source: 'director', filename: 'x.mp4', contentType: 'video/mp4', dataBase64 }));
+  assert.equal(response.status, 400);
 });

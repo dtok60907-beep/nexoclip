@@ -8,13 +8,13 @@ import { ensureAssetThumbnail } from './assetThumbnailService.js';
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'audio/wav']);
 const maxSizeBytes = 50 * 1024 * 1024;
 
-export function validateAssetInput(input) {
+export function validateAssetInput(input, { maxBytes = maxSizeBytes } = {}) {
   const filename = String(input?.filename || '').trim();
   const contentType = String(input?.contentType || '').trim().toLowerCase();
   const sizeBytes = Number(input?.sizeBytes);
   if (!filename) throw new Error('Asset filename is required');
   if (!allowedContentTypes.has(contentType)) throw new Error('Asset content type is not supported');
-  if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > maxSizeBytes) throw new Error('Asset size is invalid');
+  if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > maxBytes) throw new Error('Asset size is invalid');
   return { filename, contentType, sizeBytes };
 }
 
@@ -79,9 +79,9 @@ export async function findExactTrustedWorkspaceAsset({
   return null;
 }
 
-export async function importWorkspaceAsset(workspaceId, { filename, contentType, body, allowVideo = false }, storage = createStorage(), pool = getPool()) {
+export async function importWorkspaceAsset(workspaceId, { filename, contentType, body, allowVideo = false, maxBytes }, storage = createStorage(), pool = getPool()) {
   const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body || []);
-  const metadata = validateAssetInput({ filename, contentType, sizeBytes: bytes.length });
+  const metadata = validateAssetInput({ filename, contentType, sizeBytes: bytes.length }, { maxBytes });
   const isImage = metadata.contentType.startsWith('image/');
   if (!isImage && !(allowVideo && metadata.contentType === 'video/mp4')) throw new Error('Only images can be imported');
   const existing = isImage ? await findExactTrustedWorkspaceAsset({

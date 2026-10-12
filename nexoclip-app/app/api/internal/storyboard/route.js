@@ -29,8 +29,6 @@ export const STORYBOARD_MODELS = { image: 'bytedance-seed/seedream-4.5', video: 
 // Bookkeeping label for which internal tool made the request; must be one of these.
 const SOURCES = new Set(['storyboard', 'director']);
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
-// The Director's final render (an MP4 joined from the user's own clips).
-const MAX_RENDER_BYTES = 50 * 1024 * 1024;
 
 async function publishReservedGeneration({ pool, kind }) {
   if (!process.env.REDIS_URL) throw new Error('Generation queue is unavailable');
@@ -130,15 +128,13 @@ export function createInternalStoryboardHandler({
 
       if (action === 'import-asset') {
         const { filename, contentType, dataBase64 } = payload;
-        const isRender = source === 'director' && contentType === 'video/mp4';
-        if (typeof contentType !== 'string' || !(contentType.startsWith('image/') || isRender) || typeof dataBase64 !== 'string') return badRequest('An image is required');
+        if (typeof contentType !== 'string' || !contentType.startsWith('image/') || typeof dataBase64 !== 'string') return badRequest('An image is required');
         const bytes = Buffer.from(dataBase64, 'base64');
-        if (!bytes.length || bytes.length > (isRender ? MAX_RENDER_BYTES : MAX_IMPORT_BYTES)) return badRequest('File size is invalid');
+        if (!bytes.length || bytes.length > MAX_IMPORT_BYTES) return badRequest('Image size is invalid');
         const result = await importAsset(workspace.id, {
           filename: typeof filename === 'string' && filename.trim() ? filename : 'storyboard-reference',
           contentType,
           body: bytes,
-          allowVideo: isRender,
         }, loadStorage(), pool);
         return Response.json({ assetId: result.asset.id, reference: `/api/assets/${encodeURIComponent(result.asset.id)}/download` }, { status: 201 });
       }

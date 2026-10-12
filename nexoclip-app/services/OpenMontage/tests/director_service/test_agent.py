@@ -104,10 +104,9 @@ class FakeBridge:
     def status(self, generation_id):
         return self._gens[generation_id]
 
-    def import_asset(self, *, content, content_type, filename, return_id=False):
-        self.imports.append({"content": content, "content_type": content_type, "filename": filename})
-        asset_id = f"asset-import{len(self.imports)}"
-        return asset_id if return_id else f"/api/assets/{asset_id}/download"
+    def upload_render(self, *, content, filename):
+        self.imports.append({"content": content, "content_type": "video/mp4", "filename": filename})
+        return f"asset-import{len(self.imports)}"
 
     def download(self, asset_id):
         if asset_id in self.files:

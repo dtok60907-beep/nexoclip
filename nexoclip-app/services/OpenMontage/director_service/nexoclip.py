@@ -112,14 +112,39 @@ class Bridge:
         })
         return float(response.json().get("credits") or 0)
 
-    def import_asset(self, *, content: bytes, content_type: str, filename: str, return_id: bool = False) -> str:
-        """Store a file in the user's workspace. Returns its reference, or its asset id with return_id."""
+    def import_asset(self, *, content: bytes, content_type: str, filename: str) -> str:
         response = self._post({
             "action": "import-asset", "source": SOURCE, "filename": filename, "contentType": content_type,
             "dataBase64": base64.b64encode(content).decode("ascii"),
-        }, timeout=300.0)
-        data = response.json()
-        return str(data["assetId"] if return_id else data["reference"])
+        })
+        return str(response.json()["reference"])
+
+    def upload_render(self, *, content: bytes, filename: str) -> str:
+        """Store the final MP4 in the user's workspace; returns its asset id. Sent as the raw body
+        (not base64 JSON) to a dedicated route, signed over its size and sha256."""
+        meta = {"action": "upload-render", "filename": filename, "size": len(content),
+                "sha256": hashlib.sha256(content).hexdigest()}
+        signed = sign_request(user_id=self.user_id, request=meta, secret=self._secret)
+        headers = {
+            "Content-Type": "video/mp4",
+            "X-Director-User-Id": signed["userId"],
+            "X-Director-Timestamp": str(signed["timestamp"]),
+            "X-Director-Nonce": signed["nonce"],
+            "X-Director-Signature": signed["signature"],
+            "X-Director-Request": base64.b64encode(signed["request"].encode("utf-8")).decode("ascii"),
+        }
+        url = self._url.rsplit("/api/", 1)[0] + "/api/internal/director/render-upload"
+        try:
+            response = requests.post(url, data=content, headers=headers, timeout=600)
+        except requests.RequestException as exc:
+            raise BridgeError(503, f"nexoclip unreachable: {exc}") from exc
+        if response.status_code >= 400:
+            try:
+                message = response.json().get("error") or response.text
+            except ValueError:
+                message = response.text
+            raise BridgeError(response.status_code, f"upload render gagal ({response.status_code}): {message}"[:500])
+        return str(response.json()["assetId"])
 
     def submit(self, *, kind: str, prompt: str, parameters: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
         response = self._post({

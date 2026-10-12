@@ -22,7 +22,7 @@ from director_service.store import now_iso
 
 FPS = 24
 HEIGHTS = {"480p": 480, "720p": 720, "1080p": 1080}
-MAX_BYTES = 50 * 1024 * 1024  # nexoclip's asset size limit
+MAX_BYTES = 200 * 1024 * 1024  # MAX_RENDER_BYTES of nexoclip's render-upload route
 FFMPEG_TIMEOUT_SECONDS = 600
 
 
@@ -185,8 +185,7 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
         if bridge is None:
             raise RenderError("render butuh koneksi ke nexoclip (bridge belum dikonfigurasi)")
         download = download or (lambda asset_id: (lambda d: (d.content, d.content_type))(bridge.download(asset_id)))
-        upload = upload or (lambda content, filename: bridge.import_asset(
-            content=content, content_type="video/mp4", filename=filename, return_id=True))
+        upload = upload or (lambda content, filename: bridge.upload_render(content=content, filename=filename))
 
     by_shot = {s["shot_id"]: s for s in plan(board)}
     segments = [by_shot[sid] for sid in item["shots"] if sid in by_shot]
@@ -213,7 +212,7 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
         with open(out, "rb") as fh:
             data = fh.read()
     if len(data) > MAX_BYTES:
-        raise RenderError(f"hasil render {len(data) // (1024 * 1024)} MB, melebihi batas 50 MB; coba resolusi lebih kecil")
+        raise RenderError(f"hasil render {len(data) // (1024 * 1024)} MB, melebihi batas 200 MB; coba resolusi lebih kecil")
     title = re.sub(r"[^A-Za-z0-9 _-]+", "", (board["script"] or {}).get("title") or project_id).strip() or "director"
     asset_id = upload(data, f"{title[:60]}.mp4")
     _set(project_id, render_id, status="done", asset_id=asset_id, size_bytes=len(data), duration_seconds=total_seconds,
