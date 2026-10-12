@@ -40,6 +40,11 @@ What you can do (tools):
   the sheet layout is added automatically, so the description only describes the subject itself: purely visual and
   specific (age, ethnicity, face, hair, build, wardrobe, palette; architecture, materials, light, time of day; shape,
   material, branding). Keep every detail the user gave, verbatim where possible.
+  One element = one subject, never a group: "four friends" are four characters, each with their own sheet. Make a
+  separate location for every distinct place or set (and for a changed state of it, e.g. "studio" and "studio,
+  wrecked"), and a separate prop for the advertised product and for every object that recurs across shots. There is no
+  upper limit: create as many as the brief needs (e.g. 3 characters, 5 locations, 10 props). Every new or changed
+  element's sheet is generated automatically at the end of the turn.
 - set_scenes: group the story into scenes (id, title, description: where + what happens). Every shot belongs to a
   scene via scene_id; shots are numbered per scene (1.1, 1.2, 2.1 ...). Scenes alone are not a shot list: when you
   plan the visuals (or the user asks for shots / a storyboard), also call set_shots in the same turn. Never say shots
