@@ -196,6 +196,8 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
 
     with tempfile.TemporaryDirectory(prefix="director-render-") as tmp:
         parts = []
+        placed = []  # where each shot sits in the final video, for the timeline
+        cursor = 0.0
         for index, seg in enumerate(segments):
             content, content_type = download(seg["asset_id"])
             ext = ".mp4" if seg["source"] == "video" else (".png" if "png" in content_type else ".jpg")
@@ -205,6 +207,9 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             part = os.path.join(tmp, f"seg_{index:03d}.mp4")
             normalise(raw, seg["source"], seg["duration"], part, size)
             parts.append(part)
+            length = round(duration_of(part), 3)
+            placed.append({"shot_id": seg["shot_id"], "source": seg["source"], "start": round(cursor, 3), "duration": length})
+            cursor += length
             _set(project_id, render_id, progress={"done": index + 1, "total": len(segments)})
         out = os.path.join(tmp, "final.mp4")
         join(parts, out)
@@ -216,6 +221,7 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
     title = re.sub(r"[^A-Za-z0-9 _-]+", "", (board["script"] or {}).get("title") or project_id).strip() or "director"
     asset_id = upload(data, f"{title[:60]}.mp4")
     _set(project_id, render_id, status="done", asset_id=asset_id, size_bytes=len(data), duration_seconds=total_seconds,
+         segments=placed,
          width=size[0], height=size[1], finished_at=now_iso())
     return find(read_board(project_id), render_id)
 

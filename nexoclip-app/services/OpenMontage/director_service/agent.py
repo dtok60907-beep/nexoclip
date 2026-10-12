@@ -472,6 +472,42 @@ def _remove_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True}, f"Menghapus shot: {title}"
 
 
+def _timeline_order(board: dict[str, Any]) -> list[dict[str, Any]]:
+    """Shots as the timeline shows them: by scene, then shots without a known scene."""
+    scene_ids = [sc["id"] for sc in board["scenes"]]
+    if not scene_ids:
+        return list(board["shots"])
+    ordered = [sh for sid in scene_ids for sh in board["shots"] if sh.get("scene_id") == sid]
+    return ordered + [sh for sh in board["shots"] if sh.get("scene_id") not in scene_ids]
+
+
+def _move_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """Move a shot to another place in the timeline (0-based). Dropped among another scene's
+    shots, it joins that scene, so the timeline shows it exactly where it was dropped."""
+    shot_id = args.get("id")
+    try:
+        to_index = int(args.get("to_index"))
+    except (TypeError, ValueError) as exc:
+        raise ToolError("to_index must be a number") from exc
+
+    def change(board: dict[str, Any]) -> str:
+        current = boards.shot(board, shot_id)
+        if not current:
+            raise ToolError(f"no shot {shot_id!r}")
+        ctx.guard(current, f"shot {shot_id}")
+        order = [sh for sh in _timeline_order(board) if sh is not current]
+        index = max(0, min(to_index, len(order)))
+        order.insert(index, current)
+        neighbour = order[index - 1] if index > 0 else (order[1] if len(order) > 1 else None)
+        if board["scenes"] and neighbour is not None and neighbour.get("scene_id"):
+            current["scene_id"] = neighbour["scene_id"]
+        board["shots"] = order
+        return current["title"]
+
+    title = ctx.update(change, lambda title: f"Memindah urutan shot: {title}")
+    return {"ok": True}, f"Memindah urutan shot: {title}"
+
+
 def _request_generation(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     keys = list(dict.fromkeys(str(k).strip() for k in args.get("items") or [] if str(k).strip()))
     if not keys:
@@ -575,6 +611,7 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "remove_element": _remove_element,
     "update_shot": _update_shot,
     "remove_shot": _remove_shot,
+    "move_shot": _move_shot,
     "set_scenes": _set_scenes,
     "set_lock": _set_lock,
 }

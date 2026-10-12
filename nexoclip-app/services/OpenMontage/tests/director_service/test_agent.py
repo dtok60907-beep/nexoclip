@@ -713,6 +713,9 @@ def test_render_joins_videos_and_still_frames_into_one_mp4(client, fake_llm, bri
     assert item["asset_id"] == "asset-import1" and item["progress"] == {"done": 2, "total": 2}
     assert (item["width"], item["height"]) == (1280, 720)
     assert abs(item["duration_seconds"] - 6.0) < 0.3  # 2 s clip + shot 2's frame held for its 4 s
+    # Where each shot sits in the final video: the clip's real length, not the shot's planned 6 s.
+    segments = [(s["shot_id"], s["source"], round(s["start"], 1), round(s["duration"], 1)) for s in item["segments"]]
+    assert segments == [("s1", "video", 0.0, 2.0), ("s2", "frame", 2.0, 4.0)]
     assert view["chat"][-1]["kind"] == "render" and view["chat"][-1]["meta"]["render_id"] == item["id"]
 
     upload = bridge.imports[0]
@@ -741,3 +744,21 @@ def test_agent_can_render_and_a_dead_render_is_healed(client, fake_llm, bridge, 
     item = render.create(pid)
     render._set(pid, item["id"], status="running")
     assert _view(client, pid)["board"]["renders"][-1]["status"] == "failed"
+
+
+def test_user_can_reorder_and_delete_shots_from_the_timeline(client, fake_llm):
+    pid = _built_project(client, fake_llm)
+    edit = lambda tool, **args: client.post(f"/api/director/projects/{pid}/edit", json={"tool": tool, "args": args}, headers=HEADERS)
+    assert edit("set_scenes", scenes=[{"id": "datang", "title": "Datang", "description": "x"}, {"id": "teras", "title": "Teras", "description": "y"}]).status_code == 200
+    assert edit("update_shot", id="s1", scene_id="datang").status_code == 200
+    assert edit("update_shot", id="s2", scene_id="teras").status_code == 200
+
+    # s2 dropped first lands among scene a's shots, so it joins scene a.
+    assert edit("move_shot", id="s2", to_index=0).status_code == 200
+    board = _view(client, pid)["board"]
+    assert [s["id"] for s in board["shots"]] == ["s2", "s1"]
+    assert {s["id"]: s["scene_id"] for s in board["shots"]} == {"s2": "datang", "s1": "datang"}
+    assert edit("move_shot", id="nope", to_index=0).status_code == 400
+
+    assert edit("remove_shot", id="s2").status_code == 200
+    assert [s["id"] for s in _view(client, pid)["board"]["shots"]] == ["s1"]
