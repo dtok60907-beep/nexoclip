@@ -14,13 +14,14 @@ import traceback
 import uuid
 from typing import Callable, Optional
 
-from director_service import agent, billing, generation, llm
+from director_service import agent, billing, generation, llm, render
 from director_service.board import create_board, read_board
 from director_service.db import ActivityLock, activity_held
 from director_service.store import append_chat, create_project as insert_project, now_iso, read_director, update_director
 
 BUSY_AGENT = "Director masih membalas pesan sebelumnya"
 BUSY_GENERATION = "masih ada generate yang berjalan"
+BUSY_RENDER = "video masih dirender"
 
 
 class Busy(RuntimeError):
@@ -54,7 +55,7 @@ def _background(project_id: str, activity: str, work: Callable[[], None], busy_m
             traceback.print_exc()
             message = str(exc)[:400]
             _set_activity(project_id, activity, "error", message)
-            prefix = "Director gagal membalas" if activity == "agent" else "Generate gagal"
+            prefix = {"agent": "Director gagal membalas", "render": "Render gagal"}.get(activity, "Generate gagal")
             append_chat(project_id, "assistant", f"{prefix}: {message}", kind="error")
         finally:
             lock.release()
@@ -79,6 +80,8 @@ def heal(project_id: str) -> None:
         _set_activity(project_id, "agent", "error", "Balasan terputus (service restart). Coba lagi.")
     if not activity_held(project_id, "generation"):
         resume(project_id)
+    if not activity_held(project_id, "render"):
+        render.interrupted(project_id)
 
 
 # ---------------------------------------------------------------- chat
@@ -264,3 +267,31 @@ def resume(project_id: str) -> None:
                     after=lambda: _kick_auto(project_id))
     except Busy:
         pass
+
+
+# ---------------------------------------------------------------- final video
+
+
+def start_render(project_id: str) -> dict:
+    """Join the shots into one MP4 in the background. Free: no model is called."""
+    if activity_held(project_id, "render"):
+        raise Busy(BUSY_RENDER)
+    try:
+        item = render.create(project_id)
+    except render.RenderError as exc:
+        raise InvalidAction(str(exc)) from exc
+    append_chat(project_id, "assistant", "Render video final", kind="render", meta={"render_id": item["id"]})
+
+    def work() -> None:
+        try:
+            render.run(project_id, item["id"])
+        except Exception as exc:
+            render.fail(project_id, item["id"], str(exc))
+            raise
+
+    try:
+        _background(project_id, "render", work, BUSY_RENDER)
+    except Busy:
+        render.fail(project_id, item["id"], BUSY_RENDER)
+        raise
+    return item

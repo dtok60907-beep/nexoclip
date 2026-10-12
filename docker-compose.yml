@@ -356,7 +356,8 @@ services:
   # LLM usage are billed through the signed /api/internal/storyboard bridge.
   # ---------------------------------------------------------------------------
   director:
-    mem_limit: 512m
+    # ffmpeg encodes the final render here.
+    mem_limit: 1g
     build:
       context: ./nexoclip-app/services/OpenMontage
       dockerfile: director_service/Dockerfile

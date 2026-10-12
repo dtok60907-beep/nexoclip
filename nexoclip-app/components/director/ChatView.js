@@ -275,6 +275,55 @@ function RequestCard({ request, board, workspaceId, busy, generationRunning, onA
   );
 }
 
+// ---------------------------------------------------------------- final render
+
+function fmtDuration(seconds) {
+  const s = Math.round(Number(seconds) || 0);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+export function RenderCard({ render, workspaceId, rendering, onRender }) {
+  if (!render) return null;
+  const done = render.status === 'done';
+  const failed = render.status === 'failed';
+  const progress = render.progress || { done: 0, total: render.shots?.length || 0 };
+  const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const src = done ? assetUrl(render.asset_id, workspaceId) : null;
+  const notes = [];
+  if (render.stills) notes.push(`${render.stills} shot masih frame diam`);
+  if (render.skipped) notes.push(`${render.skipped} shot dilewati (belum ada gambar)`);
+  return (
+    <CardShell icon="▶" title="Video final" accent={done ? fmtDuration(render.duration_seconds) : failed ? 'gagal' : 'dirender'}
+      action={done || failed ? (failed ? 'Coba render lagi' : 'Render ulang') : null} onAction={onRender} actionDisabled={rendering}
+      secondary={done && src ? (
+        <a href={`${src}&download=1`} download
+          className="flex items-center justify-center rounded-full bg-[#d4ff64] px-5 py-2 text-[12px] font-semibold text-[#10130a] hover:brightness-110">
+          Download
+        </a>
+      ) : null}>
+      {done && src ? (
+        <video src={src} controls preload="metadata" playsInline className="w-full rounded-lg bg-black" />
+      ) : failed ? (
+        <p className="text-[11.5px] leading-relaxed text-red-300/90">{render.error || 'Render gagal.'}</p>
+      ) : (
+        <div>
+          <div className="flex items-center gap-2 text-[11.5px] text-white/75">
+            <Spinner /> {progress.done < progress.total ? `Menggabungkan shot ${Math.min(progress.done + 1, progress.total)}/${progress.total}` : 'Menyimpan video…'}
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+            <div className="h-full rounded-full bg-[#d4ff64] transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+          </div>
+        </div>
+      )}
+      <p className="mt-2 text-[10.5px] text-white/40">
+        {render.shots?.length || 0} shot · {render.aspect_ratio} · {render.resolution}
+        {done && render.size_bytes ? ` · ${(render.size_bytes / (1024 * 1024)).toFixed(1)} MB` : ''}
+        {notes.length ? ` · ${notes.join(', ')}` : ''}
+      </p>
+    </CardShell>
+  );
+}
+
 // ---------------------------------------------------------------- timeline
 
 function groupEntries(chat) {
@@ -291,7 +340,11 @@ function groupEntries(chat) {
   return blocks;
 }
 
-function Entry({ entry, board, workspaceId, busy, generationRunning, onApprove, onReject, onOpenPanel }) {
+function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender }) {
+  if (entry.kind === 'render') {
+    const render = (board.renders || []).find((r) => r.id === entry.meta?.render_id);
+    return <RenderCard render={render} workspaceId={workspaceId} rendering={busy || renderRunning} onRender={onRender} />;
+  }
   if (entry.kind === 'card') return <ArtifactCard card={entry.meta?.card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} />;
   if (entry.kind === 'request') {
     const request = board.requests.find((r) => r.id === entry.meta?.request_id);
@@ -315,7 +368,7 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, onApprove, 
   return <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={entry.text} /></div>;
 }
 
-export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, agentRunning, onApprove, onReject, onOpenPanel }) {
+export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender }) {
   const blocks = groupEntries(chat);
   return (
     <div className="space-y-4">
@@ -323,7 +376,8 @@ export default function ChatTimeline({ chat, board, workspaceId, busy, generatio
         <StepGroup key={block.key} items={block.items} live={agentRunning && i === blocks.length - 1} />
       ) : (
         <Entry key={block.key} entry={block.entry} board={board} workspaceId={workspaceId} busy={busy}
-          generationRunning={generationRunning} onApprove={onApprove} onReject={onReject} onOpenPanel={onOpenPanel} />
+          generationRunning={generationRunning} renderRunning={renderRunning} onApprove={onApprove} onReject={onReject}
+          onOpenPanel={onOpenPanel} onRender={onRender} />
       ))}
       {agentRunning && blocks[blocks.length - 1]?.type !== 'steps' && (
         <div className="flex items-center gap-2 text-[10.5px] text-white/40"><Spinner /> Director sedang bekerja…</div>

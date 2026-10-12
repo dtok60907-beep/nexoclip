@@ -75,7 +75,7 @@ export class R2ObjectStorage {
   // windows), so repeated views produce the identical URL and the browser can
   // serve the file from cache instead of downloading it again. Objects are
   // immutable, so `responseCacheControl` lets R2 mark the response cacheable.
-  async createDownloadUrl({ key, expiresInSeconds = 900, cacheWindowSeconds = 0, responseCacheControl = '' }) {
+  async createDownloadUrl({ key, expiresInSeconds = 900, cacheWindowSeconds = 0, responseCacheControl = '', responseContentDisposition = '' }) {
     if (!this.accountId || !this.accessKeyId || !this.secretAccessKey) throw new Error('R2 signing credentials are required');
     if (cacheWindowSeconds) {
       if (!Number.isInteger(cacheWindowSeconds) || cacheWindowSeconds < 60 || cacheWindowSeconds * 2 > 604800) {
@@ -102,6 +102,7 @@ export class R2ObjectStorage {
       'X-Amz-Expires': String(expiresInSeconds),
       'X-Amz-SignedHeaders': 'host',
       ...(responseCacheControl ? { 'response-cache-control': responseCacheControl } : {}),
+      ...(responseContentDisposition ? { 'response-content-disposition': responseContentDisposition } : {}),
     });
     query.sort();
     const canonicalRequest = ['GET', pathname, query.toString(), `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');

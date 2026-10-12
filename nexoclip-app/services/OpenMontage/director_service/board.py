@@ -27,7 +27,7 @@ ELEMENT_KINDS = ("character", "location", "prop")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
 TERMINAL_OK = "succeeded"
 CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots")
-RUNTIME_KEYS = ("media", "requests")
+RUNTIME_KEYS = ("media", "requests", "renders")
 
 T = TypeVar("T")
 
@@ -44,6 +44,7 @@ def empty_board() -> dict[str, Any]:
         "shots": [],
         "media": {},
         "requests": [],
+        "renders": [],
     }
 
 
@@ -274,4 +275,4 @@ def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
             # from nexoclip's own /api/assets/<id>/download with its session.
             "asset_id": media.get("asset_id") if status == TERMINAL_OK else None,
         }
-    return {**{k: board[k] for k in (*CONTENT_KEYS, "requests")}, "media": media_view, "version": board.get("version")}
+    return {**{k: board[k] for k in (*CONTENT_KEYS, "requests", "renders")}, "media": media_view, "version": board.get("version")}

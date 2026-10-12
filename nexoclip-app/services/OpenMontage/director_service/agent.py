@@ -64,7 +64,11 @@ The user can also edit the board directly, lock items ("locked": true) and resto
 as approved and final: tools refuse to change them, so ask the user to unlock in the board if a change is needed.
 Messages like "[user edited: ...]" in the history are the user's own edits; respect them.
 
-Not available yet: voiceover/narration, music, final edit/render of the whole video. Say so honestly; do not promise them.
+- render_video: join the shots into the final MP4 in timeline order (free, no credits). Each shot uses its video,
+  or its frame held still when it has no video yet; shots with neither are skipped. Use it when the user asks for
+  the final video / export / render. It runs in the background and shows its own card with progress and download.
+
+Not available yet: voiceover/narration, music, transitions or captions in the render. Say so honestly; do not promise them.
 
 How to work:
 - Reply in the user's language (default Indonesian, casual, like a creative director). Keep replies short:
@@ -172,6 +176,7 @@ TOOLS = [
     _tool("read_skill", "Load a craft guide from the skills list.", {
         "name": {"type": "string", "enum": list(skills.SKILLS)},
     }, ["name"]),
+    _tool("render_video", "Render the final MP4 from the shots in timeline order (free).", {}, []),
     _tool("request_generation", "Prepare paid generation (needs the user's approval in the UI).", {
         "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01"},
         "force": {"type": "boolean", "description": "regenerate even if already up to date"},
@@ -492,6 +497,23 @@ def _request_generation(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return result, f"Menyiapkan generate: {' + '.join(parts)}"
 
 
+def _render_video(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    from director_service import session  # session imports this module
+
+    try:
+        item = session.start_render(ctx.project_id)
+    except (session.Busy, session.InvalidAction) as exc:
+        raise ToolError(str(exc)) from exc
+    note = f"{len(item['shots'])} shot"
+    if item["stills"]:
+        note += f", {item['stills']} masih frame diam (belum ada video)"
+    if item["skipped"]:
+        note += f", {item['skipped']} dilewati (belum ada frame/video)"
+    return ({"ok": True, "render_id": item["id"], "shots": len(item["shots"]), "stills": item["stills"],
+             "skipped": item["skipped"], "status": "rendering in the background; the render card shows progress and the download"},
+            f"Render video final ({note})")
+
+
 def _read_skill(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     name = str(args.get("name") or "")
     try:
@@ -541,6 +563,7 @@ HANDLERS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "update_shot": _update_shot,
     "remove_shot": _remove_shot,
     "request_generation": _request_generation,
+    "render_video": _render_video,
 }
 
 # What the user may change directly from the board (same validation as the agent).

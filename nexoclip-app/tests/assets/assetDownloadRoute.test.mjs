@@ -31,3 +31,9 @@ test('missing local objects return 404 and storage errors do not expose paths',a
  const response=await handler(request(),context);assert.equal(response.status,status);assert.doesNotMatch(JSON.stringify(await response.json()),/secret/);
  }
 });
+test('download=1 asks for an attachment, never for thumbnails',async()=>{
+ const seen=[];const handler=createAssetDownloadGetHandler({resolveContext:async()=>({workspace:{id:'verified'}}),storageFactory:()=>({}),getDownload:async(_w,_a,_s,_o,opts)=>{seen.push(opts);return {download:{url:'https://storage.example/v.mp4'}};}});
+ const req=(q)=>{const r=new Request(`http://app/api/assets/asset/download?workspace_id=w${q}`);r.cookies={get:()=>({value:'session'})};return r;};
+ await handler(req('&download=1'),context);await handler(req('&download=1&variant=thumb'),context);await handler(req(''),context);
+ assert.deepEqual(seen.map((o)=>o.attachment),[true,false,false]);
+});

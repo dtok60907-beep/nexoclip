@@ -81,6 +81,10 @@ MIGRATIONS: list[str] = [
         created_at  timestamptz NOT NULL DEFAULT now()
     );
     """,
+    # Status of the final-video render, next to agent / generation.
+    """
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS render JSONB NOT NULL DEFAULT '{"status": "idle"}'::jsonb;
+    """,
 ]
 
 

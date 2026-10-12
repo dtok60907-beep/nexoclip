@@ -148,6 +148,7 @@ def _project_view(project_id: str) -> dict[str, Any]:
         "llm_cost_usd": project["llm_cost_usd"],
         "agent": project["agent"],
         "generation": project["generation"],
+        "render": project.get("render") or {"status": "idle"},
         "board": view_for_ui(project_id, read_board(project_id)),
         "chat": read_chat(project_id),
     }
@@ -267,6 +268,13 @@ async def reject_request(project_id: str, request_id: str, x_nexoclip_user_id: O
     await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
     await asyncio.to_thread(_call, session.reject_request, project_id, request_id)
     return {"rejected": request_id}
+
+
+@app.post("/api/director/projects/{project_id}/renders", status_code=201)
+async def create_render(project_id: str, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+    await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
+    item = await asyncio.to_thread(_call, session.start_render, project_id)
+    return {"render_id": item["id"], "shots": len(item["shots"]), "stills": item["stills"]}
 
 
 def _sse(payload: dict[str, Any]) -> str:

@@ -112,12 +112,14 @@ class Bridge:
         })
         return float(response.json().get("credits") or 0)
 
-    def import_asset(self, *, content: bytes, content_type: str, filename: str) -> str:
+    def import_asset(self, *, content: bytes, content_type: str, filename: str, return_id: bool = False) -> str:
+        """Store a file in the user's workspace. Returns its reference, or its asset id with return_id."""
         response = self._post({
-            "action": "import-asset", "filename": filename, "contentType": content_type,
+            "action": "import-asset", "source": SOURCE, "filename": filename, "contentType": content_type,
             "dataBase64": base64.b64encode(content).decode("ascii"),
-        })
-        return str(response.json()["reference"])
+        }, timeout=300.0)
+        data = response.json()
+        return str(data["assetId"] if return_id else data["reference"])
 
     def submit(self, *, kind: str, prompt: str, parameters: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
         response = self._post({

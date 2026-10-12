@@ -396,7 +396,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect }) {
             <div className="pointer-events-none absolute bottom-0 top-0 w-0.5 bg-[#d4ff64]" style={{ left: now * zoom }} />
           </div>
         </div>
-        <p className="mt-1 text-[10px] text-white/30">Preview urutan shot. Ekspor MP4 belum tersedia.</p>
+        <p className="mt-1 text-[10px] text-white/30">Preview urutan shot. Klik Export untuk menggabungkannya jadi satu MP4.</p>
       </div>
     </div>
   );
@@ -404,7 +404,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect }) {
 
 // ---------------------------------------------------------------- workspace
 
-export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore }) {
+export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering }) {
   const [mode, setMode] = useState('scene');
   const [selectedId, setSelectedId] = useState(null);
   const { groups, numbered } = useMemo(() => groupShots(board), [board]);
@@ -412,6 +412,8 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
 
   const panelDef = panel && PANELS[panel];
   const openAssets = () => onOpenPanel('assets');
+  const ready = (key) => board.media[key]?.status === 'succeeded' && board.media[key]?.asset_id;
+  const renderable = numbered.some((n) => ready(`video:${n.shot.id}`) || ready(`frame:${n.shot.id}`));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -429,6 +431,11 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
           <Badge>{board.brief.aspect_ratio}</Badge>
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>
+          </button>
+          <button type="button" onClick={onRender} disabled={!renderable || rendering || busy}
+            title={renderable ? 'Gabungkan semua shot jadi satu MP4 (gratis)' : 'Belum ada shot dengan frame atau video'}
+            className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-white/85 hover:border-white/25 disabled:opacity-40">
+            <Icon d="M12 4v11 M7 10l5 5 5-5 M5 20h14" /> {rendering ? 'Merender…' : 'Export'}
           </button>
         </div>
       </div>

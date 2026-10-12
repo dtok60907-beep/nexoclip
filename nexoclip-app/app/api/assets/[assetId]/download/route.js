@@ -1,6 +1,6 @@
 import { SESSION_COOKIE } from '../../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../../src/services/tenantContext.js';
-import { createAssetDownload, createStorage, DISPLAY_DOWNLOAD_CACHE } from '../../../../../src/services/assetService.js';
+import { attachmentDisposition, createAssetDownload, createStorage, DISPLAY_DOWNLOAD_CACHE } from '../../../../../src/services/assetService.js';
 
 export const runtime = 'nodejs';
 
@@ -13,8 +13,10 @@ export function createAssetDownloadGetHandler({ resolveContext = resolveTenantCo
       const tenant = await resolveContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId });
       const { assetId } = await params;
       const variant = url.searchParams.get('variant') === 'thumb' ? 'thumb' : null;
+      // ?download=1: save the file instead of showing it (e.g. a rendered video).
+      const attachment = url.searchParams.get('download') === '1' && !variant;
       const storage = storageFactory();
-      const result = await getDownload(tenant.workspace.id, assetId, storage, DISPLAY_DOWNLOAD_CACHE, { variant });
+      const result = await getDownload(tenant.workspace.id, assetId, storage, DISPLAY_DOWNLOAD_CACHE, { variant, attachment });
       if (!result) return Response.json({ error: 'Asset not found' }, { status: 404 });
       const target = result.download.url;
       // local:// is a signed server-side storage capability, not a browser URL.
@@ -26,7 +28,7 @@ export function createAssetDownloadGetHandler({ resolveContext = resolveTenantCo
         return new Response(new Uint8Array(object.body), { headers: {
           'Content-Type': contentType,
           'Content-Length': String(object.body.length),
-          'Content-Disposition': inline ? 'inline' : 'attachment',
+          'Content-Disposition': attachment ? attachmentDisposition(result.asset?.filename) : inline ? 'inline' : 'attachment',
           'Cache-Control': 'private, max-age=600',
           'Vary': 'Cookie',
           'X-Content-Type-Options': 'nosniff',

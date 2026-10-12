@@ -7,8 +7,8 @@ from typing import Any, Optional
 
 from director_service.db import Jsonb, notify, tx
 
-PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "agent", "generation")
-JSON_FIELDS = {"agent", "generation"}
+PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "agent", "generation", "render")
+JSON_FIELDS = {"agent", "generation", "render"}
 
 
 def now_iso() -> str:

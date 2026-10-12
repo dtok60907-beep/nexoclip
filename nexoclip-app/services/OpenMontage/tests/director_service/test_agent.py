@@ -74,6 +74,8 @@ class FakeBridge:
         self.submits: list[dict] = []
         self.charges: list[dict] = []
         self.fail_once: set[str] = set()
+        self.imports: list[dict] = []
+        self.files: dict[str, nexoclip.Downloaded] = {}  # real media for render tests
         self._gens: dict[str, dict] = {}
 
     def balance(self):
@@ -102,7 +104,14 @@ class FakeBridge:
     def status(self, generation_id):
         return self._gens[generation_id]
 
+    def import_asset(self, *, content, content_type, filename, return_id=False):
+        self.imports.append({"content": content, "content_type": content_type, "filename": filename})
+        asset_id = f"asset-import{len(self.imports)}"
+        return asset_id if return_id else f"/api/assets/{asset_id}/download"
+
     def download(self, asset_id):
+        if asset_id in self.files:
+            return self.files[asset_id]
         content_type = "video/mp4" if any(s["kind"] == "video" and f"asset-{s['id']}" == asset_id for s in self.submits) else "image/png"
         return nexoclip.Downloaded(content=f"media:{asset_id}".encode(), content_type=content_type)
 
@@ -161,7 +170,7 @@ def _wait(pid: str, timeout: float = 10.0) -> dict:
     deadline = time.time() + timeout
     while time.time() < deadline:
         director = read_director(pid)
-        if all((director.get(a) or {}).get("status") != "running" for a in ("agent", "generation")):
+        if all((director.get(a) or {}).get("status") != "running" for a in ("agent", "generation", "render")):
             return director
         time.sleep(0.02)
     raise AssertionError("project stayed busy")
@@ -666,3 +675,70 @@ def test_user_can_prepare_generation_from_the_board(client, fake_llm, bridge):
     assert view["chat"][-1]["kind"] == "request" and view["chat"][-1]["role"] == "user"
     assert len(bridge.submits) == 2  # just the automatic sheets
     assert client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:nope"]}, headers=HEADERS).status_code == 400
+
+
+# ---------------------------------------------------------------- final render
+
+
+def _media(tmp_path, kind):
+    from director_service import render
+
+    out = tmp_path / ("clip.mp4" if kind == "video" else "frame.png")
+    if kind == "video":  # 2 s, 320x240, no audio track (like a silent Seedance clip)
+        render._run(["-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=24:duration=2", "-c:v", "libx264",
+                     "-pix_fmt", "yuv420p", str(out)])
+        return nexoclip.Downloaded(out.read_bytes(), "video/mp4")
+    render._run(["-y", "-f", "lavfi", "-i", "color=c=teal:size=400x400", "-frames:v", "1", str(out)])
+    return nexoclip.Downloaded(out.read_bytes(), "image/png")
+
+
+def test_render_joins_videos_and_still_frames_into_one_mp4(client, fake_llm, bridge, tmp_path):
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 400  # nothing to show yet
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2"]}, headers=HEADERS).json()
+    client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
+    _wait(pid)
+    media = _view(client, pid)["board"]["media"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+
+    res = client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS)
+    assert res.status_code == 201, res.text
+    assert res.json()["shots"] == 2 and res.json()["stills"] == 1
+    _wait(pid, timeout=120)
+    view = _view(client, pid)
+    item = view["board"]["renders"][-1]
+    assert item["status"] == "done", item
+    assert item["asset_id"] == "asset-import1" and item["progress"] == {"done": 2, "total": 2}
+    assert (item["width"], item["height"]) == (1280, 720)
+    assert abs(item["duration_seconds"] - 6.0) < 0.3  # 2 s clip + shot 2's frame held for its 4 s
+    assert view["chat"][-1]["kind"] == "render" and view["chat"][-1]["meta"]["render_id"] == item["id"]
+
+    upload = bridge.imports[0]
+    assert upload["content_type"] == "video/mp4" and upload["filename"] == "Shore Thing.mp4"
+    out = tmp_path / "final.mp4"
+    out.write_bytes(upload["content"])
+    assert render.has_audio(str(out))  # silent clips still carry a track, so players and editors agree
+
+
+def test_agent_can_render_and_a_dead_render_is_healed(client, fake_llm, bridge, tmp_path, monkeypatch):
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"]}, headers=HEADERS).json()
+    client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
+    _wait(pid)
+    bridge.files[_view(client, pid)["board"]["media"]["frame:s1"]["asset_id"]] = _media(tmp_path, "frame")
+
+    fake_llm.turns.append([{"calls": [call("render_video")]}, {"text": "Lagi dirender."}])
+    view = _say(client, pid, "export videonya dong")
+    _wait(pid, timeout=120)
+    item = _view(client, pid)["board"]["renders"][-1]
+    assert item["status"] == "done" and item["shots"] == ["s1"] and item["stills"] == 1 and item["skipped"] == 1
+
+    # A render left "running" by a crashed instance is marked failed, so it can be started again.
+    item = render.create(pid)
+    render._set(pid, item["id"], status="running")
+    assert _view(client, pid)["board"]["renders"][-1]["status"] == "failed"

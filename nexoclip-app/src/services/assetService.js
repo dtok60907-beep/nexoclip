@@ -79,13 +79,14 @@ export async function findExactTrustedWorkspaceAsset({
   return null;
 }
 
-export async function importWorkspaceAsset(workspaceId, { filename, contentType, body }, storage = createStorage(), pool = getPool()) {
+export async function importWorkspaceAsset(workspaceId, { filename, contentType, body, allowVideo = false }, storage = createStorage(), pool = getPool()) {
   const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body || []);
   const metadata = validateAssetInput({ filename, contentType, sizeBytes: bytes.length });
-  if (!metadata.contentType.startsWith('image/')) throw new Error('Only images can be imported');
-  const existing = await findExactTrustedWorkspaceAsset({
+  const isImage = metadata.contentType.startsWith('image/');
+  if (!isImage && !(allowVideo && metadata.contentType === 'video/mp4')) throw new Error('Only images can be imported');
+  const existing = isImage ? await findExactTrustedWorkspaceAsset({
     workspaceId, body: bytes, contentType: metadata.contentType,
-  }, storage, pool);
+  }, storage, pool) : null;
   if (existing) {
     return {
       asset: existing,
@@ -198,7 +199,14 @@ export const DISPLAY_DOWNLOAD_CACHE = {
   responseCacheControl: 'private,max-age=21600,immutable',
 };
 
-export async function createAssetDownload(workspaceId, assetId, storage = createStorage(), downloadOptions = {}, { variant = null, ensureThumbnail = ensureAssetThumbnail } = {}) {
+// "Save as" for a download button. Only characters SigV4 and URLSearchParams
+// encode the same way (see above), so the signed URL stays valid.
+export function attachmentDisposition(filename) {
+  const safe = String(filename || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+/, '').slice(0, 120) || 'download';
+  return `attachment;filename="${safe}"`;
+}
+
+export async function createAssetDownload(workspaceId, assetId, storage = createStorage(), downloadOptions = {}, { variant = null, attachment = false, ensureThumbnail = ensureAssetThumbnail } = {}) {
   if (!workspaceId) throw new Error('workspace_id is required');
   if (!assetId) throw new Error('asset_id is required');
   const result = await getPool().query(
@@ -216,5 +224,6 @@ export async function createAssetDownload(workspaceId, assetId, storage = create
       console.error('[asset-thumbnail] falling back to original', asset.id, error?.message);
     }
   }
-  return { asset, download: await storage.createDownloadUrl({ key, ...downloadOptions }) };
+  const options = attachment ? { ...downloadOptions, responseContentDisposition: attachmentDisposition(asset.filename) } : downloadOptions;
+  return { asset, download: await storage.createDownloadUrl({ key, ...options }) };
 }

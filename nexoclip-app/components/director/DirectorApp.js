@@ -305,12 +305,13 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
 
   const agentRunning = view?.agent?.status === 'running';
   const generationRunning = view?.generation?.status === 'running';
+  const renderRunning = view?.render?.status === 'running';
   // Fallback polling while something runs, in case the event stream is buffered.
   useEffect(() => {
-    if (!agentRunning && !generationRunning) return undefined;
+    if (!agentRunning && !generationRunning && !renderRunning) return undefined;
     const interval = setInterval(refresh, 3000);
     return () => clearInterval(interval);
-  }, [agentRunning, generationRunning, refresh]);
+  }, [agentRunning, generationRunning, renderRunning, refresh]);
 
   const chatLength = view?.chat?.length || 0;
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'end' }); }, [chatLength, agentRunning]);
@@ -352,6 +353,11 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   };
   const reject = (request) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/reject`, { method: 'POST' }));
   const retry = () => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/retry`, { method: 'POST' }));
+  // Free: joins the finished shots into one MP4; its card in the chat shows progress and the download.
+  const startRender = () => runAction(async () => {
+    await api(`/projects/${encodeURIComponent(projectId)}/renders`, { method: 'POST' });
+    setMobilePane('chat');
+  });
 
   // Direct edits from the board; resolves true when saved so the editor can close.
   const onEdit = useCallback(async (tool, args) => {
@@ -475,8 +481,8 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
           <ChatTimeline chat={view.chat} board={board} workspaceId={workspaceId} busy={actionBusy}
-            generationRunning={generationRunning} agentRunning={agentRunning}
-            onApprove={approve} onReject={reject} onOpenPanel={openPanel} />
+            generationRunning={generationRunning} renderRunning={renderRunning} agentRunning={agentRunning}
+            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender} />
           {view.agent?.status === 'error' && (
             <button type="button" onClick={retry} disabled={actionBusy} className="mt-3 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-white/80 hover:border-white/30 disabled:opacity-50">
               Coba lagi
@@ -533,7 +539,8 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         {actionError && <p className="px-4 pt-2 text-[12px] text-red-300">{actionError}</p>}
         <div className="min-h-0 flex-1">
           <Workspace board={board} workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} onChooseConcept={chooseConcept} onConfirmScript={confirmScript} busy={actionBusy || agentRunning}
-            panel={panel} onOpenPanel={setPanel} onClosePanel={() => setPanel(null)} loadVersions={loadVersions} onRestore={onRestore} />
+            panel={panel} onOpenPanel={setPanel} onClosePanel={() => setPanel(null)} loadVersions={loadVersions} onRestore={onRestore}
+            onRender={startRender} rendering={renderRunning} />
         </div>
       </section>
       {confirm && (

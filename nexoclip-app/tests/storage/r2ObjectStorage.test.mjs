@@ -101,3 +101,15 @@ test('display download URLs are identical within a cache window and ask R2 for a
   assert.equal(params.get('X-Amz-Expires'), '43200');
   assert.equal(params.get('response-cache-control'), 'private,max-age=21600,immutable');
 });
+
+test('a download link can ask R2 to save the file under its name', async () => {
+  const { attachmentDisposition } = await import('../../src/services/assetService.js');
+  const storage = new R2ObjectStorage({
+    bucket: 'bucket', publicUrl: 'https://cdn.example', accountId: 'account-id', accessKeyId: 'access-key', secretAccessKey: 'secret-key',
+    now: () => new Date('2026-10-01T06:00:01Z'), client: {},
+  });
+  const disposition = attachmentDisposition('Shore Thing (final)*.mp4');
+  assert.equal(disposition, 'attachment;filename="Shore_Thing_final_.mp4"');
+  const { url } = await storage.createDownloadUrl({ key: 'workspace/render', responseContentDisposition: disposition });
+  assert.equal(new URL(url).searchParams.get('response-content-disposition'), disposition);
+});
