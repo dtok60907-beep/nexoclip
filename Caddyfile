@@ -51,48 +51,6 @@
 			reverse_proxy {$SPITE_UPSTREAM:spite:3005}
 		}
 
-		# AI Storyboards Director (Jellyfish). Every request is authorized by the
-		# nexoclip session (forward_auth reads the nexoclip_session cookie); the
-		# verified user id is passed to Jellyfish in X-Nexoclip-User-Id. Client
-		# copies of those headers are stripped first so they cannot be spoofed.
-		redir /storyboard /storyboard/ 308
-
-		handle /storyboard/api/* {
-			# `route` keeps the written order: authorize first, then strip the prefix.
-			route {
-				request_header -X-Nexoclip-User-Id
-				request_header -X-Nexoclip-User-Email
-				request_header -X-Nexoclip-User-Name
-				forward_auth {$NEXOCLIP_UPSTREAM:nexoclip-app:3000} {
-					uri /api/internal/storyboard/authorize
-					copy_headers X-Nexoclip-User-Id X-Nexoclip-User-Email X-Nexoclip-User-Name
-				}
-				uri strip_prefix /storyboard
-				reverse_proxy {$JELLYFISH_BACKEND_UPSTREAM:jellyfish-backend:8000} {
-					# Large uploads/downloads and long-polling task endpoints.
-					transport http {
-						read_timeout 10m
-						write_timeout 10m
-					}
-				}
-			}
-		}
-
-		handle /storyboard/* {
-			route {
-				request_header -X-Nexoclip-User-Id
-				forward_auth {$NEXOCLIP_UPSTREAM:nexoclip-app:3000} {
-					uri /api/internal/storyboard/authorize
-					@unauthenticated status 401
-					handle_response @unauthenticated {
-						redir * /login?next={path} 302
-					}
-				}
-				uri strip_prefix /storyboard
-				reverse_proxy {$JELLYFISH_FRONT_UPSTREAM:jellyfish-front:80}
-			}
-		}
-
 		handle {
 			reverse_proxy {$NEXOCLIP_UPSTREAM:nexoclip-app:3000}
 		}

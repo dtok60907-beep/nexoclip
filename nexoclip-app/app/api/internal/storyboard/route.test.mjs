@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createInternalStoryboardHandler, STORYBOARD_MODELS } from './route.js';
-import { createStoryboardAuthorizeHandler } from './authorize/route.js';
 import { signCanvasAuthorization } from '../../../../src/lib/realtime/internalAuth.js';
 
 const userId = '11111111-1111-4111-8111-111111111111';
@@ -144,15 +143,3 @@ test('maps insufficient credits on submit to HTTP 402', async () => {
   assert.equal(response.status, 402);
 });
 
-test('authorize returns identity headers for a valid session and 401 otherwise', async () => {
-  const get = createStoryboardAuthorizeHandler({
-    sessionLookup: async (token) => (token === 'good' ? { user_id: userId, email: 'a@b.c', display_name: 'Ana' } : null),
-  });
-  const withCookie = (value) => ({ cookies: { get: () => (value ? { value } : undefined) } });
-  const ok = await get(withCookie('good'));
-  assert.equal(ok.status, 200);
-  assert.equal(ok.headers.get('X-Nexoclip-User-Id'), userId);
-  assert.equal(decodeURIComponent(ok.headers.get('X-Nexoclip-User-Name')), 'Ana');
-  assert.equal((await get(withCookie('bad'))).status, 401);
-  assert.equal((await get(withCookie(null))).status, 401);
-});

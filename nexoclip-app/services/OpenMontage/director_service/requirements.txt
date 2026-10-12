@@ -1,0 +1,7 @@
+# Runtime deps of the director service container.
+fastapi==0.143.0
+uvicorn==0.54.0
+pydantic==2.14.0
+requests==2.34.2
+psycopg[binary]==3.2.10
+psycopg-pool==3.2.6

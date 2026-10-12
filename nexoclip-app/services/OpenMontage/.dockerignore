@@ -1,0 +1,14 @@
+**/__pycache__
+**/*.pyc
+.venv
+projects
+*.env
+.env*
+tests
+**/*.mp4
+**/*.mov
+.agents
+docs
+remotion-composer
+ink-theater
+assets

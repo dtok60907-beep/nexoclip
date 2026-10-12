@@ -154,22 +154,6 @@ const TABS = [
     )
   },
   {
-    // Full-page app served by Caddy at /storyboard (Jellyfish), like Canvas.
-    // Hidden while still being verified; the route and page stay reachable directly.
-    id: 'storyboard',
-    hidden: true,
-    label: 'AI Storyboards Director',
-    href: '/storyboard/',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="4" width="20" height="16" rx="2"/>
-        <path d="M2 9h20"/>
-        <path d="M7 4l2 5M12 4l2 5M17 4l2 5"/>
-        <path d="M10 13l4 2.5-4 2.5z"/>
-      </svg>
-    )
-  },
-  {
     // AI Director (OpenMontage pipeline): brief -> research -> script -> scene plan -> assets.
     id: 'director',
     label: 'AI Director',
@@ -530,13 +514,9 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   const handleTabChange = useCallback((tabId, prompt = '') => {
-    if (['billing', 'usage', 'canvas', 'storyboard', 'director'].includes(tabId) && !requireAuth()) return;
+    if (['billing', 'usage', 'canvas', 'director'].includes(tabId) && !requireAuth()) return;
     if (tabId === 'canvas') {
       window.location.assign('/canvas');
-      return;
-    }
-    if (tabId === 'storyboard') {
-      window.location.assign('/storyboard/');
       return;
     }
     window.history.pushState(null, '', `/studio/${tabId}`);
