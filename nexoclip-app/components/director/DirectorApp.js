@@ -100,7 +100,7 @@ function useChatWidth() {
 }
 
 // The panel a newly shown chat card opens on the right (null = back to the shot views).
-const CARD_PANEL = { brief: 'brief', concepts: 'concepts', script: 'script', assets: 'assets', research: 'research', shots: null };
+const CARD_PANEL = { brief: 'brief', concepts: 'concepts', script: 'script', assets: 'assets', research: 'research', audio: 'audio', shots: null };
 
 function ConfirmDialog({ title, body, confirmLabel = 'Konfirmasi', busy, onConfirm, onCancel }) {
   useEffect(() => {

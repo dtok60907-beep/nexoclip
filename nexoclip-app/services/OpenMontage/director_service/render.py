@@ -137,6 +137,46 @@ def join(segments: list[str], out: str) -> None:
     _run(["-y", "-f", "concat", "-safe", "0", "-i", listing, "-c", "copy", "-movflags", "+faststart", out])
 
 
+# Volumes when the separate tracks are laid over the clips: with a voiceover, the clips' own sound and the
+# music step back so the voice stays clear.
+CLIP_VOLUME = {"with_voice": 0.45, "alone": 1.0}
+MUSIC_VOLUME = {"with_voice": 0.22, "alone": 0.6}
+MUSIC_FADE_SECONDS = 2.0
+
+
+def audio_tracks(board: dict[str, Any]) -> dict[str, str]:
+    """Finished voiceover / music assets, by "voiceover" / "music"."""
+    tracks = {}
+    for name in ("voiceover", "music"):
+        media = board["media"].get(f"audio:{name}") or {}
+        if media.get("status") == TERMINAL_OK and media.get("asset_id"):
+            tracks[name] = media["asset_id"]
+    return tracks
+
+
+def mix(video: str, out: str, *, voiceover: Optional[str] = None, music: Optional[str] = None) -> None:
+    """Lay the voiceover (from the start) and the music bed over the joined video; the video's length wins."""
+    length = duration_of(video)
+    inputs, chains, labels = ["-i", video], [], []
+    voiced = "with_voice" if voiceover else "alone"
+    chains.append(f"[0:a]volume={CLIP_VOLUME[voiced]}[clips]")
+    labels.append("[clips]")
+    if voiceover:
+        inputs += ["-i", voiceover]
+        chains.append(f"[{len(labels)}:a]aresample=48000,apad[vo]")
+        labels.append("[vo]")
+    if music:
+        inputs += ["-i", music]
+        fade_at = max(0.0, length - MUSIC_FADE_SECONDS)
+        chains.append(f"[{len(labels)}:a]aresample=48000,volume={MUSIC_VOLUME[voiced]},"
+                      f"afade=t=out:st={fade_at:.2f}:d={MUSIC_FADE_SECONDS},apad[music]")
+        labels.append("[music]")
+    chains.append(f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:normalize=0[mixed]")
+    _run(["-y", *inputs, "-filter_complex", ";".join(chains), "-map", "0:v", "-map", "[mixed]",
+          "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+          "-t", f"{length:.3f}", "-movflags", "+faststart", out])
+
+
 def duration_of(path: str) -> float:
     probe = subprocess.run([ffmpeg_exe(), "-hide_banner", "-nostdin", "-i", path], capture_output=True, text=True)
     match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", probe.stderr)
@@ -173,6 +213,7 @@ def create(project_id: str) -> dict[str, Any]:
         "stills": sum(1 for s in segments if s["source"] == "frame"),
         "skipped": len(board["shots"]) - len(segments),
         "progress": {"done": 0, "total": len(segments)},
+        "audio": sorted(audio_tracks(board)),  # separate tracks laid over the clips
         "aspect_ratio": board["brief"].get("aspect_ratio") or "16:9",
         "resolution": board["brief"].get("resolution") or "720p",
     }
@@ -224,7 +265,19 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             cursor += length
             _set(project_id, render_id, progress={"done": index + 1, "total": len(segments)})
         out = os.path.join(tmp, "final.mp4")
-        join(parts, out)
+        tracks = {name: asset for name, asset in audio_tracks(board).items() if name in item.get("audio", [])}
+        if tracks:
+            joined = os.path.join(tmp, "joined.mp4")
+            join(parts, joined)
+            files = {}
+            for name, asset_id in tracks.items():
+                content, _ = download(asset_id)
+                files[name] = os.path.join(tmp, f"{name}.mp3")
+                with open(files[name], "wb") as fh:
+                    fh.write(content)
+            mix(joined, out, voiceover=files.get("voiceover"), music=files.get("music"))
+        else:
+            join(parts, out)
         total_seconds = round(duration_of(out), 2)
         with open(out, "rb") as fh:
             data = fh.read()

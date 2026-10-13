@@ -79,11 +79,13 @@ export async function findExactTrustedWorkspaceAsset({
   return null;
 }
 
-export async function importWorkspaceAsset(workspaceId, { filename, contentType, body, allowVideo = false, maxBytes }, storage = createStorage(), pool = getPool()) {
+export async function importWorkspaceAsset(workspaceId, { filename, contentType, body, allowVideo = false, allowAudio = false, maxBytes }, storage = createStorage(), pool = getPool()) {
   const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body || []);
   const metadata = validateAssetInput({ filename, contentType, sizeBytes: bytes.length }, { maxBytes });
   const isImage = metadata.contentType.startsWith('image/');
-  if (!isImage && !(allowVideo && metadata.contentType === 'video/mp4')) throw new Error('Only images can be imported');
+  if (!isImage && !(allowVideo && metadata.contentType === 'video/mp4') && !(allowAudio && metadata.contentType.startsWith('audio/'))) {
+    throw new Error('Only images can be imported');
+  }
   const existing = isImage ? await findExactTrustedWorkspaceAsset({
     workspaceId, body: bytes, contentType: metadata.contentType,
   }, storage, pool) : null;

@@ -29,7 +29,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from director_service import db, session
+from director_service import db, nexoclip, session
 from director_service.generation import generation_credits
 from director_service.board import list_versions, read_board, restore_version, version_content, view_for_ui
 from director_service.store import find_project, list_projects, read_chat
@@ -169,6 +169,12 @@ def _call(fn, *args):
 @app.get("/api/director/health")
 async def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/director/voices")
+async def voices() -> dict:
+    """Voices for a voiceover (premade ElevenLabs voices)."""
+    return {"voices": nexoclip.VOICES}
 
 
 @app.post("/api/director/projects", status_code=201)

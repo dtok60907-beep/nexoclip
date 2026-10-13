@@ -492,3 +492,106 @@ export function HistoryView({ board, busy, loadVersions, onRestore }) {
     </Section>
   );
 }
+
+// ---------------------------------------------------------------- audio
+
+const CHARS_PER_SECOND = 13; // roughly how fast an Indonesian voiceover reads
+
+function AudioTrack({ title, mediaKey, media, workspaceId, onEdit, onRequest, busy, canGenerate, children }) {
+  const src = assetUrl(media?.asset_id, workspaceId);
+  const takes = media?.takes || [];
+  const fresh = !!media?.asset_id && !media?.stale;
+  return (
+    <div className="space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[13px] font-semibold text-white/90">{title}</div>
+        <span className="text-[10px] text-white/35">{mediaStatus(media).label}</span>
+      </div>
+      {children}
+      {src && <audio key={src} src={src} controls className="h-9 w-full" />}
+      {takes.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-white/40">
+          <span>Take</span>
+          {takes.map((take, i) => (
+            <button key={take.asset_id} type="button" disabled={busy || take.asset_id === media.asset_id}
+              onClick={() => onEdit('use_take', { key: mediaKey, asset_id: take.asset_id })}
+              className={`rounded px-1.5 py-0.5 ${take.asset_id === media.asset_id ? 'bg-amber-300/20 text-amber-200' : 'bg-white/[0.05] hover:bg-white/[0.1]'}`}>
+              {takes.length - i}{take.outdated ? ' · lama' : ''}
+            </button>
+          ))}
+        </div>
+      )}
+      {media?.error && <p className="text-[11px] text-red-300/80">{media.error}</p>}
+      <SmallButton tone="accent" disabled={busy || !canGenerate} onClick={() => onRequest([mediaKey], fresh)}>
+        {media?.asset_id ? 'Generate ulang' : 'Generate'} {title.toLowerCase()}
+      </SmallButton>
+    </div>
+  );
+}
+
+export function AudioView({ board, onEdit, onRequest, busy, workspaceId }) {
+  const audio = board.audio || { voiceover: {}, music: {} };
+  const [voices, setVoices] = useState([]);
+  const [draft, setDraft] = useState(null);
+  useEffect(() => {
+    fetch('/api/director/voices').then((r) => (r.ok ? r.json() : { voices: [] })).then((d) => setVoices(d.voices || [])).catch(() => {});
+  }, []);
+  const current = {
+    voiceover_text: audio.voiceover?.text || '', voice_id: audio.voiceover?.voice_id || '',
+    music_prompt: audio.music?.prompt || '', music_seconds: audio.music?.duration_seconds || '', instrumental: audio.music?.instrumental !== false,
+  };
+  const value = draft || current;
+  const change = (patch) => setDraft({ ...value, ...patch });
+  const videoSeconds = board.shots.reduce((t, s) => t + Math.max(1, s.duration_seconds - (s.trim_start || 0) - (s.trim_end || 0)), 0);
+  const readSeconds = Math.round(value.voiceover_text.length / CHARS_PER_SECOND);
+  const save = async () => {
+    const ok = await onEdit('set_audio', {
+      voiceover_text: value.voiceover_text, voice_id: value.voice_id, music_prompt: value.music_prompt,
+      instrumental: value.instrumental, ...(value.music_seconds ? { music_seconds: Number(value.music_seconds) } : {}),
+    });
+    if (ok) setDraft(null);
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-[12px] text-white/50">
+        Audio terpisah yang ditimpa di atas video saat Export (ElevenLabs). Dengan voiceover, suara klip dan musik otomatis dikecilkan. Generate memakai kredit.
+      </p>
+      <AudioTrack title="Voiceover" mediaKey="audio:voiceover" media={board.media['audio:voiceover']} workspaceId={workspaceId}
+        onEdit={onEdit} onRequest={onRequest} busy={busy || !!draft} canGenerate={!!(audio.voiceover?.text && audio.voiceover?.voice_id)}>
+        <textarea rows={4} className={inputClass} placeholder="Narasi yang dibacakan dari awal video…" value={value.voiceover_text}
+          onChange={(e) => change({ voiceover_text: e.target.value })} />
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+          <select className={`${inputClass} w-auto`} value={value.voice_id} onChange={(e) => change({ voice_id: e.target.value })}>
+            <option value="">Pilih suara…</option>
+            {voices.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.gender === 'female' ? 'perempuan' : 'laki-laki'} · {v.description}</option>)}
+          </select>
+          {value.voiceover_text && (
+            <span className={readSeconds > videoSeconds && videoSeconds ? 'text-amber-300/80' : ''}>
+              ±{readSeconds} detik dibaca{videoSeconds ? ` · video ${videoSeconds} detik` : ''}
+            </span>
+          )}
+        </div>
+      </AudioTrack>
+      <AudioTrack title="Musik" mediaKey="audio:music" media={board.media['audio:music']} workspaceId={workspaceId}
+        onEdit={onEdit} onRequest={onRequest} busy={busy || !!draft} canGenerate={!!audio.music?.prompt}>
+        <textarea rows={3} className={inputClass} placeholder="Genre, mood, tempo, instrumen… mis. lo-fi hangat, gitar akustik, 85 bpm"
+          value={value.music_prompt} onChange={(e) => change({ music_prompt: e.target.value })} />
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/45">
+          <label className="flex items-center gap-1.5">Durasi
+            <input type="number" min={3} max={300} className={`${inputClass} w-20`} placeholder={String(videoSeconds || 30)}
+              value={value.music_seconds} onChange={(e) => change({ music_seconds: e.target.value })} /> detik
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={value.instrumental} onChange={(e) => change({ instrumental: e.target.checked })} /> Instrumental (tanpa vokal)
+          </label>
+        </div>
+      </AudioTrack>
+      {draft && (
+        <div className="flex gap-2">
+          <SmallButton tone="accent" disabled={busy || !!(value.voiceover_text.trim() && !value.voice_id)} onClick={save}>Simpan audio</SmallButton>
+          <SmallButton onClick={() => setDraft(null)}>Batal</SmallButton>
+        </div>
+      )}
+    </div>
+  );
+}

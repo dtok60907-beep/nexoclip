@@ -82,6 +82,8 @@ class FakeBridge:
         return self.credits
 
     def estimate(self, *, kind, prompt, parameters):
+        if kind == "audio":
+            return {"credits": 2.0, "usd": 0.02}
         credits = 1.0 if kind == "image" else 5.0 * parameters["duration"]
         return {"credits": credits, "usd": credits / 100}
 
@@ -100,6 +102,10 @@ class FakeBridge:
                               "error": {"message": "moderation"} if failed else None,
                               "outputs": [] if failed else [{"assetId": f"asset-{gen_id}", "contentType": "image/png" if kind == "image" else "video/mp4"}]}
         return {"id": gen_id, "status": "queued"}
+
+    def generate_audio(self, *, text, parameters, idempotency_key):
+        self.audio = getattr(self, "audio", []) + [{"text": text, "parameters": parameters, "idempotency_key": idempotency_key}]
+        return {"asset_id": f"audio-{len(self.audio)}", "credits": 2.0}
 
     def status(self, generation_id):
         return self._gens[generation_id]
@@ -585,7 +591,7 @@ def test_frames_and_videos_need_approval_and_use_the_sheets(client, fake_llm, br
     request = view["board"]["requests"][-1]
     assert request["status"] == "pending" and not request["auto"]
     assert request["items"] == ["frame:s1", "video:s1"]  # the sheets already exist
-    assert request["estimate"] == {"available": True, "images": 1, "videos": 1, "video_seconds": 6, "credits": 31.0, "usd": 0.31}
+    assert request["estimate"] == {"available": True, "images": 1, "videos": 1, "video_seconds": 6, "audio": 0, "credits": 31.0, "usd": 0.31}
     assert len(bridge.submits) == 2  # only the automatic sheets so far
 
     res = client.post(f"/api/director/projects/{pid}/requests/{request['id']}/approve", headers=HEADERS)
@@ -965,3 +971,63 @@ def test_added_shots_and_trims_reach_the_render(client, fake_llm, bridge, tmp_pa
     item = read_board(pid)["renders"][-1]
     segments = [(s["shot_id"], round(s["duration"], 1)) for s in item["segments"]]
     assert item["status"] == "done" and segments == [("s1", 1.5), ("s2", 4.0)]  # the 2 s clip minus 0.5 s
+
+
+
+def _tone(tmp_path, name, seconds):
+    from director_service import render
+
+    out = tmp_path / f"{name}.wav"
+    render._run(["-y", "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}", str(out)])
+    return nexoclip.Downloaded(out.read_bytes(), "audio/mpeg")
+
+
+def test_voiceover_and_music_are_generated_and_mixed_into_the_render(client, fake_llm, bridge, tmp_path):
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([
+        {"calls": [call("list_voices"), call("set_audio", voiceover_text="Liburan terakhir, sebelum semuanya berubah.",
+                                                voice_id="JBFqnCBsd6RMkjVDRZzb", music_prompt="warm acoustic guitar, nostalgic")]},
+        {"calls": [call("request_generation", items=["audio:voiceover", "audio:music"])]},
+        {"text": "VO dan musik siap di-approve."},
+    ])
+    view = _say(client, pid, "tambahin VO dan musik")
+    voices = json.loads(fake_llm.requests[-2]["input"][0]["output"])["voices"]
+    assert any(v["id"] == "JBFqnCBsd6RMkjVDRZzb" for v in voices)
+    audio = view["board"]["audio"]
+    assert audio["voiceover"]["voice_name"] == "George" and audio["music"]["duration_seconds"] == 10  # the 2 shots
+    request = view["board"]["requests"][-1]
+    assert request["items"] == ["audio:voiceover", "audio:music"] and request["estimate"]["audio"] == 2
+
+    assert client.post(f"/api/director/projects/{pid}/requests/{request['id']}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    sent = {a["parameters"]["type"]: a for a in bridge.audio}
+    assert sent["voiceover"]["text"] == "Liburan terakhir, sebelum semuanya berubah."
+    assert sent["voiceover"]["parameters"] == {"type": "voiceover", "voiceId": "JBFqnCBsd6RMkjVDRZzb"}
+    assert sent["music"]["parameters"] == {"type": "music", "durationSeconds": 10, "instrumental": True}
+    media = _view(client, pid)["board"]["media"]
+    assert media["audio:voiceover"]["asset_id"] == "audio-1" and not media["audio:voiceover"]["stale"]
+
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    bridge.files[_view(client, pid)["board"]["media"]["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files["audio-1"] = _tone(tmp_path, "vo", 1.5)
+    bridge.files["audio-2"] = _tone(tmp_path, "music", 10)
+    assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 201
+    _wait(pid, timeout=120)
+    item = read_board(pid)["renders"][-1]
+    assert item["status"] == "done", item
+    assert item["audio"] == ["music", "voiceover"] and abs(item["duration_seconds"] - 2.0) < 0.3  # the video's length wins
+    out = tmp_path / "mixed.mp4"
+    out.write_bytes(bridge.imports[-1]["content"])
+    assert render.has_audio(str(out))
+
+
+def test_a_voiceover_needs_a_voice(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([{"calls": [call("set_audio", voiceover_text="Halo")]}, {"text": "ok"}])
+    _say(client, pid, "VO")
+    refused = json.loads(fake_llm.requests[-1]["input"][0]["output"])
+    assert refused["ok"] is False and "list_voices" in refused["error"]

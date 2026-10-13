@@ -5,6 +5,8 @@ import { createImageGenerationJobWithReservation, getGenerationJob, toPublicGene
 import { estimateGenerationCredits } from '../../../../src/services/generationPricing.js';
 import { createAssetDownload, createStorage, importWorkspaceAsset } from '../../../../src/services/assetService.js';
 import { appendCreditEntry } from '../../../../src/services/creditService.js';
+import { findCreditEntryByIdempotencyKey } from '../../../../src/repositories/creditRepository.js';
+import { audioCredits, generateElevenLabsAudio, validateAudioInput } from '../../../../src/services/elevenlabsAudio.js';
 import { storyboardTextCredits } from '../../../../src/services/storyboardTextPricing.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../../src/queue/bullmqGenerationQueue.js';
@@ -23,7 +25,7 @@ import IORedis from 'ioredis';
 // caller holding it may submit on behalf of the user it names, same as Canvas.
 export const STORYBOARD_PROJECT_SCOPE = 'storyboard';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate']);
+const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio']);
 // Only the models these tools are configured with may be submitted.
 export const STORYBOARD_MODELS = { image: 'bytedance-seed/seedream-4.5', video: 'byteplus/seedance-2.5-unfiltered' };
 // Bookkeeping label for which internal tool made the request; must be one of these.
@@ -61,6 +63,9 @@ export function createInternalStoryboardHandler({
   appendCredit = appendCreditEntry,
   priceText = storyboardTextCredits,
   priceGeneration = estimateGenerationCredits,
+  priceAudio = audioCredits,
+  generateAudio = generateElevenLabsAudio,
+  findCreditEntry = findCreditEntryByIdempotencyKey,
   logError = console.error,
 } = {}) {
   return async function POST(request) {
@@ -88,6 +93,11 @@ export function createInternalStoryboardHandler({
 
       if (action === 'balance') {
         return Response.json({ balance: await readBalance(pool, workspace.id) });
+      }
+
+      if (action === 'estimate' && payload.kind === 'audio') {
+        const { usd, credits } = await priceAudio(payload.parameters || {});
+        return Response.json({ credits, usd });
       }
 
       if (action === 'estimate') {
@@ -124,6 +134,39 @@ export function createInternalStoryboardHandler({
           if (charged > 0) await appendCredit(pool, { ...entry, amount: -charged, metadata: { ...entry.metadata, partial: true, quotedCredits: credits } });
         }
         return Response.json({ credits: charged, balance: await readBalance(pool, workspace.id) });
+      }
+
+      // Voiceover / music: generated in this request (ElevenLabs answers with the file), stored as an
+      // asset and charged only once it exists. A retry with the same key returns the same asset.
+      if (action === 'generate-audio') {
+        const { idempotencyKey } = payload;
+        if (typeof idempotencyKey !== 'string' || !idempotencyKey || idempotencyKey.length > 200) return badRequest('idempotencyKey is required');
+        const key = `${source}-audio:${idempotencyKey}`;
+        const done = await findCreditEntry(pool, workspace.id, key);
+        if (done?.metadata?.assetId) return Response.json({ assetId: done.metadata.assetId, credits: -Number(done.amount) });
+        const audio = validateAudioInput(payload.audio || {});
+        const { usd, credits } = await priceAudio(audio);
+        if (await readBalance(pool, workspace.id) < credits) return Response.json({ error: 'Insufficient credits' }, { status: 402 });
+        const file = await generateAudio(audio);
+        const imported = await importAsset(workspace.id, {
+          filename: `${audio.type}.mp3`, contentType: file.contentType, body: file.body, allowAudio: true,
+        }, loadStorage(), pool);
+        const assetId = imported.asset.id;
+        const entry = {
+          workspaceId: workspace.id, reason: `${source}_audio`, idempotencyKey: key,
+          metadata: { type: audio.type, assetId, providerCostUsd: usd, characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds },
+        };
+        let charged = credits;
+        try {
+          if (credits > 0) await appendCredit(pool, { ...entry, amount: -credits });
+        } catch (error) {
+          if (error?.message !== 'Insufficient credits') throw error;
+          // Spent elsewhere while this was generating: take what is left, as for text.
+          const balance = await readBalance(pool, workspace.id);
+          charged = Math.max(0, Math.floor(balance * 10) / 10);
+          if (charged > 0) await appendCredit(pool, { ...entry, amount: -charged, metadata: { ...entry.metadata, partial: true, quotedCredits: credits } });
+        }
+        return Response.json({ assetId, credits: charged }, { status: 201 });
       }
 
       if (action === 'import-asset') {

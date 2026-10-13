@@ -8,7 +8,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  AssetsView, Badge, BriefView, ConceptsView, HistoryView, LockButton, ResearchView, ScriptView,
+  AssetsView, AudioView, Badge, BriefView, ConceptsView, HistoryView, LockButton, ResearchView, ScriptView,
   assetUrl, inputClass, mediaStatus, SmallButton, Field,
 } from './BoardViews.js';
 
@@ -18,6 +18,7 @@ export const PANELS = {
   assets: { title: 'Aset cerita', View: AssetsView },
   concepts: { title: 'Konsep', View: ConceptsView },
   research: { title: 'Riset', View: ResearchView },
+  audio: { title: 'Audio: voiceover & musik', View: AudioView },
   history: { title: 'Riwayat versi', View: HistoryView },
 };
 
@@ -779,6 +780,9 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
             <Badge tone={board.brief.generate_audio ? 'green' : 'default'}>{board.brief.generate_audio ? 'Audio on' : 'Audio off'}</Badge>
           </button>
           <Badge>{board.brief.aspect_ratio}</Badge>
+          <button type="button" onClick={() => onOpenPanel('audio')} title="Voiceover dan musik terpisah (ElevenLabs)" className="rounded-md hover:opacity-80">
+            <Badge tone={board.media['audio:voiceover']?.asset_id || board.media['audio:music']?.asset_id ? 'accent' : 'default'}>♪ VO & musik</Badge>
+          </button>
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>
           </button>

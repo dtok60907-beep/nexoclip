@@ -150,3 +150,49 @@ test('the storyboard bridge imports images only (renders use the binary upload)'
   const response = await post(signedRequest({ action: 'import-asset', source: 'director', filename: 'x.mp4', contentType: 'video/mp4', dataBase64 }));
   assert.equal(response.status, 400);
 });
+
+test('generates a voiceover, stores it as an asset and charges it once', async () => {
+  const charges = [];
+  const imports = [];
+  let generated = 0;
+  let stored = null;
+  // Two signed requests: own verifier instead of handler(), which toggles the shared secret.
+  const created = createInternalStoryboardHandler({
+    verify: (payload, signature) => signature === signCanvasAuthorization(payload, 'audio-secret'),
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
+    getPool: () => ({}),
+    logError: () => {},
+    readBalance: async () => 100,
+    priceAudio: async () => ({ usd: 0.01, credits: 2 }),
+    generateAudio: async (audio) => { generated += 1; assert.equal(audio.voiceId, 'JBFqnCBsd6RMkjVDRZzb'); return { body: Buffer.from('mp3'), contentType: 'audio/mpeg' }; },
+    importAsset: async (_ws, input) => { imports.push(input); return { asset: { id: 'audio-asset-1' } }; },
+    appendCredit: async (_pool, entry) => { charges.push(entry); stored = entry; },
+    findCreditEntry: async (_pool, _ws, key) => (stored && stored.idempotencyKey === key ? { amount: stored.amount, metadata: stored.metadata } : null),
+  });
+  const post = (request) => created(request);
+  const payload = { action: 'generate-audio', source: 'director', idempotencyKey: 'p1:audio:voiceover:1',
+    audio: { type: 'voiceover', text: 'Pagi ini lebih semangat.', voiceId: 'JBFqnCBsd6RMkjVDRZzb' } };
+  const first = await post(signedRequest(payload, { secret: 'audio-secret' }));
+  assert.equal(first.status, 201);
+  assert.deepEqual(await first.json(), { assetId: 'audio-asset-1', credits: 2 });
+  assert.equal(imports[0].allowAudio, true);
+  assert.deepEqual([charges[0].amount, charges[0].reason, charges[0].idempotencyKey], [-2, 'director_audio', 'director-audio:p1:audio:voiceover:1']);
+  const again = await post(signedRequest(payload, { secret: 'audio-secret' }));
+  assert.deepEqual(await again.json(), { assetId: 'audio-asset-1', credits: 2 });
+  assert.equal(generated, 1);
+  assert.equal(charges.length, 1);
+});
+
+test('refuses audio the balance cannot pay for, before calling the provider', async () => {
+  let generated = false;
+  const post = handler({
+    readBalance: async () => 1,
+    priceAudio: async () => ({ usd: 0.3, credits: 48 }),
+    generateAudio: async () => { generated = true; },
+    findCreditEntry: async () => null,
+  });
+  const response = await post(signedRequest({ action: 'generate-audio', idempotencyKey: 'k',
+    audio: { type: 'music', text: 'warm lo-fi', durationSeconds: 30 } }));
+  assert.equal(response.status, 402);
+  assert.equal(generated, false);
+});

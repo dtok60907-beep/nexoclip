@@ -217,6 +217,15 @@ function ArtifactCard({ card, board, workspaceId, onOpen }) {
       </CardShell>
     );
   }
+  if (card === 'audio') {
+    const audio = board.audio || {};
+    const lines = [audio.voiceover?.text && `VO (${audio.voiceover.voice_name || 'suara'}): ${audio.voiceover.text}`, audio.music?.prompt && `Musik: ${audio.music.prompt}`].filter(Boolean);
+    return (
+      <CardShell icon="♪" title="Audio" action="View" onAction={() => onOpen('audio')}>
+        {lines.map((line) => <p key={line} className="line-clamp-2 text-[12px] leading-relaxed text-white/65">{line}</p>)}
+      </CardShell>
+    );
+  }
   if (card === 'research') {
     const latest = board.research[board.research.length - 1];
     if (!latest) return null;
@@ -232,7 +241,8 @@ function ArtifactCard({ card, board, workspaceId, onOpen }) {
 export function requestSummary(estimate) {
   const parts = [];
   if (estimate.images) parts.push(`${estimate.images} gambar`);
-  if (estimate.videos) parts.push(`${estimate.videos} video (${estimate.video_seconds} detik)`);
+  if (estimate.videos) parts.push(estimate.video_seconds ? `${estimate.videos} video (${estimate.video_seconds} detik)` : `${estimate.videos} video`);
+  if (estimate.audio) parts.push(`${estimate.audio} audio`);
   return parts.join(' + ');
 }
 
@@ -259,7 +269,7 @@ function RequestCard({ request, board, workspaceId, busy, generationRunning, onA
           className="rounded-full border border-white/[0.1] px-4 py-2 text-[12px] text-white/60 hover:border-white/25 disabled:opacity-50">Batal</button>
       ) : null}>
       <div className="flex items-start gap-4">
-        <Stack items={request.items.map((k) => ({ src: assetUrl(board.media[k]?.asset_id, workspaceId, true), label: (board.media[k]?.label || k).replace(' — reference sheet', '') }))} />
+        <Stack items={request.items.map((k) => ({ src: board.media[k]?.kind === 'audio' ? null : assetUrl(board.media[k]?.asset_id, workspaceId, true), label: (board.media[k]?.label || k).replace(' — reference sheet', '') }))} />
         <div className="min-w-0 flex-1">
           <div className="mb-1.5"><Badge tone={status.tone}>{status.label}</Badge></div>
           <ul className="space-y-0.5">

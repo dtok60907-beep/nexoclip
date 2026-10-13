@@ -92,7 +92,15 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   or its frame held still when it has no video yet; shots with neither are skipped. Use it when the user asks for
   the final video / export / render. It runs in the background and shows its own card with progress and download.
 
-Not available yet: voiceover/narration, music, transitions or captions in the render. Say so honestly; do not promise them.
+- set_audio / list_voices: optional separate audio laid over the clips in the render (ElevenLabs). A voiceover is
+  one narration read from the start of the video: write it to fit the video's length (about 13 characters per second
+  for Indonesian, fewer for a calm read) and pick a voice from list_voices that suits the brief. Music is one bed
+  under everything: describe genre, mood, tempo and instruments, instrumental unless the user wants vocals. Offer them
+  when they fit (ads and trailers usually want both), but they are not required. Generating them costs credits:
+  request_generation with audio:voiceover / audio:music, like frames and videos. With a voiceover the clips' own sound
+  and the music are turned down automatically.
+
+Not available yet: transitions or captions in the render. Say so honestly; do not promise them.
 
 How to work:
 - Reply in the user's language (default Indonesian, casual, like a creative director). Keep replies short:
@@ -225,8 +233,17 @@ TOOLS = [
         "name": {"type": "string", "enum": list(skills.SKILLS)},
     }, ["name"]),
     _tool("render_video", "Render the final MP4 from the shots in timeline order (free).", {}, []),
+    _tool("set_audio", "Set the voiceover and/or the music (omit what you are not changing; empty text removes it).", {
+        "voiceover_text": {"type": "string", "description": "the narration, in the video's language"},
+        "voice_id": {"type": "string", "description": "a voice_id from list_voices"},
+        "music_prompt": {"type": "string", "description": "genre, mood, tempo, instruments"},
+        "music_seconds": {"type": "integer", "minimum": boards.MIN_MUSIC_SECONDS, "maximum": boards.MAX_MUSIC_SECONDS,
+                          "description": "defaults to the video's length"},
+        "instrumental": {"type": "boolean", "description": "music without vocals (default true)"},
+    }, []),
+    _tool("list_voices", "List the voices available for a voiceover.", {}, []),
     _tool("request_generation", "Prepare paid generation (needs the user's approval in the UI).", {
-        "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01, edit:shot_01"},
+        "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01, edit:shot_01, audio:voiceover, audio:music"},
         "force": {"type": "boolean", "description": "regenerate even if already up to date"},
         "note": {"type": "string", "description": "one line for the user about what this is for"},
     }, ["items"]),
@@ -682,6 +699,54 @@ def _extend_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True, "shot": item}, f"Memperpanjang shot: {item['title']}"
 
 
+def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    def change(board: dict[str, Any]) -> dict:
+        audio = board.get("audio") or boards.empty_audio()
+        voiceover, music = dict(audio["voiceover"]), dict(audio["music"])
+        if args.get("voiceover_text") is not None:
+            voiceover["text"] = str(args["voiceover_text"]).strip()
+            if len(voiceover["text"]) > 5000:
+                raise ToolError("voiceover_text is longer than 5000 characters")
+        if args.get("voice_id") is not None:
+            voiceover["voice_id"] = str(args["voice_id"]).strip()
+            if voiceover["voice_id"] and not _VOICE_ID.match(voiceover["voice_id"]):
+                raise ToolError("voice_id is invalid; use one from list_voices")
+            voiceover["voice_name"] = str(args.get("voice_name") or _voice_name(voiceover["voice_id"]))
+        if voiceover["text"] and not voiceover["voice_id"]:
+            raise ToolError("pick a voice_id from list_voices for the voiceover")
+        if args.get("music_prompt") is not None:
+            music["prompt"] = str(args["music_prompt"]).strip()
+        if args.get("music_seconds") is not None:
+            seconds = int(args["music_seconds"])
+            if not boards.MIN_MUSIC_SECONDS <= seconds <= boards.MAX_MUSIC_SECONDS:
+                raise ToolError(f"music_seconds must be {boards.MIN_MUSIC_SECONDS}-{boards.MAX_MUSIC_SECONDS}")
+            music["duration_seconds"] = seconds
+        elif music["prompt"] and not music.get("duration_seconds"):
+            music["duration_seconds"] = max(boards.MIN_MUSIC_SECONDS, min(boards.MAX_MUSIC_SECONDS, boards.video_seconds(board) or 30))
+        if args.get("instrumental") is not None:
+            music["instrumental"] = bool(args["instrumental"])
+        board["audio"] = {"voiceover": voiceover, "music": music}
+        return board["audio"]
+
+    audio = ctx.update(change, "Mengatur audio")
+    return {"ok": True, "audio": audio}, "Mengatur audio"
+
+
+_VOICE_ID = re.compile(r"^[A-Za-z0-9]{10,40}$")
+
+
+def _voices() -> list[dict[str, Any]]:
+    return nexoclip.VOICES
+
+
+def _voice_name(voice_id: str) -> str:
+    return next((v["name"] for v in _voices() if v["id"] == voice_id), "")
+
+
+def _list_voices(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    return {"ok": True, "voices": _voices()}, "Melihat daftar suara"
+
+
 def _use_take(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     """User only: make an earlier take of a frame/video/sheet the one the board uses."""
     key, asset_id = str(args.get("key") or ""), str(args.get("asset_id") or "")
@@ -792,6 +857,8 @@ HANDLERS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "update_shot": _update_shot,
     "remove_shot": _remove_shot,
     "request_generation": _request_generation,
+    "set_audio": _set_audio,
+    "list_voices": _list_voices,
     "render_video": _render_video,
 }
 
@@ -806,6 +873,7 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "remove_shot": _remove_shot,
     "move_shot": _move_shot,
     "use_take": _use_take,
+    "set_audio": _set_audio,
     "extend_shot": _extend_shot,
     "add_shot": _add_shot,
     "set_element_photos": _set_element_photos,
@@ -900,9 +968,9 @@ def missing_skills(call: dict[str, Any], skills_read: set[str]) -> list[str]:
 CARD_FOR_TOOL = {
     "update_brief": "brief", "set_concepts": "concepts", "choose_concept": "concepts", "write_script": "script",
     "upsert_element": "assets", "remove_element": "assets", "set_scenes": "shots", "set_shots": "shots",
-    "update_shot": "shots", "remove_shot": "shots", "web_research": "research",
+    "update_shot": "shots", "remove_shot": "shots", "web_research": "research", "set_audio": "audio",
 }
-CARD_ORDER = ("brief", "concepts", "research", "script", "assets", "shots")
+CARD_ORDER = ("brief", "concepts", "research", "script", "assets", "shots", "audio")
 
 
 MAX_NUDGES = 2

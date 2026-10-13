@@ -31,10 +31,27 @@ BRIEF_DETAILS = ("goal", "audience", "platform", "key_message", "product", "tone
 LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
 TERMINAL_OK = "succeeded"
-CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots")
+CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots", "audio")
 RUNTIME_KEYS = ("media", "requests", "renders")
 
 T = TypeVar("T")
+
+
+# Separate audio tracks laid over the joined clips in the render (ElevenLabs): one voiceover read from the
+# start, and one music bed. Both optional.
+MIN_MUSIC_SECONDS, MAX_MUSIC_SECONDS = 3, 300
+
+
+def empty_audio() -> dict[str, Any]:
+    return {"voiceover": {"text": "", "voice_id": "", "voice_name": ""},
+            "music": {"prompt": "", "duration_seconds": None, "instrumental": True}}
+
+
+def video_seconds(board: dict[str, Any]) -> int:
+    """Planned length of the final video: the shots minus their trims, else the brief's target."""
+    total = sum(max(1.0, float(s.get("duration_seconds") or 0) - float(s.get("trim_start") or 0) - float(s.get("trim_end") or 0))
+                for s in board["shots"])
+    return int(round(total)) or int(board["brief"].get("duration_seconds") or 0)
 
 
 def empty_board() -> dict[str, Any]:
@@ -47,6 +64,7 @@ def empty_board() -> dict[str, Any]:
         "script": None,
         "scenes": [],
         "shots": [],
+        "audio": empty_audio(),
         "media": {},
         "requests": [],
         "renders": [],
@@ -313,6 +331,21 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 "deps": [f"video:{item['id']}"],
                 "params": {"aspectRatio": "adaptive", "duration": -1, **audio, "omniReferenceTaskType": "edit"},
             }
+    audio = board.get("audio") or empty_audio()
+    voiceover = audio.get("voiceover") or {}
+    if (voiceover.get("text") or "").strip() and voiceover.get("voice_id"):
+        specs["audio:voiceover"] = {
+            "kind": "audio", "label": "Voiceover", "prompt": voiceover["text"].strip(), "deps": [],
+            "params": {"type": "voiceover", "voiceId": voiceover["voice_id"]},
+        }
+    music = audio.get("music") or {}
+    if (music.get("prompt") or "").strip():
+        seconds = int(music.get("duration_seconds") or video_seconds(board) or 30)
+        specs["audio:music"] = {
+            "kind": "audio", "label": "Musik", "prompt": music["prompt"].strip(), "deps": [],
+            "params": {"type": "music", "durationSeconds": max(MIN_MUSIC_SECONDS, min(MAX_MUSIC_SECONDS, seconds)),
+                       "instrumental": bool(music.get("instrumental", True))},
+        }
     return specs
 
 
@@ -378,7 +411,7 @@ def tier(key: str, specs: Optional[dict[str, dict[str, Any]]] = None) -> int:
     """Generation order: everything a key depends on runs in an earlier tier (a continuation after
     the clip it extends, an edit after the clip it edits)."""
     if specs is None or key not in specs:
-        return {"element": 0, "frame": 1, "video": 2, "edit": 3}[key.split(":", 1)[0]]
+        return {"element": 0, "audio": 0, "frame": 1, "video": 2, "edit": 3}[key.split(":", 1)[0]]
     return 1 + max((tier(dep, specs) for dep in specs[key]["deps"]), default=-1)
 
 

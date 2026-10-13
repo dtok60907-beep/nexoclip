@@ -97,6 +97,7 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
         "available": bridge is not None,
         "images": sum(1 for k in items if specs[k]["kind"] == "image"),
         "videos": sum(1 for k in items if specs[k]["kind"] == "video"),
+        "audio": sum(1 for k in items if specs[k]["kind"] == "audio"),
         # an edit keeps its source's length (duration -1), so it is left out of this count
         "video_seconds": sum(max(0, specs[k]["params"].get("duration", 0)) for k in items if specs[k]["kind"] == "video"),
         "credits": 0.0,
@@ -216,6 +217,20 @@ def _edited_take(project_id: str, key: str, asset_id: str) -> None:
                  dep_assets=current.get("dep_assets") or [], generated_at=now_iso())
 
 
+def _run_audio(project_id: str, bridge: nexoclip.Bridge, key: str, spec: dict[str, Any], media: dict[str, Any]) -> None:
+    """Voiceover / music: nexoclip generates it within the call and returns the stored asset."""
+    sig = spec_sig(spec)
+    attempt = int(media.get("attempt") or 0) + 1
+    _set_media(project_id, key, status="running", attempt=attempt, error=None, pending_spec_sig=sig, pending_dep_assets=[])
+    try:
+        result = bridge.generate_audio(text=spec["prompt"], parameters=spec["params"],
+                                       idempotency_key=f"{project_id}:{key}:{sig[:24]}:{attempt}")
+    except nexoclip.BridgeError as exc:
+        _set_media(project_id, key, status="failed", error=str(exc)[:300])
+        return
+    _record_take(project_id, key, asset_id=result["asset_id"], spec_sig=sig, dep_assets=[], generated_at=now_iso())
+
+
 def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None:
     submitted: list[str] = []
     submit_error: Optional[Exception] = None
@@ -231,6 +246,9 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
         if (media.get("status") == "running" and media.get("generation_id")
                 and media.get("pending_spec_sig") == sig and media.get("pending_dep_assets") == dep_assets):
             submitted.append(key)  # submitted before a restart: poll it instead of paying twice
+            continue
+        if spec["kind"] == "audio":
+            _run_audio(project_id, bridge, key, spec, media)
             continue
         params = dict(spec["params"])
         # Clips a key builds on (extend / edit) go as reference videos, everything else as images,
@@ -259,7 +277,7 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
         for key in sorted(pending):
             board = read_board(project_id)
             media = board["media"][key]
-            kind = "video" if key.startswith("video:") else "image"
+            kind = "video" if key.startswith(("video:", "edit:")) else "image"
             try:
                 generation = bridge.status(media["generation_id"])
             except nexoclip.BridgeError:

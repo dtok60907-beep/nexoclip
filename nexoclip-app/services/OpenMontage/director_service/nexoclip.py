@@ -62,6 +62,25 @@ def sign_request(*, user_id: str, request: dict[str, Any], secret: str, timestam
     return {"userId": user_id, "timestamp": ts, "nonce": nonce_value, "signature": signature, "request": request_json}
 
 
+# Voiceover voices: the premade ElevenLabs voices nexoclip offers (ELEVENLABS_VOICES in
+# src/services/elevenlabsAudio.js; a nexoclip test keeps the two lists identical).
+VOICES = [
+    {"id": "JBFqnCBsd6RMkjVDRZzb", "name": "George", "gender": "male", "description": "warm, mature narrator"},
+    {"id": "nPczCjzI2devNBz1zQrb", "name": "Brian", "gender": "male", "description": "deep, resonant, ads and trailers"},
+    {"id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "gender": "male", "description": "authoritative, news style"},
+    {"id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam", "gender": "male", "description": "young, energetic"},
+    {"id": "iP95p4xoKVk53GoZ742B", "name": "Chris", "gender": "male", "description": "casual, friendly"},
+    {"id": "CwhRBWXzGAHq8TQ4Fs17", "name": "Roger", "gender": "male", "description": "laid-back, confident"},
+    {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "gender": "female", "description": "soft, reassuring"},
+    {"id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "gender": "female", "description": "warm, upbeat storyteller"},
+    {"id": "cgSgspJ2msm6clMCkdW9", "name": "Jessica", "gender": "female", "description": "young, bright, playful"},
+    {"id": "FGY2WhTYpPnrIDTdsKH5", "name": "Laura", "gender": "female", "description": "quirky, lively"},
+    {"id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "gender": "female", "description": "smooth, seductive"},
+    {"id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily", "gender": "female", "description": "gentle, elegant"},
+]
+AUDIO_TIMEOUT_SECONDS = 300.0  # a few minutes of music can take a while
+
+
 def configured() -> bool:
     return bool(os.environ.get("NEXOCLIP_INTERNAL_URL") and os.environ.get("NEXOCLIP_BRIDGE_SECRET"))
 
@@ -101,9 +120,21 @@ class Bridge:
         return float(self._post({"action": "balance"}).json().get("balance") or 0)
 
     def estimate(self, *, kind: str, prompt: str, parameters: dict[str, Any]) -> dict[str, float]:
-        response = self._post({"action": "estimate", "kind": kind, "model": _model(kind), "prompt": prompt, "parameters": parameters})
-        data = response.json()
+        request = {"action": "estimate", "kind": kind, "prompt": prompt, "parameters": parameters}
+        if kind == "audio":
+            request["parameters"] = {**parameters, "text": prompt}
+        else:
+            request["model"] = _model(kind)
+        data = self._post(request).json()
         return {"credits": float(data.get("credits") or 0), "usd": float(data.get("usd") or 0)}
+
+    def generate_audio(self, *, text: str, parameters: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+        """Voiceover / music (ElevenLabs). Generated within the request, so it returns the stored
+        asset; a retry with the same key returns the same asset without paying again."""
+        response = self._post({"action": "generate-audio", "source": SOURCE, "idempotencyKey": idempotency_key,
+                               "audio": {**parameters, "text": text}}, timeout=AUDIO_TIMEOUT_SECONDS)
+        data = response.json()
+        return {"asset_id": str(data["assetId"]), "credits": float(data.get("credits") or 0)}
 
     def charge_text(self, *, model: str, input_tokens: int, output_tokens: int, idempotency_key: str) -> float:
         response = self._post({
