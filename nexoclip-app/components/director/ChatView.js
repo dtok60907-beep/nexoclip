@@ -163,6 +163,7 @@ function ArtifactCard({ card, board, workspaceId, onOpen }) {
     return (
       <CardShell icon="◎" title="Brief" accent={brief.duration_seconds ? `${brief.duration_seconds} detik · ${brief.aspect_ratio}` : brief.aspect_ratio} action="View" onAction={() => onOpen('brief')}>
         <p className="line-clamp-3 text-[12px] leading-relaxed text-white/65">{brief.summary}</p>
+        {[brief.goal, brief.audience, brief.product].some(Boolean) && <p className="mt-1.5 line-clamp-2 text-[11px] text-white/45">{[brief.goal, brief.audience, brief.product].filter(Boolean).join(' · ')}</p>}
         {brief.style && <p className="mt-1.5 line-clamp-1 text-[11px] text-white/40">{brief.style}</p>}
       </CardShell>
     );

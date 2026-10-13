@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from director_service.db import Jsonb, notify, tx
 
-PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "agent", "generation", "render")
+PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render")
 JSON_FIELDS = {"agent", "generation", "render"}
 
 
@@ -72,9 +72,10 @@ def update_director(project_id: str, **changes: Any) -> None:
         notify(conn, project_id)
 
 
-def add_llm_cost(project_id: str, cost_usd: float) -> None:
+def add_llm_cost(project_id: str, cost_usd: float, credits: float = 0.0) -> None:
     with tx() as conn:
-        conn.execute("UPDATE projects SET llm_cost_usd = llm_cost_usd + %s WHERE id = %s", (float(cost_usd or 0), project_id))
+        conn.execute("UPDATE projects SET llm_cost_usd = llm_cost_usd + %s, llm_credits = llm_credits + %s WHERE id = %s",
+                     (float(cost_usd or 0), float(credits or 0), project_id))
 
 
 def append_chat(project_id: str, role: str, text: str, *, kind: str = "message", meta: Optional[dict[str, Any]] = None) -> None:

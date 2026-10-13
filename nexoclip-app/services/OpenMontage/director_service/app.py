@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from director_service import db, session
+from director_service.generation import generation_credits
 from director_service.board import list_versions, read_board, restore_version, version_content, view_for_ui
 from director_service.store import find_project, list_projects, read_chat
 
@@ -146,6 +147,8 @@ def _project_view(project_id: str) -> dict[str, Any]:
         "created_at": project["created_at"],
         "llm_model": project["llm_model"],
         "llm_cost_usd": project["llm_cost_usd"],
+        "llm_credits": project.get("llm_credits") or 0,
+        "generation_credits": generation_credits(read_board(project_id)),
         "agent": project["agent"],
         "generation": project["generation"],
         "render": project.get("render") or {"status": "idle"},

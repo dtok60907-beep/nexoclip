@@ -3,7 +3,7 @@
 // Views of the Director's project board. Every item can be edited and locked
 // directly; edits go through the same validation as the agent's tools.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export const fmtCredits = (value) => Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
 
@@ -123,6 +123,12 @@ function MediaFrame({ media, aspect = 'aspect-video', label, workspaceId }) {
 // ---------------------------------------------------------------- brief
 
 // brief.look: how the whole video is rendered (sheets, frames and clips follow it).
+// Same keys and order as BRIEF_DETAILS in director_service/board.py.
+export const BRIEF_DETAIL_LABELS = {
+  goal: 'Tujuan', audience: 'Target penonton', platform: 'Platform', key_message: 'Pesan utama', product: 'Produk / brand',
+  tone: 'Mood & tone', references: 'Referensi', cta: 'Penutup / CTA', must_have: 'Wajib ada', avoid: 'Hindari',
+};
+
 export const LOOK_LABELS = { realistic: 'Realistis', '3d_animation': 'Animasi 3D', anime: 'Anime', illustration: 'Ilustrasi', other: 'Lainnya' };
 
 export function BriefView({ board, onEdit, busy }) {
@@ -133,7 +139,8 @@ export function BriefView({ board, onEdit, busy }) {
 
   const save = async () => {
     const ok = await onEdit('update_brief', {
-      summary: draft.summary || '', ...(draft.look ? { look: draft.look } : {}), aspect_ratio: draft.aspect_ratio, style: draft.style || '', resolution: draft.resolution,
+      summary: draft.summary || '', ...Object.fromEntries(Object.keys(BRIEF_DETAIL_LABELS).map((k) => [k, draft[k] || ''])),
+      ...(draft.look ? { look: draft.look } : {}), aspect_ratio: draft.aspect_ratio, style: draft.style || '', resolution: draft.resolution,
       generate_audio: !!draft.generate_audio, ...(draft.duration_seconds ? { duration_seconds: Number(draft.duration_seconds) } : {}),
     });
     if (ok) setEditing(false);
@@ -151,6 +158,11 @@ export function BriefView({ board, onEdit, busy }) {
       <Section title="Brief" action={actions}>
         <div className="space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
           <Field label="Ringkasan"><textarea rows={4} className={inputClass} value={draft.summary || ''} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} /></Field>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {Object.entries(BRIEF_DETAIL_LABELS).map(([key, label]) => (
+              <Field key={key} label={label}><textarea rows={2} className={inputClass} value={draft[key] || ''} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} /></Field>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Field label="Rasio">
               <select className={inputClass} value={draft.aspect_ratio} onChange={(e) => setDraft({ ...draft, aspect_ratio: e.target.value })}>
@@ -191,6 +203,16 @@ export function BriefView({ board, onEdit, busy }) {
     <div>
       <Section title="Brief" action={actions}>
         <p className="whitespace-pre-line text-sm leading-relaxed text-white/80">{brief.summary}</p>
+        {Object.keys(BRIEF_DETAIL_LABELS).some((k) => brief[k]) && (
+          <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2">
+            {Object.entries(BRIEF_DETAIL_LABELS).filter(([k]) => brief[k]).map(([key, label]) => (
+              <div key={key}>
+                <dt className="text-[11px] uppercase tracking-wide text-white/35">{label}</dt>
+                <dd className="mt-0.5 whitespace-pre-line text-[13px] leading-relaxed text-white/75">{brief[key]}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </Section>
       <Section title="Format">
         <div className="flex flex-wrap gap-1.5">
@@ -246,6 +268,63 @@ export function ConceptsView({ board, onEdit, onChooseConcept, busy }) {
 
 // ---------------------------------------------------------------- assets (elements)
 
+// The user's own photos of an element (product, logo, face, place). The sheet is regenerated from them.
+const MAX_ELEMENT_PHOTOS = 4; // MAX_ELEMENT_PHOTOS in director_service/board.py
+
+function ElementPhotos({ item, onEdit, busy, workspaceId }) {
+  const photos = item.photos || [];
+  const input = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const upload = async (files) => {
+    const room = MAX_ELEMENT_PHOTOS - photos.length;
+    const picked = [...files].filter((f) => f.type.startsWith('image/')).slice(0, room);
+    if (!picked.length) return;
+    setUploading(true);
+    setError('');
+    try {
+      const ids = [];
+      for (const file of picked) {
+        const body = new FormData();
+        body.append('file', file);
+        const res = await fetch('/api/uploads', { method: 'POST', headers: { 'x-workspace-id': workspaceId }, body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.id) throw new Error(data.error || 'Upload gagal');
+        ids.push(data.id);
+      }
+      await onEdit('set_element_photos', { id: item.id, photos: [...photos, ...ids] });
+    } catch (err) {
+      setError(err.message || 'Upload gagal');
+    } finally {
+      setUploading(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {photos.map((id) => (
+          <div key={id} className="group relative h-11 w-11 overflow-hidden rounded-md border border-white/15">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={assetUrl(id, workspaceId, true)} alt="Foto referensi" className="h-full w-full object-cover" />
+            <button type="button" disabled={busy || uploading} aria-label="Hapus foto"
+              onClick={() => onEdit('set_element_photos', { id: item.id, photos: photos.filter((p) => p !== id) })}
+              className="absolute right-0 top-0 hidden h-4 w-4 items-center justify-center rounded-bl bg-black/80 text-[10px] text-white group-hover:flex">×</button>
+          </div>
+        ))}
+        {photos.length < MAX_ELEMENT_PHOTOS && (
+          <SmallButton disabled={busy || uploading || item.locked} onClick={() => input.current?.click()}>
+            {uploading ? 'Mengupload…' : photos.length ? '+ Foto' : '+ Foto asli'}
+          </SmallButton>
+        )}
+        <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
+      </div>
+      {photos.length > 0 && <p className="mt-1 text-[10px] text-white/35">Sheet dibuat dari foto ini (generate ulang otomatis, pakai kredit).</p>}
+      {error && <p className="mt-1 text-[10px] text-red-300/80">{error}</p>}
+    </div>
+  );
+}
+
 function ElementCard({ item, board, onEdit, onRequest, busy, workspaceId }) {
   const media = board.media[`element:${item.id}`];
   const [editing, setEditing] = useState(false);
@@ -272,6 +351,7 @@ function ElementCard({ item, board, onEdit, onRequest, busy, workspaceId }) {
               <span className="text-[10px] text-white/35">{mediaStatus(media).label}</span>
             </div>
             <p className="mt-1 line-clamp-4 text-[11px] leading-snug text-white/45" title={item.description}>{item.description}</p>
+            <ElementPhotos item={item} onEdit={onEdit} busy={busy} workspaceId={workspaceId} />
             <div className="mt-2 flex flex-wrap gap-1.5">
               <SmallButton onClick={() => onRequest([`element:${item.id}`], !!generated)} disabled={busy}>
                 {media?.asset_id ? 'Generate ulang sheet' : 'Generate sheet'}

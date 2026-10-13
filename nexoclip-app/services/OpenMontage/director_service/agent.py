@@ -29,7 +29,16 @@ INSTRUCTIONS = """You are the AI Director inside nexoclip, a video creation stud
 build their video on a shared project board using tools. You decide what to do next; there is no fixed pipeline.
 
 What you can do (tools):
-- update_brief: purpose/summary, look, aspect ratio, target duration, visual style, resolution, native audio on/off.
+- update_brief: the creative brief. summary is 2-4 sentences: what the video is, the story or idea, and how it should
+  feel. The detail fields: goal (sell, awareness, story, education ...), audience, platform, key_message (the one thing
+  viewers must remember), product (name, look, colours, logo; empty when there is none), tone (mood, pace, music feel),
+  references (similar films, ads, creators), cta (the ending / call to action), must_have, avoid. Plus look, aspect
+  ratio, target duration, visual style, resolution and native audio on/off.
+  Write the brief as soon as you know what the video is about, in the same call that sets the look when possible.
+  Fill every field you can reasonably infer and mark guesses with "(asumsi)" so the user can correct them; ask only
+  about what really matters and is unknown (usually the product and the audience), together with the look question.
+  The brief is required: set_concepts, write_script, upsert_element and set_shots are refused while summary is empty.
+  Keep it up to date when the user changes their mind.
   look is the rendering of the whole video: realistic (live-action, real people), 3d_animation, anime, illustration
   or other (then describe it in style). ALWAYS settle the look first: if the user has not said it, ask before creating
   any element or shot (e.g. "Mau realistis seperti syuting asli, atau animasi 3D / anime / ilustrasi?"), and do not
@@ -48,6 +57,8 @@ What you can do (tools):
   material, branding). Keep every detail the user gave, verbatim where possible.
   A prop sheet shows the object alone, without people. Only when the story needs a character physically using it (worn,
   held in a specific way, operated) set interaction, e.g. "worn on the wrist of Dimas"; otherwise leave it empty.
+  Elements with "photos" have real photos uploaded by the user (their product, logo, face, place): the sheet is made
+  from those photos, so keep the description consistent with them and never invent a different design.
   One element = one subject, never a group: "four friends" are four characters, each with their own sheet. Make a
   separate location for every distinct place or set (and for a changed state of it, e.g. "studio" and "studio,
   wrecked"), and a separate prop for the advertised product and for every object that recurs across shots. There is no
@@ -59,9 +70,14 @@ What you can do (tools):
   exist unless set_shots succeeded.
 - set_shots / update_shot / remove_shot: the ordered shot list. Each shot is one generated video clip of 4-15 s with
   a frame_prompt (the first frame as a still image) and a video_prompt (motion, camera, action, sound for that clip).
-  List the element_ids that appear in the shot: their reference images are passed to the frame generation, and the
-  frame is passed to the video, so looks stay consistent. Restate each character's key look in the prompts too.
+  List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
+  the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
+  added automatically), so faces, places and products stay consistent across shots. Restate each character's key look in the prompts too.
   On-screen text/title cards are not generated as clips; note them in the script instead.
+- Longer shots and changes to a finished clip: a shot with extends=<shot_id> continues that shot's video
+  seamlessly (Seedance extend; same action going on, no new frame). Put it right after its source. To change something in
+  an existing clip without regenerating it (colour of a dress, remove an object), set the shot's edit_instruction
+  with update_shot and request edit:<shot_id>; the edited clip becomes the shot's new take. Both cost credits.
 - Asset reference sheets (element:<id>) are generated AUTOMATICALLY at the end of every turn in which you create or
   change elements: no request or approval is needed. Use request_generation with force only to redo an up-to-date sheet.
 - request_generation: prepare paid generation of frames and videos (frame:<shot_id>, video:<shot_id>). It adds
@@ -122,7 +138,12 @@ SHOT_FIELDS = {
     "element_ids": {"type": "array", "items": {"type": "string"}},
     "frame_prompt": {"type": "string"},
     "video_prompt": {"type": "string"},
+    "extends": {"type": "string", "description": "optional: id of the shot this one continues seamlessly (its clip is "
+                                                "extended; no frame of its own). Only for the same action going on"},
+    "edit_instruction": {"type": "string", "description": "optional: change to make to this shot's existing video, "
+                                                         "e.g. \"make her dress red\"; generate it with edit:<shot_id>"},
 }
+OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction")
 
 SCENE_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
@@ -138,15 +159,30 @@ CONCEPT_FIELDS = {
     "why": {"type": "string", "description": "why it fits the brief"},
 }
 
+BRIEF_DETAIL_HINTS = {
+    "goal": "what the video is for: sell, awareness, story, education ...",
+    "audience": "who watches it",
+    "platform": "where it is published (TikTok/Reels, YouTube, TV, ...)",
+    "key_message": "the one thing viewers must remember",
+    "product": "product/brand: name, look, colours, logo; empty when there is none",
+    "tone": "mood, pace, music feel",
+    "references": "similar films, ads or creators",
+    "cta": "ending / call to action",
+    "must_have": "things that must appear",
+    "avoid": "things that must not appear",
+}
+assert tuple(BRIEF_DETAIL_HINTS) == boards.BRIEF_DETAILS
+
 TOOLS = [
     _tool("update_brief", "Set or change brief fields. Omit fields you are not changing.", {
-        "summary": {"type": "string"},
+        "summary": {"type": "string", "description": "2-4 sentences: what the video is, the story/idea, the feel"},
+        **{key: {"type": "string", "description": desc} for key, desc in BRIEF_DETAIL_HINTS.items()},
         "aspect_ratio": {"type": "string", "enum": list(boards.ASPECT_RATIOS)},
         "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 600},
         "look": {"type": "string", "enum": list(boards.LOOKS), "description": "rendering of the whole video; ask the user if unknown"},
         "style": {"type": "string", "description": "visual style applied to every image"},
         "resolution": {"type": "string", "enum": list(boards.RESOLUTIONS)},
-        "generate_audio": {"type": "boolean", "description": "native ambient audio in video clips"},
+        "generate_audio": {"type": "boolean", "description": "native audio in video clips (ambience, effects, speech); on by default, turn off only if the user asks"},
     }, []),
     _tool("set_concepts", "Offer 2-3 creative directions and recommend one (replaces the current options).", {
         "options": {"type": "array", "items": {"type": "object", "properties": CONCEPT_FIELDS,
@@ -175,7 +211,7 @@ TOOLS = [
     }, ["scenes"]),
     _tool("set_shots", "Replace the whole ordered shot list. Media of shots whose id is kept are preserved.", {
         "shots": {"type": "array", "items": {"type": "object", "properties": SHOT_FIELDS,
-                                             "required": [k for k in SHOT_FIELDS if k != "scene_id"], "additionalProperties": False}},
+                                             "required": [k for k in SHOT_FIELDS if k not in OPTIONAL_SHOT_FIELDS], "additionalProperties": False}},
     }, ["shots"]),
     _tool("update_shot", "Change some fields of one shot, or move it with position (0-based).", {
         "id": {"type": "string"},
@@ -188,7 +224,7 @@ TOOLS = [
     }, ["name"]),
     _tool("render_video", "Render the final MP4 from the shots in timeline order (free).", {}, []),
     _tool("request_generation", "Prepare paid generation (needs the user's approval in the UI).", {
-        "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01"},
+        "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01, edit:shot_01"},
         "force": {"type": "boolean", "description": "regenerate even if already up to date"},
         "note": {"type": "string", "description": "one line for the user about what this is for"},
     }, ["items"]),
@@ -256,6 +292,10 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     elif scene_id:
         raise ToolError(f"shot {shot['id']}: create scenes with set_scenes before using scene_id")
     shot["scene_id"] = scene_id
+    shot["extends"] = str(shot.get("extends") or "").strip() or None
+    if shot["extends"] == shot["id"]:
+        raise ToolError(f"shot {shot['id']}: a shot cannot extend itself")
+    shot["edit_instruction"] = str(shot.get("edit_instruction") or "").strip()
     shot["locked"] = bool(raw.get("locked"))
     return shot
 
@@ -269,7 +309,11 @@ def _same_shot(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _update_brief(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     fields = {k: v for k, v in args.items()
-              if k in ("summary", "look", "aspect_ratio", "duration_seconds", "style", "resolution", "generate_audio") and v is not None}
+              if k in ("summary", "look", "aspect_ratio", "duration_seconds", "style", "resolution", "generate_audio",
+                       *boards.BRIEF_DETAILS) and v is not None}
+    for key in ("summary", "style", *boards.BRIEF_DETAILS):
+        if key in fields:
+            fields[key] = str(fields[key]).strip()
     if "look" in fields and fields["look"] not in boards.LOOKS:
         raise ToolError("look must be one of " + ", ".join(boards.LOOKS))
     if fields.get("aspect_ratio") and fields["aspect_ratio"] not in boards.ASPECT_RATIOS:
@@ -287,6 +331,7 @@ def _update_brief(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
 
 def _set_concepts(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    _require_brief(ctx)
     options = []
     for raw in args.get("options") or []:
         option = {k: str(raw.get(k) or "").strip() for k in CONCEPT_FIELDS}
@@ -345,6 +390,7 @@ def _web_research(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
 
 def _write_script(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    _require_brief(ctx)
     title, text = str(args.get("title") or "").strip(), str(args.get("text") or "").strip()
     if not text:
         raise ToolError("text is required")
@@ -361,8 +407,20 @@ NEEDS_LOOK = ("the look is not set: ask the user first whether the video is real
               "3D animation, anime or illustration, then update_brief(look=...) before creating elements or shots")
 
 
+NEEDS_BRIEF = ("the brief is empty: call update_brief first with a summary and every detail field you can infer "
+               "(goal, audience, platform, key_message, product, tone, references, cta, must_have, avoid; mark guesses "
+               "with \"(asumsi)\"), then do this again")
+
+
+def _require_brief(ctx: Ctx) -> None:
+    """The agent may not build on a project whose brief was never written."""
+    if ctx.author == "agent" and not boards.read_board(ctx.project_id)["brief"].get("summary"):
+        raise ToolError(NEEDS_BRIEF)
+
+
 def _require_look(ctx: Ctx) -> None:
-    """The agent may not design assets or shots before the look of the video is settled."""
+    """The agent may not design assets or shots before the brief and the look of the video are settled."""
+    _require_brief(ctx)
     if ctx.author == "agent" and not boards.read_board(ctx.project_id)["brief"].get("look"):
         raise ToolError(NEEDS_LOOK)
 
@@ -390,6 +448,28 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
     created = ctx.update(change, f"{labels[item['kind']].capitalize()}: {item['name']}")
     return {"ok": True, "created": created}, f"{'Menambah' if created else 'Mengubah'} {labels[item['kind']]}: {item['name']}"
+
+
+_ASSET_ID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
+
+def _set_element_photos(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: the user's own photos of an element (nexoclip asset ids); its sheet is regenerated from them."""
+    element_id = args.get("id")
+    photos = list(dict.fromkeys(str(p) for p in args.get("photos") or []))
+    if len(photos) > boards.MAX_ELEMENT_PHOTOS or not all(_ASSET_ID.match(p) for p in photos):
+        raise ToolError(f"photos must be up to {boards.MAX_ELEMENT_PHOTOS} asset ids")
+
+    def change(board: dict[str, Any]) -> str:
+        item = boards.element(board, element_id)
+        if not item:
+            raise ToolError(f"no element {element_id!r}")
+        ctx.guard(item, f"element {element_id}")
+        item["photos"] = photos
+        return item["name"]
+
+    name = ctx.update(change, lambda name: f"Foto referensi: {name}")
+    return {"ok": True}, f"Foto referensi: {name}"
 
 
 def _remove_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
@@ -535,6 +615,54 @@ def _move_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True}, f"Memindah urutan shot: {title}"
 
 
+def _extend_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: add a continuation right after a shot; its clip extends that shot's video."""
+    source_id = args.get("id")
+    prompt = str(args.get("video_prompt") or "").strip() or "Continue the same action naturally."
+    try:
+        duration = int(args.get("duration_seconds") or 5)
+    except (TypeError, ValueError) as exc:
+        raise ToolError("duration_seconds must be a number") from exc
+
+    def change(board: dict[str, Any]) -> dict:
+        source = boards.shot(board, source_id)
+        if not source:
+            raise ToolError(f"no shot {source_id!r}")
+        n = 2
+        while boards.shot(board, f"{source_id[:34]}_ext{n}"):
+            n += 1
+        item = _clean_shot({
+            "id": f"{source_id[:34]}_ext{n}", "title": f"{source['title']} (lanjutan)",
+            "description": f"Lanjutan dari {source['title']}.", "scene_id": source.get("scene_id"),
+            "duration_seconds": duration, "element_ids": source.get("element_ids") or [],
+            "frame_prompt": source["frame_prompt"], "video_prompt": prompt, "extends": source_id,
+        }, board)
+        board["shots"].insert(board["shots"].index(source) + 1, item)
+        return item
+
+    item = ctx.update(change, lambda item: f"Memperpanjang shot: {item['title']}")
+    return {"ok": True, "shot": item}, f"Memperpanjang shot: {item['title']}"
+
+
+def _use_take(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: make an earlier take of a frame/video/sheet the one the board uses."""
+    key, asset_id = str(args.get("key") or ""), str(args.get("asset_id") or "")
+
+    def change(board: dict[str, Any]) -> str:
+        media = board["media"].get(key) or {}
+        take = next((t for t in media.get("takes") or [] if t["asset_id"] == asset_id), None)
+        if take is None:
+            raise ToolError(f"no take {asset_id!r} for {key}")
+        if media.get("status") == "running":
+            raise ToolError(f"{key} is generating; wait until it finishes")
+        media.update(status=boards.TERMINAL_OK, asset_id=take["asset_id"], error=None, done_spec_sig=take["spec_sig"],
+                     dep_assets=take["dep_assets"], generated_at=take["generated_at"])
+        return key
+
+    ctx.update(change, f"Memilih take {key}")
+    return {"ok": True}, f"Memilih take {key}"
+
+
 def _request_generation(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     keys = list(dict.fromkeys(str(k).strip() for k in args.get("items") or [] if str(k).strip()))
     if not keys:
@@ -639,6 +767,9 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "update_shot": _update_shot,
     "remove_shot": _remove_shot,
     "move_shot": _move_shot,
+    "use_take": _use_take,
+    "extend_shot": _extend_shot,
+    "set_element_photos": _set_element_photos,
     "set_scenes": _set_scenes,
     "set_lock": _set_lock,
 }
@@ -665,8 +796,8 @@ def apply_user_edit(project_id: str, tool: str, args: dict[str, Any]) -> str:
 
 
 def _bill(project_id: str, purpose: str, usage: dict[str, Any]) -> None:
-    billing.charge_llm(project_id, llm.model_name(), usage)
-    add_llm_cost(project_id, float(usage.get("cost") or 0.0))
+    credits = billing.charge_llm(project_id, llm.model_name(), usage)
+    add_llm_cost(project_id, float(usage.get("cost") or 0.0), credits)
     append_llm_log(project_id, {"purpose": purpose, "model": llm.model_name(), "cost_usd": usage.get("cost"),
                                 "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")})
 

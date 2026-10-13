@@ -131,7 +131,7 @@ def edit(project_id: str, tool: str, args: dict) -> str:
         label = agent.apply_user_edit(project_id, tool, args)
     except agent.ToolError as exc:
         raise InvalidAction(str(exc)) from exc
-    if tool in ("upsert_element", "update_brief"):  # the brief's style is part of every sheet prompt
+    if tool in ("upsert_element", "update_brief", "set_element_photos"):  # the brief's style is part of every sheet prompt
         auto_generate_assets(project_id)
     return label
 

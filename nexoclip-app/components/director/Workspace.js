@@ -117,6 +117,92 @@ function ShotPreview({ board, shot, workspaceId, className = '' }) {
   );
 }
 
+// Every generated result of a frame or video; clicking one makes it the take the board (and the render) uses.
+function Takes({ label, mediaKey, media, workspaceId, onEdit, busy }) {
+  const takes = media?.takes || [];
+  if (takes.length < 2) return null;
+  const isVideo = mediaKey.startsWith('video:');
+  const running = media?.status === 'running';
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="w-16 flex-none whitespace-nowrap text-[10px] text-white/40">{label}</span>
+      <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-1">
+        {takes.map((take, i) => {
+          const active = take.asset_id === media.asset_id;
+          const src = assetUrl(take.asset_id, workspaceId, !isVideo);
+          return (
+            <button key={take.asset_id} type="button" disabled={busy || running || active}
+              title={`Take ${takes.length - i}${take.outdated ? ' (prompt lama)' : ''}${active ? ' · dipakai' : ' · klik untuk pakai'}`}
+              onClick={() => onEdit('use_take', { key: mediaKey, asset_id: take.asset_id })}
+              className={`relative h-12 flex-none overflow-hidden rounded-md border bg-black/50 aspect-video ${active ? 'border-amber-300 ring-1 ring-amber-300/60' : 'border-white/10 hover:border-white/40'} disabled:cursor-default`}>
+              {isVideo ? (
+                <video src={`${src}#t=0.5`} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="" draggable={false} loading="lazy" className="pointer-events-none h-full w-full object-cover" />
+              )}
+              <span className="absolute bottom-0 left-0 rounded-tr bg-black/70 px-1 text-[9px] text-white/85">{takes.length - i}{take.outdated ? ' · lama' : ''}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Extend (a continuation shot made from this clip) and edit (change something in this clip). Both use
+// Seedance 2.5 on the existing video and cost credits; the estimate appears in the chat to approve.
+function ClipActions({ board, shot, video, onEdit, onRequest, onSelect, busy }) {
+  const [open, setOpen] = useState(null); // 'extend' | 'edit' | null
+  const [text, setText] = useState('');
+  const [seconds, setSeconds] = useState(5);
+  useEffect(() => { setOpen(null); setText(''); }, [shot.id]);
+  const hasClip = !!video?.asset_id && video?.status === 'succeeded';
+  const submit = async () => {
+    if (open === 'extend') {
+      const base = shot.id.slice(0, 34);
+      let n = 2;
+      while (board.shots.some((s) => s.id === `${base}_ext${n}`)) n += 1;
+      if (await onEdit('extend_shot', { id: shot.id, video_prompt: text.trim(), duration_seconds: seconds })) {
+        setOpen(null); setText('');
+        onSelect(`${base}_ext${n}`);
+      }
+    } else if (text.trim() && await onEdit('update_shot', { id: shot.id, edit_instruction: text.trim() })) {
+      setOpen(null); setText('');
+      await onRequest([`edit:${shot.id}`], true);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <SmallButton disabled={busy} onClick={() => setOpen(open === 'extend' ? null : 'extend')}
+          title="Tambah shot lanjutan setelah shot ini; videonya menyambung mulus dari klip ini">Perpanjang</SmallButton>
+        <SmallButton disabled={busy || !hasClip} onClick={() => { setOpen(open === 'edit' ? null : 'edit'); setText(shot.edit_instruction || ''); }}
+          title={hasClip ? 'Ubah sebagian isi video ini tanpa membuat ulang dari awal' : 'Generate videonya dulu'}>Edit video</SmallButton>
+      </div>
+      {open && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] p-2">
+          <input autoFocus className="min-w-[220px] flex-1 rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-[12px] text-white outline-none focus:border-white/30"
+            placeholder={open === 'extend' ? 'Lanjutannya ngapain? (kosong = lanjutkan gerakan yang sama)' : 'Mau diubah apa? mis. "bajunya jadi merah"'}
+            value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+          {open === 'extend' && (
+            <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}
+              className="rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-[12px] text-white">
+              {[4, 5, 6, 8, 10, 12, 15].map((n) => <option key={n} value={n}>{n} dtk</option>)}
+            </select>
+          )}
+          <SmallButton tone="accent" disabled={busy || (open === 'edit' && !text.trim())} onClick={submit}>
+            {open === 'extend' ? 'Tambah shot lanjutan' : 'Hitung biaya edit'}
+          </SmallButton>
+          <span className="w-full text-[10px] text-white/35">
+            {open === 'extend' ? 'Shot baru muncul setelah shot ini. Generate videonya setelah klip ini jadi (pakai kredit).' : 'Hasil edit jadi take baru; take lama tetap bisa dipilih.'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- side: characters & world
 
 function CharactersAndWorld({ board, workspaceId, onOpenAssets, highlight = [] }) {
@@ -225,6 +311,7 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
     return <div className="flex h-full items-center justify-center text-[12px] text-white/35">Belum ada shot. Minta Director menyusun shot list.</div>;
   }
   const { shot, label } = selected;
+  const continuation = !board.media[`frame:${shot.id}`] && shot.extends ? board.shots.find((s) => s.id === shot.extends) : null;
   const frame = board.media[`frame:${shot.id}`];
   const video = board.media[`video:${shot.id}`];
   return (
@@ -243,14 +330,19 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
           <ShotPreview board={board} shot={shot} workspaceId={workspaceId} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <SmallButton disabled={busy} onClick={() => onRequest([`frame:${shot.id}`], !!frame?.asset_id && !frame?.stale)}>
-            {frame?.asset_id ? 'Generate ulang frame' : 'Generate frame'}
-          </SmallButton>
+          {!continuation && (
+            <SmallButton disabled={busy} onClick={() => onRequest([`frame:${shot.id}`], !!frame?.asset_id && !frame?.stale)}>
+              {frame?.asset_id ? 'Generate ulang frame' : 'Generate frame'}
+            </SmallButton>
+          )}
           <SmallButton tone="accent" disabled={busy} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id && !video?.stale)}>
             {video?.asset_id ? 'Generate ulang video' : 'Generate video'}
           </SmallButton>
-          <span className="text-[10px] text-white/35">Frame: {mediaStatus(frame).label} · Video: {mediaStatus(video).label}</span>
+          <span className="text-[10px] text-white/35">{continuation ? `Lanjutan dari ${continuation.title}` : `Frame: ${mediaStatus(frame).label}`} · Video: {mediaStatus(video).label}</span>
         </div>
+        <ClipActions board={board} shot={shot} video={video} onEdit={onEdit} onRequest={onRequest} onSelect={onSelect} busy={busy} />
+        <Takes label="Take frame" mediaKey={`frame:${shot.id}`} media={frame} workspaceId={workspaceId} onEdit={onEdit} busy={busy} />
+        <Takes label="Take video" mediaKey={`video:${shot.id}`} media={video} workspaceId={workspaceId} onEdit={onEdit} busy={busy} />
       </div>
       <aside className="flex w-full flex-none flex-col gap-3 overflow-y-auto lg:w-[290px]">
         <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
@@ -623,6 +715,10 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
   const openAssets = () => onOpenPanel('assets');
   const ready = (key) => board.media[key]?.status === 'succeeded' && board.media[key]?.asset_id;
   const renderable = numbered.some((n) => ready(`video:${n.shot.id}`) || ready(`frame:${n.shot.id}`));
+  // Every shot whose video is missing or outdated, in one request: one estimate to approve in the chat
+  // (their missing frames are added by the Director).
+  const todo = numbered.map((n) => `video:${n.shot.id}`)
+    .filter((key) => { const m = board.media[key]; return m?.status !== 'running' && (!m?.asset_id || m.stale); });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -637,10 +733,27 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
         ))}
         {/* Only the three views; brief, script, assets etc. open from their cards in the chat. */}
         <div className="ml-auto flex flex-none items-center gap-1.5">
+          <button type="button" disabled={busy}
+            onClick={() => {
+              const hasVideos = Object.keys(board.media).some((k) => k.startsWith('video:') && board.media[k]?.asset_id);
+              if (hasVideos && !window.confirm('Video yang sudah ada akan ditandai perlu dibuat ulang dengan pengaturan audio baru. Lanjut?')) return;
+              onEdit('update_brief', { generate_audio: !board.brief.generate_audio });
+            }}
+            title={board.brief.generate_audio ? 'Video dibuat dengan suara bawaan Seedance (ambience, efek). Klik untuk matikan.' : 'Video dibuat tanpa suara. Klik untuk menyalakan suara bawaan Seedance.'}
+            className="rounded-md hover:opacity-80 disabled:opacity-40">
+            <Badge tone={board.brief.generate_audio ? 'green' : 'default'}>{board.brief.generate_audio ? 'Audio on' : 'Audio off'}</Badge>
+          </button>
           <Badge>{board.brief.aspect_ratio}</Badge>
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>
           </button>
+          {todo.length > 0 && (
+            <button type="button" onClick={() => onRequest(todo)} disabled={busy}
+              title="Hitung estimasi kredit untuk semua shot yang belum punya video; generate setelah kamu approve di chat"
+              className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#d4ff64] px-3 py-1.5 text-[12px] font-medium text-[#10130a] hover:brightness-110 disabled:opacity-40">
+              <Icon d="M5 3l14 9-14 9V3z" /> Generate semua ({todo.length})
+            </button>
+          )}
           <button type="button" onClick={onRender} disabled={!renderable || rendering || busy}
             title={renderable ? 'Gabungkan semua shot jadi satu MP4 (gratis)' : 'Belum ada shot dengan frame atau video'}
             className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-white/85 hover:border-white/25 disabled:opacity-40">

@@ -240,7 +240,8 @@ def test_agent_builds_the_board_with_tools(client, fake_llm, bridge):
 
 def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     fake_llm.turns.append([
-        {"calls": [call("update_brief", look="realistic"), call("set_shots", shots=SHOTS)]},  # no prompt guide read yet
+        {"calls": [call("read_skill", name="idea-director"), call("update_brief", summary="Trailer", look="realistic"),
+                   call("set_shots", shots=SHOTS)]},  # no prompt guide read yet
         {"calls": [call("read_skill", name="seedance-prompting"), call("set_shots", shots=SHOTS)]},  # elements missing
         {"calls": [call("read_skill", name="image-gen-usage"), call("upsert_element", **MAYA), call("upsert_element", **HOUSE)]},
         {"calls": [call("set_shots", shots=SHOTS)]},
@@ -248,7 +249,7 @@ def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     ])
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
-    refused = json.loads(fake_llm.requests[1]["input"][1]["output"])
+    refused = json.loads(fake_llm.requests[1]["input"][2]["output"])
     assert refused["ok"] is False and "needs the seedance-prompting guide" in refused["error"]
     assert "Seedance 2.0" in refused["skill_content"]["seedance-prompting"]
     error = json.loads(fake_llm.requests[2]["input"][1]["output"])
@@ -420,7 +421,8 @@ def test_agent_cannot_change_locked_items(client, fake_llm):
 def test_concepts(client, fake_llm):
     options = [{"id": "warm", "title": "Hangat", "logline": "Liburan terakhir yang hangat", "approach": "golden hour", "why": "nostalgia"},
                {"id": "chaos", "title": "Kacau", "logline": "Liburan yang berantakan", "approach": "handheld", "why": "komedi"}]
-    fake_llm.turns.append([{"calls": [call("set_concepts", options=options, recommended="warm")]}, {"text": "Aku rekomendasi Hangat."}])
+    fake_llm.turns.append([{"calls": [call("update_brief", summary="Trailer rom-com"),
+                                      call("set_concepts", options=options, recommended="warm")]}, {"text": "Aku rekomendasi Hangat."}])
     pid = client.post("/api/director/projects", json={"brief": "trailer rom-com"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     concepts = _view(client, pid)["board"]["concepts"]
@@ -493,8 +495,9 @@ def test_creative_tools_require_their_openmontage_skill(client, fake_llm, skill_
     first = [json.loads(i["output"]) for i in fake_llm.requests[1]["input"]]
     assert [o["ok"] for o in first] == [False, False, False, False, True]  # a plain format change needs no skill
     assert "idea-director" in first[0]["error"]
-    # idea-director was loaded by the first refusal, so set_concepts now fails on its own validation.
-    assert first[3]["error"] == "give 2-3 concept options"
+    # idea-director was loaded by the first refusal, so set_concepts passes the skill gate and is held back only
+    # because the brief (refused above) is still empty.
+    assert "brief is empty" in first[3]["error"]
     # The refused calls come back with the guide loaded, so a retry in the same turn goes through.
     assert set(first[0]["skill_content"]) == {"idea-director"}
     third = [json.loads(i["output"]) for i in fake_llm.requests[3]["input"]]
@@ -590,8 +593,14 @@ def test_frames_and_videos_need_approval_and_use_the_sheets(client, fake_llm, br
     _wait(pid)
     by_key = {x["key"]: x for x in bridge.submits}
     assert by_key["frame:s1"]["parameters"]["referenceImages"] == ["/api/assets/asset-gen1/download", "/api/assets/asset-gen2/download"]
-    assert by_key["video:s1"]["parameters"] == {"aspectRatio": "16:9", "duration": 6, "resolution": "720p", "generateAudio": False,
-                                                "referenceImages": ["/api/assets/asset-gen3/download"]}
+    # The video gets its frame first, then the same sheets, and the prompt says which image is which.
+    assert by_key["video:s1"]["parameters"] == {"aspectRatio": "16:9", "duration": 6, "resolution": "720p", "generateAudio": True,
+                                                "referenceImages": ["/api/assets/asset-gen3/download",
+                                                                    "/api/assets/asset-gen1/download", "/api/assets/asset-gen2/download"]}
+    prompt = by_key["video:s1"]["prompt"]
+    assert "@Image1 is the opening frame" in prompt
+    assert "@Image2 is the reference sheet of Maya (character)" in prompt and "exact same person" in prompt
+    assert "@Image3 is the reference sheet of" in prompt and "exact same location" in prompt
     view = _view(client, pid)
     assert view["board"]["requests"][-1]["status"] == "done"
     assert view["chat"][-1]["text"] == "Generate selesai: 2 berhasil."
@@ -769,14 +778,14 @@ def test_user_can_reorder_and_delete_shots_from_the_timeline(client, fake_llm):
 
 def test_assets_wait_until_the_look_is_settled(client, fake_llm, bridge):
     fake_llm.turns.append([
-        {"calls": [call("upsert_element", **MAYA)]},
+        {"calls": [call("update_brief", summary="Iklan sepatu lari"), call("upsert_element", **MAYA)]},
         {"text": "Mau realistis seperti syuting asli, atau animasi 3D / anime?"},
     ])
     pid = client.post("/api/director/projects", json={"brief": "bikin iklan sepatu"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     board = _view(client, pid)["board"]
     assert board["elements"] == [] and bridge.submits == []
-    refused = json.loads(fake_llm.requests[1]["input"][0]["output"])
+    refused = json.loads(fake_llm.requests[1]["input"][1]["output"])
     assert refused["ok"] is False and "look is not set" in refused["error"]
 
     fake_llm.turns.append([{"calls": [call("update_brief", look="realistic"), call("upsert_element", **MAYA)]}, {"text": "Oke."}])
@@ -818,3 +827,115 @@ def test_only_gpt5_class_models_are_allowed(monkeypatch):
             llm._checked_model()
     monkeypatch.delenv("DIRECTOR_LLM_MODEL")
     assert llm._checked_model() == "gpt-5.6-terra"
+
+
+def test_the_brief_is_written_before_anything_is_built(client, fake_llm, bridge):
+    details = {"goal": "jualan", "audience": "pelari muda Jakarta (asumsi)", "key_message": "ringan seperti tidak pakai sepatu",
+               "product": "Sepatu lari Kilat, hijau neon", "cta": "Beli di Tokopedia"}
+    fake_llm.turns.append([
+        {"calls": [call("update_brief", look="realistic"), call("write_script", title="T", text="x"),
+                   call("upsert_element", **MAYA)]},
+        {"calls": [call("update_brief", summary="  Iklan sepatu lari 15 detik.  ", **details), call("upsert_element", **MAYA)]},
+        {"text": "Oke."},
+    ])
+    pid = client.post("/api/director/projects", json={"brief": "iklan sepatu, realistis"}, headers=HEADERS).json()["project_id"]
+    _wait(pid)
+    first = [json.loads(i["output"]) for i in fake_llm.requests[1]["input"]]
+    assert first[0]["ok"] is True  # setting only the look is allowed ...
+    assert all("brief is empty" in o["error"] for o in first[1:])  # ... building on an empty brief is not
+    brief = read_board(pid)["brief"]
+    assert brief["summary"] == "Iklan sepatu lari 15 detik." and brief["product"] == "Sepatu lari Kilat, hijau neon"
+    assert brief["avoid"] == "" and [e["id"] for e in read_board(pid)["elements"]] == ["maya"]
+
+
+def test_every_result_is_kept_as_a_take(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    for _ in range(2):
+        rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"], "force": True},
+                          headers=HEADERS).json()["request_id"]
+        assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+        _wait(pid)
+    frame = _view(client, pid)["board"]["media"]["frame:s1"]
+    first, second = frame["takes"][1]["asset_id"], frame["takes"][0]["asset_id"]
+    assert frame["asset_id"] == second and len(frame["takes"]) == 2 and not frame["takes"][1]["outdated"]
+
+    assert _edit(client, pid, "use_take", key="frame:s1", asset_id=first).status_code == 200
+    board = _view(client, pid)["board"]
+    assert board["media"]["frame:s1"]["asset_id"] == first and not board["media"]["frame:s1"]["stale"]
+    assert len(board["media"]["frame:s1"]["takes"]) == 2
+    assert _edit(client, pid, "use_take", key="frame:s1", asset_id="nope").status_code == 400
+
+
+def test_the_users_own_photos_make_the_sheet(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    before = len(bridge.submits)
+    assert _edit(client, pid, "set_element_photos", id="maya", photos=["photo-1111-aaaa"]).status_code == 200
+    _wait(pid)
+    sheet = bridge.submits[-1]
+    assert len(bridge.submits) == before + 1 and sheet["key"] == "element:maya"
+    assert sheet["parameters"]["referenceImages"] == ["/api/assets/photo-1111-aaaa/download"]
+    assert "attached reference photo" in sheet["prompt"] and "same face" in sheet["prompt"]
+    # The agent rewriting the element keeps the photos.
+    fake_llm.turns.append([{"calls": [call("upsert_element", **{**MAYA, "description": MAYA["description"] + ", silver earrings"})]},
+                           {"text": "ok"}])
+    board = _say(client, pid, "tambah anting")["board"]
+    assert next(e for e in board["elements"] if e["id"] == "maya")["photos"] == ["photo-1111-aaaa"]
+    assert _edit(client, pid, "set_element_photos", id="maya", photos=["../etc"]).status_code == 400
+
+
+def test_the_project_shows_what_it_cost_in_credits(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    view = _view(client, pid)
+    assert view["llm_credits"] >= 0
+    sheets = view["generation_credits"]
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"]}, headers=HEADERS).json()["request_id"]
+    assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    frame = read_board(pid)["requests"][-1]["item_estimates"]["frame:s1"]["credits"]
+    assert _view(client, pid)["generation_credits"] == round(sheets + frame, 2)
+
+
+def test_a_shot_can_be_extended_and_edited(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()["request_id"]
+    assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    clip = read_board(pid)["media"]["video:s1"]["asset_id"]
+
+    # Extend: a continuation right after s1, made from s1's clip, without a frame of its own.
+    assert _edit(client, pid, "extend_shot", id="s1", video_prompt="She keeps walking to the sea", duration_seconds=6).status_code == 200
+    board = read_board(pid)
+    assert [s["id"] for s in board["shots"]][:2] == ["s1", "s1_ext2"] and board["shots"][1]["extends"] == "s1"
+    media = _view(client, pid)["board"]["media"]
+    assert "frame:s1_ext2" not in media
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1_ext2"]}, headers=HEADERS).json()["request_id"]
+    assert read_board(pid)["requests"][-1]["items"] == ["video:s1_ext2"]
+    assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    sent = bridge.submits[-1]
+    assert sent["key"] == "video:s1_ext2" and sent["prompt"].startswith("Extend the video")
+    assert sent["parameters"]["referenceVideos"] == [f"/api/assets/{clip}/download"] and "referenceImages" not in sent["parameters"]
+    assert sent["parameters"]["omniReferenceTaskType"] == "extend" and sent["parameters"]["aspectRatio"] == "adaptive"
+    assert sent["parameters"]["duration"] == 6
+
+    # Edit: the edited clip becomes s1's active take, and s1 does not turn stale.
+    assert _edit(client, pid, "update_shot", id="s1", edit_instruction="make her dress red").status_code == 200
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["edit:s1"]}, headers=HEADERS).json()["request_id"]
+    assert read_board(pid)["requests"][-1]["estimate"]["video_seconds"] == 0
+    assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    sent = bridge.submits[-1]
+    assert sent["parameters"]["omniReferenceTaskType"] == "edit" and sent["parameters"]["duration"] == -1
+    assert sent["parameters"]["referenceVideos"] == [f"/api/assets/{clip}/download"] and "make her dress red" in sent["prompt"]
+    video = _view(client, pid)["board"]["media"]["video:s1"]
+    assert video["asset_id"] != clip and not video["stale"] and [t["asset_id"] for t in video["takes"]][1] == clip
+    # The continuation now builds on the edited clip, so it is outdated.
+    assert _view(client, pid)["board"]["media"]["video:s1_ext2"]["stale"]
+
+
+def test_extend_loops_are_ignored(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    assert _edit(client, pid, "update_shot", id="s1", extends="s2").status_code == 200
+    assert _edit(client, pid, "update_shot", id="s2", extends="s1").status_code == 200
+    media = _view(client, pid)["board"]["media"]
+    assert "frame:s1" in media and "frame:s2" in media

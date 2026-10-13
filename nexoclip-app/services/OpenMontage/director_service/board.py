@@ -25,6 +25,9 @@ ASPECT_RATIOS = ("16:9", "9:16", "1:1")
 RESOLUTIONS = ("480p", "720p", "1080p")
 ELEMENT_KINDS = ("character", "location", "prop")
 # The look of the whole video. Asked up front: it decides how every sheet, frame and clip is rendered.
+# The creative brief beyond the one-line summary (all free text, empty when unknown).
+BRIEF_DETAILS = ("goal", "audience", "platform", "key_message", "product", "tone", "references", "cta", "must_have",
+                 "avoid")
 LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
 TERMINAL_OK = "succeeded"
@@ -37,7 +40,7 @@ T = TypeVar("T")
 def empty_board() -> dict[str, Any]:
     return {
         "brief": {"summary": "", "look": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
-                  "resolution": "720p", "generate_audio": False},
+                  "resolution": "720p", "generate_audio": True, **{k: "" for k in BRIEF_DETAILS}},
         "concepts": {"options": [], "recommended": None, "chosen": None, "locked": False},
         "research": [],
         "elements": [],
@@ -230,9 +233,45 @@ def sheet_prompt(item: dict[str, Any], style: str, look: str = "") -> str:
     return prompt + (f"\nLook: {rendering}" if rendering else "") + (f"\nStyle: {style}" if style else "")
 
 
+MAX_ELEMENT_PHOTOS = 4
+FROM_PHOTOS = ("Base it on the attached reference photo(s) of this exact {kind}: keep its identity exactly as photographed "
+               "({keep}); the description only fills in what the photos do not show.")
+PHOTO_KEEP = {"character": "same face, facial structure, skin tone, hair and build",
+              "location": "same layout, architecture, materials and landmarks",
+              "prop": "same shape, proportions, materials, colours, logo and markings"}
+
+
 def _with_look(prompt: str, brief: dict[str, Any]) -> str:
     rendering = look_rendering(brief)
     return f"{prompt}\nLook: {rendering}" if rendering else prompt
+
+
+# How the video prompt names each reference image, in the order they are sent (Seedance omni: "@Image N",
+# the same citation and identity wording Canvas uses in lib/mention-prompt.ts).
+KEEP_IDENTITY = {
+    "character": "the exact same person/character, and preserve facial identity, facial structure, skin tone, hairstyle, "
+                 "wardrobe and distinguishing features without substitution or redesign",
+    "location": "the exact same location, and preserve its spatial layout, architecture, landmarks, materials and "
+                "distinguishing details without substitution or redesign",
+    "prop": "the exact same object, and preserve its shape, geometry, materials, colors, markings and distinguishing "
+            "details without substitution or redesign",
+}
+MAX_VIDEO_REFERENCES = 30  # Seedance 2.5 reference_image limit
+
+
+def video_references(board: dict[str, Any], shot: dict[str, Any]) -> list[str]:
+    """The shot's frame, then the reference sheet of every element in it."""
+    sheets = [f"element:{e}" for e in shot.get("element_ids", []) if element(board, e)]
+    return [f"frame:{shot['id']}", *sheets][:MAX_VIDEO_REFERENCES]
+
+
+def reference_legend(board: dict[str, Any], deps: list[str]) -> str:
+    lines = ["References:", "@Image1 is the opening frame of this shot: start the clip from it."]
+    for n, dep in enumerate(deps[1:], start=2):
+        item = element(board, dep.split(":", 1)[1])
+        lines.append(f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one "
+                     f"image: show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
+    return "\n".join(lines) if len(lines) > 2 else ""
 
 
 def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -243,28 +282,77 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
     look = brief.get("look") or ""
     specs: dict[str, dict[str, Any]] = {}
     for item in board["elements"]:
+        prompt = sheet_prompt(item, style, look)
+        photos = item.get("photos") or []
+        if photos:
+            prompt += "\n" + FROM_PHOTOS.format(kind=item["kind"], keep=PHOTO_KEEP.get(item["kind"], PHOTO_KEEP["prop"]))
         specs[f"element:{item['id']}"] = {
-            "kind": "image", "label": f"{item['name']} — reference sheet", "prompt": sheet_prompt(item, style, look), "deps": [],
+            "kind": "image", "label": f"{item['name']} — reference sheet", "prompt": prompt, "deps": [],
             "params": {"aspectRatio": "16:9"},
+            **({"photos": list(photos)} if photos else {}),
         }
     for item in board["shots"]:
-        refs = [f"element:{e}" for e in item.get("element_ids", []) if element(board, e)]
-        specs[f"frame:{item['id']}"] = {
-            "kind": "image", "label": f"{item['title']} — frame", "prompt": _with_look(item["frame_prompt"], brief), "deps": refs,
-            "params": {"aspectRatio": ratio},
-        }
-        specs[f"video:{item['id']}"] = {
-            "kind": "video", "label": f"{item['title']} — video", "prompt": _with_look(item["video_prompt"], brief),
-            "deps": [f"frame:{item['id']}"],
-            "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]),
-                       "resolution": brief.get("resolution") or "720p",
-                       "generateAudio": bool(brief.get("generate_audio"))},
-        }
+        audio = {"resolution": brief.get("resolution") or "720p", "generateAudio": bool(brief.get("generate_audio"))}
+        source = extended_shot(board, item)
+        if source is not None:
+            # A continuation: Seedance extends the source shot's clip, so it has no frame of its own.
+            specs[f"video:{item['id']}"] = {
+                "kind": "video", "label": f"{item['title']} — video (lanjutan)",
+                "prompt": _with_look(f"{EXTEND_PREFIX}{item['video_prompt']}", brief), "deps": [f"video:{source['id']}"],
+                "params": {"aspectRatio": "adaptive", "duration": int(item["duration_seconds"]), **audio,
+                           "omniReferenceTaskType": "extend"},
+            }
+        else:
+            _shot_specs(board, item, specs, ratio, audio)
+        instruction = (item.get("edit_instruction") or "").strip()
+        if instruction:
+            specs[f"edit:{item['id']}"] = {
+                "kind": "video", "label": f"{item['title']} — edit video",
+                "prompt": f"Edit the video: {instruction}. Keep everything else exactly as it is.",
+                "deps": [f"video:{item['id']}"],
+                "params": {"aspectRatio": "adaptive", "duration": -1, **audio, "omniReferenceTaskType": "edit"},
+            }
     return specs
+
+
+EXTEND_PREFIX = "Extend the video: continue it seamlessly from its last moment, same people, place, light and camera. "
+
+
+def extended_shot(board: dict[str, Any], item: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """The shot this one continues (video extend), if any."""
+    seen = {item["id"]}
+    current = item
+    while current.get("extends"):  # follow the chain so a loop (a extends b extends a) is ignored
+        current = shot(board, current["extends"])
+        if current is None or current["id"] in seen:
+            return None
+        seen.add(current["id"])
+    return shot(board, item["extends"]) if item.get("extends") else None
+
+
+def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, dict[str, Any]], ratio: str,
+                audio: dict[str, Any]) -> None:
+    brief = board["brief"]
+    refs = [f"element:{e}" for e in item.get("element_ids", []) if element(board, e)]
+    specs[f"frame:{item['id']}"] = {
+        "kind": "image", "label": f"{item['title']} — frame", "prompt": _with_look(item["frame_prompt"], brief), "deps": refs,
+        "params": {"aspectRatio": ratio},
+    }
+    deps = video_references(board, item)
+    legend = reference_legend(board, deps)
+    video_prompt = _with_look(item["video_prompt"], brief)
+    specs[f"video:{item['id']}"] = {
+        "kind": "video", "label": f"{item['title']} — video",
+        "prompt": f"{video_prompt}\n{legend}" if legend else video_prompt,
+        "deps": deps,
+        "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio},
+    }
 
 
 def spec_sig(spec: dict[str, Any]) -> str:
     basis = {k: spec[k] for k in ("kind", "prompt", "params", "deps")}
+    if spec.get("photos"):  # only when present, so specs without photos keep their old signature
+        basis["photos"] = spec["photos"]
     return hashlib.sha256(json.dumps(basis, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -285,8 +373,12 @@ def needs_generation(board: dict[str, Any], key: str, specs: Optional[dict] = No
     return needed
 
 
-def tier(key: str) -> int:
-    return {"element": 0, "frame": 1, "video": 2}[key.split(":", 1)[0]]
+def tier(key: str, specs: Optional[dict[str, dict[str, Any]]] = None) -> int:
+    """Generation order: everything a key depends on runs in an earlier tier (a continuation after
+    the clip it extends, an edit after the clip it edits)."""
+    if specs is None or key not in specs:
+        return {"element": 0, "frame": 1, "video": 2, "edit": 3}[key.split(":", 1)[0]]
+    return 1 + max((tier(dep, specs) for dep in specs[key]["deps"]), default=-1)
 
 
 # ---------------------------------------------------------------- views
@@ -298,6 +390,8 @@ def summary_for_agent(board: dict[str, Any]) -> dict[str, Any]:
     memo: dict[str, bool] = {}
 
     def media_state(key: str) -> str:
+        if key not in specs:
+            return "n/a"  # e.g. the frame of a continuation shot
         media = board["media"].get(key) or {}
         status = media.get("status") or "none"
         if status == TERMINAL_OK and needs_generation(board, key, specs, memo):
@@ -333,5 +427,9 @@ def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
             # Generated media are nexoclip assets owned by the user; the browser loads them
             # from nexoclip's own /api/assets/<id>/download with its session.
             "asset_id": media.get("asset_id") if status == TERMINAL_OK else None,
+            # Every result so far, newest first; "outdated" ones were made from an older prompt.
+            "takes": [{"asset_id": t["asset_id"], "generated_at": t.get("generated_at"),
+                       "outdated": t.get("spec_sig") != spec_sig(spec)}
+                      for t in reversed(media.get("takes") or [])],
         }
     return {**{k: board[k] for k in (*CONTENT_KEYS, "requests", "renders")}, "media": media_view, "version": board.get("version")}

@@ -53,7 +53,7 @@ def _closure(board: dict[str, Any], keys: list[str], specs: dict[str, dict[str, 
 
     for key in keys:
         visit(key, True)
-    return sorted(wanted, key=lambda k: (tier(k), list(specs).index(k)))
+    return sorted(wanted, key=lambda k: (tier(k, specs), list(specs).index(k)))
 
 
 AUTO_PREFIX = "element:"
@@ -79,7 +79,7 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
     specs = media_specs(board)
     unknown = [k for k in keys if k not in specs]
     if unknown:
-        raise GenerationError(f"unknown media: {', '.join(unknown)}. Valid keys look like element:<id>, frame:<shot_id>, video:<shot_id>.")
+        raise GenerationError(f"unknown media: {', '.join(unknown)}. Valid keys look like element:<id>, frame:<shot_id>, video:<shot_id>, edit:<shot_id> (after setting edit_instruction).")
     open_request = None if auto else next((r for r in board["requests"] if r["status"] == "pending" and not r.get("auto")), None)
     if open_request:
         keys = list(dict.fromkeys([*(k for k in open_request["requested"] if k in specs), *keys]))
@@ -97,7 +97,8 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
         "available": bridge is not None,
         "images": sum(1 for k in items if specs[k]["kind"] == "image"),
         "videos": sum(1 for k in items if specs[k]["kind"] == "video"),
-        "video_seconds": sum(specs[k]["params"].get("duration", 0) for k in items if specs[k]["kind"] == "video"),
+        # an edit keeps its source's length (duration -1), so it is left out of this count
+        "video_seconds": sum(max(0, specs[k]["params"].get("duration", 0)) for k in items if specs[k]["kind"] == "video"),
         "credits": 0.0,
         "usd": 0.0,
     }
@@ -179,6 +180,42 @@ def _set_media(project_id: str, key: str, **fields: Any) -> None:
     update_board(project_id, change)
 
 
+MAX_TAKES = 12
+
+
+def _take(asset_id: str, spec_sig: Optional[str], dep_assets: list, generated_at: Optional[str]) -> dict[str, Any]:
+    return {"asset_id": asset_id, "spec_sig": spec_sig, "dep_assets": dep_assets, "generated_at": generated_at}
+
+
+def _record_take(project_id: str, key: str, *, asset_id: str, spec_sig: Optional[str], dep_assets: list,
+                 generated_at: str) -> None:
+    """A new result becomes the active take; earlier takes stay selectable (board.media[key].takes)."""
+    def change(board: dict[str, Any]) -> None:
+        media = board["media"].setdefault(key, {})
+        takes = list(media.get("takes") or [])
+        if not takes and media.get("asset_id") and media.get("done_spec_sig"):
+            # media from before takes existed: keep its last result as the first take
+            takes.append(_take(media["asset_id"], media["done_spec_sig"], media.get("dep_assets") or [],
+                               media.get("generated_at")))
+        takes = [t for t in takes if t["asset_id"] != asset_id] + [_take(asset_id, spec_sig, dep_assets, generated_at)]
+        media.update(status=TERMINAL_OK, asset_id=asset_id, error=None, done_spec_sig=spec_sig, dep_assets=dep_assets,
+                     generated_at=generated_at, takes=takes[-MAX_TAKES:])
+
+    update_board(project_id, change)
+
+
+def _edited_take(project_id: str, key: str, asset_id: str) -> None:
+    """An edited clip becomes the shot's active video take (the edit made from its current spec)."""
+    board = read_board(project_id)
+    video_key = "video:" + key.split(":", 1)[1]
+    spec = media_specs(board).get(video_key)
+    current = board["media"].get(video_key) or {}
+    if spec is None:
+        return
+    _record_take(project_id, video_key, asset_id=asset_id, spec_sig=current.get("done_spec_sig") or spec_sig(spec),
+                 dep_assets=current.get("dep_assets") or [], generated_at=now_iso())
+
+
 def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None:
     submitted: list[str] = []
     submit_error: Optional[Exception] = None
@@ -196,8 +233,14 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
             submitted.append(key)  # submitted before a restart: poll it instead of paying twice
             continue
         params = dict(spec["params"])
-        if dep_assets:
-            params["referenceImages"] = [nexoclip.asset_reference(a) for a in dep_assets]
+        # Clips a key builds on (extend / edit) go as reference videos, everything else as images,
+        # the user's own photos first.
+        videos = [a for dep, a in zip(spec["deps"], dep_assets) if dep.startswith("video:")]
+        images = [*spec.get("photos", []), *(a for dep, a in zip(spec["deps"], dep_assets) if not dep.startswith("video:"))]
+        if images:
+            params["referenceImages"] = [nexoclip.asset_reference(a) for a in images]
+        if videos:
+            params["referenceVideos"] = [nexoclip.asset_reference(a) for a in videos]
         attempt = int(media.get("attempt") or 0) + 1
         basis = hashlib.sha256(json.dumps([sig, dep_assets]).encode("utf-8")).hexdigest()[:24]
         try:
@@ -231,9 +274,10 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
                     _set_media(project_id, key, status="failed", error=str(exc))
                 else:
                     # The result is already a nexoclip asset in the user's workspace; keep the id only.
-                    _set_media(project_id, key, status=TERMINAL_OK, asset_id=asset_id, error=None,
-                               done_spec_sig=media.get("pending_spec_sig"), dep_assets=media.get("pending_dep_assets", []),
-                               generated_at=now_iso())
+                    _record_take(project_id, key, asset_id=asset_id, spec_sig=media.get("pending_spec_sig"),
+                                 dep_assets=media.get("pending_dep_assets", []), generated_at=now_iso())
+                    if key.startswith("edit:"):
+                        _edited_take(project_id, key, asset_id)
             else:
                 _set_media(project_id, key, status="failed", error=_error_text(generation))
             pending.discard(key)
@@ -253,15 +297,28 @@ def run_request(project_id: str, request_id: str) -> dict[str, Any]:
     bridge = billing.bridge_for(project_id)
     if bridge is None:
         raise GenerationError("generate gambar/video butuh koneksi kredit nexoclip (bridge belum dikonfigurasi)")
-    request = find_request(read_board(project_id), request_id)
-    for level in (0, 1, 2):
-        keys = [k for k in request["items"] if tier(k) == level]
-        if keys:
-            _run_tier(project_id, bridge, keys)
+    board = read_board(project_id)
+    request = find_request(board, request_id)
+    specs = media_specs(board)
+    levels = {k: tier(k, specs) for k in request["items"]}
+    for level in sorted(set(levels.values())):
+        keys = [k for k in request["items"] if levels[k] == level]
+        _run_tier(project_id, bridge, keys)
     board = read_board(project_id)
     succeeded = [k for k in request["items"] if (board["media"].get(k) or {}).get("status") == TERMINAL_OK]
     failed = {k: (board["media"].get(k) or {}).get("error") or "failed" for k in request["items"] if k not in succeeded}
     return {"succeeded": succeeded, "failed": failed}
+
+
+def generation_credits(board: dict[str, Any]) -> float:
+    """Credits spent on frames, videos and sheets so far: the estimate of every item that was generated
+    (nexoclip settles each job at its actual usage, so this is close, not exact)."""
+    total = 0.0
+    for request in board["requests"]:
+        succeeded = set((request.get("result") or {}).get("succeeded") or [])
+        total += sum(float(price.get("credits") or 0) for key, price in (request.get("item_estimates") or {}).items()
+                     if key in succeeded)
+    return round(total, 2)
 
 
 def resume_running(project_id: str) -> Optional[str]:

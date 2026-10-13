@@ -85,6 +85,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS render JSONB NOT NULL DEFAULT '{"status": "idle"}'::jsonb;
     """,
+    # Credits nexoclip charged for the project's LLM use (what the user actually pays, next to the raw USD).
+    """
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS llm_credits double precision NOT NULL DEFAULT 0;
+    """,
 ]
 
 

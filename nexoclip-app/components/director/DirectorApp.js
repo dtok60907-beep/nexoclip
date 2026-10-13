@@ -523,7 +523,9 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
             </button>
           </div>
           <div className="flex items-center justify-between px-1 text-[10px] text-white/30">
-            <span>Biaya AI project ini: ${Number(view.llm_cost_usd || 0).toFixed(3)}</span>
+            <span title={`Biaya model AI: $${Number(view.llm_cost_usd || 0).toFixed(3)}`}>
+              Kredit project ini: chat AI {fmtCredits(view.llm_credits || 0)} · generate {fmtCredits(view.generation_credits || 0)}
+            </span>
             {/* Required by AGPL-3.0 §13: the Director service is built on OpenMontage. */}
             <a href={`${API}/source`} className="hover:text-white/60" title="AI Director dibangun di atas OpenMontage (AGPL-3.0)">Kode sumber (AGPL-3.0)</a>
           </div>
