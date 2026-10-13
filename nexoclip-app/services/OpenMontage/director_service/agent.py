@@ -11,12 +11,14 @@ in the board, and every change is recorded as a new board version.
 
 from __future__ import annotations
 
+import base64
 import copy
+import io
 import json
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from director_service import billing, board as boards, generation, live, llm, nexoclip, skills
 from director_service.store import add_llm_cost, append_chat, append_llm_log, read_chat, read_director
@@ -111,8 +113,10 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   music are turned down automatically.
 
 - Attachments and mentions: a user message can carry images/videos they uploaded ([attached by the user: ...], with
-  asset ids) and @mentions of shots or elements ([mentions: ...], which shot/element they mean). You cannot see the
-  files yet: ask in one line what an attachment shows if the message does not say. Use them: a photo of the user's
+  asset ids) and @mentions of shots or elements ([mentions: ...], which shot/element they mean). You see attached
+  images (the latest few messages' images are included): describe what you see when it matters and use it (a
+  product's exact look goes into its element description). You cannot see videos yet: ask in one line what a video
+  shows if the message does not say. Use them: a photo of the user's
   product, face, logo or place goes on its element (upsert_element photos=[asset_id], its sheet is then made from
   it); an image or video meant as a style, composition or motion reference for a shot goes on that shot
   (reference_assets=[{asset_id, kind}], sent to Seedance with the frame and sheets).
@@ -1146,9 +1150,49 @@ def _message_notes(meta: dict[str, Any]) -> str:
     return ("\n" + "\n".join(notes)) if notes else ""
 
 
+SEEN_IMAGE_MESSAGES = 3  # user messages whose attached images the model sees (older ones: ids only)
+IMAGE_SIDE = 1024
+_image_cache: dict[str, Optional[str]] = {}
+
+
+def _image_data_url(project_id: str, asset_id: str) -> Optional[str]:
+    """An attached image, shrunk to IMAGE_SIDE and inlined, for the model to look at (None if unavailable)."""
+    if asset_id in _image_cache:
+        return _image_cache[asset_id]
+    url = None
+    bridge = billing.bridge_for(project_id)
+    if bridge is not None:
+        try:
+            from PIL import Image
+
+            image = Image.open(io.BytesIO(bridge.download(asset_id).content)).convert("RGB")
+            image.thumbnail((IMAGE_SIDE, IMAGE_SIDE))
+            out = io.BytesIO()
+            image.save(out, format="JPEG", quality=85)
+            url = "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+        except Exception:  # unreadable or gone: the model still gets the asset id
+            url = None
+    if len(_image_cache) > 200:
+        _image_cache.clear()
+    _image_cache[asset_id] = url
+    return url
+
+
+def _user_content(project_id: str, entry: dict[str, Any], show_images: bool) -> Any:
+    meta = entry.get("meta") or {}
+    text = (entry.get("text") or "") + _message_notes(meta)
+    images = [a for a in meta.get("attachments") or [] if a.get("kind") == "image"] if show_images else []
+    parts = [{"type": "input_image", "image_url": url} for url in (_image_data_url(project_id, a["asset_id"]) for a in images) if url]
+    return [{"type": "input_text", "text": text}, *parts] if parts else text
+
+
 def build_history(project_id: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for entry in read_chat(project_id, limit=HISTORY_ENTRIES):
+    entries = read_chat(project_id, limit=HISTORY_ENTRIES)
+    with_images = [i for i, e in enumerate(entries) if e.get("role") == "user"
+                   and any(a.get("kind") == "image" for a in (e.get("meta") or {}).get("attachments") or [])]
+    shown = set(with_images[-SEEN_IMAGE_MESSAGES:])
+    for index, entry in enumerate(entries):
         kind, text = entry.get("kind"), entry.get("text") or ""
         if kind == "edit":
             items.append({"role": "user", "content": f"[user edited: {text}]"})
@@ -1157,7 +1201,7 @@ def build_history(project_id: str) -> list[dict[str, Any]]:
         elif kind == "request" and entry.get("role") == "user":
             items.append({"role": "user", "content": f"[user prepared generation: {text}]"})
         elif entry.get("role") == "user":
-            items.append({"role": "user", "content": text + _message_notes(entry.get("meta") or {})})
+            items.append({"role": "user", "content": _user_content(project_id, entry, index in shown)})
         elif kind in ("activity", "request"):
             items.append({"role": "assistant", "content": f"[tool used: {text}]"})
         elif kind in ("generation", "error"):

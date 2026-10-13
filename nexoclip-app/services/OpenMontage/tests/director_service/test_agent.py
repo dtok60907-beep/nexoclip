@@ -1304,3 +1304,31 @@ def test_attachments_and_mentions_reach_the_director_and_the_shots(client, fake_
     bad = client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS,
                       json={"text": "x", "attachments": [{"asset_id": "../etc", "kind": "image"}]})
     assert bad.status_code == 422
+
+
+def test_the_director_sees_attached_images_but_not_videos(client, fake_llm, bridge, tmp_path):
+    pid = _built_project(client, fake_llm)
+    photo, clip = "bbbbbbbb-1111-4111-8111-000000000001", "bbbbbbbb-1111-4111-8111-000000000002"
+    bridge.files[photo] = _media(tmp_path, "frame")  # a real 400x400 PNG
+    fake_llm.turns.append([{"text": "Itu cup kopi oranye."}])
+    res = client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS, json={
+        "text": "ini produknya", "attachments": [{"asset_id": photo, "kind": "image", "name": "cup.png"},
+                                                 {"asset_id": clip, "kind": "video", "name": "walk.mp4"}]})
+    assert res.status_code == 200
+    _wait(pid)
+    content = fake_llm.requests[-1]["input"][-1]["content"]
+    assert content[0]["type"] == "input_text" and f"video asset_id={clip}" in content[0]["text"]
+    images = [p for p in content if p["type"] == "input_image"]
+    assert len(images) == 1 and images[0]["image_url"].startswith("data:image/jpeg;base64,")
+
+    # Only the latest few messages carry their images; older ones keep just the ids.
+    for n in range(3):
+        fake_llm.turns.append([{"text": "ok"}])
+        other = f"bbbbbbbb-1111-4111-8111-00000000010{n}"
+        bridge.files[other] = _media(tmp_path, "frame")
+        client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS,
+                    json={"text": f"foto {n}", "attachments": [{"asset_id": other, "kind": "image"}]})
+        _wait(pid)
+    history = fake_llm.requests[-1]["input"]
+    first = next(m for m in history if m["role"] == "user" and "ini produknya" in str(m["content"]))
+    assert isinstance(first["content"], str) and f"image asset_id={photo}" in first["content"]
