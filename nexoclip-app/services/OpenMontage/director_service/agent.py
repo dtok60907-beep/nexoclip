@@ -124,9 +124,11 @@ conversation (intake on a vague brief, concept, script, shot plan, element promp
 matching skill and apply it. Some tools need their skill read in the same turn (if not, the guide is returned to you
 and you must call the tool again): update_brief with a
 summary or set_concepts needs idea-director, write_script needs script-director, upsert_element
-needs image-gen-usage, and set_shots or a changed frame_prompt/video_prompt needs seedance-prompting.
+needs image-gen-usage, set_shots or a changed frame_prompt/video_prompt needs seedance-prompting, and set_audio
+needs voice-performance-director for a voiceover and music-gen-usage for music.
 These guides were written for a different agent that runs local tools, files, stages and checkpoints: take the
-creative craft, and ignore instructions about tools, files, checkpoints, stages, audio or rendering you do not have.
+creative craft, and ignore instructions about tools, files, checkpoints, stages or rendering you do not have (levels,
+ducking and mastering are done by the render; voices are the ones from list_voices).
 Available skills:
 """
 
@@ -945,23 +947,32 @@ def _args(call: dict[str, Any]) -> dict[str, Any]:
     return args if isinstance(args, dict) else {}
 
 
+def _audio_skills(args: dict[str, Any]) -> tuple[str, ...]:
+    """set_audio needs the voiceover guide for narration and the music guide for a music prompt."""
+    return tuple(name for name, field in (("voice-performance-director", "voiceover_text"), ("music-gen-usage", "music_prompt"))
+                 if str(args.get(field) or "").strip())
+
+
 # Creative output the agent may only write with the matching OpenMontage skill in context
 # (the model reliably skips "please read the guide" instructions otherwise).
-REQUIRED_SKILLS: dict[str, tuple[tuple[str, ...], Callable[[dict[str, Any]], bool]]] = {
+REQUIRED_SKILLS: dict[str, tuple[Any, Callable[[dict[str, Any]], bool]]] = {
     "update_brief": (("idea-director",), lambda a: bool(a.get("summary"))),
     "set_concepts": (("idea-director",), lambda a: True),
     "write_script": (("script-director",), lambda a: True),
     "upsert_element": (("image-gen-usage",), lambda a: True),
     "set_shots": (("seedance-prompting",), lambda a: True),
     "update_shot": (("seedance-prompting",), lambda a: bool(a.get("frame_prompt") or a.get("video_prompt"))),
+    "set_audio": (_audio_skills, lambda a: True),
 }
+
 
 
 def missing_skills(call: dict[str, Any], skills_read: set[str]) -> list[str]:
     rule = REQUIRED_SKILLS.get(call["name"])
     if not rule or not rule[1](_args(call)):
         return []
-    return [name for name in rule[0] if name not in skills_read]
+    names = rule[0](_args(call)) if callable(rule[0]) else rule[0]
+    return [name for name in names if name not in skills_read]
 
 
 # Which board card to show in the chat after a turn that changed it.

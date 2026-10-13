@@ -31,6 +31,9 @@ SKILLS: dict[str, tuple[str, str]] = {
     "video-gen-prompting": ("creative/video-gen-prompting.md", "universal video prompt vocabulary: camera, motion, light"),
     "seedance-prompting": ("creative/prompting/seedance-prompting.md", "Seedance-specific video prompt structure (our video model)"),
     "reviewer": ("meta/reviewer.md", "critically reviewing a plan or result before showing it"),
+    "voice-performance-director": ("meta/voice-performance-director.md", "writing and directing a voiceover: pacing, pauses, energy, delivery"),
+    "music-gen-usage": ("creative/music-gen-usage.md", "music prompts for ElevenLabs music: genre, BPM by video type, mood, structure"),
+    "sound-design": ("creative/sound-design.md", "how voice, music and clip sound sit together (levels, ducking, timing)"),
 }
 
 

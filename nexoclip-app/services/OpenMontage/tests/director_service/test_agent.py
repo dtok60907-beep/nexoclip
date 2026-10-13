@@ -1031,3 +1031,18 @@ def test_a_voiceover_needs_a_voice(client, fake_llm, bridge):
     _say(client, pid, "VO")
     refused = json.loads(fake_llm.requests[-1]["input"][0]["output"])
     assert refused["ok"] is False and "list_voices" in refused["error"]
+
+
+def test_audio_is_written_with_the_openmontage_audio_guides(client, fake_llm, bridge, skill_gate):
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([
+        {"calls": [call("set_audio", voiceover_text="Halo semua.", voice_id="JBFqnCBsd6RMkjVDRZzb", music_prompt="lo-fi, 85 BPM"),
+                   call("set_audio", music_seconds=20)]},
+        {"calls": [call("set_audio", voiceover_text="Halo semua.", voice_id="JBFqnCBsd6RMkjVDRZzb", music_prompt="lo-fi, 85 BPM")]},
+        {"text": "ok"},
+    ])
+    board = _say(client, pid, "tambahin VO dan musik")["board"]
+    first = [json.loads(i["output"]) for i in fake_llm.requests[-2]["input"]]
+    assert first[0]["ok"] is False and set(first[0]["skill_content"]) == {"voice-performance-director", "music-gen-usage"}
+    assert first[1]["ok"] is True  # only a length change: no guide needed
+    assert board["audio"]["voiceover"]["text"] == "Halo semua." and board["audio"]["music"]["prompt"] == "lo-fi, 85 BPM"
