@@ -17,17 +17,26 @@ from typing import Any
 import requests
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_MODEL = "gpt-4.1-mini"
+DEFAULT_MODEL = "gpt-5.6-terra"
 KEY_ENV = "DIRECTOR_OPENAI_API_KEY"
 KEY_FILE = Path(__file__).resolve().parent.parent / "director.env"
 
-# USD per 1M tokens (input, output) for cost tracking in the chat log.
+# The models the Director may use: GPT-5 and newer, never a -pro or -sol model. USD per 1M tokens
+# (input, output), OpenAI list prices for contexts up to 272K tokens. Keep in step with
+# STORYBOARD_TEXT_PRICES in nexoclip-app/src/services/storyboardTextPricing.js, which bills them.
 PRICES_PER_MILLION = {
-    "gpt-4o-mini": (0.15, 0.60),
-    "gpt-4.1-mini": (0.40, 1.60),
-    "gpt-4o": (2.50, 10.00),
-    "gpt-4.1": (2.00, 8.00),
+    "gpt-5.6-terra": (2.00, 12.00),
+    "gpt-5.6-luna": (0.20, 1.20),
+    "gpt-5.5": (5.00, 30.00),
+    "gpt-5.4": (2.50, 15.00),
+    "gpt-5.4-mini": (0.75, 4.50),
+    "gpt-5.2": (1.75, 14.00),
+    "gpt-5.1": (1.25, 10.00),
+    "gpt-5": (1.25, 10.00),
+    "gpt-5-mini": (0.25, 2.00),
 }
+# GPT-5 models reason before answering; "low" keeps a turn quick while tools still get used well.
+REASONING_EFFORT_ENV = "DIRECTOR_REASONING_EFFORT"
 WEB_SEARCH_CALL_USD = 0.025
 
 
@@ -37,6 +46,17 @@ class LLMError(RuntimeError):
 
 def model_name() -> str:
     return os.environ.get("DIRECTOR_LLM_MODEL") or DEFAULT_MODEL
+
+
+def _checked_model() -> str:
+    model = model_name()
+    if model not in PRICES_PER_MILLION:
+        raise LLMError(f"model {model!r} is not allowed for the Director (GPT-5 or newer, not -pro / -sol)")
+    return model
+
+
+def _reasoning() -> dict[str, str]:
+    return {"effort": os.environ.get(REASONING_EFFORT_ENV) or "low"}
 
 
 def _api_key() -> str | None:
@@ -79,9 +99,10 @@ def chat(
     api_key = _api_key()
     if not api_key:
         raise LLMError(f"{KEY_ENV} is not set")
-    model = model_name()
+    model = _checked_model()
     body: dict[str, Any] = {
         "model": model,
+        "reasoning": _reasoning(),
         "input": [{"role": m["role"], "content": m["content"]} for m in messages],
         "max_output_tokens": max_tokens,
     }
@@ -183,9 +204,10 @@ def respond(
     api_key = _api_key()
     if not api_key:
         raise LLMError(f"{KEY_ENV} is not set")
-    model = model_name()
+    model = _checked_model()
     body: dict[str, Any] = {
         "model": model,
+        "reasoning": _reasoning(),
         "instructions": instructions,
         "input": input_items,
         "tools": tools,

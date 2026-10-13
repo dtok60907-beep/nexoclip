@@ -9,6 +9,15 @@ export const STORYBOARD_TEXT_PRICES = {
   'gpt-4.1-mini': { input: 0.4 / 1e6, output: 1.6 / 1e6 },
   'gpt-5': { input: 1.25 / 1e6, output: 10 / 1e6 },
   'gpt-5-mini': { input: 0.25 / 1e6, output: 2 / 1e6 },
+  // The AI Director (services/OpenMontage/director_service/llm.py, PRICES_PER_MILLION):
+  // GPT-5 and newer, never -pro / -sol. Prices for contexts up to 272K tokens.
+  'gpt-5.1': { input: 1.25 / 1e6, output: 10 / 1e6 },
+  'gpt-5.2': { input: 1.75 / 1e6, output: 14 / 1e6 },
+  'gpt-5.4': { input: 2.5 / 1e6, output: 15 / 1e6 },
+  'gpt-5.4-mini': { input: 0.75 / 1e6, output: 4.5 / 1e6 },
+  'gpt-5.5': { input: 5 / 1e6, output: 30 / 1e6 },
+  'gpt-5.6-terra': { input: 2 / 1e6, output: 12 / 1e6 },
+  'gpt-5.6-luna': { input: 0.2 / 1e6, output: 1.2 / 1e6 },
   // OpenDirector's configurable OPENAI_MODEL defaults to gpt-4o-mini.
   'gpt-4o': { input: 2.5 / 1e6, output: 10 / 1e6 },
   'gpt-4o-mini': { input: 0.15 / 1e6, output: 0.6 / 1e6 },

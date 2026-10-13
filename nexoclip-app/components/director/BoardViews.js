@@ -122,6 +122,9 @@ function MediaFrame({ media, aspect = 'aspect-video', label, workspaceId }) {
 
 // ---------------------------------------------------------------- brief
 
+// brief.look: how the whole video is rendered (sheets, frames and clips follow it).
+export const LOOK_LABELS = { realistic: 'Realistis', '3d_animation': 'Animasi 3D', anime: 'Anime', illustration: 'Ilustrasi', other: 'Lainnya' };
+
 export function BriefView({ board, onEdit, busy }) {
   const brief = board.brief || {};
   const [editing, setEditing] = useState(false);
@@ -130,7 +133,7 @@ export function BriefView({ board, onEdit, busy }) {
 
   const save = async () => {
     const ok = await onEdit('update_brief', {
-      summary: draft.summary || '', aspect_ratio: draft.aspect_ratio, style: draft.style || '', resolution: draft.resolution,
+      summary: draft.summary || '', ...(draft.look ? { look: draft.look } : {}), aspect_ratio: draft.aspect_ratio, style: draft.style || '', resolution: draft.resolution,
       generate_audio: !!draft.generate_audio, ...(draft.duration_seconds ? { duration_seconds: Number(draft.duration_seconds) } : {}),
     });
     if (ok) setEditing(false);
@@ -166,6 +169,15 @@ export function BriefView({ board, onEdit, busy }) {
               </select>
             </Field>
           </div>
+          <Field label="Tampilan">
+            <select className={inputClass} value={draft.look || ''} onChange={(e) => setDraft({ ...draft, look: e.target.value })}>
+              {!draft.look && <option value="">Belum dipilih</option>}
+              {Object.entries(LOOK_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+          </Field>
+          {draft.look && draft.look !== brief.look && brief.look && (
+            <p className="text-[11px] text-amber-200/70">Mengganti tampilan membuat semua reference sheet dibuat ulang otomatis (memakai kredit), dan frame/video perlu di-generate ulang.</p>
+          )}
           <Field label="Gaya visual"><input className={inputClass} value={draft.style || ''} onChange={(e) => setDraft({ ...draft, style: e.target.value })} /></Field>
           <div className="flex gap-2"><SmallButton tone="accent" onClick={save} disabled={busy}>Simpan</SmallButton><SmallButton onClick={() => setEditing(false)}>Batal</SmallButton></div>
         </div>
@@ -182,6 +194,7 @@ export function BriefView({ board, onEdit, busy }) {
       </Section>
       <Section title="Format">
         <div className="flex flex-wrap gap-1.5">
+          <Badge tone={brief.look ? 'default' : 'amber'}>{brief.look ? LOOK_LABELS[brief.look] || brief.look : 'Tampilan belum dipilih'}</Badge>
           <Badge>{brief.aspect_ratio}</Badge>
           {brief.duration_seconds && <Badge>{brief.duration_seconds} detik</Badge>}
           <Badge>{brief.resolution}</Badge>

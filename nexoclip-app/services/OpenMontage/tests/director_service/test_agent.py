@@ -187,7 +187,7 @@ def _say(client, pid, text):
 
 
 BUILD_TURN = [
-    {"calls": [call("update_brief", summary="Trailer rom-com 30 detik", aspect_ratio="16:9", duration_seconds=30, style="warm film grain"),
+    {"calls": [call("update_brief", summary="Trailer rom-com 30 detik", look="realistic", aspect_ratio="16:9", duration_seconds=30, style="warm film grain"),
                call("upsert_element", **MAYA), call("upsert_element", **HOUSE),
                call("write_script", title="Shore Thing", text="Maya tiba di rumah pantai...")]},
     {"calls": [call("read_skill", name="seedance-prompting"), call("set_shots", shots=SHOTS)]},
@@ -240,7 +240,7 @@ def test_agent_builds_the_board_with_tools(client, fake_llm, bridge):
 
 def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     fake_llm.turns.append([
-        {"calls": [call("set_shots", shots=SHOTS)]},  # no prompt guide read yet
+        {"calls": [call("update_brief", look="realistic"), call("set_shots", shots=SHOTS)]},  # no prompt guide read yet
         {"calls": [call("read_skill", name="seedance-prompting"), call("set_shots", shots=SHOTS)]},  # elements missing
         {"calls": [call("read_skill", name="image-gen-usage"), call("upsert_element", **MAYA), call("upsert_element", **HOUSE)]},
         {"calls": [call("set_shots", shots=SHOTS)]},
@@ -248,7 +248,7 @@ def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     ])
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
-    refused = json.loads(fake_llm.requests[1]["input"][0]["output"])
+    refused = json.loads(fake_llm.requests[1]["input"][1]["output"])
     assert refused["ok"] is False and "needs the seedance-prompting guide" in refused["error"]
     assert "Seedance 2.0" in refused["skill_content"]["seedance-prompting"]
     error = json.loads(fake_llm.requests[2]["input"][1]["output"])
@@ -485,7 +485,7 @@ def test_creative_tools_require_their_openmontage_skill(client, fake_llm, skill_
                    call("update_brief", aspect_ratio="9:16")]},
         {"calls": [call("read_skill", name="idea-director"), call("read_skill", name="script-director"),
                    call("read_skill", name="image-gen-usage")]},
-        {"calls": [call("update_brief", summary="Trailer"), call("write_script", title="T", text="x"), call("upsert_element", **MAYA)]},
+        {"calls": [call("update_brief", summary="Trailer", look="realistic"), call("write_script", title="T", text="x"), call("upsert_element", **MAYA)]},
         {"text": "ok"},
     ])
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
@@ -762,3 +762,59 @@ def test_user_can_reorder_and_delete_shots_from_the_timeline(client, fake_llm):
 
     assert edit("remove_shot", id="s2").status_code == 200
     assert [s["id"] for s in _view(client, pid)["board"]["shots"]] == ["s1"]
+
+
+# ---------------------------------------------------------------- look and prop sheets
+
+
+def test_assets_wait_until_the_look_is_settled(client, fake_llm, bridge):
+    fake_llm.turns.append([
+        {"calls": [call("upsert_element", **MAYA)]},
+        {"text": "Mau realistis seperti syuting asli, atau animasi 3D / anime?"},
+    ])
+    pid = client.post("/api/director/projects", json={"brief": "bikin iklan sepatu"}, headers=HEADERS).json()["project_id"]
+    _wait(pid)
+    board = _view(client, pid)["board"]
+    assert board["elements"] == [] and bridge.submits == []
+    refused = json.loads(fake_llm.requests[1]["input"][0]["output"])
+    assert refused["ok"] is False and "look is not set" in refused["error"]
+
+    fake_llm.turns.append([{"calls": [call("update_brief", look="realistic"), call("upsert_element", **MAYA)]}, {"text": "Oke."}])
+    board = _say(client, pid, "realistis")["board"]
+    assert board["brief"]["look"] == "realistic" and [e["id"] for e in board["elements"]] == ["maya"]
+    sheet = board["media"]["element:maya"]["prompt"]
+    assert "Photorealistic" in sheet and "not anime" in sheet
+
+
+def test_prop_sheets_have_no_people_unless_the_story_needs_it(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    can = {"id": "can", "kind": "prop", "name": "Kaleng GASPOL", "description": "Slim 250 ml aluminium can, matte black with lime logo"}
+    watch = {"id": "watch", "kind": "prop", "name": "Jam Dimas", "description": "Chunky steel diver watch with orange bezel",
+             "interaction": "worn on the left wrist of a young man, wrist turned toward camera"}
+    fake_llm.turns.append([{"calls": [call("upsert_element", **can), call("upsert_element", **watch)]}, {"text": "ok"}])
+    media = _say(client, pid, "tambah properti")["board"]["media"]
+    assert "No people, no hands" in media["element:can"]["prompt"]
+    assert "No people, no hands" not in media["element:watch"]["prompt"]
+    assert "worn on the left wrist" in media["element:watch"]["prompt"]
+    # The look reaches frames and clips too.
+    assert "Photorealistic" in media["frame:s1"]["prompt"] and "Photorealistic" in media["video:s1"]["prompt"]
+
+
+def test_projects_without_a_look_keep_their_old_prompts():
+    from director_service import board as boards
+
+    item = {"id": "can", "kind": "prop", "name": "Can", "description": "Slim 250 ml aluminium can, matte black"}
+    old = boards.sheet_prompt(item, "warm grain")
+    assert old == boards.SHEET_TEMPLATES["prop"].format(description=item["description"]) + "\nStyle: warm grain"
+    shot = {**SHOTS[0], "scene_id": None}
+    board = {**boards.empty_board(), "elements": [], "shots": [shot]}
+    assert boards.media_specs(board)["frame:s1"]["prompt"] == shot["frame_prompt"]
+
+
+def test_only_gpt5_class_models_are_allowed(monkeypatch):
+    for model in ("gpt-5.6-sol", "gpt-5.5-pro", "gpt-4.1-mini"):
+        monkeypatch.setenv("DIRECTOR_LLM_MODEL", model)
+        with pytest.raises(llm.LLMError, match="not allowed"):
+            llm._checked_model()
+    monkeypatch.delenv("DIRECTOR_LLM_MODEL")
+    assert llm._checked_model() == "gpt-5.6-terra"

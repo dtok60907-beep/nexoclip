@@ -29,7 +29,13 @@ INSTRUCTIONS = """You are the AI Director inside nexoclip, a video creation stud
 build their video on a shared project board using tools. You decide what to do next; there is no fixed pipeline.
 
 What you can do (tools):
-- update_brief: purpose/summary, aspect ratio, target duration, visual style, resolution, native audio on/off.
+- update_brief: purpose/summary, look, aspect ratio, target duration, visual style, resolution, native audio on/off.
+  look is the rendering of the whole video: realistic (live-action, real people), 3d_animation, anime, illustration
+  or other (then describe it in style). ALWAYS settle the look first: if the user has not said it, ask before creating
+  any element or shot (e.g. "Mau realistis seperti syuting asli, atau animasi 3D / anime / ilustrasi?"), and do not
+  assume. If they already said it ("realistis", "kayak film asli", "anime"), just set it. upsert_element and set_shots
+  are refused until the look is set. Every sheet, frame and clip then follows it: with realistic, characters are real
+  people and props and places are real, never cartoon or 3D.
 - set_concepts / choose_concept: 2-3 distinct creative directions (title, logline, approach, why it works) with your
   recommendation; record the one the user picks. Offer concepts before the script for a new idea, unless the user
   already has a clear concept or asks to skip.
@@ -40,6 +46,8 @@ What you can do (tools):
   the sheet layout is added automatically, so the description only describes the subject itself: purely visual and
   specific (age, ethnicity, face, hair, build, wardrobe, palette; architecture, materials, light, time of day; shape,
   material, branding). Keep every detail the user gave, verbatim where possible.
+  A prop sheet shows the object alone, without people. Only when the story needs a character physically using it (worn,
+  held in a specific way, operated) set interaction, e.g. "worn on the wrist of Dimas"; otherwise leave it empty.
   One element = one subject, never a group: "four friends" are four characters, each with their own sheet. Make a
   separate location for every distinct place or set (and for a changed state of it, e.g. "studio" and "studio,
   wrecked"), and a separate prop for the advertised product and for every object that recurs across shots. There is no
@@ -135,6 +143,7 @@ TOOLS = [
         "summary": {"type": "string"},
         "aspect_ratio": {"type": "string", "enum": list(boards.ASPECT_RATIOS)},
         "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 600},
+        "look": {"type": "string", "enum": list(boards.LOOKS), "description": "rendering of the whole video; ask the user if unknown"},
         "style": {"type": "string", "description": "visual style applied to every image"},
         "resolution": {"type": "string", "enum": list(boards.RESOLUTIONS)},
         "generate_audio": {"type": "boolean", "description": "native ambient audio in video clips"},
@@ -157,6 +166,7 @@ TOOLS = [
         "kind": {"type": "string", "enum": list(boards.ELEMENT_KINDS)},
         "name": {"type": "string"},
         "description": {"type": "string", "description": "visual prompt for its reference image"},
+        "interaction": {"type": "string", "description": "props only, and only if needed: how a character uses it"},
     }, ["id", "kind", "name", "description"]),
     _tool("remove_element", "Remove an element.", {"id": {"type": "string"}}, ["id"]),
     _tool("set_scenes", "Replace the ordered scene list (shots keep their scene_id).", {
@@ -259,7 +269,9 @@ def _same_shot(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _update_brief(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     fields = {k: v for k, v in args.items()
-              if k in ("summary", "aspect_ratio", "duration_seconds", "style", "resolution", "generate_audio") and v is not None}
+              if k in ("summary", "look", "aspect_ratio", "duration_seconds", "style", "resolution", "generate_audio") and v is not None}
+    if "look" in fields and fields["look"] not in boards.LOOKS:
+        raise ToolError("look must be one of " + ", ".join(boards.LOOKS))
     if fields.get("aspect_ratio") and fields["aspect_ratio"] not in boards.ASPECT_RATIOS:
         raise ToolError("aspect_ratio must be one of " + ", ".join(boards.ASPECT_RATIOS))
     if fields.get("resolution") and fields["resolution"] not in boards.RESOLUTIONS:
@@ -345,9 +357,22 @@ def _write_script(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True}, "Menulis naskah"
 
 
+NEEDS_LOOK = ("the look is not set: ask the user first whether the video is realistic (live-action, real people) or "
+              "3D animation, anime or illustration, then update_brief(look=...) before creating elements or shots")
+
+
+def _require_look(ctx: Ctx) -> None:
+    """The agent may not design assets or shots before the look of the video is settled."""
+    if ctx.author == "agent" and not boards.read_board(ctx.project_id)["brief"].get("look"):
+        raise ToolError(NEEDS_LOOK)
+
+
 def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    _require_look(ctx)
     item = {"id": _check_id(args.get("id")), "kind": args.get("kind"), "name": str(args.get("name") or "").strip(),
             "description": str(args.get("description") or "").strip()}
+    if item["kind"] == "prop":
+        item["interaction"] = str(args.get("interaction") or "").strip()
     if item["kind"] not in boards.ELEMENT_KINDS:
         raise ToolError("kind must be character, location or prop")
     if not item["name"] or len(item["description"]) < 20:
@@ -413,6 +438,8 @@ def _set_scenes(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
 
 def _set_shots(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    _require_look(ctx)
+
     def change(board: dict[str, Any]) -> int:
         current = {s["id"]: s for s in board["shots"]}
         shots = []

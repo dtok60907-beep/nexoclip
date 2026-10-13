@@ -24,6 +24,8 @@ from director_service.db import Jsonb, notify, tx
 ASPECT_RATIOS = ("16:9", "9:16", "1:1")
 RESOLUTIONS = ("480p", "720p", "1080p")
 ELEMENT_KINDS = ("character", "location", "prop")
+# The look of the whole video. Asked up front: it decides how every sheet, frame and clip is rendered.
+LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
 TERMINAL_OK = "succeeded"
 CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots")
@@ -34,7 +36,7 @@ T = TypeVar("T")
 
 def empty_board() -> dict[str, Any]:
     return {
-        "brief": {"summary": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
+        "brief": {"summary": "", "look": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
                   "resolution": "720p", "generate_audio": False},
         "concepts": {"options": [], "recommended": None, "chosen": None, "locked": False},
         "research": [],
@@ -172,9 +174,65 @@ SHEET_TEMPLATES = {
 }
 
 
-def sheet_prompt(item: dict[str, Any], style: str) -> str:
-    prompt = SHEET_TEMPLATES[item["kind"]].format(description=item["description"])
-    return prompt + (f"\nStyle: {style}" if style else "")
+# Sheets for projects that chose a look (brief.look). Projects from before keep SHEET_TEMPLATES
+# as they were, so their existing sheets are not suddenly out of date (and regenerated, at a cost).
+LOOK_SHEET_TEMPLATES = {
+    "character": (
+        "Character reference sheet, one image on a plain light-grey studio background. The same character shown "
+        "full body in a row: front view, three-quarter view, side profile and back view, plus two head close-ups "
+        "(neutral and smiling). Identical face, proportions, hairstyle, outfit and colours in every view; even soft "
+        "lighting; clean layout with space between views; only this one character; no text, labels or watermarks."
+        "\nCharacter: {description}"
+    ),
+    "location": (
+        "Location reference sheet, one image laid out as a 2x2 grid of the same place: wide establishing shot, "
+        "reverse angle, medium shot of the main area, and a close detail of key textures. Identical architecture, "
+        "layout, materials, lighting and time of day in all four panels; empty of people; no text, labels or "
+        "watermarks.\nLocation: {description}"
+    ),
+    "prop": (
+        "Prop / product reference sheet, one image on a plain light-grey studio background. The object alone: front, "
+        "side, back and three-quarter views, plus a close-up of materials, details and any branding. No people, no "
+        "hands, no body parts, no mannequins. Identical shape, scale, colours and finish in every view; soft even "
+        "lighting; no text, labels or watermarks.\nObject: {description}"
+    ),
+}
+PROP_IN_USE = (
+    "Prop / product reference sheet, one image on a plain light-grey studio background. Left half: the object alone in "
+    "front, side and three-quarter views, no people. Right half: the object in use, {interaction}; show only as much of "
+    "the person as the interaction needs. Identical shape, scale, colours and finish throughout; soft even lighting; "
+    "no text, labels or watermarks.\nObject: {description}"
+)
+# How each look is rendered: added to every sheet, frame and clip prompt of the project.
+LOOK_RENDERING = {
+    "realistic": ("Photorealistic, real photograph / live-action footage: real people with natural skin texture and "
+                  "real proportions, real materials and physically accurate light, shot on a full-frame cinema camera. "
+                  "Not an illustration, not a 3D render, not anime, not a cartoon, not CGI."),
+    "3d_animation": "Stylised 3D animated feature-film look: appealing 3D characters, soft global illumination, rich materials.",
+    "anime": "Japanese anime look: clean line art, cel shading, anime character design.",
+    "illustration": "Hand-drawn 2D illustration look: painterly textures, illustrated characters and backgrounds.",
+    "other": "",
+}
+
+
+def look_rendering(brief: dict[str, Any]) -> str:
+    return LOOK_RENDERING.get(brief.get("look") or "", "")
+
+
+def sheet_prompt(item: dict[str, Any], style: str, look: str = "") -> str:
+    if not look:  # project from before looks were asked: unchanged prompt
+        prompt = SHEET_TEMPLATES[item["kind"]].format(description=item["description"])
+        return prompt + (f"\nStyle: {style}" if style else "")
+    interaction = (item.get("interaction") or "").strip() if item["kind"] == "prop" else ""
+    template = PROP_IN_USE if interaction else LOOK_SHEET_TEMPLATES[item["kind"]]
+    prompt = template.format(description=item["description"], interaction=interaction)
+    rendering = LOOK_RENDERING.get(look, "")
+    return prompt + (f"\nLook: {rendering}" if rendering else "") + (f"\nStyle: {style}" if style else "")
+
+
+def _with_look(prompt: str, brief: dict[str, Any]) -> str:
+    rendering = look_rendering(brief)
+    return f"{prompt}\nLook: {rendering}" if rendering else prompt
 
 
 def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -182,20 +240,21 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
     brief = board["brief"]
     ratio = brief.get("aspect_ratio") or "16:9"
     style = (brief.get("style") or "").strip()
+    look = brief.get("look") or ""
     specs: dict[str, dict[str, Any]] = {}
     for item in board["elements"]:
         specs[f"element:{item['id']}"] = {
-            "kind": "image", "label": f"{item['name']} — reference sheet", "prompt": sheet_prompt(item, style), "deps": [],
+            "kind": "image", "label": f"{item['name']} — reference sheet", "prompt": sheet_prompt(item, style, look), "deps": [],
             "params": {"aspectRatio": "16:9"},
         }
     for item in board["shots"]:
         refs = [f"element:{e}" for e in item.get("element_ids", []) if element(board, e)]
         specs[f"frame:{item['id']}"] = {
-            "kind": "image", "label": f"{item['title']} — frame", "prompt": item["frame_prompt"], "deps": refs,
+            "kind": "image", "label": f"{item['title']} — frame", "prompt": _with_look(item["frame_prompt"], brief), "deps": refs,
             "params": {"aspectRatio": ratio},
         }
         specs[f"video:{item['id']}"] = {
-            "kind": "video", "label": f"{item['title']} — video", "prompt": item["video_prompt"],
+            "kind": "video", "label": f"{item['title']} — video", "prompt": _with_look(item["video_prompt"], brief),
             "deps": [f"frame:{item['id']}"],
             "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]),
                        "resolution": brief.get("resolution") or "720p",
