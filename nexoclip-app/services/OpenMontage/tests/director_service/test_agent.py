@@ -1052,9 +1052,10 @@ def test_the_agent_offers_audio_options_and_the_user_picks_one(client, fake_llm,
     pid = _built_project(client, fake_llm)
     options = [
         {"id": "hangat", "title": "Narator hangat + akustik", "why": "nostalgia", "voice_id": "JBFqnCBsd6RMkjVDRZzb",
-         "voiceover_text": "Liburan terakhir sebelum semuanya berubah.", "music_prompt": "acoustic guitar, 85 BPM", "instrumental": True},
+         "voiceover_lines": [{"shot_id": "s1", "text": "Liburan terakhir."}, {"shot_id": "s2", "text": "Sebelum semuanya berubah."}],
+         "music_prompt": "acoustic guitar, 85 BPM", "instrumental": True},
         {"id": "musik", "title": "Tanpa VO, pop ceria", "why": "biar visual yang bicara", "voice_id": "",
-         "voiceover_text": "", "music_prompt": "upbeat indie pop, 120 BPM", "instrumental": True},
+         "voiceover_lines": [], "music_prompt": "upbeat indie pop, 120 BPM", "instrumental": True},
     ]
     fake_llm.turns.append([{"calls": [call("set_audio_options", options=options, recommended="hangat")]}, {"text": "Opsi audio ada di panel."}])
     view = _say(client, pid, "opsi audio dong")
@@ -1064,17 +1065,66 @@ def test_the_agent_offers_audio_options_and_the_user_picks_one(client, fake_llm,
 
     assert _edit(client, pid, "choose_audio_option", id="musik").status_code == 200
     audio = read_board(pid)["audio"]
-    assert audio["chosen"] == "musik" and audio["voiceover"]["text"] == "" and audio["music"]["prompt"] == "upbeat indie pop, 120 BPM"
+    assert audio["chosen"] == "musik" and audio["music"]["prompt"] == "upbeat indie pop, 120 BPM"
     media = _view(client, pid)["board"]["media"]
-    assert "audio:music" in media and "audio:voiceover" not in media
+    assert "audio:music" in media and not any(k.startswith("vo:") for k in media)
     assert _edit(client, pid, "choose_audio_option", id="hangat").status_code == 200
-    assert read_board(pid)["audio"]["voiceover"]["voice_id"] == "JBFqnCBsd6RMkjVDRZzb"
+    board = read_board(pid)
+    assert board["audio"]["voiceover"]["voice_id"] == "JBFqnCBsd6RMkjVDRZzb"
+    assert [s["vo_text"] for s in board["shots"]] == ["Liburan terakhir.", "Sebelum semuanya berubah."]
+    media = _view(client, pid)["board"]["media"]
+    assert media["vo:s1"]["prompt"] == "Liburan terakhir." and media["vo:s2"]["kind"] == "audio"
     assert _edit(client, pid, "choose_audio_option", id="none").status_code == 200
     audio = read_board(pid)["audio"]
     assert audio["chosen"] == "none" and not audio["voiceover"]["text"] and not audio["music"]["prompt"]
-    assert not any(k.startswith("audio:") for k in _view(client, pid)["board"]["media"])
+    assert not any(k.startswith(("audio:", "vo:")) for k in _view(client, pid)["board"]["media"])
+    assert all(not s["vo_text"] for s in read_board(pid)["shots"])
 
-    bad = [{**options[0], "voice_id": ""}, options[1]]
+    bad = [{**options[0], "voice_id": ""}, options[1]]  # lines without a voice
     fake_llm.turns.append([{"calls": [call("set_audio_options", options=bad, recommended="hangat")]}, {"text": "ok"}])
     _say(client, pid, "lagi")
     assert "voice_id" in json.loads(fake_llm.requests[-1]["input"][0]["output"])["error"]
+
+
+
+def test_voiceover_lines_play_over_their_own_shots(client, fake_llm, bridge, tmp_path):
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([
+        {"calls": [call("set_audio", voice_id="JBFqnCBsd6RMkjVDRZzb",
+                        lines=[{"shot_id": "s2", "text": "Rumah pantai, musim terakhir.", "offset": 0.5}])]},
+        {"calls": [call("request_generation", items=["vo:s2"])]},
+        {"text": "ok"},
+    ])
+    view = _say(client, pid, "VO di shot 2 aja")
+    assert [s.get("vo_text") for s in view["board"]["shots"]] == ["", "Rumah pantai, musim terakhir."]
+    assert view["board"]["requests"][-1]["items"] == ["vo:s2"]
+    request = view["board"]["requests"][-1]
+    assert client.post(f"/api/director/projects/{pid}/requests/{request['id']}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    assert bridge.audio[-1]["text"] == "Rumah pantai, musim terakhir."
+
+    # Moving the shot does not touch its line; the render places it at the shot's new start.
+    assert _edit(client, pid, "update_shot", id="s2", duration_seconds=5).status_code == 200
+    assert not _view(client, pid)["board"]["media"]["vo:s2"]["stale"]
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    media = _view(client, pid)["board"]["media"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+    bridge.files[media["vo:s2"]["asset_id"]] = _tone(tmp_path, "line", 1.0)
+    placed = []
+    original = render.mix
+    render_mix = lambda video, out, voices=None, music=None: (placed.extend(voices or []), original(video, out, voices=voices, music=music))
+    import director_service.render as render_module
+    render_module.mix = render_mix
+    try:
+        assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 201
+        _wait(pid, timeout=120)
+    finally:
+        render_module.mix = original
+    item = read_board(pid)["renders"][-1]
+    assert item["status"] == "done", item
+    assert len(placed) == 1 and abs(placed[0][1] - 2.5) < 0.1  # s2 starts after s1's 2 s clip, + 0.5 s offset

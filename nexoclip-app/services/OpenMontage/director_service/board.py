@@ -37,9 +37,12 @@ RUNTIME_KEYS = ("media", "requests", "renders")
 T = TypeVar("T")
 
 
-# Separate audio tracks laid over the joined clips in the render (ElevenLabs): one voiceover read from the
-# start, and one music bed. Both optional.
+# Separate audio laid over the joined clips in the render (ElevenLabs), all optional: voiceover lines, each on
+# a shot (shot.vo_text, read in the voice of audio.voiceover from shot.vo_offset seconds into that shot), and
+# one music bed. audio.voiceover.text is an older single narration read from the start of the video.
 MIN_MUSIC_SECONDS, MAX_MUSIC_SECONDS = 3, 300
+MAX_VO_LINE_CHARS = 1000
+DEFAULT_VO_OFFSET = 0.3
 
 
 def empty_audio() -> dict[str, Any]:
@@ -335,6 +338,14 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
             }
     audio = board.get("audio") or empty_audio()
     voiceover = audio.get("voiceover") or {}
+    if voiceover.get("voice_id"):
+        for item in board["shots"]:
+            line = (item.get("vo_text") or "").strip()
+            if line:
+                specs[f"vo:{item['id']}"] = {
+                    "kind": "audio", "label": f"{item['title']} — VO", "prompt": line, "deps": [],
+                    "params": {"type": "voiceover", "voiceId": voiceover["voice_id"]},
+                }
     if (voiceover.get("text") or "").strip() and voiceover.get("voice_id"):
         specs["audio:voiceover"] = {
             "kind": "audio", "label": "Voiceover", "prompt": voiceover["text"].strip(), "deps": [],
@@ -413,7 +424,7 @@ def tier(key: str, specs: Optional[dict[str, dict[str, Any]]] = None) -> int:
     """Generation order: everything a key depends on runs in an earlier tier (a continuation after
     the clip it extends, an edit after the clip it edits)."""
     if specs is None or key not in specs:
-        return {"element": 0, "audio": 0, "frame": 1, "video": 2, "edit": 3}[key.split(":", 1)[0]]
+        return {"element": 0, "audio": 0, "vo": 0, "frame": 1, "video": 2, "edit": 3}[key.split(":", 1)[0]]
     return 1 + max((tier(dep, specs) for dep in specs[key]["deps"]), default=-1)
 
 

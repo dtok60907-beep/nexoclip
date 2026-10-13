@@ -395,7 +395,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   // null = no separate voiceover / music.
   const chooseAudio = async (option) => {
     if (!(await onEdit('choose_audio_option', { id: option ? option.id : 'none' }))) return;
-    const items = option ? [...(option.voiceover_text ? ['audio:voiceover'] : []), ...(option.music_prompt ? ['audio:music'] : [])] : [];
+    const items = option ? [...(option.voiceover_lines || []).map((l) => `vo:${l.shot_id}`), ...(option.music_prompt ? ['audio:music'] : [])] : [];
     if (items.length) await onRequest(items);
   };
 

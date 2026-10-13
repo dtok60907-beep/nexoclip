@@ -537,41 +537,76 @@ export function AudioView({ board, onEdit, onRequest, busy, workspaceId }) {
     fetch('/api/director/voices').then((r) => (r.ok ? r.json() : { voices: [] })).then((d) => setVoices(d.voices || [])).catch(() => {});
   }, []);
   const current = {
-    voiceover_text: audio.voiceover?.text || '', voice_id: audio.voiceover?.voice_id || '',
+    voice_id: audio.voiceover?.voice_id || '',
+    lines: Object.fromEntries(board.shots.map((s) => [s.id, { text: s.vo_text || '', offset: s.vo_offset ?? 0.3 }])),
     music_prompt: audio.music?.prompt || '', music_seconds: audio.music?.duration_seconds || '', instrumental: audio.music?.instrumental !== false,
   };
   const value = draft || current;
   const change = (patch) => setDraft({ ...value, ...patch });
+  const setLine = (id, patch) => change({ lines: { ...value.lines, [id]: { ...value.lines[id], ...patch } } });
   const videoSeconds = board.shots.reduce((t, s) => t + Math.max(1, s.duration_seconds - (s.trim_start || 0) - (s.trim_end || 0)), 0);
-  const readSeconds = Math.round(value.voiceover_text.length / CHARS_PER_SECOND);
+  const hasLines = Object.values(value.lines).some((l) => l.text.trim());
   const save = async () => {
+    const lines = Object.entries(value.lines).filter(([, l]) => l.text.trim())
+      .map(([shot_id, l]) => ({ shot_id, text: l.text.trim(), offset: Number(l.offset) || 0 }));
     const ok = await onEdit('set_audio', {
-      voiceover_text: value.voiceover_text, voice_id: value.voice_id, music_prompt: value.music_prompt,
-      instrumental: value.instrumental, ...(value.music_seconds ? { music_seconds: Number(value.music_seconds) } : {}),
+      voice_id: value.voice_id, lines, music_prompt: value.music_prompt, instrumental: value.instrumental,
+      ...(value.music_seconds ? { music_seconds: Number(value.music_seconds) } : {}),
     });
     if (ok) setDraft(null);
   };
+  const voKeys = board.shots.filter((s) => s.vo_text && board.media[`vo:${s.id}`]).map((s) => `vo:${s.id}`);
+  const voTodo = voKeys.filter((k) => { const m = board.media[k]; return m?.status !== 'running' && (!m?.asset_id || m.stale); });
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-white/50">
-        Audio terpisah yang ditimpa di atas video saat Export (ElevenLabs). Dengan voiceover, suara klip dan musik otomatis dikecilkan. Generate memakai kredit.
+        Audio terpisah yang ditimpa di atas video saat Export (ElevenLabs). Setiap baris VO dibacakan di shot-nya sendiri, jadi tetap pas walau shot digeser atau di-trim. Dengan VO, suara klip dan musik otomatis dikecilkan. Generate memakai kredit.
       </p>
-      <AudioTrack title="Voiceover" mediaKey="audio:voiceover" media={board.media['audio:voiceover']} workspaceId={workspaceId}
-        onEdit={onEdit} onRequest={onRequest} busy={busy || !!draft} canGenerate={!!(audio.voiceover?.text && audio.voiceover?.voice_id)}>
-        <textarea rows={4} className={inputClass} placeholder="Narasi yang dibacakan dari awal video…" value={value.voiceover_text}
-          onChange={(e) => change({ voiceover_text: e.target.value })} />
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+      <div className="space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[13px] font-semibold text-white/90">Voiceover per shot</div>
           <select className={`${inputClass} w-auto`} value={value.voice_id} onChange={(e) => change({ voice_id: e.target.value })}>
             <option value="">Pilih suara…</option>
             {voices.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.gender === 'female' ? 'perempuan' : 'laki-laki'} · {v.description}</option>)}
           </select>
-          {value.voiceover_text && (
-            <span className={readSeconds > videoSeconds && videoSeconds ? 'text-amber-300/80' : ''}>
-              ±{readSeconds} detik dibaca{videoSeconds ? ` · video ${videoSeconds} detik` : ''}
-            </span>
-          )}
         </div>
-      </AudioTrack>
+        <div className="space-y-2">
+          {board.shots.map((shot, i) => {
+            const line = value.lines[shot.id] || { text: '', offset: 0.3 };
+            const media = board.media[`vo:${shot.id}`];
+            const src = assetUrl(media?.asset_id, workspaceId);
+            const read = Math.round((line.text.length / CHARS_PER_SECOND) * 10) / 10;
+            const room = Math.max(0, shot.duration_seconds - (shot.trim_start || 0) - (shot.trim_end || 0) - (Number(line.offset) || 0));
+            return (
+              <div key={shot.id} className="rounded-lg border border-white/[0.06] p-2.5">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <span className="truncate text-white/70"><span className="text-white/35">Shot {i + 1} · </span>{shot.title} <span className="text-white/30">· {shot.duration_seconds} dtk</span></span>
+                  {media && <span className="text-[10px] text-white/35">{mediaStatus(media).label}</span>}
+                </div>
+                <textarea rows={2} className={inputClass} placeholder="Kosongkan kalau shot ini tanpa VO" value={line.text}
+                  onChange={(e) => setLine(shot.id, { text: e.target.value })} />
+                <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10.5px] text-white/40">
+                  <label className="flex items-center gap-1">mulai di detik
+                    <input type="number" min={0} step={0.1} className={`${inputClass} w-16 py-1`} value={line.offset}
+                      onChange={(e) => setLine(shot.id, { offset: e.target.value })} /></label>
+                  {line.text && <span className={read > room ? 'text-amber-300/80' : ''}>±{read} dtk dibaca · ruang {Math.round(room * 10) / 10} dtk{read > room ? ' (kepanjangan, masuk ke shot berikutnya)' : ''}</span>}
+                </div>
+                {src && <audio key={src} src={src} controls className="mt-1.5 h-8 w-full" />}
+                {media?.error && <p className="mt-1 text-[11px] text-red-300/80">{media.error}</p>}
+              </div>
+            );
+          })}
+        </div>
+        {!draft && voTodo.length > 0 && (
+          <SmallButton tone="accent" disabled={busy} onClick={() => onRequest(voTodo)}>Generate {voTodo.length} baris VO</SmallButton>
+        )}
+      </div>
+      {audio.voiceover?.text && (
+        <AudioTrack title="Narasi (satu track dari awal)" mediaKey="audio:voiceover" media={board.media['audio:voiceover']} workspaceId={workspaceId}
+          onEdit={onEdit} onRequest={onRequest} busy={busy || !!draft} canGenerate>
+          <p className="text-[12px] text-white/60">{audio.voiceover.text}</p>
+        </AudioTrack>
+      )}
       <AudioTrack title="Musik" mediaKey="audio:music" media={board.media['audio:music']} workspaceId={workspaceId}
         onEdit={onEdit} onRequest={onRequest} busy={busy || !!draft} canGenerate={!!audio.music?.prompt}>
         <textarea rows={3} className={inputClass} placeholder="Genre, mood, tempo, instrumen… mis. lo-fi hangat, gitar akustik, 85 bpm"
@@ -588,8 +623,9 @@ export function AudioView({ board, onEdit, onRequest, busy, workspaceId }) {
       </AudioTrack>
       {draft && (
         <div className="flex gap-2">
-          <SmallButton tone="accent" disabled={busy || !!(value.voiceover_text.trim() && !value.voice_id)} onClick={save}>Simpan audio</SmallButton>
+          <SmallButton tone="accent" disabled={busy || (hasLines && !value.voice_id)} onClick={save}>Simpan audio</SmallButton>
           <SmallButton onClick={() => setDraft(null)}>Batal</SmallButton>
+          {hasLines && !value.voice_id && <span className="text-[11px] text-amber-300/80">Pilih suara dulu.</span>}
         </div>
       )}
     </div>

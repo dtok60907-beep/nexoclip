@@ -92,20 +92,22 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   or its frame held still when it has no video yet; shots with neither are skipped. Use it when the user asks for
   the final video / export / render. It runs in the background and shows its own card with progress and download.
 
-- set_audio_options: offer the user 2-3 distinct audio directions to pick from in the Audio panel, each a voice,
-  a voiceover (or none) and a music bed, with why it fits; recommend one. Do this ON YOUR OWN, without being asked,
-  in the turn where the shot list is first made (and again when the user asks for other options), unless the user
-  already chose or set audio (audio.chosen "none" means they want no separate audio: do not push it again). Say in
-  your reply whether you think this video needs a voiceover and music, and which option you recommend. Make them really different (e.g. warm narrator + acoustic bed / energetic young voice
-  + upbeat pop / no voiceover, music only). Tell the user in one line that the options are in the Audio panel
-  (♪ VO & musik). When the user picks one, it is applied for them; generate it only after they ask or approve.
-- set_audio / list_voices: optional separate audio laid over the clips in the render (ElevenLabs). A voiceover is
-  one narration read from the start of the video: write it to fit the video's length (about 13 characters per second
-  for Indonesian, fewer for a calm read) and pick a voice from list_voices that suits the brief. Music is one bed
-  under everything: describe genre, mood, tempo and instruments, instrumental unless the user wants vocals. Offer them
-  when they fit (ads and trailers usually want both), but they are not required. Generating them costs credits:
-  request_generation with audio:voiceover / audio:music, like frames and videos. With a voiceover the clips' own sound
-  and the music are turned down automatically.
+- set_audio_options: offer the user 2-3 distinct audio directions, each a voice, voiceover lines (or none) and a
+  music bed, with why it fits; recommend one. Do this ON YOUR OWN, without being asked, in the turn where the shot list
+  is first made (and again when the user asks for other options), unless the user already chose or set audio
+  (audio.chosen "none" means they want no separate audio: do not push it again). Say in your reply whether this video
+  needs a voiceover and music and which option you recommend; the options show as a card the user picks from. Make
+  them really different (e.g. warm narrator + acoustic bed / energetic young voice + upbeat pop / music only). When
+  the user picks one it is applied for them, with its credit estimate to approve.
+- set_audio / list_voices: optional separate audio laid over the clips in the render (ElevenLabs). A voiceover is a set
+  of lines, each on the shot it belongs to (lines: [{shot_id, text, offset}]): the line starts offset seconds into
+  that shot (default 0.3) and stays in sync when shots move or get trimmed. Write each line for what is on screen in
+  its shot and to fit it: about 13 characters per second for Indonesian (fewer for a calm read), so a 5 s shot holds
+  about 55 characters; leave shots without a line where the picture should breathe, and put the CTA on the shot that
+  shows the product or logo. One voice (voice_id from list_voices) reads all lines. Music is one bed under everything:
+  genre, mood, tempo and instruments, instrumental unless the user wants vocals. Generating costs credits:
+  request_generation with vo:<shot_id> for each line and audio:music. With a voiceover the clips' own sound and the
+  music are turned down automatically.
 
 Not available yet: transitions or captions in the render. Say so honestly; do not promise them.
 
@@ -159,17 +161,21 @@ SHOT_FIELDS = {
                                                 "extended; no frame of its own). Only for the same action going on"},
     "edit_instruction": {"type": "string", "description": "optional: change to make to this shot's existing video, "
                                                          "e.g. \"make her dress red\"; generate it with edit:<shot_id>"},
+    "vo_text": {"type": "string", "description": "optional: the voiceover line read over this shot"},
+    "vo_offset": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot where its line starts"},
     "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
-OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end")
+OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset")
 
 AUDIO_OPTION_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
     "title": {"type": "string", "description": "short name, e.g. \"Narator hangat + akustik\""},
     "why": {"type": "string", "description": "one line: why it fits the brief"},
     "voice_id": {"type": "string", "description": "a voice_id from list_voices; empty when there is no voiceover"},
-    "voiceover_text": {"type": "string", "description": "the full narration; empty for music only"},
+    "voiceover_lines": {"type": "array", "description": "the narration, one line per shot that has one; empty for music only",
+                        "items": {"type": "object", "properties": {"shot_id": {"type": "string"}, "text": {"type": "string"}},
+                                  "required": ["shot_id", "text"], "additionalProperties": False}},
     "music_prompt": {"type": "string", "description": "genre, mood, BPM, instruments"},
     "instrumental": {"type": "boolean"},
 }
@@ -253,8 +259,12 @@ TOOLS = [
     }, ["name"]),
     _tool("render_video", "Render the final MP4 from the shots in timeline order (free).", {}, []),
     _tool("set_audio", "Set the voiceover and/or the music (omit what you are not changing; empty text removes it).", {
-        "voiceover_text": {"type": "string", "description": "the narration, in the video's language"},
-        "voice_id": {"type": "string", "description": "a voice_id from list_voices"},
+        "lines": {"type": "array", "description": "voiceover lines by shot; replaces all lines (an empty list removes the voiceover)",
+                  "items": {"type": "object", "properties": {
+                      "shot_id": {"type": "string"}, "text": {"type": "string"},
+                      "offset": {"type": "number", "minimum": 0, "description": "seconds into the shot (default 0.3)"}},
+                      "required": ["shot_id", "text"], "additionalProperties": False}},
+        "voice_id": {"type": "string", "description": "a voice_id from list_voices, reads every line"},
         "music_prompt": {"type": "string", "description": "genre, mood, tempo, instruments"},
         "music_seconds": {"type": "integer", "minimum": boards.MIN_MUSIC_SECONDS, "maximum": boards.MAX_MUSIC_SECONDS,
                           "description": "defaults to the video's length"},
@@ -346,6 +356,16 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if min(trims) < 0 or sum(trims) > duration - boards.MIN_KEPT_SECONDS:
         raise ToolError(f"shot {shot['id']}: trims must be >= 0 and keep at least {boards.MIN_KEPT_SECONDS}s of the clip")
     shot["trim_start"], shot["trim_end"] = trims
+    shot["vo_text"] = str(shot.get("vo_text") or "").strip()
+    if len(shot["vo_text"]) > boards.MAX_VO_LINE_CHARS:
+        raise ToolError(f"shot {shot['id']}: vo_text is longer than {boards.MAX_VO_LINE_CHARS} characters")
+    try:
+        offset = round(float(boards.DEFAULT_VO_OFFSET if shot.get("vo_offset") is None else shot["vo_offset"]), 2)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"shot {shot['id']}: vo_offset must be a number") from exc
+    if not 0 <= offset < duration:
+        raise ToolError(f"shot {shot['id']}: vo_offset must be within the shot (0-{duration}s)")
+    shot["vo_offset"] = offset
     shot["locked"] = bool(raw.get("locked"))
     return shot
 
@@ -727,6 +747,9 @@ def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     def change(board: dict[str, Any]) -> dict:
         audio = board.get("audio") or boards.empty_audio()
         voiceover, music = dict(audio["voiceover"]), dict(audio["music"])
+        if args.get("lines") is not None:
+            _apply_lines(ctx, board, args["lines"])
+            voiceover["text"] = ""  # lines replace the older single narration
         if args.get("voiceover_text") is not None:
             voiceover["text"] = str(args["voiceover_text"]).strip()
             if len(voiceover["text"]) > 5000:
@@ -736,7 +759,7 @@ def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
             if voiceover["voice_id"] and not _VOICE_ID.match(voiceover["voice_id"]):
                 raise ToolError("voice_id is invalid; use one from list_voices")
             voiceover["voice_name"] = str(args.get("voice_name") or _voice_name(voiceover["voice_id"]))
-        if voiceover["text"] and not voiceover["voice_id"]:
+        if (voiceover["text"] or any(s.get("vo_text") for s in board["shots"])) and not voiceover["voice_id"]:
             raise ToolError("pick a voice_id from list_voices for the voiceover")
         if args.get("music_prompt") is not None:
             music["prompt"] = str(args["music_prompt"]).strip()
@@ -759,19 +782,50 @@ def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 _VOICE_ID = re.compile(r"^[A-Za-z0-9]{10,40}$")
 
 
+def _apply_lines(ctx: Ctx, board: dict[str, Any], lines: list[dict[str, Any]]) -> None:
+    """Put each voiceover line on its shot (all other shots lose theirs)."""
+    by_shot: dict[str, dict[str, Any]] = {}
+    for line in lines:
+        shot_id, text = str(line.get("shot_id") or ""), str(line.get("text") or "").strip()
+        item = boards.shot(board, shot_id)
+        if item is None:
+            raise ToolError(f"voiceover line for unknown shot {shot_id!r}")
+        if len(text) > boards.MAX_VO_LINE_CHARS:
+            raise ToolError(f"shot {shot_id}: a voiceover line is longer than {boards.MAX_VO_LINE_CHARS} characters")
+        by_shot[shot_id] = {"text": text, "offset": line.get("offset")}
+    for item in board["shots"]:
+        line = by_shot.get(item["id"], {"text": "", "offset": None})
+        if (item.get("vo_text") or "") == line["text"] and line["offset"] is None:
+            continue
+        ctx.guard(item, f"shot {item['id']}")
+        item["vo_text"] = line["text"]
+        if line["offset"] is not None:
+            offset = round(float(line["offset"]), 2)
+            if not 0 <= offset < item["duration_seconds"]:
+                raise ToolError(f"shot {item['id']}: offset must be within the shot (0-{item['duration_seconds']}s)")
+            item["vo_offset"] = offset
+
+
 def _set_audio_options(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     options = []
     for raw in args.get("options") or []:
-        option = {k: str(raw.get(k) or "").strip() for k in ("id", "title", "why", "voice_id", "voiceover_text", "music_prompt")}
+        option = {k: str(raw.get(k) or "").strip() for k in ("id", "title", "why", "voice_id", "music_prompt")}
         option["instrumental"] = raw.get("instrumental") is not False
         _check_id(option["id"])
-        if not option["title"] or not (option["voiceover_text"] or option["music_prompt"]):
-            raise ToolError(f"option {option['id']}: a title and a voiceover or music prompt are required")
-        if option["voiceover_text"] and not _VOICE_ID.match(option["voice_id"]):
+        lines = [{"shot_id": str(l.get("shot_id") or ""), "text": str(l.get("text") or "").strip()}
+                 for l in raw.get("voiceover_lines") or [] if str(l.get("text") or "").strip()]
+        known = {s["id"] for s in boards.read_board(ctx.project_id)["shots"]}
+        unknown = [l["shot_id"] for l in lines if l["shot_id"] not in known]
+        if unknown:
+            raise ToolError(f"option {option['id']}: voiceover lines for unknown shots {unknown}")
+        if any(len(l["text"]) > boards.MAX_VO_LINE_CHARS for l in lines):
+            raise ToolError(f"option {option['id']}: a voiceover line is longer than {boards.MAX_VO_LINE_CHARS} characters")
+        option["voiceover_lines"] = lines
+        if not option["title"] or not (lines or option["music_prompt"]):
+            raise ToolError(f"option {option['id']}: a title and voiceover lines or a music prompt are required")
+        if lines and not _VOICE_ID.match(option["voice_id"]):
             raise ToolError(f"option {option['id']}: pick a voice_id from list_voices for its voiceover")
-        if len(option["voiceover_text"]) > 5000:
-            raise ToolError(f"option {option['id']}: voiceover_text is longer than 5000 characters")
-        option["voice_name"] = _voice_name(option["voice_id"]) if option["voiceover_text"] else ""
+        option["voice_name"] = _voice_name(option["voice_id"]) if lines else ""
         options.append(option)
     if not 2 <= len(options) <= 3 or len({o["id"] for o in options}) != len(options):
         raise ToolError("give 2-3 options with distinct ids")
@@ -797,13 +851,15 @@ def _choose_audio_option(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         if option_id == "none":
             empty = boards.empty_audio()
             audio.update(voiceover=empty["voiceover"], music=empty["music"], chosen="none")
+            _apply_lines(ctx, board, [])
             board["audio"] = audio
             return "tanpa audio tambahan"
         option = next((o for o in audio["options"] if o["id"] == option_id), None)
         if option is None:
             raise ToolError(f"no audio option {option_id!r}")
-        audio["voiceover"] = {"text": option["voiceover_text"], "voice_id": option["voice_id"] if option["voiceover_text"] else "",
-                              "voice_name": option.get("voice_name") or ""}
+        lines = option.get("voiceover_lines") or []
+        _apply_lines(ctx, board, lines)
+        audio["voiceover"] = {"text": "", "voice_id": option["voice_id"] if lines else "", "voice_name": option.get("voice_name") or ""}
         seconds = max(boards.MIN_MUSIC_SECONDS, min(boards.MAX_MUSIC_SECONDS, boards.video_seconds(board) or 30))
         audio["music"] = {"prompt": option["music_prompt"], "duration_seconds": seconds if option["music_prompt"] else None,
                           "instrumental": option["instrumental"]}
@@ -1029,8 +1085,12 @@ def _args(call: dict[str, Any]) -> dict[str, Any]:
 
 def _audio_skills(args: dict[str, Any]) -> tuple[str, ...]:
     """set_audio needs the voiceover guide for narration and the music guide for a music prompt."""
-    return tuple(name for name, field in (("voice-performance-director", "voiceover_text"), ("music-gen-usage", "music_prompt"))
-                 if str(args.get(field) or "").strip())
+    names = []
+    if args.get("lines") or str(args.get("voiceover_text") or "").strip():
+        names.append("voice-performance-director")
+    if str(args.get("music_prompt") or "").strip():
+        names.append("music-gen-usage")
+    return tuple(names)
 
 
 # Creative output the agent may only write with the matching OpenMontage skill in context

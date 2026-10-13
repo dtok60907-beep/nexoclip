@@ -219,7 +219,7 @@ function ArtifactCard({ card, board, workspaceId, onOpen, onChooseAudio, busy })
   }
   if (card === 'audio' && board.audio?.options?.length) {
     const audio = board.audio;
-    const seconds = (text) => Math.max(1, Math.round((text || '').length / 13));
+    const title = (id) => board.shots.find((s) => s.id === id)?.title || id;
     return (
       <CardShell icon="♪" title="Usulan audio" accent={audio.chosen ? (audio.chosen === 'none' ? 'tanpa audio' : 'dipilih') : `${audio.options.length} opsi`}
         action="View" onAction={() => onOpen('audio')}>
@@ -241,9 +241,15 @@ function ArtifactCard({ card, board, workspaceId, onOpen, onChooseAudio, busy })
                     {chosen ? 'Dipakai' : 'Pakai'}
                   </button>
                 </div>
-                {o.voiceover_text
-                  ? <p className="mt-1.5 line-clamp-2 text-[11px] text-white/60"><span className="text-white/35">VO · {o.voice_name || 'suara'} · ±{seconds(o.voiceover_text)} dtk: </span>{o.voiceover_text}</p>
-                  : <p className="mt-1.5 text-[11px] text-white/35">Tanpa voiceover</p>}
+                {o.voiceover_lines?.length ? (
+                  <div className="mt-1.5 space-y-0.5 text-[11px]">
+                    <p className="text-white/35">VO · {o.voice_name || 'suara'} · {o.voiceover_lines.length} baris</p>
+                    {o.voiceover_lines.slice(0, 3).map((l) => (
+                      <p key={l.shot_id} className="line-clamp-1 text-white/60"><span className="text-white/30">{title(l.shot_id)}: </span>{l.text}</p>
+                    ))}
+                    {o.voiceover_lines.length > 3 && <p className="text-white/30">+{o.voiceover_lines.length - 3} baris lagi</p>}
+                  </div>
+                ) : <p className="mt-1.5 text-[11px] text-white/35">Tanpa voiceover</p>}
                 {o.music_prompt && <p className="mt-0.5 line-clamp-1 text-[11px] text-white/60"><span className="text-white/35">Musik: </span>{o.music_prompt}</p>}
               </div>
             );
@@ -258,7 +264,11 @@ function ArtifactCard({ card, board, workspaceId, onOpen, onChooseAudio, busy })
   }
   if (card === 'audio') {
     const audio = board.audio || {};
-    const lines = [audio.voiceover?.text && `VO (${audio.voiceover.voice_name || 'suara'}): ${audio.voiceover.text}`, audio.music?.prompt && `Musik: ${audio.music.prompt}`].filter(Boolean);
+    const voLines = board.shots.filter((s) => s.vo_text).length;
+    const lines = [
+      voLines ? `VO (${audio.voiceover?.voice_name || 'suara'}): ${voLines} baris di ${voLines} shot` : audio.voiceover?.text && `VO (${audio.voiceover.voice_name || 'suara'}): ${audio.voiceover.text}`,
+      audio.music?.prompt && `Musik: ${audio.music.prompt}`,
+    ].filter(Boolean);
     return (
       <CardShell icon="♪" title="Audio" action="View" onAction={() => onOpen('audio')}>
         {lines.map((line) => <p key={line} className="line-clamp-2 text-[12px] leading-relaxed text-white/65">{line}</p>)}

@@ -393,6 +393,14 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
                 <p className="mt-1.5"><span className="text-white/30">Frame: </span>{shot.frame_prompt}</p>
                 <p className="mt-1.5"><span className="text-white/30">Video: </span>{shot.video_prompt}</p>
               </details>
+              {shot.vo_text && (
+                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 text-[11px]">
+                  <p className="text-white/70"><span className="text-white/35">VO (mulai {shot.vo_offset ?? 0.3} dtk): </span>{shot.vo_text}</p>
+                  {board.media[`vo:${shot.id}`]?.asset_id && (
+                    <audio src={assetUrl(board.media[`vo:${shot.id}`].asset_id, workspaceId)} controls className="mt-1.5 h-8 w-full" />
+                  )}
+                </div>
+              )}
               {frame?.error && <p className="text-[11px] text-red-300/80">Frame: {frame.error}</p>}
               {video?.error && <p className="text-[11px] text-red-300/80">Video: {video.error}</p>}
             </div>

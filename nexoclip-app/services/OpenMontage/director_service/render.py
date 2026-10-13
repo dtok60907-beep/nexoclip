@@ -154,17 +154,30 @@ def audio_tracks(board: dict[str, Any]) -> dict[str, str]:
     return tracks
 
 
-def mix(video: str, out: str, *, voiceover: Optional[str] = None, music: Optional[str] = None) -> None:
-    """Lay the voiceover (from the start) and the music bed over the joined video; the video's length wins."""
+def voice_lines(board: dict[str, Any]) -> dict[str, str]:
+    """Finished voiceover lines whose text is still on their shot, by shot id."""
+    lines = {}
+    for shot in board["shots"]:
+        media = board["media"].get(f"vo:{shot['id']}") or {}
+        if (shot.get("vo_text") or "").strip() and media.get("status") == TERMINAL_OK and media.get("asset_id"):
+            lines[shot["id"]] = media["asset_id"]
+    return lines
+
+
+def mix(video: str, out: str, *, voices: Optional[list[tuple[str, float]]] = None, music: Optional[str] = None) -> None:
+    """Lay voice clips (each from its start second) and the music bed over the joined video; the video's
+    length wins."""
     length = duration_of(video)
+    voices = voices or []
     inputs, chains, labels = ["-i", video], [], []
-    voiced = "with_voice" if voiceover else "alone"
+    voiced = "with_voice" if voices else "alone"
     chains.append(f"[0:a]volume={CLIP_VOLUME[voiced]}[clips]")
     labels.append("[clips]")
-    if voiceover:
-        inputs += ["-i", voiceover]
-        chains.append(f"[{len(labels)}:a]aresample=48000,apad[vo]")
-        labels.append("[vo]")
+    for index, (path, start) in enumerate(voices):
+        inputs += ["-i", path]
+        delay = int(round(max(0.0, start) * 1000))
+        chains.append(f"[{len(labels)}:a]aresample=48000,adelay={delay}:all=1,apad[vo{index}]")
+        labels.append(f"[vo{index}]")
     if music:
         inputs += ["-i", music]
         fade_at = max(0.0, length - MUSIC_FADE_SECONDS)
@@ -214,6 +227,7 @@ def create(project_id: str) -> dict[str, Any]:
         "skipped": len(board["shots"]) - len(segments),
         "progress": {"done": 0, "total": len(segments)},
         "audio": sorted(audio_tracks(board)),  # separate tracks laid over the clips
+        "voice_lines": len(voice_lines(board)),
         "aspect_ratio": board["brief"].get("aspect_ratio") or "16:9",
         "resolution": board["brief"].get("resolution") or "720p",
     }
@@ -266,16 +280,25 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             _set(project_id, render_id, progress={"done": index + 1, "total": len(segments)})
         out = os.path.join(tmp, "final.mp4")
         tracks = {name: asset for name, asset in audio_tracks(board).items() if name in item.get("audio", [])}
-        if tracks:
+        starts = {p["shot_id"]: p["start"] for p in placed}
+        offsets = {s["id"]: float(s.get("vo_offset") or 0) for s in board["shots"]}
+        lines = {sid: asset for sid, asset in voice_lines(board).items() if sid in starts}
+        if tracks or lines:
             joined = os.path.join(tmp, "joined.mp4")
             join(parts, joined)
-            files = {}
-            for name, asset_id in tracks.items():
+
+            def fetch(asset_id: str, name: str) -> str:
                 content, _ = download(asset_id)
-                files[name] = os.path.join(tmp, f"{name}.mp3")
-                with open(files[name], "wb") as fh:
+                path = os.path.join(tmp, f"{name}.mp3")
+                with open(path, "wb") as fh:
                     fh.write(content)
-            mix(joined, out, voiceover=files.get("voiceover"), music=files.get("music"))
+                return path
+
+            voices = [(fetch(asset, f"vo_{sid}"), starts[sid] + offsets.get(sid, 0.0)) for sid, asset in lines.items()]
+            if "voiceover" in tracks:  # the older single narration, read from the start
+                voices.append((fetch(tracks["voiceover"], "voiceover"), 0.0))
+            music = fetch(tracks["music"], "music") if "music" in tracks else None
+            mix(joined, out, voices=voices, music=music)
         else:
             join(parts, out)
         total_seconds = round(duration_of(out), 2)
