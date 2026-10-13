@@ -114,6 +114,10 @@ class FakeBridge:
     def status(self, generation_id):
         return self._gens[generation_id]
 
+    def analyze_video(self, *, asset_id, question="", idempotency_key):
+        self.watched = getattr(self, "watched", []) + [{"asset_id": asset_id, "question": question, "key": idempotency_key}]
+        return {"text": f"00:00-00:03 a woman walks along the beach, handheld, golden hour ({question or 'overview'})", "credits": 0.2}
+
     def upload_render(self, *, content, filename):
         self.imports.append({"content": content, "content_type": "video/mp4", "filename": filename})
         return f"asset-import{len(self.imports)}"
@@ -1332,3 +1336,42 @@ def test_the_director_sees_attached_images_but_not_videos(client, fake_llm, brid
     history = fake_llm.requests[-1]["input"]
     first = next(m for m in history if m["role"] == "user" and "ini produknya" in str(m["content"]))
     assert isinstance(first["content"], str) and f"image asset_id={photo}" in first["content"]
+
+
+
+def test_the_video_analyst_watches_attached_videos(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    clip = "cccccccc-1111-4111-8111-000000000001"
+    fake_llm.turns.append([{"calls": [call("analyze_video", asset_id=clip, question="when does she smile?")]}, {"text": "Oke."}])
+    client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS, json={
+        "text": "bikin mirip video ini", "attachments": [{"asset_id": clip, "kind": "video", "name": "walk.mp4"}]})
+    _wait(pid)
+    assert [w["question"] for w in bridge.watched] == ["", "when does she smile?"]
+    assert read_board(pid)["video_notes"][clip].startswith("00:00-00:03 a woman walks")
+    sent = str(fake_llm.requests[-2]["input"][-1]["content"])
+    assert "[video analyst, watched video" in sent and "golden hour (overview)" in sent
+    answer = json.loads(fake_llm.requests[-1]["input"][0]["output"])
+    assert "when does she smile?" in answer["answer"]
+    assert any(m["text"] == "Menonton video: walk.mp4" for m in _view(client, pid)["chat"])
+
+    # Watched once: the next turn does not pay for it again.
+    fake_llm.turns.append([{"text": "ok"}])
+    _say(client, pid, "lanjut")
+    assert len(bridge.watched) == 2
+
+
+def test_prompts_name_elements_with_mentions(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    assert _edit(client, pid, "update_shot", id="s2", element_ids=[],
+                 frame_prompt="Wide: @maya waves from the porch of @beach_house at golden hour",
+                 video_prompt="@maya runs down the steps of @beach_house, camera tracks left; @ghost stays as text").status_code == 200
+    shot = next(s for s in read_board(pid)["shots"] if s["id"] == "s2")
+    assert shot["element_ids"] == ["maya", "beach_house"]  # mentioned elements join the shot
+    media = _view(client, pid)["board"]["media"]
+    frame = media["frame:s2"]["prompt"]
+    assert frame.startswith("Wide: Maya (reference image 1) waves from the porch of Beach house (reference image 2)")
+    assert "image 2 is the reference sheet of Beach house" in frame
+    video = media["video:s2"]["prompt"]
+    assert video.startswith("Maya (@Image2) runs down the steps of Beach house (@Image3)") and "@ghost" in video
+    # Prompts without mentions keep their old wording, so finished frames do not turn stale.
+    assert "reference image" not in media["frame:s1"]["prompt"]

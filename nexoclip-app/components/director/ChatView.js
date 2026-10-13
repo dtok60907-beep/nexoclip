@@ -442,8 +442,9 @@ function splitMentions(text, labels) {
 }
 
 // Images / videos attached to a user message, and its @mentions.
-function UserMessage({ entry, workspaceId }) {
+function UserMessage({ entry, workspaceId, videoNotes }) {
   const attachments = entry.meta?.attachments || [];
+  const watched = attachments.filter((a) => a.kind === 'video' && videoNotes?.[a.asset_id]);
   const labels = (entry.meta?.mentions || []).map((m) => `@${m.label}`);
   return (
     <div className="flex flex-col items-end gap-1.5">
@@ -461,6 +462,12 @@ function UserMessage({ entry, workspaceId }) {
           ))}
         </div>
       )}
+      {watched.map((a) => (
+        <details key={a.asset_id} className="max-w-[72%] rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-[11px] text-white/60">
+          <summary className="cursor-pointer text-white/45 hover:text-white/75">Hasil tonton AI · {a.name || 'video'}</summary>
+          <p className="mt-1.5 whitespace-pre-line leading-relaxed">{videoNotes[a.asset_id]}</p>
+        </details>
+      ))}
       <div className="max-w-[72%] whitespace-pre-line break-words rounded-lg border border-white/[0.06] bg-[#181b20] px-3 py-1.5 text-[11.5px] leading-[1.6] text-white/90">
         {splitMentions(entry.text, labels).map((part, i) => (labels.includes(part)
           ? <span key={i} className="rounded bg-[#d4ff64]/15 px-1 text-[#e4f5bd]">{part}</span>
@@ -485,7 +492,7 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
   if (entry.kind === 'edit' || entry.kind === 'approval') {
     return <div className="text-right text-[10.5px] text-white/40">{entry.kind === 'edit' ? '✎ ' : '✓ '}{entry.text}</div>;
   }
-  if (entry.role === 'user') return <UserMessage entry={entry} workspaceId={workspaceId} />;
+  if (entry.role === 'user') return <UserMessage entry={entry} workspaceId={workspaceId} videoNotes={board.video_notes} />;
   if (entry.kind === 'error') return <p className="text-[11.5px] leading-relaxed text-red-300/90">{entry.text}</p>;
   if (entry.kind === 'generation') {
     return <div className="flex items-center gap-2 text-[11.5px] text-white/80"><CheckIcon />{entry.text}</div>;

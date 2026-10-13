@@ -150,6 +150,14 @@ class Bridge:
         })
         return str(response.json()["reference"])
 
+    def analyze_video(self, *, asset_id: str, question: str = "", idempotency_key: str) -> dict[str, Any]:
+        """A Seed vision model on BytePlus watches the whole video and describes it (nexoclip bills the tokens)."""
+        request = {"action": "analyze-video", "source": SOURCE, "assetId": asset_id, "idempotencyKey": idempotency_key}
+        if question:
+            request["question"] = question
+        data = self._post(request, timeout=AUDIO_TIMEOUT_SECONDS).json()
+        return {"text": str(data.get("text") or ""), "credits": float(data.get("credits") or 0)}
+
     def upload_render(self, *, content: bytes, filename: str) -> str:
         """Store the final MP4 in the user's workspace; returns its asset id. Sent as the raw body
         (not base64 JSON) to a dedicated route, signed over its size and sha256."""

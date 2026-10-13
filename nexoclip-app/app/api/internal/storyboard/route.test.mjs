@@ -196,3 +196,37 @@ test('refuses audio the balance cannot pay for, before calling the provider', as
   assert.equal(response.status, 402);
   assert.equal(generated, false);
 });
+
+test('a video is watched by the Seed model, charged by its tokens, and answered again from the ledger', async () => {
+  const charges = [];
+  let stored = null;
+  let watched = 0;
+  const created = createInternalStoryboardHandler({
+    verify: (payload, signature) => signature === signCanvasAuthorization(payload, 'video-secret'),
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
+    getPool: () => ({}),
+    logError: () => {},
+    readBalance: async () => 50,
+    createStorage: () => ({}),
+    getDownload: async () => ({ asset: { content_type: 'video/mp4' }, download: { url: 'https://r2.example/v.mp4?sig=1' } }),
+    watchVideo: async ({ url }) => {
+      watched += 1;
+      if (url.startsWith('https:')) throw Object.assign(new Error('Invalid video_url'), { invalidUrl: true });
+      assert.match(url, /^data:video\/mp4;base64,/);
+      return { text: '00:00 seorang pria berjalan', usage: { prompt_tokens: 1000, completion_tokens: 100 } };
+    },
+    fetchBytes: async () => Buffer.from('mp4'),
+    priceVideoAnalysis: async () => ({ usd: 0.00045, credits: 0.1 }),
+    appendCredit: async (_pool, entry) => { charges.push(entry); stored = entry; },
+    findCreditEntry: async (_pool, _ws, key) => (stored && stored.idempotencyKey === key ? { amount: stored.amount, metadata: stored.metadata } : null),
+  });
+  const payload = { action: 'analyze-video', source: 'director', assetId: 'video-1', idempotencyKey: 'p1:video-1' };
+  const first = await created(signedRequest(payload, { secret: 'video-secret' }));
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { text: '00:00 seorang pria berjalan', credits: 0.1 });
+  assert.equal(watched, 2); // the URL first, then the file inline
+  assert.equal(charges[0].reason, 'director_video_analysis');
+  const again = await created(signedRequest(payload, { secret: 'video-secret' }));
+  assert.deepEqual(await again.json(), { text: '00:00 seorang pria berjalan', credits: 0.1 });
+  assert.equal(watched, 2);
+});

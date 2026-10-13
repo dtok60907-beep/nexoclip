@@ -99,6 +99,7 @@ def heal(project_id: str) -> None:
 
 def _turn(project_id: str) -> None:
     billing.require_credits(project_id)
+    agent.watch_new_videos(project_id)  # the video analyst watches new attachments first
     agent.run_turn(project_id)
     # Once per turn (not per edit), so several tweaks to one asset cost one sheet.
     _kick_auto(project_id)  # e.g. a sheet the agent asked to redo with force

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import io
 import json
 import re
@@ -75,7 +76,11 @@ What you can do (tools):
   a frame_prompt (the first frame as a still image) and a video_prompt (motion, camera, action, sound for that clip).
   List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
   the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
-  added automatically), so faces, places and products stay consistent across shots. Restate each character's key look in the prompts too.
+  added automatically), so faces, places and products stay consistent across shots.
+  In frame_prompt and video_prompt refer to elements as @<element_id> (e.g. "@maya walks onto the porch of
+  @beach_house holding @senja_cup"): each becomes the element's name plus the reference image it points at, and an
+  element you mention is added to the shot. Spend the words on action, camera and light rather than re-describing
+  how a mentioned element looks (keep one or two key traits). Restate each character's key look in the prompts too.
   On-screen text/title cards are not generated as clips; note them in the script instead.
 - Longer shots and changes to a finished clip: a shot with extends=<shot_id> continues that shot's video
   seamlessly (Seedance extend; same action going on, no new frame). Put it right after its source. To change something in
@@ -115,8 +120,9 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
 - Attachments and mentions: a user message can carry images/videos they uploaded ([attached by the user: ...], with
   asset ids) and @mentions of shots or elements ([mentions: ...], which shot/element they mean). You see attached
   images (the latest few messages' images are included): describe what you see when it matters and use it (a
-  product's exact look goes into its element description). You cannot see videos yet: ask in one line what a video
-  shows if the message does not say. Use them: a photo of the user's
+  product's exact look goes into its element description). Attached videos are watched for you from start to end by
+  a video analyst before you answer ([video analyst, ...] with a timeline, camera, subjects, mood); ask it specifics
+  with analyze_video (costs a little). It sees frames, not sound. Use them: a photo of the user's
   product, face, logo or place goes on its element (upsert_element photos=[asset_id], its sheet is then made from
   it); an image or video meant as a style, composition or motion reference for a shot goes on that shot
   (reference_assets=[{asset_id, kind}], sent to Seedance with the frame and sheets).
@@ -299,6 +305,9 @@ TOOLS = [
                                                "required": ["id", "title", "why", "music_prompt"], "additionalProperties": False}},
         "recommended": {"type": "string", "description": "id of the recommended option"},
     }, ["options", "recommended"]),
+    _tool("analyze_video", "Ask the video analyst (it watches the whole video) a specific question about a video the user attached.", {
+        "asset_id": {"type": "string"}, "question": {"type": "string", "description": "what to look for, e.g. when the product appears"},
+    }, ["asset_id", "question"]),
     _tool("list_voices", "List the voices available for a voiceover.", {}, []),
     _tool("request_generation", "Prepare paid generation (needs the user's approval in the UI).", {
         "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01, edit:shot_01, audio:voiceover, audio:music"},
@@ -360,7 +369,9 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if not boards.MIN_SHOT_SECONDS <= duration <= boards.MAX_SHOT_SECONDS:
         raise ToolError(f"shot {shot['id']}: duration_seconds must be {boards.MIN_SHOT_SECONDS}-{boards.MAX_SHOT_SECONDS}")
     shot["duration_seconds"] = duration
-    ids = list(dict.fromkeys(shot.get("element_ids") or []))
+    # Elements named with @<id> in the prompts are in the shot (and passed as references) too.
+    mentioned = [m for m in boards.MENTION.findall(f"{shot['frame_prompt']} {shot['video_prompt']}") if boards.element(board, m)]
+    ids = list(dict.fromkeys([*(shot.get("element_ids") or []), *mentioned]))
     missing = [e for e in ids if not boards.element(board, e)]
     if missing:
         raise ToolError(f"shot {shot['id']}: unknown element_ids {missing}; create them with upsert_element first")
@@ -951,6 +962,22 @@ def _list_voices(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True, "voices": _voices()}, "Melihat daftar suara"
 
 
+def _analyze_video(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """Ask the video analyst a specific question about a video the user attached."""
+    asset_id, question = str(args.get("asset_id") or ""), str(args.get("question") or "").strip()
+    if not _ASSET_ID.match(asset_id) or not question:
+        raise ToolError("asset_id (a video the user attached) and a question are required")
+    bridge = billing.bridge_for(ctx.project_id)
+    if bridge is None:
+        raise ToolError("video analysis needs the nexoclip connection")
+    key = hashlib.sha256(f"{asset_id}:{question}".encode("utf-8")).hexdigest()[:24]
+    try:
+        answer = bridge.analyze_video(asset_id=asset_id, question=question, idempotency_key=f"{ctx.project_id}:{key}")
+    except nexoclip.BridgeError as exc:
+        raise ToolError(f"the video analyst failed: {exc}") from exc
+    return {"ok": True, "answer": answer["text"]}, "Menonton ulang video"
+
+
 def _use_take(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     """User only: make an earlier take of a frame/video/sheet the one the board uses."""
     key, asset_id = str(args.get("key") or ""), str(args.get("asset_id") or "")
@@ -1064,6 +1091,7 @@ HANDLERS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "set_audio": _set_audio,
     "set_audio_options": _set_audio_options,
     "list_voices": _list_voices,
+    "analyze_video": _analyze_video,
     "render_video": _render_video,
 }
 
@@ -1137,9 +1165,13 @@ RUN_MODE_NOTES = {
 }
 
 
-def _message_notes(meta: dict[str, Any]) -> str:
+def _message_notes(meta: dict[str, Any], video_notes: Optional[dict[str, str]] = None) -> str:
     """What a chat message carried besides its text, spelled out for the model."""
     notes = []
+    for a in meta.get("attachments") or []:
+        seen = (video_notes or {}).get(a["asset_id"]) if a.get("kind") == "video" else None
+        if seen:
+            notes.append(f"[video analyst, watched video {a['asset_id']} from start to end]:\n{seen}")
     files = [f"{a['kind']} asset_id={a['asset_id']}" + (f" ({a['name']})" if a.get("name") else "")
              for a in meta.get("attachments") or []]
     if files:
@@ -1178,12 +1210,40 @@ def _image_data_url(project_id: str, asset_id: str) -> Optional[str]:
     return url
 
 
-def _user_content(project_id: str, entry: dict[str, Any], show_images: bool) -> Any:
+def _user_content(project_id: str, entry: dict[str, Any], show_images: bool, video_notes: dict[str, str]) -> Any:
     meta = entry.get("meta") or {}
-    text = (entry.get("text") or "") + _message_notes(meta)
+    text = (entry.get("text") or "") + _message_notes(meta, video_notes)
     images = [a for a in meta.get("attachments") or [] if a.get("kind") == "image"] if show_images else []
     parts = [{"type": "input_image", "image_url": url} for url in (_image_data_url(project_id, a["asset_id"]) for a in images) if url]
     return [{"type": "input_text", "text": text}, *parts] if parts else text
+
+
+VIDEO_NOTE_MESSAGES = 6  # recent user messages whose new videos are watched before the Director answers
+
+
+def watch_new_videos(project_id: str) -> None:
+    """Have the video analyst (a Seed vision model) watch every video the user attached recently and not yet seen."""
+    bridge = billing.bridge_for(project_id)
+    if bridge is None:
+        return
+    notes = boards.read_board(project_id).get("video_notes") or {}
+    entries = [e for e in read_chat(project_id, limit=HISTORY_ENTRIES) if e.get("role") == "user"][-VIDEO_NOTE_MESSAGES:]
+    videos = [a for e in entries for a in (e.get("meta") or {}).get("attachments") or [] if a.get("kind") == "video"]
+    for video in videos:
+        if video["asset_id"] in notes:
+            continue
+        name = video.get("name") or "video"
+        append_chat(project_id, "assistant", f"Menonton video: {name}", kind="activity", meta={"tool": "analyze_video"})
+        try:
+            text = bridge.analyze_video(asset_id=video["asset_id"], idempotency_key=f"{project_id}:{video['asset_id']}")["text"]
+        except nexoclip.BridgeError as exc:
+            text = f"(could not watch this video: {exc})"[:300]
+        notes[video["asset_id"]] = text
+
+        def change(board: dict[str, Any], asset_id: str = video["asset_id"], seen: str = text) -> None:
+            board["video_notes"] = {**(board.get("video_notes") or {}), asset_id: seen}
+
+        boards.update_board(project_id, change)
 
 
 def build_history(project_id: str) -> list[dict[str, Any]]:
@@ -1192,16 +1252,19 @@ def build_history(project_id: str) -> list[dict[str, Any]]:
     with_images = [i for i, e in enumerate(entries) if e.get("role") == "user"
                    and any(a.get("kind") == "image" for a in (e.get("meta") or {}).get("attachments") or [])]
     shown = set(with_images[-SEEN_IMAGE_MESSAGES:])
+    video_notes = boards.read_board(project_id).get("video_notes") or {}
     for index, entry in enumerate(entries):
         kind, text = entry.get("kind"), entry.get("text") or ""
         if kind == "edit":
             items.append({"role": "user", "content": f"[user edited: {text}]"})
         elif kind == "card":
             continue  # a UI card for something the tool log already covers
+        elif kind == "activity" and (entry.get("meta") or {}).get("tool") == "analyze_video" and text.startswith("Menonton video:"):
+            continue  # the analyst's notes are on the user's message itself
         elif kind == "request" and entry.get("role") == "user":
             items.append({"role": "user", "content": f"[user prepared generation: {text}]"})
         elif entry.get("role") == "user":
-            items.append({"role": "user", "content": _user_content(project_id, entry, index in shown)})
+            items.append({"role": "user", "content": _user_content(project_id, entry, index in shown, video_notes)})
         elif kind in ("activity", "request"):
             items.append({"role": "assistant", "content": f"[tool used: {text}]"})
         elif kind in ("generation", "error"):

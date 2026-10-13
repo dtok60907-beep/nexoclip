@@ -272,6 +272,7 @@ function ShotEditor({ board, shot, onEdit, busy, onDone }) {
         </Field>
       )}
       <Field label="Deskripsi"><textarea rows={2} className={inputClass} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></Field>
+      <p className="text-[10px] text-white/35">Sebut aset dengan @id, mis. {board.elements.slice(0, 2).map((e) => `@${e.id}`).join(' ') || '@maya'}: otomatis jadi gambar referensinya.</p>
       <Field label="Prompt frame"><textarea rows={3} className={inputClass} value={draft.frame_prompt} onChange={(e) => setDraft({ ...draft, frame_prompt: e.target.value })} /></Field>
       <Field label="Prompt video"><textarea rows={3} className={inputClass} value={draft.video_prompt} onChange={(e) => setDraft({ ...draft, video_prompt: e.target.value })} /></Field>
       {board.elements.length > 0 && (

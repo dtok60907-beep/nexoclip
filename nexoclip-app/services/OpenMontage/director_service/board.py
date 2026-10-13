@@ -17,6 +17,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 from typing import Any, Callable, Optional, TypeVar
 
 from director_service.db import Jsonb, notify, tx
@@ -32,7 +33,7 @@ LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
 TERMINAL_OK = "succeeded"
 CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots", "audio")
-RUNTIME_KEYS = ("media", "requests", "renders")
+RUNTIME_KEYS = ("media", "requests", "renders", "video_notes")
 
 T = TypeVar("T")
 
@@ -73,6 +74,8 @@ def empty_board() -> dict[str, Any]:
         "media": {},
         "requests": [],
         "renders": [],
+        # what the video analyst saw in each video the user attached: asset id -> description
+        "video_notes": {},
     }
 
 
@@ -302,6 +305,28 @@ def reference_legend(board: dict[str, Any], deps: list[str], user_images: int = 
     return "\n".join(lines) if len(lines) > 2 else ""
 
 
+MENTION = re.compile(r"@([a-z0-9_]{2,40})\b")
+
+
+def mentioned_elements(board: dict[str, Any], text: str) -> list[str]:
+    """Ids of the board's elements named with @<id> in a prompt, in order."""
+    return [m for m in dict.fromkeys(MENTION.findall(text or "")) if element(board, m)]
+
+
+def compile_mentions(text: str, names: dict[str, str]) -> tuple[str, bool]:
+    """Replace @<element_id> with how the model should see that element; returns (text, any replaced)."""
+    hit = False
+
+    def swap(match: re.Match) -> str:
+        nonlocal hit
+        if match.group(1) not in names:
+            return match.group(0)
+        hit = True
+        return names[match.group(1)]
+
+    return MENTION.sub(swap, text or ""), hit
+
+
 def user_references(item: dict[str, Any]) -> tuple[list[str], list[str]]:
     """The user's own images and videos attached to a shot as references."""
     refs = item.get("reference_assets") or []
@@ -392,7 +417,17 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
     brief = board["brief"]
     refs = [f"element:{e}" for e in item.get("element_ids", []) if element(board, e)]
     images, videos = user_references(item)
-    frame_prompt = _with_look(item["frame_prompt"], brief)
+    # @element mentions name the reference images they point at (Seedream: "reference image N").
+    frame_names = {}
+    for n, dep in enumerate(refs, start=1):
+        el = element(board, dep.split(":", 1)[1])
+        frame_names[el["id"]] = f"{el['name']} (reference image {n})"
+    frame_text, mentioned = compile_mentions(item["frame_prompt"], frame_names)
+    frame_prompt = _with_look(frame_text, brief)
+    if mentioned:
+        frame_prompt += "\nReference images: " + "; ".join(
+            f"image {n} is the reference sheet of {element(board, d.split(':', 1)[1])['name']}, several views on one image: "
+            f"keep its identity, never copy the sheet layout" for n, d in enumerate(refs, start=1)) + "."
     if images:
         frame_prompt += f"\nThe last {len(images)} reference image(s) are the user's references: follow their style and composition."
     specs[f"frame:{item['id']}"] = {
@@ -402,7 +437,11 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
     }
     deps = video_references(board, item)[:MAX_VIDEO_REFERENCES - len(images)]
     legend = reference_legend(board, deps, len(images), len(videos))
-    video_prompt = _with_look(item["video_prompt"], brief)
+    video_names = {}
+    for n, dep in enumerate(deps[1:], start=2):
+        el = element(board, dep.split(":", 1)[1])
+        video_names[el["id"]] = f"{el['name']} (@Image{n})"
+    video_prompt = _with_look(compile_mentions(item["video_prompt"], video_names)[0], brief)
     specs[f"video:{item['id']}"] = {
         "kind": "video", "label": f"{item['title']} — video",
         "prompt": f"{video_prompt}\n{legend}" if legend else video_prompt,
@@ -498,4 +537,5 @@ def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
                        "outdated": t.get("spec_sig") != spec_sig(spec)}
                       for t in reversed(media.get("takes") or [])],
         }
-    return {**{k: board[k] for k in (*CONTENT_KEYS, "requests", "renders")}, "media": media_view, "version": board.get("version")}
+    return {**{k: board[k] for k in (*CONTENT_KEYS, "requests", "renders", "video_notes")}, "media": media_view,
+            "version": board.get("version")}

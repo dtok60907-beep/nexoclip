@@ -6,6 +6,7 @@ import { estimateGenerationCredits } from '../../../../src/services/generationPr
 import { createAssetDownload, createStorage, importWorkspaceAsset } from '../../../../src/services/assetService.js';
 import { appendCreditEntry } from '../../../../src/services/creditService.js';
 import { findCreditEntryByIdempotencyKey } from '../../../../src/repositories/creditRepository.js';
+import { MAX_INLINE_BYTES, analyzeVideo, videoAnalysisCredits } from '../../../../src/services/videoAnalysis.js';
 import { audioCredits, generateElevenLabsAudio, validateAudioInput } from '../../../../src/services/elevenlabsAudio.js';
 import { storyboardTextCredits } from '../../../../src/services/storyboardTextPricing.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
@@ -25,7 +26,7 @@ import IORedis from 'ioredis';
 // caller holding it may submit on behalf of the user it names, same as Canvas.
 export const STORYBOARD_PROJECT_SCOPE = 'storyboard';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio']);
+const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio', 'analyze-video']);
 // Only the models these tools are configured with may be submitted.
 export const STORYBOARD_MODELS = { image: 'bytedance-seed/seedream-4.5', video: 'byteplus/seedance-2.5-unfiltered' };
 // Bookkeeping label for which internal tool made the request; must be one of these.
@@ -66,6 +67,9 @@ export function createInternalStoryboardHandler({
   priceAudio = audioCredits,
   generateAudio = generateElevenLabsAudio,
   findCreditEntry = findCreditEntryByIdempotencyKey,
+  watchVideo = analyzeVideo,
+  priceVideoAnalysis = videoAnalysisCredits,
+  fetchBytes = async (url) => Buffer.from(await (await fetch(url)).arrayBuffer()),
   logError = console.error,
 } = {}) {
   return async function POST(request) {
@@ -167,6 +171,53 @@ export function createInternalStoryboardHandler({
           if (charged > 0) await appendCredit(pool, { ...entry, amount: -charged, metadata: { ...entry.metadata, partial: true, quotedCredits: credits } });
         }
         return Response.json({ assetId, credits: charged }, { status: 201 });
+      }
+
+      // A user's video watched by a Seed vision model (the Director's video analyst), charged by the tokens used.
+      // A retry with the same key returns the same text.
+      if (action === 'analyze-video') {
+        const { assetId, question, idempotencyKey } = payload;
+        if (typeof assetId !== 'string' || !assetId) return badRequest('assetId is required');
+        if (typeof idempotencyKey !== 'string' || !idempotencyKey || idempotencyKey.length > 200) return badRequest('idempotencyKey is required');
+        const key = `${source}-video-analysis:${idempotencyKey}`;
+        const done = await findCreditEntry(pool, workspace.id, key);
+        if (done?.metadata?.text) return Response.json({ text: done.metadata.text, credits: -Number(done.amount) });
+        if (await readBalance(pool, workspace.id) <= 0) return Response.json({ error: 'Insufficient credits' }, { status: 402 });
+        const storage = loadStorage();
+        const found = await getDownload(workspace.id, assetId, storage);
+        if (!found) return Response.json({ error: 'Asset not found' }, { status: 404 });
+        if (!String(found.asset.content_type || '').startsWith('video/')) return badRequest('The asset is not a video');
+        const inline = (body) => {
+          if (body.length > MAX_INLINE_BYTES) throw Object.assign(new Error('Video is too large to analyse'), { status: 400 });
+          return `data:${found.asset.content_type};base64,${Buffer.from(body).toString('base64')}`;
+        };
+        const target = found.download.url;
+        let result;
+        if (new URL(target).protocol === 'local:') {
+          result = await watchVideo({ url: inline((await storage.get(target)).body), question });
+        } else {
+          try {
+            result = await watchVideo({ url: target, question });
+          } catch (error) {
+            if (!error?.invalidUrl) throw error;
+            result = await watchVideo({ url: inline(await fetchBytes(target)), question }); // the provider could not fetch it
+          }
+        }
+        const { usd, credits } = await priceVideoAnalysis(result.usage);
+        const entry = {
+          workspaceId: workspace.id, reason: `${source}_video_analysis`, idempotencyKey: key,
+          metadata: { assetId, text: result.text, usage: result.usage, providerCostUsd: usd },
+        };
+        let charged = credits;
+        try {
+          if (credits > 0) await appendCredit(pool, { ...entry, amount: -credits });
+        } catch (error) {
+          if (error?.message !== 'Insufficient credits') throw error;
+          const balance = await readBalance(pool, workspace.id);
+          charged = Math.max(0, Math.floor(balance * 10) / 10);
+          if (charged > 0) await appendCredit(pool, { ...entry, amount: -charged, metadata: { ...entry.metadata, partial: true, quotedCredits: credits } });
+        }
+        return Response.json({ text: result.text, credits: charged });
       }
 
       if (action === 'import-asset') {
