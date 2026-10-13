@@ -12,7 +12,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 
 import requests
 
@@ -146,7 +146,7 @@ def chat(
 CONNECT_RETRIES = 2
 
 
-def _post(api_key: str, body: dict[str, Any]) -> requests.Response:
+def _post(api_key: str, body: dict[str, Any], *, stream: bool = False) -> requests.Response:
     """POST to the Responses API, retrying only failures to connect.
 
     A connection that never got established cannot have been billed, so it is
@@ -159,6 +159,7 @@ def _post(api_key: str, body: dict[str, Any]) -> requests.Response:
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json=body,
                 timeout=(10, 600),
+                stream=stream,
             )
         except requests.ConnectionError as exc:
             if attempt == CONNECT_RETRIES or not _before_send(exc):
@@ -194,8 +195,11 @@ def respond(
     tools: list[dict[str, Any]],
     previous_response_id: str | None = None,
     max_tokens: int = 8000,
+    on_text: Optional[Callable[[str], None]] = None,
 ) -> dict[str, Any]:
     """One Responses API step with function tools.
+
+    With on_text the reply is streamed and on_text gets the text written so far after every piece.
 
     Returns {"id", "text", "calls": [{"call_id", "name", "arguments"}], "usage"}.
     Within one agent turn, later steps pass previous_response_id and only the
@@ -216,14 +220,16 @@ def respond(
     }
     if previous_response_id:
         body["previous_response_id"] = previous_response_id
-    response = _post(api_key, body)
+    if on_text is not None:
+        body["stream"] = True
+    response = _post(api_key, body, stream=on_text is not None)
     if not response.ok:
         try:
             detail = response.json().get("error", {}).get("message")
         except ValueError:
             detail = response.text[:300]
         raise LLMError(f"OpenAI returned {response.status_code}: {detail}")
-    payload = response.json()
+    payload = _read_stream(response, on_text) if on_text is not None else response.json()
     if payload.get("status") not in (None, "completed"):
         reason = (payload.get("incomplete_details") or {}).get("reason")
         raise LLMError(f"OpenAI response {payload.get('status')}: {reason}")
@@ -235,6 +241,35 @@ def respond(
     usage = dict(payload.get("usage") or {})
     usage["cost"] = _cost_usd(model, payload)
     return {"id": payload.get("id"), "text": _output_text(payload), "calls": calls, "usage": usage}
+
+
+def _read_stream(response: requests.Response, on_text: Callable[[str], None]) -> dict[str, Any]:
+    """Follow a streamed Responses API reply (server-sent events) and return its final response object."""
+    text = ""
+    try:
+        for raw in response.iter_lines(decode_unicode=True):
+            if not raw or not raw.startswith("data:"):
+                continue
+            data = raw[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            kind = event.get("type")
+            if kind == "response.output_text.delta":
+                text += event.get("delta") or ""
+                on_text(text)
+            elif kind in ("response.completed", "response.incomplete", "response.failed"):
+                return event.get("response") or {}
+            elif kind == "error":
+                raise LLMError(f"OpenAI stream error: {event.get('message') or event.get('code')}")
+    except requests.RequestException as exc:
+        raise LLMError(f"OpenAI stream broke off: {exc}") from exc
+    finally:
+        response.close()
+    raise LLMError("OpenAI stream ended without a response")
 
 
 def _cited_urls(payload: dict[str, Any]) -> list[str]:

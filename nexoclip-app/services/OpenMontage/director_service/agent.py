@@ -18,8 +18,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from director_service import billing, board as boards, generation, llm, nexoclip, skills
-from director_service.store import add_llm_cost, append_chat, append_llm_log, read_chat
+from director_service import billing, board as boards, generation, live, llm, nexoclip, skills
+from director_service.store import add_llm_cost, append_chat, append_llm_log, read_chat, read_director
 
 MAX_STEPS = 12
 HISTORY_ENTRIES = 40
@@ -110,6 +110,12 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   request_generation with vo:<shot_id> for each line and audio:music. With a voiceover the clips' own sound and the
   music are turned down automatically.
 
+- Attachments and mentions: a user message can carry images/videos they uploaded ([attached by the user: ...], with
+  asset ids) and @mentions of shots or elements ([mentions: ...], which shot/element they mean). You cannot see the
+  files yet: ask in one line what an attachment shows if the message does not say. Use them: a photo of the user's
+  product, face, logo or place goes on its element (upsert_element photos=[asset_id], its sheet is then made from
+  it); an image or video meant as a style, composition or motion reference for a shot goes on that shot
+  (reference_assets=[{asset_id, kind}], sent to Seedance with the frame and sheets).
 - Captions: a shot's caption is on-screen text at the bottom for the whole shot (subtitles of the voiceover, a tagline,
   the CTA with the brand). Optional: add them when the format wants them (TikTok/Reels ads usually do), keep them short
   (max ~8 words), in the video's language; set them with set_shots / update_shot.
@@ -167,12 +173,18 @@ SHOT_FIELDS = {
     "edit_instruction": {"type": "string", "description": "optional: change to make to this shot's existing video, "
                                                          "e.g. \"make her dress red\"; generate it with edit:<shot_id>"},
     "vo_text": {"type": "string", "description": "optional: the voiceover line read over this shot"},
+    "reference_assets": {"type": "array", "description": "optional: the user's images/videos (from attachments) to pass to "
+                         "Seedance as references for this shot (style, composition, motion)",
+                         "items": {"type": "object", "properties": {"asset_id": {"type": "string"},
+                                                                    "kind": {"type": "string", "enum": ["image", "video"]}},
+                                   "required": ["asset_id", "kind"], "additionalProperties": False}},
     "caption": {"type": "string", "description": "optional: on-screen text shown at the bottom for the whole shot (subtitle, tagline, CTA)"},
     "vo_offset": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot where its line starts"},
     "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
-OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption")
+OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption",
+                        "reference_assets")
 
 AUDIO_OPTION_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
@@ -244,6 +256,8 @@ TOOLS = [
         "name": {"type": "string"},
         "description": {"type": "string", "description": "visual prompt for its reference image"},
         "interaction": {"type": "string", "description": "props only, and only if needed: how a character uses it"},
+        "photos": {"type": "array", "items": {"type": "string"},
+                   "description": "asset ids of the user's own photos of it (from their attachments); its sheet is made from them"},
     }, ["id", "kind", "name", "description"]),
     _tool("remove_element", "Remove an element.", {"id": {"type": "string"}}, ["id"]),
     _tool("set_scenes", "Replace the ordered scene list (shots keep their scene_id).", {
@@ -365,6 +379,15 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if min(trims) < 0 or sum(trims) > duration - boards.MIN_KEPT_SECONDS:
         raise ToolError(f"shot {shot['id']}: trims must be >= 0 and keep at least {boards.MIN_KEPT_SECONDS}s of the clip")
     shot["trim_start"], shot["trim_end"] = trims
+    refs = []
+    for ref in shot.get("reference_assets") or []:
+        asset_id, kind = str((ref or {}).get("asset_id") or ""), (ref or {}).get("kind")
+        if not _ASSET_ID.match(asset_id) or kind not in ("image", "video"):
+            raise ToolError(f"shot {shot['id']}: reference_assets need an asset_id and kind image or video")
+        refs.append({"asset_id": asset_id, "kind": kind})
+    if sum(1 for r in refs if r["kind"] == "video") > 3 or len(refs) > 8:
+        raise ToolError(f"shot {shot['id']}: at most 8 references, 3 of them videos")
+    shot["reference_assets"] = refs
     shot["caption"] = str(shot.get("caption") or "").strip()
     if len(shot["caption"]) > MAX_CAPTION_CHARS:
         raise ToolError(f"shot {shot['id']}: caption is longer than {MAX_CAPTION_CHARS} characters")
@@ -513,6 +536,11 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
             "description": str(args.get("description") or "").strip()}
     if item["kind"] == "prop":
         item["interaction"] = str(args.get("interaction") or "").strip()
+    if args.get("photos") is not None:
+        photos = list(dict.fromkeys(str(p) for p in args["photos"]))
+        if len(photos) > boards.MAX_ELEMENT_PHOTOS or not all(_ASSET_ID.match(p) for p in photos):
+            raise ToolError(f"photos must be up to {boards.MAX_ELEMENT_PHOTOS} asset ids")
+        item["photos"] = photos
     if item["kind"] not in boards.ELEMENT_KINDS:
         raise ToolError("kind must be character, location or prop")
     if not item["name"] or len(item["description"]) < 20:
@@ -1088,7 +1116,34 @@ def _instructions(project_id: str) -> str:
     board_json = json.dumps(boards.summary_for_agent(boards.read_board(project_id)), ensure_ascii=False)
     if len(board_json) > BOARD_CHARS:
         board_json = board_json[:BOARD_CHARS] + " ...(truncated)"
-    return f"{INSTRUCTIONS}{skills.index_text()}\n\nCURRENT PROJECT BOARD (JSON):\n{board_json}"
+    mode = RUN_MODE_NOTES.get(read_director(project_id).get("run_mode") or "guide", "")
+    return f"{INSTRUCTIONS}{skills.index_text()}\n\n{mode}\n\nCURRENT PROJECT BOARD (JSON):\n{board_json}"
+
+
+RUN_MODE_NOTES = {
+    "guide": ("RUN MODE: Guide me. The user reviews each step: offer choices (concepts, audio), wait for their pick, and "
+              "prepare paid generation for them to approve."),
+    "auto": ("RUN MODE: Just make it. Do not stop to ask or wait for picks: decide yourself with sensible defaults "
+             "(including the look when the user did not say it; state your choices in one line) and drive straight to a "
+             "finished video in this turn: brief, choose a concept yourself, script, elements, scenes, shots, audio "
+             "(set_audio with your recommended voice, lines and music unless it clearly needs none), then "
+             "request_generation for every shot's video (and vo:/audio: items). Requests are approved automatically "
+             "and the video is exported when everything is generated. Only ask when the request is too vague to "
+             "start at all."),
+}
+
+
+def _message_notes(meta: dict[str, Any]) -> str:
+    """What a chat message carried besides its text, spelled out for the model."""
+    notes = []
+    files = [f"{a['kind']} asset_id={a['asset_id']}" + (f" ({a['name']})" if a.get("name") else "")
+             for a in meta.get("attachments") or []]
+    if files:
+        notes.append("[attached by the user: " + "; ".join(files) + "]")
+    refs = [f"@{m.get('label') or m['id']} = {m['type']} {m['id']}" for m in meta.get("mentions") or []]
+    if refs:
+        notes.append("[mentions: " + "; ".join(refs) + "]")
+    return ("\n" + "\n".join(notes)) if notes else ""
 
 
 def build_history(project_id: str) -> list[dict[str, Any]]:
@@ -1102,7 +1157,7 @@ def build_history(project_id: str) -> list[dict[str, Any]]:
         elif kind == "request" and entry.get("role") == "user":
             items.append({"role": "user", "content": f"[user prepared generation: {text}]"})
         elif entry.get("role") == "user":
-            items.append({"role": "user", "content": text})
+            items.append({"role": "user", "content": text + _message_notes(entry.get("meta") or {})})
         elif kind in ("activity", "request"):
             items.append({"role": "assistant", "content": f"[tool used: {text}]"})
         elif kind in ("generation", "error"):
@@ -1192,7 +1247,8 @@ def run_turn(project_id: str) -> str:
 
     for _ in range(MAX_STEPS):
         step = llm.respond(input_items, instructions=_instructions(project_id), tools=TOOLS,
-                           previous_response_id=previous_id)
+                           previous_response_id=previous_id, on_text=lambda text: live.draft(project_id, text))
+        live.draft(project_id, "", force=True)  # the step's text is in the chat (or dropped) from here on
         _bill(project_id, "agent", step["usage"])
         if not step["calls"] and refused and nudges < MAX_NUDGES:
             # The model is about to wrap up (often claiming the work is done) while calls it made were

@@ -253,8 +253,9 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
         params = dict(spec["params"])
         # Clips a key builds on (extend / edit) go as reference videos, everything else as images,
         # the user's own photos first.
-        videos = [a for dep, a in zip(spec["deps"], dep_assets) if dep.startswith("video:")]
-        images = [*spec.get("photos", []), *(a for dep, a in zip(spec["deps"], dep_assets) if not dep.startswith("video:"))]
+        videos = [*(a for dep, a in zip(spec["deps"], dep_assets) if dep.startswith("video:")), *spec.get("ref_videos", [])]
+        images = [*spec.get("photos", []), *(a for dep, a in zip(spec["deps"], dep_assets) if not dep.startswith("video:")),
+                  *spec.get("extra_images", [])]
         if images:
             params["referenceImages"] = [nexoclip.asset_reference(a) for a in images]
         if videos:

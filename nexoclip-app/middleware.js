@@ -45,12 +45,13 @@ export function middleware(request) {
     return addSecurityHeaders(NextResponse.next());
 }
 
-// Match all paths for security headers. Exclude Next.js internal paths, and the
-// Director's render upload: middleware clones request bodies and cuts them off at
-// 10 MB (middlewareClientMaxBodySize), which would truncate a rendered MP4.
+// Match all paths for security headers. Exclude Next.js internal paths, the
+// Director's render upload and the file upload (chat attachments, element photos):
+// middleware clones request bodies and cuts them off at 10 MB
+// (middlewareClientMaxBodySize), which would truncate a rendered MP4 or a video.
 export const config = {
     matcher: [
-        '/api/((?!internal/director/render-upload).*)',
-        '/((?!_next/static|_next/image|favicon.ico|__nextjs_original-stack-frame|api/internal/director/render-upload).*)',
+        '/api/((?!internal/director/render-upload|uploads$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|__nextjs_original-stack-frame|api/internal/director/render-upload|api/uploads$).*)',
     ],
 };

@@ -14,7 +14,7 @@ import traceback
 import uuid
 from typing import Callable, Optional
 
-from director_service import agent, billing, generation, llm, render
+from director_service import agent, billing, generation, llm, nexoclip, render
 from director_service.board import create_board, read_board
 from director_service.db import ActivityLock, activity_held
 from director_service.store import append_chat, create_project as insert_project, now_iso, read_director, update_director
@@ -26,6 +26,16 @@ BUSY_RENDER = "video masih dirender"
 
 class Busy(RuntimeError):
     pass
+
+
+class NotEnoughCredits(RuntimeError):
+    def __init__(self, needed: float, balance: float) -> None:
+        super().__init__(f"Butuh minimal {needed:g} kredit untuk memulai project Director; saldo kamu {balance:g}.")
+        self.needed, self.balance = needed, balance
+
+
+RUN_MODES = ("guide", "auto")
+MIN_START_CREDITS = 100.0  # like OpenArt Director: a new project needs a buffer for a first pass
 
 
 class InvalidAction(RuntimeError):
@@ -93,29 +103,58 @@ def _turn(project_id: str) -> None:
     # Once per turn (not per edit), so several tweaks to one asset cost one sheet.
     _kick_auto(project_id)  # e.g. a sheet the agent asked to redo with force
     auto_generate_assets(project_id)
+    if _auto(project_id):  # "Just make it": what the Director prepared is approved for the user
+        board = read_board(project_id)
+        for request in board["requests"]:
+            if request["status"] == "pending" and not request.get("auto"):
+                try:
+                    approve_request(project_id, request["id"], by_director=True)
+                except (Busy, InvalidAction):
+                    pass  # e.g. sheets still generating: approved when they finish (_after_generation)
     # Name the project after its script once there is one, unless it was renamed since.
     script = read_board(project_id)["script"]
     if script and script.get("title") and read_director(project_id).get("title_auto", True):
         update_director(project_id, title=script["title"][:80], title_auto=False)
 
 
-def create_project(owner: str, first_message: str) -> str:
+def _check_start_credits(owner: str) -> None:
+    if not (nexoclip.configured() and nexoclip.is_billable_user(owner)):
+        return
+    balance = nexoclip.Bridge(owner).balance()
+    if balance < MIN_START_CREDITS:
+        raise NotEnoughCredits(MIN_START_CREDITS, balance)
+
+
+def create_project(owner: str, first_message: str, *, run_mode: str = "guide", meta: Optional[dict] = None) -> str:
+    if run_mode not in RUN_MODES:
+        raise InvalidAction("run_mode must be guide or auto")
+    _check_start_credits(owner)
     title = first_message.strip().splitlines()[0][:80] or "Project baru"
     project_id = f"{_slug(title)}-{uuid.uuid4().hex[:6]}"
     idle = {"status": "idle", "error": None, "updated_at": now_iso()}
     insert_project(project_id, {"owner": owner, "title": title, "title_auto": True, "llm_model": llm.model_name(),
-                                "agent": idle, "generation": idle})
+                                "agent": idle, "generation": idle, "run_mode": run_mode})
     create_board(project_id)
-    append_chat(project_id, "user", first_message, kind="message")
+    append_chat(project_id, "user", first_message, kind="message", meta=meta or None)
     _background(project_id, "agent", lambda: _turn(project_id), BUSY_AGENT)
     return project_id
 
 
-def send_message(project_id: str, text: str) -> None:
+def send_message(project_id: str, text: str, meta: Optional[dict] = None) -> None:
     if activity_held(project_id, "agent"):
         raise Busy(BUSY_AGENT)
-    append_chat(project_id, "user", text, kind="message")
+    append_chat(project_id, "user", text, kind="message", meta=meta or None)
     _background(project_id, "agent", lambda: _turn(project_id), BUSY_AGENT)
+
+
+def set_run_mode(project_id: str, run_mode: str) -> None:
+    if run_mode not in RUN_MODES:
+        raise InvalidAction("run_mode must be guide or auto")
+    update_director(project_id, run_mode=run_mode)
+
+
+def _auto(project_id: str) -> bool:
+    return read_director(project_id).get("run_mode") == "auto"
 
 
 def retry(project_id: str) -> None:
@@ -211,17 +250,36 @@ def _finish(project_id: str, request_id: str) -> None:
     append_chat(project_id, "assistant", _summary(result), kind="generation", meta={"request_id": request_id})
 
 
-def approve_request(project_id: str, request_id: str) -> None:
+def approve_request(project_id: str, request_id: str, *, by_director: bool = False) -> None:
+    """Approve a request; one held at the credit gate is approved again ("Lanjutkan") after a top-up."""
     board = read_board(project_id)
     request = generation.find_request(board, request_id)
     if request is None:
         raise InvalidAction("request not found")
-    if request["status"] != "pending":
+    if request["status"] not in ("pending", "needs_credits"):
         raise InvalidAction(f"request is {request['status']}, not pending")
     if not generation.request_is_current(board, request):
         generation.set_request_status(project_id, request_id, "superseded")
         raise InvalidAction("prompt-nya berubah setelah estimasi dibuat; minta Director siapkan estimasi baru")
-    _start(project_id, request_id, log_approval=True)
+    _start(project_id, request_id, log_approval=not by_director)
+
+
+def _credit_gate(project_id: str, request: dict) -> bool:
+    """True (and the request held at the gate, with a note in the chat) when the balance cannot pay for it."""
+    bridge = billing.bridge_for(project_id)
+    needed = float((request.get("estimate") or {}).get("credits") or 0)
+    if bridge is None or needed <= 0:
+        return False
+    balance = bridge.balance()
+    if balance >= needed:
+        return False
+    first = request["status"] != "needs_credits"
+    generation.set_request_status(project_id, request["id"], "needs_credits",
+                                  credit_gate={"needed": needed, "balance": round(balance, 2)})
+    if first:
+        append_chat(project_id, "assistant", f"Kredit kurang: butuh {needed:g}, saldo {balance:g}.", kind="credit_gate",
+                    meta={"request_id": request["id"], "needed": needed, "balance": round(balance, 2)})
+    return True
 
 
 def _next_queued_auto(project_id: str) -> Optional[str]:
@@ -235,6 +293,10 @@ def _next_queued_auto(project_id: str) -> Optional[str]:
 
 
 def _start(project_id: str, request_id: str, *, log_approval: bool) -> None:
+    request = generation.find_request(read_board(project_id), request_id)
+    if request is not None and not request.get("auto") and _credit_gate(project_id, request):
+        return
+
     def work() -> None:
         billing.require_credits(project_id)
         generation.set_request_status(project_id, request_id, "running")
@@ -246,7 +308,33 @@ def _start(project_id: str, request_id: str, *, log_approval: bool) -> None:
             generation.set_request_status(project_id, queued, "running")
             _finish(project_id, queued)
 
-    _background(project_id, "generation", work, BUSY_GENERATION, after=lambda: _kick_auto(project_id))
+    _background(project_id, "generation", work, BUSY_GENERATION, after=lambda: _after_generation(project_id))
+
+
+def _after_generation(project_id: str) -> None:
+    _kick_auto(project_id)
+    if not _auto(project_id):
+        return
+    board = read_board(project_id)
+    # "Just make it": approve what waited for the sheets, then export once every shot has its video.
+    waiting = [r for r in board["requests"] if r["status"] == "pending" and not r.get("auto")]
+    if waiting:
+        try:
+            approve_request(project_id, waiting[0]["id"], by_director=True)
+        except (Busy, InvalidAction):
+            pass
+        return
+    if any(r["status"] in ("pending", "running", "needs_credits") for r in board["requests"]) or not board["shots"]:
+        return
+    if not all((board["media"].get(f"video:{s['id']}") or {}).get("status") == generation.TERMINAL_OK for s in board["shots"]):
+        return
+    latest = board["renders"][-1] if board["renders"] else None
+    if latest and latest.get("board_version") == board.get("version") and latest["status"] in ("done", "running", "pending"):
+        return
+    try:
+        start_render(project_id)
+    except (Busy, InvalidAction):
+        pass
 
 
 def reject_request(project_id: str, request_id: str) -> None:

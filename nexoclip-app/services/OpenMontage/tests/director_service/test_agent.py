@@ -52,11 +52,15 @@ class FakeLLM:
         self.research_calls: list[list[dict]] = []
         self._steps: list[dict] = []
 
-    def respond(self, input_items, *, instructions, tools, previous_response_id=None, max_tokens=8000):
+    def respond(self, input_items, *, instructions, tools, previous_response_id=None, max_tokens=8000, on_text=None):
         self.requests.append({"input": input_items, "instructions": instructions, "previous": previous_response_id})
         if previous_response_id is None:
             self._steps = list(self.turns.pop(0)) if self.turns else [{"text": "Oke."}]
         step = self._steps.pop(0) if self._steps else {"text": "Selesai."}
+        if on_text and step.get("text"):
+            words = step["text"].split(" ")
+            for n in range(1, len(words) + 1):  # streamed word by word, like the real API
+                on_text(" ".join(words[:n]))
         calls = [{"call_id": f"call_{len(self.requests)}_{i}", "name": c["name"], "arguments": json.dumps(c["args"])}
                  for i, c in enumerate(step.get("calls", []))]
         return {"id": f"resp_{len(self.requests)}", "text": step.get("text", ""), "calls": calls,
@@ -1176,3 +1180,127 @@ def test_shots_can_be_duplicated_and_added_before_another(client, fake_llm, brid
     assert ids[:3] == [ids[0], "s1", "s1_copy2"] and ids[0].startswith("shot_")
     media = _view(client, pid)["board"]["media"]
     assert media["frame:s1_copy2"]["asset_id"] == media["frame:s1"]["asset_id"] and not media["frame:s1_copy2"]["stale"]
+
+
+def test_replies_stream_to_the_browser_as_they_are_written(client, fake_llm, bridge):
+    from director_service import live
+
+    events = []
+    live.bind(lambda project_id, event: events.append(event["text"]))
+    monkey_interval, live.DRAFT_INTERVAL_SECONDS = live.DRAFT_INTERVAL_SECONDS, 0.0
+    try:
+        fake_llm.turns.append([{"text": "Halo, mau bikin video apa hari ini?"}])
+        pid = client.post("/api/director/projects", json={"brief": "hai"}, headers=HEADERS).json()["project_id"]
+        _wait(pid)
+    finally:
+        live.DRAFT_INTERVAL_SECONDS = monkey_interval
+    assert events[:2] == ["Halo,", "Halo, mau"] and "Halo, mau bikin video apa hari ini?" in events
+    assert events[-1] == ""  # cleared once the reply is in the chat
+    assert _view(client, pid)["chat"][-1]["text"] == "Halo, mau bikin video apa hari ini?"
+
+
+def test_the_openai_stream_is_read_into_one_response():
+    from director_service import llm
+
+    lines = [
+        'data: {"type":"response.output_text.delta","delta":"Ha"}',
+        "",
+        'data: {"type":"response.output_text.delta","delta":"lo"}',
+        'data: {"type":"response.completed","response":{"id":"r1","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Halo"}]}]}}',
+    ]
+
+    class Stream:
+        def iter_lines(self, decode_unicode=True):
+            return iter(lines)
+
+        def close(self):
+            pass
+
+    seen = []
+    payload = llm._read_stream(Stream(), seen.append)
+    assert seen == ["Ha", "Halo"] and payload["id"] == "r1" and llm._output_text(payload) == "Halo"
+    with pytest.raises(llm.LLMError):
+        llm._read_stream(type("S", (Stream,), {"iter_lines": lambda self, decode_unicode=True: iter([])})(), seen.append)
+
+
+def test_just_make_it_approves_and_exports_on_its_own(client, fake_llm, bridge):
+    fake_llm.turns.append(BUILD_TURN)
+    pid = client.post("/api/director/projects", json={"brief": "trailer", "run_mode": "auto"}, headers=HEADERS).json()["project_id"]
+    _wait(pid)
+    assert _view(client, pid)["run_mode"] == "auto"
+    fake_llm.turns.append([{"calls": [call("request_generation", items=["video:s1", "video:s2"])]}, {"text": "Langsung jalan."}])
+    _say(client, pid, "gas")
+    deadline = time.time() + 10
+    while time.time() < deadline and not read_board(pid)["renders"]:
+        time.sleep(0.05)
+    board = read_board(pid)
+    assert [r["status"] for r in board["requests"] if not r.get("auto")] == ["done"]  # approved without a click
+    assert {s["key"] for s in bridge.submits} >= {"video:s1", "video:s2"}
+    assert board["renders"], "the finished video is exported by itself"
+    assert "RUN MODE: Just make it" in fake_llm.requests[-1]["instructions"]
+
+    assert client.post(f"/api/director/projects/{pid}/settings", json={"run_mode": "guide"}, headers=HEADERS).status_code == 200
+    assert _view(client, pid)["run_mode"] == "guide"
+
+
+def test_the_credit_gate_holds_a_request_until_there_are_credits(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()["request_id"]
+    submitted = len(bridge.submits)
+    bridge.credits = 3.0
+    assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    view = _view(client, pid)
+    request = next(r for r in view["board"]["requests"] if r["id"] == rid)
+    assert request["status"] == "needs_credits" and request["credit_gate"] == {"needed": 31.0, "balance": 3.0}
+    assert view["chat"][-1]["kind"] == "credit_gate" and len(bridge.submits) == submitted
+    bridge.credits = 100.0  # topped up: "Lanjutkan"
+    assert client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS).status_code == 200
+    _wait(pid)
+    assert next(r for r in read_board(pid)["requests"] if r["id"] == rid)["status"] == "done"
+
+
+def test_a_new_project_needs_a_minimum_balance(client, fake_llm, bridge, monkeypatch):
+    from director_service import nexoclip as nexoclip_mod
+
+    monkeypatch.setattr(nexoclip_mod, "configured", lambda: True)
+    monkeypatch.setattr(nexoclip_mod, "Bridge", lambda owner: bridge)
+    bridge.credits = 40.0
+    res = client.post("/api/director/projects", json={"brief": "iklan"}, headers=HEADERS)
+    assert res.status_code == 402 and "100" in res.json()["detail"]
+    bridge.credits = 150.0
+    res = client.post("/api/director/projects", json={"brief": "hai"}, headers=HEADERS)
+    assert res.status_code == 201
+    _wait(res.json()["project_id"])
+
+
+def test_attachments_and_mentions_reach_the_director_and_the_shots(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    photo, clip = "aaaaaaaa-1111-4111-8111-000000000001", "aaaaaaaa-1111-4111-8111-000000000002"
+    fake_llm.turns.append([
+        {"calls": [call("upsert_element", **MAYA, photos=[photo]),
+                   call("update_shot", id="s1", reference_assets=[{"asset_id": clip, "kind": "video"}])]},
+        {"text": "Siap."},
+    ])
+    res = client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS, json={
+        "text": "ini foto Maya, dan pakai video ini buat gerakan di @1.1",
+        "attachments": [{"asset_id": photo, "kind": "image", "name": "maya.jpg"}, {"asset_id": clip, "kind": "video", "name": "walk.mp4"}],
+        "mentions": [{"type": "shot", "id": "s1", "label": "1.1"}]})
+    assert res.status_code == 200
+    _wait(pid)
+    sent = fake_llm.requests[-2]["input"][-1]["content"]
+    assert f"image asset_id={photo} (maya.jpg)" in sent and "@1.1 = shot s1" in sent
+    view = _view(client, pid)
+    sent_message = next(m for m in view["chat"] if m["text"].startswith("ini foto Maya"))
+    assert sent_message["meta"]["attachments"][1]["kind"] == "video"
+    board = read_board(pid)
+    assert next(e for e in board["elements"] if e["id"] == "maya")["photos"] == [photo]
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    video = next(s for s in bridge.submits if s["key"] == "video:s1")
+    assert video["parameters"]["referenceVideos"] == [f"/api/assets/{clip}/download"]
+    assert "@Video1 is a reference video the user gave" in video["prompt"]
+    bad = client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS,
+                      json={"text": "x", "attachments": [{"asset_id": "../etc", "kind": "image"}]})
+    assert bad.status_code == 422

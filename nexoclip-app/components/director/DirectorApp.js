@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fmtCredits } from './BoardViews.js';
 import ChatTimeline, { Spinner, requestSummary } from './ChatView.js';
+import Composer from './Composer.js';
 import Workspace from './Workspace.js';
 
 const API = '/api/director';
@@ -126,21 +127,30 @@ function ConfirmDialog({ title, body, confirmLabel = 'Konfirmasi', busy, onConfi
   );
 }
 
+export const TOP_UP_URL = '/studio/billing';
+
 function NewProject({ initialBrief, onCreated }) {
   const [brief, setBrief] = useState(initialBrief || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [runMode, setRunMode] = useState('guide');
+  const [workspaceId, setWorkspaceId] = useState(null);
+  useEffect(() => { loadWorkspaceId().then(setWorkspaceId); }, []);
 
-  const submit = async () => {
-    if (!brief.trim() || busy) return;
+  const submit = async (text, { attachments, mentions }) => {
+    if (busy) return false;
     setBusy(true);
     setError('');
     try {
-      const { project_id: projectId } = await api('/projects', { method: 'POST', body: JSON.stringify({ brief: brief.trim() }) });
+      const { project_id: projectId } = await api('/projects', {
+        method: 'POST', body: JSON.stringify({ brief: text, run_mode: runMode, attachments, mentions }),
+      });
       onCreated(projectId);
+      return true;
     } catch (err) {
       setError(err.message);
       setBusy(false);
+      return false;
     }
   };
 
@@ -152,31 +162,19 @@ function NewProject({ initialBrief, onCreated }) {
         </p>
         <h1 className="mt-3 text-[clamp(26px,3vw,38px)] font-semibold tracking-[-1.4px] text-white">Ceritakan video yang mau kamu buat.</h1>
         <p className="mx-auto mt-3 max-w-[540px] text-[13px] leading-relaxed text-white/50">
-          Ngobrol aja seperti ke sutradara. Director menyusun brief, naskah, karakter, dan shot. Reference sheet aset langsung dibuat otomatis; frame dan video shot menunggu approve dari kamu.
+          Ngobrol aja seperti ke sutradara. Director menyusun brief, naskah, karakter, shot, dan audio. Pilih <strong className="text-white/70">Pandu aku</strong> untuk menyetujui tiap langkah, atau <strong className="text-white/70">Langsung jadi</strong> supaya Director jalan sendiri sampai video final.
         </p>
-        <div className="mt-6 rounded-[22px] border border-[#44474e] bg-[#0b0e13] p-4 text-left shadow-[0_18px_42px_#0006] focus-within:border-[#d4ff64]/40">
-          <textarea
-            value={brief}
-            onChange={(event) => setBrief(event.target.value)}
-            onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') submit(); }}
-            rows={4}
-            placeholder="Mau bikin video apa? Boleh singkat…"
-            className="block w-full resize-y bg-transparent px-1 text-[13px] leading-relaxed text-white outline-none placeholder:text-white/35"
-            aria-label="Pesan pertama untuk Director"
-          />
-          <div className="mt-3 flex items-center gap-3 border-t border-white/[0.05] pt-3">
-            <span className="text-[10px] text-white/35">Chat memakai sedikit kredit untuk AI.</span>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!brief.trim() || busy}
-              className="ml-auto flex items-center gap-2 rounded-[9px] bg-[#d4ff64] px-4 py-2 text-[11px] font-bold text-[#10130a] shadow-[0_0_22px_#d4ff6423] hover:bg-[#e0ff8c] disabled:opacity-50"
-            >
-              {busy ? <Spinner /> : null} Kirim <span aria-hidden="true">↗</span>
-            </button>
-          </div>
+        <div className="mt-6 text-left">
+          <Composer value={brief} onChange={setBrief} onSubmit={submit} sending={busy} workspaceId={workspaceId} large rows={4}
+            placeholder="Mau bikin video apa? Boleh singkat. Lampirkan foto produk, karakter, atau video referensi kalau ada…"
+            runMode={runMode} onRunMode={setRunMode} />
+          <p className="mt-2 px-1 text-[10px] text-white/35">Chat memakai sedikit kredit untuk AI. Butuh minimal 100 kredit untuk memulai project. Ctrl/⌘ + Enter untuk kirim.</p>
         </div>
-        {error && <p className="mt-3 text-[12px] text-red-300">{error}</p>}
+        {error && (
+          <p className="mt-3 text-[12px] text-red-300">
+            {error}{/kredit/i.test(error) && <> <a href={TOP_UP_URL} target="_blank" rel="noreferrer" className="underline">Top up kredit</a></>}
+          </p>
+        )}
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           {EXAMPLE_BRIEFS.map((idea) => (
             <button
@@ -249,6 +247,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   const [loadError, setLoadError] = useState('');
   const [panel, setPanel] = useState(null);
   const [message, setMessage] = useState('');
+  const [draft, setDraft] = useState(''); // the Director's reply as it streams in
   const [sending, setSending] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -293,9 +292,10 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
     try {
       source = new EventSource(`${API}/projects/${encodeURIComponent(projectId)}/events`);
       source.onmessage = (event) => {
-        try {
-          if (JSON.parse(event.data)?.type !== 'change') return;
-        } catch { return; }
+        let data;
+        try { data = JSON.parse(event.data); } catch { return; }
+        if (data?.type === 'draft') { setDraft(data.text || ''); return; }
+        if (data?.type !== 'change') return;
         clearTimeout(timer);
         timer = setTimeout(() => { refresh(); onProjectsChanged(); }, 250);
       };
@@ -304,6 +304,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   }, [projectId, refresh, onProjectsChanged]);
 
   const agentRunning = view?.agent?.status === 'running';
+  useEffect(() => { if (!agentRunning) setDraft(''); }, [agentRunning]);
   const generationRunning = view?.generation?.status === 'running';
   const renderRunning = view?.render?.status === 'running';
   // Fallback polling while something runs, in case the event stream is buffered.
@@ -330,21 +331,27 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
     }
   };
 
-  const sendMessage = async () => {
-    const text = message.trim();
-    if (!text || sending) return;
+  const sendMessage = async (text, { attachments = [], mentions = [] } = {}) => {
+    if (!text || sending) return false;
     setSending(true);
     setActionError('');
     try {
-      await api(`/projects/${encodeURIComponent(projectId)}/messages`, { method: 'POST', body: JSON.stringify({ text }) });
+      await api(`/projects/${encodeURIComponent(projectId)}/messages`, { method: 'POST', body: JSON.stringify({ text, attachments, mentions }) });
       setMessage('');
       await refresh();
+      return true;
     } catch (err) {
       setActionError(err.message);
+      return false;
     } finally {
       setSending(false);
     }
   };
+  const setRunMode = (runMode) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/settings`, {
+    method: 'POST', body: JSON.stringify({ run_mode: runMode }),
+  }));
+  // The credit gate's "Lanjutkan": approve the held request again once the balance covers it.
+  const continueRequest = (request) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/approve`, { method: 'POST' }));
 
   const approve = (request) => {
     const what = requestSummary(request.estimate);
@@ -490,7 +497,8 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
           <ChatTimeline chat={view.chat} board={board} workspaceId={workspaceId} busy={actionBusy}
             generationRunning={generationRunning} renderRunning={renderRunning} agentRunning={agentRunning}
-            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender} onChooseAudio={chooseAudio} />
+            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender} onChooseAudio={chooseAudio}
+            draft={agentRunning ? draft : ''} onContinue={continueRequest} />
           {view.agent?.status === 'error' && (
             <button type="button" onClick={retry} disabled={actionBusy} className="mt-3 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-white/80 hover:border-white/30 disabled:opacity-50">
               Coba lagi
@@ -505,31 +513,9 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
             </div>
           )}
           {actionError && <p className="text-[11px] text-red-300">{actionError}</p>}
-          <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[#0b0e13] p-2 focus-within:border-[#d4ff64]/40">
-            <textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  if (canSend) sendMessage();
-                }
-              }}
-              rows={2}
-              placeholder={agentRunning ? 'Tunggu Director selesai…' : 'Ngobrol, minta ubah apa saja, atau minta generate…'}
-              className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-1.5 py-1 text-[11.5px] text-white outline-none placeholder:text-white/30"
-              aria-label="Pesan untuk Director"
-            />
-            <button
-              type="button"
-              onClick={sendMessage}
-              disabled={!canSend || !message.trim()}
-              className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-[#d4ff64] text-[#10130a] disabled:bg-white/10 disabled:text-white/30"
-              aria-label="Kirim pesan"
-            >
-              {sending ? <Spinner /> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M5 12h14M13 6l6 6-6 6" /></svg>}
-            </button>
-          </div>
+          <Composer value={message} onChange={setMessage} onSubmit={sendMessage} disabled={!canSend} sending={sending}
+            workspaceId={workspaceId} board={board} runMode={view.run_mode || 'guide'} onRunMode={setRunMode}
+            placeholder={agentRunning ? 'Tunggu Director selesai…' : 'Ngobrol, @sebut shot/aset, lampirkan gambar atau video…'} />
           <div className="flex items-center justify-between px-1 text-[10px] text-white/30">
             <span title={`Biaya model AI: $${Number(view.llm_cost_usd || 0).toFixed(3)}`}>
               Kredit project ini: chat AI {fmtCredits(view.llm_credits || 0)} · generate {fmtCredits(view.generation_credits || 0)}

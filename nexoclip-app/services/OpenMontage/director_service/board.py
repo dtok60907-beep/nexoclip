@@ -289,13 +289,23 @@ def video_references(board: dict[str, Any], shot: dict[str, Any]) -> list[str]:
     return [f"frame:{shot['id']}", *sheets][:MAX_VIDEO_REFERENCES]
 
 
-def reference_legend(board: dict[str, Any], deps: list[str]) -> str:
+def reference_legend(board: dict[str, Any], deps: list[str], user_images: int = 0, user_videos: int = 0) -> str:
     lines = ["References:", "@Image1 is the opening frame of this shot: start the clip from it."]
     for n, dep in enumerate(deps[1:], start=2):
         item = element(board, dep.split(":", 1)[1])
         lines.append(f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one "
                      f"image: show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
+    for n in range(len(deps) + 1, len(deps) + 1 + user_images):
+        lines.append(f"@Image{n} is a reference the user gave for this shot: follow its style, composition and mood.")
+    for n in range(1, user_videos + 1):
+        lines.append(f"@Video{n} is a reference video the user gave: follow its motion, camera movement and pacing.")
     return "\n".join(lines) if len(lines) > 2 else ""
+
+
+def user_references(item: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """The user's own images and videos attached to a shot as references."""
+    refs = item.get("reference_assets") or []
+    return [r["asset_id"] for r in refs if r["kind"] == "image"], [r["asset_id"] for r in refs if r["kind"] == "video"]
 
 
 def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -381,25 +391,32 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
                 audio: dict[str, Any]) -> None:
     brief = board["brief"]
     refs = [f"element:{e}" for e in item.get("element_ids", []) if element(board, e)]
+    images, videos = user_references(item)
+    frame_prompt = _with_look(item["frame_prompt"], brief)
+    if images:
+        frame_prompt += f"\nThe last {len(images)} reference image(s) are the user's references: follow their style and composition."
     specs[f"frame:{item['id']}"] = {
-        "kind": "image", "label": f"{item['title']} — frame", "prompt": _with_look(item["frame_prompt"], brief), "deps": refs,
+        "kind": "image", "label": f"{item['title']} — frame", "prompt": frame_prompt, "deps": refs,
         "params": {"aspectRatio": ratio},
+        **({"extra_images": images} if images else {}),
     }
-    deps = video_references(board, item)
-    legend = reference_legend(board, deps)
+    deps = video_references(board, item)[:MAX_VIDEO_REFERENCES - len(images)]
+    legend = reference_legend(board, deps, len(images), len(videos))
     video_prompt = _with_look(item["video_prompt"], brief)
     specs[f"video:{item['id']}"] = {
         "kind": "video", "label": f"{item['title']} — video",
         "prompt": f"{video_prompt}\n{legend}" if legend else video_prompt,
         "deps": deps,
         "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio},
+        **({"extra_images": images} if images else {}), **({"ref_videos": videos} if videos else {}),
     }
 
 
 def spec_sig(spec: dict[str, Any]) -> str:
     basis = {k: spec[k] for k in ("kind", "prompt", "params", "deps")}
-    if spec.get("photos"):  # only when present, so specs without photos keep their old signature
-        basis["photos"] = spec["photos"]
+    for key in ("photos", "extra_images", "ref_videos"):  # only when present, so older specs keep their signature
+        if spec.get(key):
+            basis[key] = spec[key]
     return hashlib.sha256(json.dumps(basis, sort_keys=True).encode("utf-8")).hexdigest()
 
 

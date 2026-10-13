@@ -89,6 +89,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS llm_credits double precision NOT NULL DEFAULT 0;
     """,
+    # How the Director runs (OpenArt's run modes): "guide" pauses for approval, "auto" drives to a finished video.
+    """
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS run_mode text NOT NULL DEFAULT 'guide';
+    """,
 ]
 
 

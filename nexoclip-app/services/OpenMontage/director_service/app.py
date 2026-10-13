@@ -23,13 +23,13 @@ import tarfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from director_service import db, nexoclip, session
+from director_service import db, live, nexoclip, session
 from director_service.generation import generation_credits
 from director_service.board import list_versions, read_board, restore_version, version_content, view_for_ui
 from director_service.store import find_project, list_projects, read_chat
@@ -70,6 +70,16 @@ class Hub:
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._publish, project_id)
 
+    def _publish_event(self, project_id: str, event: dict[str, Any]) -> None:
+        for queue in list(self._subscribers.get(project_id, ())):
+            with contextlib.suppress(asyncio.QueueFull):
+                queue.put_nowait(event)
+
+    def publish_event_threadsafe(self, project_id: str, event: dict[str, Any]) -> None:
+        """A live event (live.py) passed to the browser as is, not as a "changed, refetch" signal."""
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._publish_event, project_id, event)
+
 
 hub = Hub()
 
@@ -78,6 +88,7 @@ hub = Hub()
 async def lifespan(_: FastAPI):
     await asyncio.to_thread(db.migrate)
     hub.bind(asyncio.get_running_loop())
+    live.bind(hub.publish_event_threadsafe)
     stop = threading.Event()
     listener = threading.Thread(target=db.listen, args=(hub.publish_threadsafe, stop), name="director-listen", daemon=True)
     listener.start()
@@ -102,13 +113,45 @@ async def require_proxy_secret(request: Request, call_next):
     return await call_next(request)
 
 
+class Attachment(BaseModel):
+    """An image or video the user added to a chat message (a nexoclip asset in their workspace)."""
+    asset_id: str = Field(pattern=r"^[A-Za-z0-9-]{8,64}$")
+    kind: Literal["image", "video"]
+    name: str = Field(default="", max_length=200)
+
+
+class Mention(BaseModel):
+    """An @mention in a chat message: a shot or an element of the board."""
+    type: Literal["shot", "element"]
+    id: str = Field(min_length=1, max_length=40)
+    label: str = Field(default="", max_length=120)
+
+
+def _message_meta(attachments: list[Attachment], mentions: list[Mention]) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+    if attachments:
+        meta["attachments"] = [a.model_dump() for a in attachments]
+    if mentions:
+        meta["mentions"] = [m.model_dump() for m in mentions]
+    return meta
+
+
 class CreateProjectBody(BaseModel):
     # The user's first chat message.
     brief: str = Field(min_length=1, max_length=20000)
+    run_mode: Literal["guide", "auto"] = "guide"
+    attachments: list[Attachment] = Field(default_factory=list, max_length=10)
+    mentions: list[Mention] = Field(default_factory=list, max_length=20)
 
 
 class MessageBody(BaseModel):
     text: str = Field(min_length=1, max_length=8000)
+    attachments: list[Attachment] = Field(default_factory=list, max_length=10)
+    mentions: list[Mention] = Field(default_factory=list, max_length=20)
+
+
+class SettingsBody(BaseModel):
+    run_mode: Literal["guide", "auto"]
 
 
 class EditBody(BaseModel):
@@ -148,6 +191,7 @@ def _project_view(project_id: str) -> dict[str, Any]:
         "llm_model": project["llm_model"],
         "llm_cost_usd": project["llm_cost_usd"],
         "llm_credits": project.get("llm_credits") or 0,
+        "run_mode": project.get("run_mode") or "guide",
         "generation_credits": generation_credits(read_board(project_id)),
         "agent": project["agent"],
         "generation": project["generation"],
@@ -164,6 +208,8 @@ def _call(fn, *args):
         raise HTTPException(status_code=409, detail=str(exc))
     except session.InvalidAction as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except session.NotEnoughCredits as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
 
 
 @app.get("/api/director/health")
@@ -179,7 +225,8 @@ async def voices() -> dict:
 
 @app.post("/api/director/projects", status_code=201)
 async def create_project(body: CreateProjectBody, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
-    project_id = await asyncio.to_thread(session.create_project, _owner(x_nexoclip_user_id), body.brief)
+    project_id = await asyncio.to_thread(_call, lambda: session.create_project(
+        _owner(x_nexoclip_user_id), body.brief, run_mode=body.run_mode, meta=_message_meta(body.attachments, body.mentions)))
     return {"project_id": project_id}
 
 
@@ -204,8 +251,15 @@ async def get_project(project_id: str, x_nexoclip_user_id: Optional[str] = Heade
 @app.post("/api/director/projects/{project_id}/messages")
 async def post_message(project_id: str, body: MessageBody, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
     await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
-    await asyncio.to_thread(_call, session.send_message, project_id, body.text)
+    await asyncio.to_thread(_call, session.send_message, project_id, body.text, _message_meta(body.attachments, body.mentions))
     return {"accepted": True}
+
+
+@app.post("/api/director/projects/{project_id}/settings")
+async def settings(project_id: str, body: SettingsBody, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+    await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
+    await asyncio.to_thread(_call, session.set_run_mode, project_id, body.run_mode)
+    return {"ok": True}
 
 
 @app.post("/api/director/projects/{project_id}/retry")
@@ -302,14 +356,24 @@ async def project_events(project_id: str, request: Request, x_nexoclip_user_id: 
                 if await request.is_disconnected():
                     return
                 try:
-                    await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
+                    item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
                 except asyncio.TimeoutError:
                     yield _sse({"type": "heartbeat", "ts": time.time()})
                     continue
+                if isinstance(item, dict):  # a live draft: sent at once, only the newest of a burst
+                    while not queue.empty() and isinstance(queue._queue[0], dict):  # type: ignore[attr-defined]
+                        item = queue.get_nowait()
+                    yield _sse(item)
+                    continue
                 await asyncio.sleep(0.2)  # coalesce bursts of writes into one refetch
+                drafts = []
                 while not queue.empty():
-                    queue.get_nowait()
+                    extra = queue.get_nowait()
+                    if isinstance(extra, dict):
+                        drafts.append(extra)
                 yield _sse({"type": "change", "project_id": project_id})
+                if drafts:
+                    yield _sse(drafts[-1])
         finally:
             hub.unsubscribe(project_id, queue)
 

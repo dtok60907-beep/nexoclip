@@ -7,7 +7,8 @@ from typing import Any, Optional
 
 from director_service.db import Jsonb, notify, tx
 
-PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render")
+PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render",
+                  "run_mode")
 JSON_FIELDS = {"agent", "generation", "render"}
 
 

@@ -68,6 +68,8 @@ test('the middleware leaves the render upload alone (it would truncate bodies ov
   const config = { matcher: [...source.match(/matcher: \[([\s\S]*?)\]/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) };
   const matches = (path) => config.matcher.some((m) => new RegExp(`^${m.replace('/:path*', '(/.*)?')}$`).test(path));
   assert.equal(matches('/api/internal/director/render-upload'), false);
+  assert.equal(matches('/api/uploads'), false); // chat attachments can be videos over 10 MB
+  assert.equal(matches('/api/uploads/other'), true);
   assert.equal(matches('/api/director/projects'), true);
   assert.equal(matches('/studio/director'), true);
 });

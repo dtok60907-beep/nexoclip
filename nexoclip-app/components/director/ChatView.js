@@ -302,6 +302,7 @@ const REQUEST_STATUS = {
   failed: { label: 'Sebagian gagal', tone: 'red' },
   rejected: { label: 'Dibatalkan', tone: 'default' },
   superseded: { label: 'Diganti estimasi baru', tone: 'default' },
+  needs_credits: { label: 'Kredit kurang', tone: 'amber' },
 };
 
 function RequestCard({ request, board, workspaceId, busy, generationRunning, onApprove, onReject }) {
@@ -400,7 +401,77 @@ function groupEntries(chat) {
   return blocks;
 }
 
-function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio }) {
+// A held request: the balance cannot pay for it. Top up, then "Lanjutkan" approves it again.
+function CreditGateCard({ entry, board, busy, onContinue }) {
+  const request = board.requests.find((r) => r.id === entry.meta?.request_id);
+  if (!request) return null;
+  const gate = request.credit_gate || entry.meta || {};
+  const held = request.status === 'needs_credits';
+  return (
+    <CardShell icon="!" title="Kredit kurang" accent={held ? 'tertahan' : 'lanjut'}
+      action={held ? 'Lanjutkan' : null} onAction={() => onContinue(request)} actionDisabled={busy}
+      secondary={held ? (
+        <a href="/studio/billing" target="_blank" rel="noreferrer"
+          className="rounded-full border border-[#d4ff64]/40 px-4 py-2 text-[12px] text-[#e4f5bd] hover:border-[#d4ff64]">Top up</a>
+      ) : null}>
+      <p className="text-[12px] text-white/75">
+        Langkah ini butuh <strong className={ACCENT}>{fmtCredits(gate.needed)} kredit</strong>, saldo kamu {fmtCredits(gate.balance)}.
+      </p>
+      <p className="mt-1 text-[11px] text-white/45">{held ? 'Pekerjaanmu aman. Top up dulu, lalu klik Lanjutkan.' : 'Sudah dilanjutkan.'}</p>
+    </CardShell>
+  );
+}
+
+// The text cut into plain parts and @mention labels (earliest match first).
+function splitMentions(text, labels) {
+  const parts = [];
+  let rest = text;
+  while (rest) {
+    let at = -1;
+    let hit = null;
+    for (const label of labels) {
+      const i = rest.indexOf(label);
+      if (i >= 0 && (at < 0 || i < at)) { at = i; hit = label; }
+    }
+    if (hit === null) { parts.push(rest); break; }
+    if (at > 0) parts.push(rest.slice(0, at));
+    parts.push(hit);
+    rest = rest.slice(at + hit.length);
+  }
+  return parts;
+}
+
+// Images / videos attached to a user message, and its @mentions.
+function UserMessage({ entry, workspaceId }) {
+  const attachments = entry.meta?.attachments || [];
+  const labels = (entry.meta?.mentions || []).map((m) => `@${m.label}`);
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      {attachments.length > 0 && (
+        <div className="flex max-w-[72%] flex-wrap justify-end gap-1.5">
+          {attachments.map((a) => (
+            <a key={a.asset_id} href={assetUrl(a.asset_id, workspaceId)} target="_blank" rel="noreferrer" title={a.name}
+              className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+              {a.kind === 'video'
+                ? <video src={`${assetUrl(a.asset_id, workspaceId)}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                // eslint-disable-next-line @next/next/no-img-element
+                : <img src={assetUrl(a.asset_id, workspaceId, true)} alt={a.name} className="h-full w-full object-cover" />}
+              {a.kind === 'video' && <span className="absolute bottom-0 left-0 rounded-tr bg-black/70 px-1 text-[9px] text-white">▶</span>}
+            </a>
+          ))}
+        </div>
+      )}
+      <div className="max-w-[72%] whitespace-pre-line break-words rounded-lg border border-white/[0.06] bg-[#181b20] px-3 py-1.5 text-[11.5px] leading-[1.6] text-white/90">
+        {splitMentions(entry.text, labels).map((part, i) => (labels.includes(part)
+          ? <span key={i} className="rounded bg-[#d4ff64]/15 px-1 text-[#e4f5bd]">{part}</span>
+          : <Fragment key={i}>{part}</Fragment>))}
+      </div>
+    </div>
+  );
+}
+
+function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio, onContinue }) {
+  if (entry.kind === 'credit_gate') return <CreditGateCard entry={entry} board={board} busy={busy} onContinue={onContinue} />;
   if (entry.kind === 'render') {
     const render = (board.renders || []).find((r) => r.id === entry.meta?.render_id);
     return <RenderCard render={render} workspaceId={workspaceId} rendering={busy || renderRunning} onRender={onRender} />;
@@ -414,13 +485,7 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
   if (entry.kind === 'edit' || entry.kind === 'approval') {
     return <div className="text-right text-[10.5px] text-white/40">{entry.kind === 'edit' ? '✎ ' : '✓ '}{entry.text}</div>;
   }
-  if (entry.role === 'user') {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[72%] whitespace-pre-line break-words rounded-lg border border-white/[0.06] bg-[#181b20] px-3 py-1.5 text-[11.5px] leading-[1.6] text-white/90">{entry.text}</div>
-      </div>
-    );
-  }
+  if (entry.role === 'user') return <UserMessage entry={entry} workspaceId={workspaceId} />;
   if (entry.kind === 'error') return <p className="text-[11.5px] leading-relaxed text-red-300/90">{entry.text}</p>;
   if (entry.kind === 'generation') {
     return <div className="flex items-center gap-2 text-[11.5px] text-white/80"><CheckIcon />{entry.text}</div>;
@@ -428,7 +493,7 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
   return <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={entry.text} /></div>;
 }
 
-export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio }) {
+export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio, draft, onContinue }) {
   const blocks = groupEntries(chat);
   return (
     <div className="space-y-4">
@@ -437,9 +502,13 @@ export default function ChatTimeline({ chat, board, workspaceId, busy, generatio
       ) : (
         <Entry key={block.key} entry={block.entry} board={board} workspaceId={workspaceId} busy={busy}
           generationRunning={generationRunning} renderRunning={renderRunning} onApprove={onApprove} onReject={onReject}
-          onOpenPanel={onOpenPanel} onRender={onRender} onChooseAudio={onChooseAudio} />
+          onOpenPanel={onOpenPanel} onRender={onRender} onChooseAudio={onChooseAudio} onContinue={onContinue} />
       ))}
-      {agentRunning && blocks[blocks.length - 1]?.type !== 'steps' && (
+      {draft && (
+        // The reply as it is being written; replaced by the saved message when the step ends.
+        <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={draft} /><span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-[#d4ff64]/70 align-middle" /></div>
+      )}
+      {agentRunning && !draft && blocks[blocks.length - 1]?.type !== 'steps' && (
         <div className="flex items-center gap-2 text-[10.5px] text-white/40"><Spinner /> Director sedang bekerja…</div>
       )}
     </div>
