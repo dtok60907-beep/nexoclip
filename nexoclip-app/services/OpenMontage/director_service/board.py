@@ -44,7 +44,9 @@ MIN_MUSIC_SECONDS, MAX_MUSIC_SECONDS = 3, 300
 
 def empty_audio() -> dict[str, Any]:
     return {"voiceover": {"text": "", "voice_id": "", "voice_name": ""},
-            "music": {"prompt": "", "duration_seconds": None, "instrumental": True}}
+            "music": {"prompt": "", "duration_seconds": None, "instrumental": True},
+            # directions the agent offers (set_audio_options); the user picks one in the Audio panel
+            "options": [], "recommended": None, "chosen": None}
 
 
 def video_seconds(board: dict[str, Any]) -> int:
@@ -437,6 +439,8 @@ def summary_for_agent(board: dict[str, Any]) -> dict[str, Any]:
     view["elements"] = [{**e, "image": media_state(f"element:{e['id']}")} for e in board["elements"]]
     view["shots"] = [{**s, "frame": media_state(f"frame:{s['id']}"), "video": media_state(f"video:{s['id']}")}
                      for s in board["shots"]]
+    view["audio"] = {**empty_audio(), **copy.deepcopy(board.get("audio") or {}),
+                     "voiceover_media": media_state("audio:voiceover"), "music_media": media_state("audio:music")}
     view["pending_requests"] = [
         {"id": r["id"], "status": r["status"], "items": r["items"], "estimate": r.get("estimate")}
         for r in board["requests"] if r["status"] in ("pending", "running")

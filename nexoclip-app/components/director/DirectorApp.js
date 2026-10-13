@@ -391,6 +391,14 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
 
   const openPanel = (id) => { setPanel(id); setMobilePane('board'); };
 
+  // Picking one of the Director's audio suggestions applies it and shows its credit estimate to approve;
+  // null = no separate voiceover / music.
+  const chooseAudio = async (option) => {
+    if (!(await onEdit('choose_audio_option', { id: option ? option.id : 'none' }))) return;
+    const items = option ? [...(option.voiceover_text ? ['audio:voiceover'] : []), ...(option.music_prompt ? ['audio:music'] : [])] : [];
+    if (items.length) await onRequest(items);
+  };
+
   // Picking a concept: confirm, record it, then tell the Director so it carries on right away.
   const [confirm, setConfirm] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -482,7 +490,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
           <ChatTimeline chat={view.chat} board={board} workspaceId={workspaceId} busy={actionBusy}
             generationRunning={generationRunning} renderRunning={renderRunning} agentRunning={agentRunning}
-            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender} />
+            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender} onChooseAudio={chooseAudio} />
           {view.agent?.status === 'error' && (
             <button type="button" onClick={retry} disabled={actionBusy} className="mt-3 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-white/80 hover:border-white/30 disabled:opacity-50">
               Coba lagi

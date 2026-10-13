@@ -92,6 +92,13 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   or its frame held still when it has no video yet; shots with neither are skipped. Use it when the user asks for
   the final video / export / render. It runs in the background and shows its own card with progress and download.
 
+- set_audio_options: offer the user 2-3 distinct audio directions to pick from in the Audio panel, each a voice,
+  a voiceover (or none) and a music bed, with why it fits; recommend one. Do this ON YOUR OWN, without being asked,
+  in the turn where the shot list is first made (and again when the user asks for other options), unless the user
+  already chose or set audio (audio.chosen "none" means they want no separate audio: do not push it again). Say in
+  your reply whether you think this video needs a voiceover and music, and which option you recommend. Make them really different (e.g. warm narrator + acoustic bed / energetic young voice
+  + upbeat pop / no voiceover, music only). Tell the user in one line that the options are in the Audio panel
+  (♪ VO & musik). When the user picks one, it is applied for them; generate it only after they ask or approve.
 - set_audio / list_voices: optional separate audio laid over the clips in the render (ElevenLabs). A voiceover is
   one narration read from the start of the video: write it to fit the video's length (about 13 characters per second
   for Indonesian, fewer for a calm read) and pick a voice from list_voices that suits the brief. Music is one bed
@@ -156,6 +163,16 @@ SHOT_FIELDS = {
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
 OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end")
+
+AUDIO_OPTION_FIELDS = {
+    "id": {"type": "string", "description": "lowercase snake_case id"},
+    "title": {"type": "string", "description": "short name, e.g. \"Narator hangat + akustik\""},
+    "why": {"type": "string", "description": "one line: why it fits the brief"},
+    "voice_id": {"type": "string", "description": "a voice_id from list_voices; empty when there is no voiceover"},
+    "voiceover_text": {"type": "string", "description": "the full narration; empty for music only"},
+    "music_prompt": {"type": "string", "description": "genre, mood, BPM, instruments"},
+    "instrumental": {"type": "boolean"},
+}
 
 SCENE_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
@@ -243,6 +260,11 @@ TOOLS = [
                           "description": "defaults to the video's length"},
         "instrumental": {"type": "boolean", "description": "music without vocals (default true)"},
     }, []),
+    _tool("set_audio_options", "Offer 2-3 audio directions (voice + voiceover + music) and recommend one.", {
+        "options": {"type": "array", "items": {"type": "object", "properties": AUDIO_OPTION_FIELDS,
+                                               "required": ["id", "title", "why", "music_prompt"], "additionalProperties": False}},
+        "recommended": {"type": "string", "description": "id of the recommended option"},
+    }, ["options", "recommended"]),
     _tool("list_voices", "List the voices available for a voiceover.", {}, []),
     _tool("request_generation", "Prepare paid generation (needs the user's approval in the UI).", {
         "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01, edit:shot_01, audio:voiceover, audio:music"},
@@ -727,7 +749,7 @@ def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
             music["duration_seconds"] = max(boards.MIN_MUSIC_SECONDS, min(boards.MAX_MUSIC_SECONDS, boards.video_seconds(board) or 30))
         if args.get("instrumental") is not None:
             music["instrumental"] = bool(args["instrumental"])
-        board["audio"] = {"voiceover": voiceover, "music": music}
+        board["audio"] = {**boards.empty_audio(), **audio, "voiceover": voiceover, "music": music}
         return board["audio"]
 
     audio = ctx.update(change, "Mengatur audio")
@@ -735,6 +757,62 @@ def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
 
 _VOICE_ID = re.compile(r"^[A-Za-z0-9]{10,40}$")
+
+
+def _set_audio_options(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    options = []
+    for raw in args.get("options") or []:
+        option = {k: str(raw.get(k) or "").strip() for k in ("id", "title", "why", "voice_id", "voiceover_text", "music_prompt")}
+        option["instrumental"] = raw.get("instrumental") is not False
+        _check_id(option["id"])
+        if not option["title"] or not (option["voiceover_text"] or option["music_prompt"]):
+            raise ToolError(f"option {option['id']}: a title and a voiceover or music prompt are required")
+        if option["voiceover_text"] and not _VOICE_ID.match(option["voice_id"]):
+            raise ToolError(f"option {option['id']}: pick a voice_id from list_voices for its voiceover")
+        if len(option["voiceover_text"]) > 5000:
+            raise ToolError(f"option {option['id']}: voiceover_text is longer than 5000 characters")
+        option["voice_name"] = _voice_name(option["voice_id"]) if option["voiceover_text"] else ""
+        options.append(option)
+    if not 2 <= len(options) <= 3 or len({o["id"] for o in options}) != len(options):
+        raise ToolError("give 2-3 options with distinct ids")
+    recommended = args.get("recommended")
+    if recommended not in {o["id"] for o in options}:
+        raise ToolError("recommended must be one of the option ids")
+
+    def change(board: dict[str, Any]) -> None:
+        audio = {**boards.empty_audio(), **(board.get("audio") or {})}
+        audio.update(options=options, recommended=recommended, chosen=None)
+        board["audio"] = audio
+
+    ctx.update(change, f"Menyusun {len(options)} opsi audio")
+    return {"ok": True}, f"Menyusun {len(options)} opsi audio"
+
+
+def _choose_audio_option(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: apply one of the agent's audio options as the voiceover and music ("none": no separate audio)."""
+    option_id = args.get("id")
+
+    def change(board: dict[str, Any]) -> str:
+        audio = {**boards.empty_audio(), **(board.get("audio") or {})}
+        if option_id == "none":
+            empty = boards.empty_audio()
+            audio.update(voiceover=empty["voiceover"], music=empty["music"], chosen="none")
+            board["audio"] = audio
+            return "tanpa audio tambahan"
+        option = next((o for o in audio["options"] if o["id"] == option_id), None)
+        if option is None:
+            raise ToolError(f"no audio option {option_id!r}")
+        audio["voiceover"] = {"text": option["voiceover_text"], "voice_id": option["voice_id"] if option["voiceover_text"] else "",
+                              "voice_name": option.get("voice_name") or ""}
+        seconds = max(boards.MIN_MUSIC_SECONDS, min(boards.MAX_MUSIC_SECONDS, boards.video_seconds(board) or 30))
+        audio["music"] = {"prompt": option["music_prompt"], "duration_seconds": seconds if option["music_prompt"] else None,
+                          "instrumental": option["instrumental"]}
+        audio["chosen"] = option_id
+        board["audio"] = audio
+        return option["title"]
+
+    title = ctx.update(change, lambda title: f"Memilih audio: {title}")
+    return {"ok": True}, f"Memilih audio: {title}"
 
 
 def _voices() -> list[dict[str, Any]]:
@@ -860,6 +938,7 @@ HANDLERS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "remove_shot": _remove_shot,
     "request_generation": _request_generation,
     "set_audio": _set_audio,
+    "set_audio_options": _set_audio_options,
     "list_voices": _list_voices,
     "render_video": _render_video,
 }
@@ -876,6 +955,7 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "move_shot": _move_shot,
     "use_take": _use_take,
     "set_audio": _set_audio,
+    "choose_audio_option": _choose_audio_option,
     "extend_shot": _extend_shot,
     "add_shot": _add_shot,
     "set_element_photos": _set_element_photos,
@@ -963,6 +1043,7 @@ REQUIRED_SKILLS: dict[str, tuple[Any, Callable[[dict[str, Any]], bool]]] = {
     "set_shots": (("seedance-prompting",), lambda a: True),
     "update_shot": (("seedance-prompting",), lambda a: bool(a.get("frame_prompt") or a.get("video_prompt"))),
     "set_audio": (_audio_skills, lambda a: True),
+    "set_audio_options": (("voice-performance-director", "music-gen-usage"), lambda a: True),
 }
 
 
@@ -979,7 +1060,7 @@ def missing_skills(call: dict[str, Any], skills_read: set[str]) -> list[str]:
 CARD_FOR_TOOL = {
     "update_brief": "brief", "set_concepts": "concepts", "choose_concept": "concepts", "write_script": "script",
     "upsert_element": "assets", "remove_element": "assets", "set_scenes": "shots", "set_shots": "shots",
-    "update_shot": "shots", "remove_shot": "shots", "web_research": "research", "set_audio": "audio",
+    "update_shot": "shots", "remove_shot": "shots", "web_research": "research", "set_audio": "audio", "set_audio_options": "audio",
 }
 CARD_ORDER = ("brief", "concepts", "research", "script", "assets", "shots", "audio")
 

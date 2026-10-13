@@ -149,7 +149,7 @@ function Stack({ items }) {
   );
 }
 
-function ArtifactCard({ card, board, workspaceId, onOpen }) {
+function ArtifactCard({ card, board, workspaceId, onOpen, onChooseAudio, busy }) {
   if (card === 'script') {
     if (!board.script) return null;
     return (
@@ -214,6 +214,45 @@ function ArtifactCard({ card, board, workspaceId, onOpen }) {
             </li>
           ))}
         </ul>
+      </CardShell>
+    );
+  }
+  if (card === 'audio' && board.audio?.options?.length) {
+    const audio = board.audio;
+    const seconds = (text) => Math.max(1, Math.round((text || '').length / 13));
+    return (
+      <CardShell icon="♪" title="Usulan audio" accent={audio.chosen ? (audio.chosen === 'none' ? 'tanpa audio' : 'dipilih') : `${audio.options.length} opsi`}
+        action="View" onAction={() => onOpen('audio')}>
+        <div className="space-y-2">
+          {audio.options.map((o) => {
+            const chosen = audio.chosen === o.id;
+            return (
+              <div key={o.id} className={`rounded-lg border p-2.5 ${chosen ? 'border-emerald-400/40 bg-emerald-400/[0.04]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-medium text-white/90">
+                      {o.title}
+                      {audio.recommended === o.id && <span className="ml-1.5 text-[10px] text-[#d4ff64]/80">rekomendasi</span>}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-white/45">{o.why}</p>
+                  </div>
+                  <button type="button" disabled={busy || chosen} onClick={() => onChooseAudio(o)}
+                    className="flex-none rounded-full border border-white/15 px-2.5 py-1 text-[11px] text-white/80 hover:border-[#d4ff64]/50 disabled:opacity-50">
+                    {chosen ? 'Dipakai' : 'Pakai'}
+                  </button>
+                </div>
+                {o.voiceover_text
+                  ? <p className="mt-1.5 line-clamp-2 text-[11px] text-white/60"><span className="text-white/35">VO · {o.voice_name || 'suara'} · ±{seconds(o.voiceover_text)} dtk: </span>{o.voiceover_text}</p>
+                  : <p className="mt-1.5 text-[11px] text-white/35">Tanpa voiceover</p>}
+                {o.music_prompt && <p className="mt-0.5 line-clamp-1 text-[11px] text-white/60"><span className="text-white/35">Musik: </span>{o.music_prompt}</p>}
+              </div>
+            );
+          })}
+          <button type="button" disabled={busy || audio.chosen === 'none'} onClick={() => onChooseAudio(null)}
+            className="text-[11px] text-white/40 underline-offset-2 hover:text-white/70 hover:underline disabled:no-underline disabled:opacity-60">
+            {audio.chosen === 'none' ? 'Tanpa VO & musik (dipilih)' : 'Tidak usah pakai VO & musik'}
+          </button>
+        </div>
       </CardShell>
     );
   }
@@ -351,12 +390,12 @@ function groupEntries(chat) {
   return blocks;
 }
 
-function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender }) {
+function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio }) {
   if (entry.kind === 'render') {
     const render = (board.renders || []).find((r) => r.id === entry.meta?.render_id);
     return <RenderCard render={render} workspaceId={workspaceId} rendering={busy || renderRunning} onRender={onRender} />;
   }
-  if (entry.kind === 'card') return <ArtifactCard card={entry.meta?.card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} />;
+  if (entry.kind === 'card') return <ArtifactCard card={entry.meta?.card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} onChooseAudio={onChooseAudio} busy={busy} />;
   if (entry.kind === 'request') {
     const request = board.requests.find((r) => r.id === entry.meta?.request_id);
     return <RequestCard request={request} board={board} workspaceId={workspaceId} busy={busy} generationRunning={generationRunning}
@@ -379,7 +418,7 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
   return <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={entry.text} /></div>;
 }
 
-export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender }) {
+export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio }) {
   const blocks = groupEntries(chat);
   return (
     <div className="space-y-4">
@@ -388,7 +427,7 @@ export default function ChatTimeline({ chat, board, workspaceId, busy, generatio
       ) : (
         <Entry key={block.key} entry={block.entry} board={board} workspaceId={workspaceId} busy={busy}
           generationRunning={generationRunning} renderRunning={renderRunning} onApprove={onApprove} onReject={onReject}
-          onOpenPanel={onOpenPanel} onRender={onRender} />
+          onOpenPanel={onOpenPanel} onRender={onRender} onChooseAudio={onChooseAudio} />
       ))}
       {agentRunning && blocks[blocks.length - 1]?.type !== 'steps' && (
         <div className="flex items-center gap-2 text-[10.5px] text-white/40"><Spinner /> Director sedang bekerja…</div>

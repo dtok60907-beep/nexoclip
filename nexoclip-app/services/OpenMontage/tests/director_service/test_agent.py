@@ -1046,3 +1046,35 @@ def test_audio_is_written_with_the_openmontage_audio_guides(client, fake_llm, br
     assert first[0]["ok"] is False and set(first[0]["skill_content"]) == {"voice-performance-director", "music-gen-usage"}
     assert first[1]["ok"] is True  # only a length change: no guide needed
     assert board["audio"]["voiceover"]["text"] == "Halo semua." and board["audio"]["music"]["prompt"] == "lo-fi, 85 BPM"
+
+
+def test_the_agent_offers_audio_options_and_the_user_picks_one(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    options = [
+        {"id": "hangat", "title": "Narator hangat + akustik", "why": "nostalgia", "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+         "voiceover_text": "Liburan terakhir sebelum semuanya berubah.", "music_prompt": "acoustic guitar, 85 BPM", "instrumental": True},
+        {"id": "musik", "title": "Tanpa VO, pop ceria", "why": "biar visual yang bicara", "voice_id": "",
+         "voiceover_text": "", "music_prompt": "upbeat indie pop, 120 BPM", "instrumental": True},
+    ]
+    fake_llm.turns.append([{"calls": [call("set_audio_options", options=options, recommended="hangat")]}, {"text": "Opsi audio ada di panel."}])
+    view = _say(client, pid, "opsi audio dong")
+    audio = view["board"]["audio"]
+    assert [o["id"] for o in audio["options"]] == ["hangat", "musik"] and audio["options"][0]["voice_name"] == "George"
+    assert any(m["meta"].get("card") == "audio" for m in view["chat"] if m["kind"] == "card")
+
+    assert _edit(client, pid, "choose_audio_option", id="musik").status_code == 200
+    audio = read_board(pid)["audio"]
+    assert audio["chosen"] == "musik" and audio["voiceover"]["text"] == "" and audio["music"]["prompt"] == "upbeat indie pop, 120 BPM"
+    media = _view(client, pid)["board"]["media"]
+    assert "audio:music" in media and "audio:voiceover" not in media
+    assert _edit(client, pid, "choose_audio_option", id="hangat").status_code == 200
+    assert read_board(pid)["audio"]["voiceover"]["voice_id"] == "JBFqnCBsd6RMkjVDRZzb"
+    assert _edit(client, pid, "choose_audio_option", id="none").status_code == 200
+    audio = read_board(pid)["audio"]
+    assert audio["chosen"] == "none" and not audio["voiceover"]["text"] and not audio["music"]["prompt"]
+    assert not any(k.startswith("audio:") for k in _view(client, pid)["board"]["media"])
+
+    bad = [{**options[0], "voice_id": ""}, options[1]]
+    fake_llm.turns.append([{"calls": [call("set_audio_options", options=bad, recommended="hangat")]}, {"text": "ok"}])
+    _say(client, pid, "lagi")
+    assert "voice_id" in json.loads(fake_llm.requests[-1]["input"][0]["output"])["error"]
