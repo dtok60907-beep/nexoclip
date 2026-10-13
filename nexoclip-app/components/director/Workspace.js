@@ -11,6 +11,7 @@ import {
   AssetsView, AudioView, Badge, BriefView, ConceptsView, HistoryView, LockButton, ResearchView, ScriptView,
   assetUrl, inputClass, mediaStatus, SmallButton, Field,
 } from './BoardViews.js';
+import ShotPanel from './ShotPanel.js';
 
 export const PANELS = {
   script: { title: 'Naskah', View: ScriptView },
@@ -114,39 +115,6 @@ function ShotPreview({ board, shot, workspaceId, className = '' }) {
     <div className={`flex h-full w-full max-w-[720px] flex-col items-center justify-center gap-2 px-6 text-center ${className}`}>
       <span className={`text-[12px] ${busy ? 'animate-pulse text-amber-300/80' : 'text-white/35'}`}>{busy ? 'Sedang dibuat…' : 'Belum ada gambar atau video untuk shot ini.'}</span>
       <p className="line-clamp-4 text-[11px] text-white/25">{shot.frame_prompt}</p>
-    </div>
-  );
-}
-
-// Every generated result of a frame or video; clicking one makes it the take the board (and the render) uses.
-function Takes({ label, mediaKey, media, workspaceId, onEdit, busy }) {
-  const takes = media?.takes || [];
-  if (takes.length < 2) return null;
-  const isVideo = mediaKey.startsWith('video:');
-  const running = media?.status === 'running';
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="w-16 flex-none whitespace-nowrap text-[10px] text-white/40">{label}</span>
-      <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-1">
-        {takes.map((take, i) => {
-          const active = take.asset_id === media.asset_id;
-          const src = assetUrl(take.asset_id, workspaceId, !isVideo);
-          return (
-            <button key={take.asset_id} type="button" disabled={busy || running || active}
-              title={`Take ${takes.length - i}${take.outdated ? ' (prompt lama)' : ''}${active ? ' · dipakai' : ' · klik untuk pakai'}`}
-              onClick={() => onEdit('use_take', { key: mediaKey, asset_id: take.asset_id })}
-              className={`relative h-12 flex-none overflow-hidden rounded-md border bg-black/50 aspect-video ${active ? 'border-amber-300 ring-1 ring-amber-300/60' : 'border-white/10 hover:border-white/40'} disabled:cursor-default`}>
-              {isVideo ? (
-                <video src={`${src}#t=0.5`} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="" draggable={false} loading="lazy" className="pointer-events-none h-full w-full object-cover" />
-              )}
-              <span className="absolute bottom-0 left-0 rounded-tr bg-black/70 px-1 text-[9px] text-white/85">{takes.length - i}{take.outdated ? ' · lama' : ''}</span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -339,7 +307,7 @@ function ShotStrip({ board, groups, selectedId, onSelect, workspaceId }) {
   );
 }
 
-function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, onEdit, onRequest, busy, onOpenAssets }) {
+function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, onEdit, onRequest, busy, onOpenAssets, tab, onTab }) {
   const [editing, setEditing] = useState(false);
   useEffect(() => { setEditing(false); }, [selected?.shot.id]);
   if (!selected) {
@@ -377,8 +345,6 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
         </div>
         <TrimControl shot={shot} video={video} onEdit={onEdit} busy={busy} />
         <ClipActions board={board} shot={shot} video={video} onEdit={onEdit} onRequest={onRequest} onSelect={onSelect} busy={busy} />
-        <Takes label="Take frame" mediaKey={`frame:${shot.id}`} media={frame} workspaceId={workspaceId} onEdit={onEdit} busy={busy} />
-        <Takes label="Take video" mediaKey={`video:${shot.id}`} media={video} workspaceId={workspaceId} onEdit={onEdit} busy={busy} />
       </div>
       <aside className="flex w-full flex-none flex-col gap-3 overflow-y-auto lg:w-[290px]">
         <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
@@ -406,6 +372,8 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
             </div>
           )}
         </div>
+        <ShotPanel board={board} shot={shot} label={label} workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest}
+          onSelect={onSelect} busy={busy} tab={tab} onTab={onTab} />
         <CharactersAndWorld board={board} workspaceId={workspaceId} onOpenAssets={onOpenAssets} highlight={shot.element_ids} />
         <p className="text-[10px] text-white/25">{numbered.length} shot · {numbered.reduce((t, n) => t + n.shot.duration_seconds, 0)} detik</p>
       </aside>
@@ -481,7 +449,31 @@ function latestRender(board) {
   return [...(board.renders || [])].reverse().find((r) => r.status === 'done' && r.asset_id) || null;
 }
 
-function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRender, rendering, onEdit, busy }) {
+// The extra tracks under the clips on the timeline, like OpenArt's: voiceover lines, the music bed and captions.
+function Lane({ label, color, children, empty, onAdd }) {
+  return (
+    <div className="relative h-7 rounded bg-white/[0.025]">
+      <span className={`sticky left-0 z-10 inline-flex h-full w-[52px] items-center rounded-l bg-[#101318] px-1.5 text-[9px] font-semibold uppercase tracking-wide ${color}`}>{label}</span>
+      {children}
+      {empty && (
+        <button type="button" onClick={onAdd} className="absolute left-16 top-1 rounded px-1.5 py-0.5 text-[10px] text-white/35 hover:bg-white/[0.06] hover:text-white/70">+ Tambah</button>
+      )}
+    </div>
+  );
+}
+
+const LANE_LABEL = 52; // px of the sticky lane label; text of a block starting under it is pushed past it
+
+function LaneBlock({ left, width, tone, title, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} title={title} style={{ left, width: Math.max(18, width), paddingLeft: Math.max(6, LANE_LABEL - left + 6) }}
+      className={`absolute top-1 bottom-1 overflow-hidden rounded pr-1 text-left text-[9.5px] leading-[18px] text-white/90 ${tone}`}>
+      <span className="block truncate">{children}</span>
+    </button>
+  );
+}
+
+function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRender, rendering, onEdit, onRequest, busy, tab, onTab }) {
   const finalRender = latestRender(board);
   const finalSrc = finalRender && assetUrl(finalRender.asset_id, workspaceId);
   const [view, setView] = useState(finalRender ? 'final' : 'shots');
@@ -569,11 +561,38 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
     return () => clearInterval(timer);
   }, [playing, index, currentVideo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Preview with the separate audio: the music bed follows the playhead, the shot's voiceover line starts at
+  // its offset, and the clip and music step back under a voice (as in the render).
+  const musicRef = useRef(null);
+  const voRef = useRef(null);
+  const musicSrc = assetUrl(board.media['audio:music']?.asset_id, workspaceId);
+  const voSrc = current?.shot.vo_text ? assetUrl(board.media[`vo:${current.shot.id}`]?.asset_id, workspaceId) : null;
+  const voiced = numbered.some((n) => n.shot.vo_text && board.media[`vo:${n.shot.id}`]?.asset_id);
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    video.volume = voiced ? 0.45 : 1;
     if (playing) video.play().catch(() => {}); else video.pause();
-  }, [playing, index, currentVideo]);
+  }, [playing, index, currentVideo, voiced]);
+  useEffect(() => {
+    const music = musicRef.current;
+    if (!music) return;
+    music.volume = voiced ? 0.3 : 0.7;
+    if (!playing) { music.pause(); return; }
+    const at = (starts[index] || 0) + offset;
+    if (Math.abs(music.currentTime - at) > 0.4) music.currentTime = at;
+    music.play().catch(() => {});
+  }, [playing, index, musicSrc]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const vo = voRef.current;
+    if (!vo) return undefined;
+    if (!playing || !voSrc) { vo.pause(); return undefined; }
+    const wait = (current.shot.vo_offset ?? 0.3) - offset;
+    if (wait <= 0) { vo.currentTime = -wait; vo.play().catch(() => {}); return undefined; }
+    vo.currentTime = 0;
+    const timer = setTimeout(() => vo.play().catch(() => {}), wait * 1000);
+    return () => clearTimeout(timer);
+  }, [playing, index, voSrc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!numbered.length && !finalSrc) return <div className="flex h-full items-center justify-center text-[12px] text-white/35">Timeline kosong. Belum ada shot.</div>;
 
@@ -666,13 +685,13 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
             <div className="px-6 text-center text-[12px] text-white/35">Shot {current.label} belum punya gambar. <span className="text-white/20">({current.shot.title})</span></div>
           )}
         </div>
-        {current && <aside className="w-full flex-none rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 lg:w-[290px]">
-          <div className="text-[12px] font-semibold text-white/85">Shot {current.label}</div>
-          <div className="mt-2 overflow-hidden rounded-md"><Thumb board={board} shot={current.shot} workspaceId={workspaceId} className="aspect-video w-full" /></div>
-          <p className="mt-2 text-[12px] text-white/70">{current.shot.title}</p>
-          <p className="mt-1 text-[11px] text-white/45">{current.shot.description}</p>
-          <p className="mt-2 text-[10px] text-white/30">Mulai {fmtTime(starts[index])} · {current.shot.duration_seconds} detik</p>
+        {current && <aside className="w-full flex-none overflow-y-auto lg:w-[290px]">
+          <ShotPanel board={board} shot={current.shot} label={current.label} workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest}
+            onSelect={onSelect} busy={busy} tab={tab} onTab={onTab} />
+          <p className="mt-2 px-1 text-[10px] text-white/30">Mulai {fmtTime(starts[index])} · {current.shot.duration_seconds} detik</p>
         </aside>}
+        {musicSrc && <audio ref={musicRef} src={musicSrc} preload="auto" className="hidden" />}
+        {voSrc && <audio ref={voRef} key={voSrc} src={voSrc} preload="auto" className="hidden" />}
       </div>
       <div className="flex items-center justify-center gap-4">
         <span className="font-mono text-[12px] text-white/80">{fmtTime(now)}</span>
@@ -685,7 +704,16 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
       </>
       )}
       <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-2">
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          {!showFinal && current && (
+            <div className="mr-2 flex flex-wrap gap-1">
+              {[['add', '+ Shot'], ['music', '+ Musik'], ['voiceover', '+ Voiceover'], ['caption', '+ Caption']].map(([id, label]) => (
+                <button key={id} type="button" disabled={busy} onClick={() => onTab(id)}
+                  title={id === 'add' ? `Shot baru setelah shot ${current.label}` : id === 'music' ? 'Musik latar untuk seluruh video' : `Untuk shot ${current.label}`}
+                  className="rounded-md border border-white/[0.1] px-2 py-0.5 text-[10.5px] text-white/75 hover:border-white/30 hover:text-white disabled:opacity-40">{label}</button>
+              ))}
+            </div>
+          )}
           <span className="text-[10px] text-white/35">Zoom</span>
           <button type="button" onClick={() => setZoomLevel((z) => Math.max(1, z / 1.5))} disabled={zoomLevel <= 1} aria-label="Perkecil"
             className="grid h-5 w-5 place-items-center rounded text-[12px] text-white/60 hover:bg-white/[0.08] disabled:opacity-30">−</button>
@@ -735,13 +763,45 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
               </SortableContext>
             </DndContext>
             )}
+            {!showFinal && (
+              <div className="mt-1 space-y-1">
+                <Lane label="VO" color="text-violet-200" empty={!numbered.some((n) => n.shot.vo_text)} onAdd={() => onTab('voiceover')}>
+                  {numbered.map((n, i) => {
+                    if (!n.shot.vo_text) return null;
+                    const media = board.media[`vo:${n.shot.id}`];
+                    const ready = media?.status === 'succeeded';
+                    return (
+                      <LaneBlock key={n.shot.id} left={(starts[i] + (n.shot.vo_offset ?? 0.3)) * zoom}
+                        width={Math.max(0.8, n.shot.vo_text.length / 13) * zoom}
+                        tone={ready ? 'bg-violet-500/60 hover:bg-violet-500/80' : 'border border-dashed border-violet-300/50 bg-violet-500/15 hover:bg-violet-500/30'}
+                        title={`VO shot ${n.label}${ready ? '' : ' (belum di-generate)'}: ${n.shot.vo_text}`}
+                        onClick={() => { seek(i); onTab('voiceover'); }}>{n.shot.vo_text}</LaneBlock>
+                    );
+                  })}
+                </Lane>
+                <Lane label="Musik" color="text-sky-200" empty={!board.audio?.music?.prompt} onAdd={() => onTab('music')}>
+                  {board.audio?.music?.prompt && (
+                    <LaneBlock left={0} width={Math.min(total, board.audio.music.duration_seconds || total) * zoom}
+                      tone={board.media['audio:music']?.status === 'succeeded' ? 'bg-sky-500/50 hover:bg-sky-500/70' : 'border border-dashed border-sky-300/50 bg-sky-500/15 hover:bg-sky-500/30'}
+                      title={`Musik: ${board.audio.music.prompt}`} onClick={() => onTab('music')}>♪ {board.audio.music.prompt}</LaneBlock>
+                  )}
+                </Lane>
+                <Lane label="Caption" color="text-amber-200" empty={!numbered.some((n) => n.shot.caption)} onAdd={() => onTab('caption')}>
+                  {numbered.map((n, i) => n.shot.caption ? (
+                    <LaneBlock key={n.shot.id} left={starts[i] * zoom + 2} width={n.shot.duration_seconds * zoom - 4}
+                      tone="bg-amber-500/45 hover:bg-amber-500/65" title={`Caption shot ${n.label}: ${n.shot.caption}`}
+                      onClick={() => { seek(i); onTab('caption'); }}>{n.shot.caption}</LaneBlock>
+                  ) : null)}
+                </Lane>
+              </div>
+            )}
             <div className="pointer-events-none absolute bottom-0 top-0 z-30 w-0.5 bg-[#d4ff64] shadow-[0_0_6px_#d4ff64]"
               style={{ left: Math.min(showFinal ? finalTime : now, span) * zoom - 1 }} />
           </div>
         </div>
         <p className="mt-1 text-[10px] text-white/30">{showFinal
           ? 'Isi video final per shot, sesuai durasi aslinya. Klik shot untuk lompat ke bagian itu.'
-          : 'Klik shot untuk melihatnya, seret ke kiri/kanan untuk mengubah urutan, ✕ untuk menghapus. Klik Export untuk menggabungkan jadi MP4.'}</p>
+          : 'Klik shot untuk melihatnya, seret untuk mengubah urutan, ✕ untuk menghapus. Klik blok VO, Musik, atau Caption untuk mengeditnya di panel kanan. Export menggabungkan semuanya jadi MP4.'}</p>
       </div>
     </div>
   );
@@ -752,6 +812,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
 export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering }) {
   const [mode, setMode] = useState('scene');
   const [selectedId, setSelectedId] = useState(null);
+  const [shotTab, setShotTab] = useState('media'); // the shot panel's tab, shared by Shot and Timeline
   const { groups, numbered } = useMemo(() => groupShots(board), [board]);
   const selected = numbered.find((n) => n.shot.id === selectedId) || numbered[0] || null;
 
@@ -824,13 +885,13 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
           </div>
         ) : mode === 'shot' ? (
           <ShotMode board={board} numbered={numbered} groups={groups} selected={selected} onSelect={setSelectedId}
-            workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} busy={busy} onOpenAssets={openAssets} />
+            workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} busy={busy} onOpenAssets={openAssets} tab={shotTab} onTab={setShotTab} />
         ) : mode === 'scene' ? (
           <SceneMode board={board} groups={groups} workspaceId={workspaceId} onOpenAssets={openAssets}
             onPick={(id) => { setSelectedId(id); setMode('shot'); }} />
         ) : (
           <TimelineMode board={board} numbered={numbered} workspaceId={workspaceId} selectedId={selected?.shot.id} onSelect={setSelectedId}
-            onRender={onRender} rendering={rendering || busy} onEdit={onEdit} busy={busy} />
+            onRender={onRender} rendering={rendering || busy} onEdit={onEdit} onRequest={onRequest} busy={busy} tab={shotTab} onTab={setShotTab} />
         )}
       </div>
     </div>

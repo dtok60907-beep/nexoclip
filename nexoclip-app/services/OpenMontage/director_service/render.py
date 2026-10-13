@@ -74,7 +74,7 @@ def plan(board: dict[str, Any]) -> list[dict[str, Any]]:
         trim_start, trim_end = float(shot.get("trim_start") or 0), float(shot.get("trim_end") or 0)
         segments.append({"shot_id": shot["id"], "title": shot.get("title") or shot["id"], "source": source,
                          "asset_id": asset_id, "duration": max(1.0, float(shot.get("duration_seconds") or 5) - trim_start - trim_end),
-                         "trim_start": trim_start, "trim_end": trim_end})
+                         "trim_start": trim_start, "trim_end": trim_end, "caption": (shot.get("caption") or "").strip()})
     return segments
 
 
@@ -108,25 +108,74 @@ ENCODE = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", str(FPS)
 SILENCE = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
 
 
+FONT_PATHS = ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf")
+
+
+def caption_image(text: str, size: tuple[int, int], out: str) -> str:
+    """A transparent full-frame PNG with the caption on a dark band near the bottom."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    width, height = size
+    font_size = max(14, int(min(width, height) * 0.05))
+    font_path = next((p for p in FONT_PATHS if os.path.exists(p)), None)
+    font = ImageFont.truetype(font_path, font_size) if font_path else ImageFont.load_default(size=font_size)
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    lines, line = [], ""
+    for word in text.split():
+        candidate = f"{line} {word}".strip()
+        if draw.textlength(candidate, font=font) <= width * 0.84 or not line:
+            line = candidate
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+    lines = lines[:3]
+    gap = int(font_size * 0.3)
+    heights = [draw.textbbox((0, 0), ln, font=font)[3] for ln in lines]
+    block = sum(heights) + gap * (len(lines) - 1)
+    pad = int(font_size * 0.45)
+    top = height - int(height * 0.08) - block
+    box_width = max(draw.textlength(ln, font=font) for ln in lines)
+    draw.rounded_rectangle([(width - box_width) / 2 - pad, top - pad, (width + box_width) / 2 + pad, top + block + pad],
+                           radius=pad, fill=(0, 0, 0, 150))
+    y = top
+    for ln, h in zip(lines, heights):
+        draw.text(((width - draw.textlength(ln, font=font)) / 2, y), ln, font=font, fill=(255, 255, 255, 255))
+        y += h + gap
+    image.save(out)
+    return out
+
+
 def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int, int], *,
-              trim_start: float = 0.0, trim_end: float = 0.0) -> None:
+              trim_start: float = 0.0, trim_end: float = 0.0, caption: Optional[str] = None) -> None:
     """Re-encode one segment so every segment shares codec, size, fps and audio layout. A clip is cut by
-    trim_start / trim_end seconds (always keeping at least a second of it)."""
+    trim_start / trim_end seconds (always keeping at least a second of it); a caption image is laid on top."""
     vf = _video_filter(*size)
+    inputs: list[str]
     if kind == "frame":
-        _run(["-y", "-loop", "1", "-t", f"{duration:.3f}", "-i", source, *SILENCE,
-              "-vf", vf, "-map", "0:v", "-map", "1:a", "-t", f"{duration:.3f}", *ENCODE, out])
-        return
-    cut: list[str] = []
-    if trim_start or trim_end:
-        length = duration_of(source)
-        start = min(trim_start, max(0.0, length - 1.0))
-        keep = max(1.0, length - start - trim_end) if length else 0.0
-        cut = ["-ss", f"{start:.3f}", *(["-t", f"{keep:.3f}"] if keep else [])]
-    if has_audio(source):
-        _run(["-y", *cut, "-i", source, "-vf", vf, "-map", "0:v", "-map", "0:a", *ENCODE, out])
+        inputs = ["-loop", "1", "-t", f"{duration:.3f}", "-i", source]
+        audio, tail = None, ["-t", f"{duration:.3f}"]
     else:
-        _run(["-y", *cut, "-i", source, *SILENCE, "-vf", vf, "-map", "0:v", "-map", "1:a", "-shortest", *ENCODE, out])
+        cut: list[str] = []
+        if trim_start or trim_end:
+            length = duration_of(source)
+            start = min(trim_start, max(0.0, length - 1.0))
+            keep = max(1.0, length - start - trim_end) if length else 0.0
+            cut = ["-ss", f"{start:.3f}", *(["-t", f"{keep:.3f}"] if keep else [])]
+        inputs = [*cut, "-i", source]
+        audio, tail = ("0:a", []) if has_audio(source) else (None, ["-shortest"])
+    if audio is None:
+        inputs += SILENCE
+        audio = "1:a"
+    if caption:
+        overlay = len([a for a in inputs if a == "-i"])
+        inputs += ["-loop", "1", "-i", caption]
+        video = ["-filter_complex", f"[0:v]{vf}[base];[base][{overlay}:v]overlay=0:0:shortest=1,format=yuv420p[v]", "-map", "[v]"]
+    else:
+        video = ["-vf", vf, "-map", "0:v"]
+    _run(["-y", *inputs, *video, "-map", audio, *tail, *ENCODE, out])
 
 
 def join(segments: list[str], out: str) -> None:
@@ -271,8 +320,11 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             with open(raw, "wb") as fh:
                 fh.write(content)
             part = os.path.join(tmp, f"seg_{index:03d}.mp4")
+            caption = None
+            if seg.get("caption"):
+                caption = caption_image(seg["caption"], size, os.path.join(tmp, f"caption_{index}.png"))
             normalise(raw, seg["source"], seg["duration"], part, size,
-                      trim_start=seg.get("trim_start", 0.0), trim_end=seg.get("trim_end", 0.0))
+                      trim_start=seg.get("trim_start", 0.0), trim_end=seg.get("trim_end", 0.0), caption=caption)
             parts.append(part)
             length = round(duration_of(part), 3)
             placed.append({"shot_id": seg["shot_id"], "source": seg["source"], "start": round(cursor, 3), "duration": length})

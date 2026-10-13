@@ -1128,3 +1128,51 @@ def test_voiceover_lines_play_over_their_own_shots(client, fake_llm, bridge, tmp
     item = read_board(pid)["renders"][-1]
     assert item["status"] == "done", item
     assert len(placed) == 1 and abs(placed[0][1] - 2.5) < 0.1  # s2 starts after s1's 2 s clip, + 0.5 s offset
+
+
+def test_captions_are_drawn_into_the_render(client, fake_llm, bridge, tmp_path):
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    assert _edit(client, pid, "update_shot", id="s2", caption="Liburan terakhir. Mulai 12 Juli di bioskop.").status_code == 200
+    assert _edit(client, pid, "update_shot", id="s1", caption="x" * 200).status_code == 400
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    media = _view(client, pid)["board"]["media"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+    assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 201
+    _wait(pid, timeout=120)
+    item = read_board(pid)["renders"][-1]
+    assert item["status"] == "done", item
+    out = tmp_path / "captioned.mp4"
+    out.write_bytes(bridge.imports[-1]["content"])
+    # The caption shows in the bottom band of shot 2's plain teal frame and nowhere above it.
+    still = tmp_path / "still.png"
+    render._run(["-y", "-ss", "4", "-i", str(out), "-frames:v", "1", str(still)])
+    from PIL import Image
+
+    image = Image.open(still).convert("RGB")
+    w, h = image.size
+    teal = image.getpixel((w // 2, h // 4))
+
+    def changed(y0, y1):
+        pixels = [image.getpixel((x, y)) for x in range(int(w * 0.3), int(w * 0.7), 8) for y in range(y0, y1, 8)]  # inside the pillarbox
+        return sum(1 for p in pixels if sum(abs(a - b) for a, b in zip(p, teal)) > 60) / len(pixels)
+
+    assert changed(int(h * 0.75), int(h * 0.95)) > 0.05 and changed(0, int(h * 0.5)) < 0.01
+
+
+def test_shots_can_be_duplicated_and_added_before_another(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    assert _edit(client, pid, "duplicate_shot", id="s1").status_code == 200
+    assert _edit(client, pid, "add_shot", before="s1", description="Opening: ombak di pantai").status_code == 200
+    board = read_board(pid)
+    ids = [s["id"] for s in board["shots"]]
+    assert ids[:3] == [ids[0], "s1", "s1_copy2"] and ids[0].startswith("shot_")
+    media = _view(client, pid)["board"]["media"]
+    assert media["frame:s1_copy2"]["asset_id"] == media["frame:s1"]["asset_id"] and not media["frame:s1_copy2"]["stale"]

@@ -11,6 +11,7 @@ in the board, and every change is recorded as a new board version.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import uuid
@@ -109,7 +110,11 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   request_generation with vo:<shot_id> for each line and audio:music. With a voiceover the clips' own sound and the
   music are turned down automatically.
 
-Not available yet: transitions or captions in the render. Say so honestly; do not promise them.
+- Captions: a shot's caption is on-screen text at the bottom for the whole shot (subtitles of the voiceover, a tagline,
+  the CTA with the brand). Optional: add them when the format wants them (TikTok/Reels ads usually do), keep them short
+  (max ~8 words), in the video's language; set them with set_shots / update_shot.
+
+Not available yet: transitions in the render. Say so honestly; do not promise them.
 
 How to work:
 - Reply in the user's language (default Indonesian, casual, like a creative director). Keep replies short:
@@ -162,11 +167,12 @@ SHOT_FIELDS = {
     "edit_instruction": {"type": "string", "description": "optional: change to make to this shot's existing video, "
                                                          "e.g. \"make her dress red\"; generate it with edit:<shot_id>"},
     "vo_text": {"type": "string", "description": "optional: the voiceover line read over this shot"},
+    "caption": {"type": "string", "description": "optional: on-screen text shown at the bottom for the whole shot (subtitle, tagline, CTA)"},
     "vo_offset": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot where its line starts"},
     "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
-OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset")
+OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption")
 
 AUDIO_OPTION_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
@@ -319,6 +325,9 @@ def _check_id(value: str) -> str:
     return value
 
 
+MAX_CAPTION_CHARS = 140
+
+
 def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     shot = {k: raw.get(k) for k in SHOT_FIELDS}
     _check_id(shot["id"])
@@ -356,6 +365,9 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if min(trims) < 0 or sum(trims) > duration - boards.MIN_KEPT_SECONDS:
         raise ToolError(f"shot {shot['id']}: trims must be >= 0 and keep at least {boards.MIN_KEPT_SECONDS}s of the clip")
     shot["trim_start"], shot["trim_end"] = trims
+    shot["caption"] = str(shot.get("caption") or "").strip()
+    if len(shot["caption"]) > MAX_CAPTION_CHARS:
+        raise ToolError(f"shot {shot['id']}: caption is longer than {MAX_CAPTION_CHARS} characters")
     shot["vo_text"] = str(shot.get("vo_text") or "").strip()
     if len(shot["vo_text"]) > boards.MAX_VO_LINE_CHARS:
         raise ToolError(f"shot {shot['id']}: vo_text is longer than {boards.MAX_VO_LINE_CHARS} characters")
@@ -690,12 +702,13 @@ def _add_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     description = str(args.get("description") or "").strip()
     if len(description) < 5:
         raise ToolError("describe the shot in a few words")
-    after = args.get("after")
+    after, before = args.get("after"), args.get("before")
 
     def change(board: dict[str, Any]) -> dict:
-        anchor = boards.shot(board, after) if after else None
-        if after and anchor is None:
-            raise ToolError(f"no shot {after!r}")
+        anchor_id = after or before
+        anchor = boards.shot(board, anchor_id) if anchor_id else None
+        if anchor_id and anchor is None:
+            raise ToolError(f"no shot {anchor_id!r}")
         n = len(board["shots"]) + 1
         while boards.shot(board, f"shot_{n}"):
             n += 1
@@ -706,12 +719,35 @@ def _add_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
             "element_ids": [e for e in args.get("element_ids") or [] if boards.element(board, e)],
             "frame_prompt": description, "video_prompt": description,
         }, board)
-        index = board["shots"].index(anchor) + 1 if anchor else len(board["shots"])
+        index = (board["shots"].index(anchor) + (0 if before else 1)) if anchor else len(board["shots"])
         board["shots"].insert(index, item)
         return item
 
     item = ctx.update(change, lambda item: f"Menambah shot: {item['title']}")
     return {"ok": True, "shot": item}, f"Menambah shot: {item['title']}"
+
+
+def _duplicate_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: a copy of a shot right after it, with its frame and video (same prompts, so not stale)."""
+    source_id = args.get("id")
+
+    def change(board: dict[str, Any]) -> dict:
+        source = boards.shot(board, source_id)
+        if not source:
+            raise ToolError(f"no shot {source_id!r}")
+        n = 2
+        while boards.shot(board, f"{source_id[:33]}_copy{n}"):
+            n += 1
+        item = {**copy.deepcopy(source), "id": f"{source_id[:33]}_copy{n}", "title": f"{source['title']} (salinan)", "locked": False}
+        board["shots"].insert(board["shots"].index(source) + 1, item)
+        for kind in ("frame", "video", "vo"):
+            media = board["media"].get(f"{kind}:{source_id}")
+            if media and media.get("status") == boards.TERMINAL_OK:
+                board["media"][f"{kind}:{item['id']}"] = copy.deepcopy(media)
+        return item
+
+    item = ctx.update(change, lambda item: f"Menduplikat shot: {item['title']}")
+    return {"ok": True, "shot": item}, f"Menduplikat shot: {item['title']}"
 
 
 def _extend_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
@@ -1014,6 +1050,7 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "choose_audio_option": _choose_audio_option,
     "extend_shot": _extend_shot,
     "add_shot": _add_shot,
+    "duplicate_shot": _duplicate_shot,
     "set_element_photos": _set_element_photos,
     "set_scenes": _set_scenes,
     "set_lock": _set_lock,

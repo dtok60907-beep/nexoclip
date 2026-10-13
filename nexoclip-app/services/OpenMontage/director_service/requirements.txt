@@ -6,3 +6,5 @@ requests==2.34.2
 psycopg[binary]==3.2.10
 psycopg-pool==3.2.6
 imageio-ffmpeg==0.6.0
+# captions are drawn as images (the bundled ffmpeg has no drawtext)
+pillow==12.3.0
