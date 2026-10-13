@@ -234,6 +234,7 @@ def sheet_prompt(item: dict[str, Any], style: str, look: str = "") -> str:
 
 
 MAX_ELEMENT_PHOTOS = 4
+MIN_KEPT_SECONDS = 1  # a trimmed clip keeps at least this much
 FROM_PHOTOS = ("Base it on the attached reference photo(s) of this exact {kind}: keep its identity exactly as photographed "
                "({keep}); the description only fills in what the photos do not show.")
 PHOTO_KEEP = {"character": "same face, facial structure, skin tone, hair and build",

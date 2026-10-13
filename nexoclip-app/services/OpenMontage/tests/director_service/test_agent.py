@@ -939,3 +939,29 @@ def test_extend_loops_are_ignored(client, fake_llm, bridge):
     assert _edit(client, pid, "update_shot", id="s2", extends="s1").status_code == 200
     media = _view(client, pid)["board"]["media"]
     assert "frame:s1" in media and "frame:s2" in media
+
+
+def test_added_shots_and_trims_reach_the_render(client, fake_llm, bridge, tmp_path):
+    pid = _built_project(client, fake_llm)
+    assert _edit(client, pid, "add_shot", after="s1", description="Close up gelas es teh di meja").status_code == 200
+    board = read_board(pid)
+    added = board["shots"][1]
+    assert added["video_prompt"] == "Close up gelas es teh di meja" and added["scene_id"] == board["shots"][0]["scene_id"]
+    assert _edit(client, pid, "add_shot", description="x").status_code == 400
+    assert _edit(client, pid, "remove_shot", id=added["id"]).status_code == 200
+
+    # Trims only change the final video: the clip is not regenerated.
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    assert _edit(client, pid, "update_shot", id="s1", trim_start=0.5).status_code == 200
+    assert _edit(client, pid, "update_shot", id="s1", trim_start=3, trim_end=3).status_code == 400  # keeps 1 s of 6
+    media = _view(client, pid)["board"]["media"]
+    assert not media["video:s1"]["stale"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+    assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 201
+    _wait(pid, timeout=120)
+    item = read_board(pid)["renders"][-1]
+    segments = [(s["shot_id"], round(s["duration"], 1)) for s in item["segments"]]
+    assert item["status"] == "done" and segments == [("s1", 1.5), ("s2", 4.0)]  # the 2 s clip minus 0.5 s

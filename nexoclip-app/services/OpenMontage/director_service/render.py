@@ -71,8 +71,10 @@ def plan(board: dict[str, Any]) -> list[dict[str, Any]]:
             source, asset_id = "frame", frame["asset_id"]
         else:
             continue
+        trim_start, trim_end = float(shot.get("trim_start") or 0), float(shot.get("trim_end") or 0)
         segments.append({"shot_id": shot["id"], "title": shot.get("title") or shot["id"], "source": source,
-                         "asset_id": asset_id, "duration": float(shot.get("duration_seconds") or 5)})
+                         "asset_id": asset_id, "duration": max(1.0, float(shot.get("duration_seconds") or 5) - trim_start - trim_end),
+                         "trim_start": trim_start, "trim_end": trim_end})
     return segments
 
 
@@ -106,16 +108,25 @@ ENCODE = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", str(FPS)
 SILENCE = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
 
 
-def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int, int]) -> None:
-    """Re-encode one segment so every segment shares codec, size, fps and audio layout."""
+def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int, int], *,
+              trim_start: float = 0.0, trim_end: float = 0.0) -> None:
+    """Re-encode one segment so every segment shares codec, size, fps and audio layout. A clip is cut by
+    trim_start / trim_end seconds (always keeping at least a second of it)."""
     vf = _video_filter(*size)
     if kind == "frame":
         _run(["-y", "-loop", "1", "-t", f"{duration:.3f}", "-i", source, *SILENCE,
               "-vf", vf, "-map", "0:v", "-map", "1:a", "-t", f"{duration:.3f}", *ENCODE, out])
-    elif has_audio(source):
-        _run(["-y", "-i", source, "-vf", vf, "-map", "0:v", "-map", "0:a", *ENCODE, out])
+        return
+    cut: list[str] = []
+    if trim_start or trim_end:
+        length = duration_of(source)
+        start = min(trim_start, max(0.0, length - 1.0))
+        keep = max(1.0, length - start - trim_end) if length else 0.0
+        cut = ["-ss", f"{start:.3f}", *(["-t", f"{keep:.3f}"] if keep else [])]
+    if has_audio(source):
+        _run(["-y", *cut, "-i", source, "-vf", vf, "-map", "0:v", "-map", "0:a", *ENCODE, out])
     else:
-        _run(["-y", "-i", source, *SILENCE, "-vf", vf, "-map", "0:v", "-map", "1:a", "-shortest", *ENCODE, out])
+        _run(["-y", *cut, "-i", source, *SILENCE, "-vf", vf, "-map", "0:v", "-map", "1:a", "-shortest", *ENCODE, out])
 
 
 def join(segments: list[str], out: str) -> None:
@@ -205,7 +216,8 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             with open(raw, "wb") as fh:
                 fh.write(content)
             part = os.path.join(tmp, f"seg_{index:03d}.mp4")
-            normalise(raw, seg["source"], seg["duration"], part, size)
+            normalise(raw, seg["source"], seg["duration"], part, size,
+                      trim_start=seg.get("trim_start", 0.0), trim_end=seg.get("trim_end", 0.0))
             parts.append(part)
             length = round(duration_of(part), 3)
             placed.append({"shot_id": seg["shot_id"], "source": seg["source"], "start": round(cursor, 3), "duration": length})

@@ -153,13 +153,23 @@ function Takes({ label, mediaKey, media, workspaceId, onEdit, busy }) {
 // Extend (a continuation shot made from this clip) and edit (change something in this clip). Both use
 // Seedance 2.5 on the existing video and cost credits; the estimate appears in the chat to approve.
 function ClipActions({ board, shot, video, onEdit, onRequest, onSelect, busy }) {
-  const [open, setOpen] = useState(null); // 'extend' | 'edit' | null
+  const [open, setOpen] = useState(null); // 'extend' | 'edit' | 'add' | null
   const [text, setText] = useState('');
   const [seconds, setSeconds] = useState(5);
   useEffect(() => { setOpen(null); setText(''); }, [shot.id]);
   const hasClip = !!video?.asset_id && video?.status === 'succeeded';
   const submit = async () => {
-    if (open === 'extend') {
+    if (open === 'add') {
+      if (!text.trim()) return;
+      const before = new Set(board.shots.map((s) => s.id));
+      const res = await onEdit('add_shot', { after: shot.id, description: text.trim(), duration_seconds: seconds, element_ids: shot.element_ids });
+      if (res) {
+        setOpen(null); setText('');
+        let n = board.shots.length + 1;
+        while (before.has(`shot_${n}`)) n += 1;
+        onSelect(`shot_${n}`);
+      }
+    } else if (open === 'extend') {
       const base = shot.id.slice(0, 34);
       let n = 2;
       while (board.shots.some((s) => s.id === `${base}_ext${n}`)) n += 1;
@@ -179,26 +189,50 @@ function ClipActions({ board, shot, video, onEdit, onRequest, onSelect, busy }) 
           title="Tambah shot lanjutan setelah shot ini; videonya menyambung mulus dari klip ini">Perpanjang</SmallButton>
         <SmallButton disabled={busy || !hasClip} onClick={() => { setOpen(open === 'edit' ? null : 'edit'); setText(shot.edit_instruction || ''); }}
           title={hasClip ? 'Ubah sebagian isi video ini tanpa membuat ulang dari awal' : 'Generate videonya dulu'}>Edit video</SmallButton>
+        <SmallButton disabled={busy} onClick={() => { setOpen(open === 'add' ? null : 'add'); setText(''); }}
+          title="Tambah shot baru setelah shot ini">+ Shot baru</SmallButton>
       </div>
       {open && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] p-2">
           <input autoFocus className="min-w-[220px] flex-1 rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-[12px] text-white outline-none focus:border-white/30"
-            placeholder={open === 'extend' ? 'Lanjutannya ngapain? (kosong = lanjutkan gerakan yang sama)' : 'Mau diubah apa? mis. "bajunya jadi merah"'}
+            placeholder={open === 'extend' ? 'Lanjutannya ngapain? (kosong = lanjutkan gerakan yang sama)'
+              : open === 'add' ? 'Shot barunya apa? mis. "close up gelas es teh di meja"' : 'Mau diubah apa? mis. "bajunya jadi merah"'}
             value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
-          {open === 'extend' && (
+          {open !== 'edit' && (
             <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}
               className="rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-[12px] text-white">
               {[4, 5, 6, 8, 10, 12, 15].map((n) => <option key={n} value={n}>{n} dtk</option>)}
             </select>
           )}
-          <SmallButton tone="accent" disabled={busy || (open === 'edit' && !text.trim())} onClick={submit}>
-            {open === 'extend' ? 'Tambah shot lanjutan' : 'Hitung biaya edit'}
+          <SmallButton tone="accent" disabled={busy || (open !== 'extend' && !text.trim())} onClick={submit}>
+            {open === 'extend' ? 'Tambah shot lanjutan' : open === 'add' ? 'Tambah shot' : 'Hitung biaya edit'}
           </SmallButton>
           <span className="w-full text-[10px] text-white/35">
-            {open === 'extend' ? 'Shot baru muncul setelah shot ini. Generate videonya setelah klip ini jadi (pakai kredit).' : 'Hasil edit jadi take baru; take lama tetap bisa dipilih.'}
+            {open === 'extend' ? 'Shot baru muncul setelah shot ini. Generate videonya setelah klip ini jadi (pakai kredit).'
+              : open === 'add' ? 'Prompt frame dan video diisi dari deskripsi ini; rapikan lewat Edit atau minta Director.'
+              : 'Hasil edit jadi take baru; take lama tetap bisa dipilih.'}
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// Cut the start / end of a finished clip in the final video only (free, the clip is not regenerated).
+function TrimControl({ shot, video, onEdit, busy }) {
+  const [start, setStart] = useState(shot.trim_start || 0);
+  const [end, setEnd] = useState(shot.trim_end || 0);
+  useEffect(() => { setStart(shot.trim_start || 0); setEnd(shot.trim_end || 0); }, [shot.id, shot.trim_start, shot.trim_end]);
+  if (!(video?.asset_id && video?.status === 'succeeded')) return null;
+  const dirty = Number(start) !== (shot.trim_start || 0) || Number(end) !== (shot.trim_end || 0);
+  const box = 'w-16 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[12px] text-white outline-none focus:border-white/30';
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+      <span>Trim</span>
+      <label className="flex items-center gap-1">awal <input type="number" min={0} step={0.5} className={box} value={start} onChange={(e) => setStart(e.target.value)} /> dtk</label>
+      <label className="flex items-center gap-1">akhir <input type="number" min={0} step={0.5} className={box} value={end} onChange={(e) => setEnd(e.target.value)} /> dtk</label>
+      {dirty && <SmallButton tone="accent" disabled={busy} onClick={() => onEdit('update_shot', { id: shot.id, trim_start: Number(start) || 0, trim_end: Number(end) || 0 })}>Simpan trim</SmallButton>}
+      <span className="text-[10px] text-white/30">Hanya memotong di video final, gratis.</span>
     </div>
   );
 }
@@ -340,6 +374,7 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
           </SmallButton>
           <span className="text-[10px] text-white/35">{continuation ? `Lanjutan dari ${continuation.title}` : `Frame: ${mediaStatus(frame).label}`} · Video: {mediaStatus(video).label}</span>
         </div>
+        <TrimControl shot={shot} video={video} onEdit={onEdit} busy={busy} />
         <ClipActions board={board} shot={shot} video={video} onEdit={onEdit} onRequest={onRequest} onSelect={onSelect} busy={busy} />
         <Takes label="Take frame" mediaKey={`frame:${shot.id}`} media={frame} workspaceId={workspaceId} onEdit={onEdit} busy={busy} />
         <Takes label="Take video" mediaKey={`video:${shot.id}`} media={video} workspaceId={workspaceId} onEdit={onEdit} busy={busy} />

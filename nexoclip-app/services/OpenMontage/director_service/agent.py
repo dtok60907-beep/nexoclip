@@ -142,8 +142,10 @@ SHOT_FIELDS = {
                                                 "extended; no frame of its own). Only for the same action going on"},
     "edit_instruction": {"type": "string", "description": "optional: change to make to this shot's existing video, "
                                                          "e.g. \"make her dress red\"; generate it with edit:<shot_id>"},
+    "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
+    "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
-OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction")
+OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end")
 
 SCENE_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
@@ -296,6 +298,13 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if shot["extends"] == shot["id"]:
         raise ToolError(f"shot {shot['id']}: a shot cannot extend itself")
     shot["edit_instruction"] = str(shot.get("edit_instruction") or "").strip()
+    try:
+        trims = [round(float(shot.get(k) or 0), 2) for k in ("trim_start", "trim_end")]
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"shot {shot['id']}: trim_start / trim_end must be numbers") from exc
+    if min(trims) < 0 or sum(trims) > duration - boards.MIN_KEPT_SECONDS:
+        raise ToolError(f"shot {shot['id']}: trims must be >= 0 and keep at least {boards.MIN_KEPT_SECONDS}s of the clip")
+    shot["trim_start"], shot["trim_end"] = trims
     shot["locked"] = bool(raw.get("locked"))
     return shot
 
@@ -615,6 +624,35 @@ def _move_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True}, f"Memindah urutan shot: {title}"
 
 
+def _add_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: a new shot after another one (or at the end), from a short description."""
+    description = str(args.get("description") or "").strip()
+    if len(description) < 5:
+        raise ToolError("describe the shot in a few words")
+    after = args.get("after")
+
+    def change(board: dict[str, Any]) -> dict:
+        anchor = boards.shot(board, after) if after else None
+        if after and anchor is None:
+            raise ToolError(f"no shot {after!r}")
+        n = len(board["shots"]) + 1
+        while boards.shot(board, f"shot_{n}"):
+            n += 1
+        scene_id = (anchor or {}).get("scene_id") or args.get("scene_id") or (board["scenes"][-1]["id"] if board["scenes"] else None)
+        item = _clean_shot({
+            "id": f"shot_{n}", "title": str(args.get("title") or "").strip() or description[:60], "description": description,
+            "scene_id": scene_id, "duration_seconds": args.get("duration_seconds") or 5,
+            "element_ids": [e for e in args.get("element_ids") or [] if boards.element(board, e)],
+            "frame_prompt": description, "video_prompt": description,
+        }, board)
+        index = board["shots"].index(anchor) + 1 if anchor else len(board["shots"])
+        board["shots"].insert(index, item)
+        return item
+
+    item = ctx.update(change, lambda item: f"Menambah shot: {item['title']}")
+    return {"ok": True, "shot": item}, f"Menambah shot: {item['title']}"
+
+
 def _extend_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     """User only: add a continuation right after a shot; its clip extends that shot's video."""
     source_id = args.get("id")
@@ -769,6 +807,7 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "move_shot": _move_shot,
     "use_take": _use_take,
     "extend_shot": _extend_shot,
+    "add_shot": _add_shot,
     "set_element_photos": _set_element_photos,
     "set_scenes": _set_scenes,
     "set_lock": _set_lock,
