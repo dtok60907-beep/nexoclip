@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]  # the OpenMontage folder: skills/ and .agents/skills/
+ROOT = Path(__file__).resolve().parents[1]  # the OpenMontage folder (its skills/)
 MAX_CHARS = 36000  # the official Seedance 2.5 reference is ~32k characters
 
 # Third-party guides (skills/external/CREDITS.md): Serge Shima's visual-skills (CC BY 4.0) and
@@ -25,7 +25,7 @@ SEEDANCE = VS + "seedance-25.md"  # a summary of ByteDance's official Seedance 2
 # Left out on purpose, to keep one source for prompt syntax (ByteDance's own optimizer, SD25_PE): visual-skills'
 # seedance.md (Seedance 1.x/2.0), universal-rules.md and fixes-and-skeletons.md (multi-model skeletons, default
 # negatives), shortfilm-prompts' negative-prompts.md, OpenMontage's seedance-2-5 SKILL.md and video-gen-prompting.md.
-SEEDANCE_TECHNIQUES = ".agents/skills/seedance-2-5/reference/techniques.md"
+SEEDANCE_TECHNIQUES = "skills/creative/seedance-archetypes.md"
 SD25_PE = "skills/external/seedance-sd25-pe/"  # ByteDance's own Seedance 2.5 prompt optimizer, split in three parts
 CINEMATIC = {"idea": "skills/pipelines/cinematic/idea-director.md", "script": "skills/pipelines/cinematic/script-director.md",
              "scene": "skills/pipelines/cinematic/scene-director.md", "asset": "skills/pipelines/cinematic/asset-director.md"}

@@ -1,7 +1,7 @@
 # UGC Ad — Idea, Script and Shot Guide
 
 > Sources: TikTok Creative Center "Top Ads" patterns, Meta creative best practices for Reels ads, Seedance 2.5
-> prompt category 8 ("UGC-style ad · natural movement, no production feel", `.agents/skills/seedance-2-5/reference/techniques.md`),
+> prompt category 8 ("UGC-style ad · natural movement, no production feel", `seedance-archetypes.md`),
 > OpenMontage `short-form.md`. Written for generated (not filmed) UGC.
 
 ## When To Use
