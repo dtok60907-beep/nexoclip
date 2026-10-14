@@ -9,6 +9,8 @@ import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
 import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
 import PricingModal from './PricingModal';
+import LowBalanceDialog from './LowBalanceDialog';
+import { lowBalanceLevel, nextLowBalanceDialog } from '../src/lib/lowBalance.js';
 import StudioTour from './tour/StudioTour';
 import StudioHome from './StudioHome';
 import StudioAuthModal from './saas/StudioAuthModal';
@@ -358,6 +360,8 @@ export default function StandaloneShell({ initialTab, children }) {
   const isFullWidthTab = activeTab === 'director';
 
   const [balance, setBalance] = useState(null);
+  const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
+  const creditLevel = lowBalanceLevel(balance);
   const [tourOpen, setTourOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
@@ -441,6 +445,28 @@ export default function StandaloneShell({ initialTab, children }) {
       if (response.ok) setBalance((await response.json()).balance);
     } catch { setBalance(null); }
   }, []);
+
+  // Credits are also spent where the shell does not see it (AI Director chats, voiceovers): check every minute and
+  // whenever the user comes back to the tab.
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return undefined;
+    const timer = window.setInterval(refreshBalance, 60_000);
+    window.addEventListener('focus', refreshBalance);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshBalance); };
+  }, [authStatus, refreshBalance]);
+
+  // Running low or out: ask to top up, once per level per session.
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return;
+    let seen = null;
+    try { seen = window.sessionStorage.getItem('nexoclip_low_balance_seen'); } catch { /* storage blocked */ }
+    const next = nextLowBalanceDialog(creditLevel, seen);
+    try {
+      if (next.seen) window.sessionStorage.setItem('nexoclip_low_balance_seen', next.seen);
+      else window.sessionStorage.removeItem('nexoclip_low_balance_seen');
+    } catch { /* storage blocked */ }
+    if (next.open) setLowBalanceOpen(true);
+  }, [authStatus, creditLevel]);
 
   const makeSuccessCallback = useCallback((tabId) => (data) => {
     refreshBalance();
@@ -759,7 +785,10 @@ export default function StandaloneShell({ initialTab, children }) {
             <button type="button" className="suite-header-help" aria-label="Studio help" title="Studio help" onClick={() => setTourOpen(true)}>?</button>
             <button type="button" data-tour="top-up" className="suite-header-link" onClick={() => setPricingOpen(true)}>Pricing</button>
             <a className="suite-header-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
-            <button data-tour="credit-balance" onClick={() => handleTabChange('usage')} className="suite-credit-pill" aria-label="View credit usage">
+            <button data-tour="credit-balance" onClick={() => (creditLevel ? setPricingOpen(true) : handleTabChange('usage'))}
+              className={`suite-credit-pill${creditLevel ? ` suite-credit-pill--${creditLevel}` : ''}`}
+              aria-label={creditLevel ? 'Credits are running low, top up' : 'View credit usage'}
+              title={creditLevel === 'empty' ? 'You are out of credits. Click to top up.' : creditLevel === 'low' ? 'Your credits are running low. Click to top up.' : undefined}>
               <span className="suite-credit-gem">✧</span>
               <span><strong>{balance !== null ? Number(balance).toLocaleString() : '—'}</strong><small>credits</small></span>
             </button>
@@ -1092,6 +1121,8 @@ export default function StandaloneShell({ initialTab, children }) {
         onRequireAuth={requestPricingAuth}
         onClose={() => setPricingOpen(false)}
       />}
+      {lowBalanceOpen && creditLevel && <LowBalanceDialog level={creditLevel} balance={balance}
+        onTopUp={() => { setLowBalanceOpen(false); setPricingOpen(true); }} onClose={() => setLowBalanceOpen(false)} />}
       <StudioTour open={tourOpen} onClose={() => setTourOpen(false)} activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );

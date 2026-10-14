@@ -429,3 +429,16 @@
 @media(min-width:761px) { .suite-video-row--spotlight { grid-auto-columns:minmax(220px,1fr); } }
 .suite-video-row { gap:14px; padding:4px 3px 14px; }
 @media(prefers-reduced-motion:reduce) { .suite-card .suite-card-media > video { transform:none; transition:none; } }
+.suite-low-balance-dialog { position:fixed; inset:0; margin:auto; width:min(420px,calc(100vw - 32px)); padding:28px 26px 22px; border:1px solid #ffffff1c; border-radius:20px; color:#f4f4f5; background:#0b0e14; box-shadow:0 30px 100px #000b; text-align:center; }
+.suite-low-balance-dialog::backdrop { background:#000b; backdrop-filter:blur(6px); }
+.suite-low-balance-icon { width:44px; height:44px; margin:0 auto 14px; display:grid; place-items:center; border-radius:14px; background:#22d3ee1a; color:#67e8f9; font-size:20px; font-weight:700; }
+.suite-low-balance-dialog h2 { font-size:18px; font-weight:650; letter-spacing:-.3px; }
+.suite-low-balance-dialog p { margin-top:8px; color:#ffffff99; font-size:13px; line-height:1.55; }
+.suite-low-balance-actions { margin-top:20px; display:flex; flex-direction:column; gap:8px; }
+.suite-low-balance-actions .suite-primary { justify-content:center; }
+.suite-low-balance-later { padding:8px; color:#ffffff73; font-size:12px; }
+.suite-low-balance-later:hover { color:#fff; }
+.suite-credit-pill--low { border-color:#fbbf2466; background:#fbbf2412; }
+.suite-credit-pill--empty { border-color:#f8717166; background:#f8717114; }
+.suite-credit-pill--low strong { color:#fcd34d; }
+.suite-credit-pill--empty strong { color:#fca5a5; }
