@@ -5,7 +5,7 @@ import { R2ObjectStorage } from '../storage/r2ObjectStorage.js';
 import { listAssets } from '../repositories/assetMetadataRepository.js';
 import { ensureAssetThumbnail } from './assetThumbnailService.js';
 
-const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'audio/wav']);
+const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav']);
 const maxSizeBytes = 50 * 1024 * 1024;
 
 export function validateAssetInput(input, { maxBytes = maxSizeBytes } = {}) {
@@ -83,7 +83,7 @@ export async function importWorkspaceAsset(workspaceId, { filename, contentType,
   const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body || []);
   const metadata = validateAssetInput({ filename, contentType, sizeBytes: bytes.length }, { maxBytes });
   const isImage = metadata.contentType.startsWith('image/');
-  if (!isImage && !(allowVideo && metadata.contentType === 'video/mp4') && !(allowAudio && metadata.contentType.startsWith('audio/'))) {
+  if (!isImage && !(allowVideo && metadata.contentType.startsWith('video/')) && !(allowAudio && metadata.contentType.startsWith('audio/'))) {
     throw new Error('Only images can be imported');
   }
   const existing = isImage ? await findExactTrustedWorkspaceAsset({

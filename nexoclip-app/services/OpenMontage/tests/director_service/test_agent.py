@@ -137,6 +137,10 @@ class FakeBridge:
             self.trusted[asset_id] = "active"
         return state
 
+    def delete_render(self, asset_id):
+        self.deleted = getattr(self, "deleted", []) + [asset_id]
+        return True
+
     def upload_render(self, *, content, filename):
         self.imports.append({"content": content, "content_type": "video/mp4", "filename": filename})
         return f"asset-import{len(self.imports)}"
@@ -671,6 +675,31 @@ def test_a_turn_stops_before_a_step_the_balance_cannot_cover(client, fake_llm, b
     assert "Kredit kamu tinggal 12" in view["chat"][-1]["text"] and "Top up" in view["chat"][-1]["text"]
 
 
+def test_projects_are_named_renamed_duplicated_and_deleted(client, fake_llm):
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([{"calls": [call("set_project_title", title="Shore Thing Trailer")]}, {"text": "ok"}])
+    _say(client, pid, "namain projectnya")
+    assert _view(client, pid)["title"] == "Shore Thing Trailer"
+
+    # The user's own name wins: the Director can no longer change it.
+    assert client.post(f"/api/director/projects/{pid}/settings", json={"title": "Liburan Terakhir"}, headers=HEADERS).status_code == 200
+    fake_llm.turns.append([{"calls": [call("set_project_title", title="Something Else")]}, {"text": "ok"}])
+    _say(client, pid, "ganti nama lagi")
+    assert _view(client, pid)["title"] == "Liburan Terakhir"
+
+    copy = client.post(f"/api/director/projects/{pid}/duplicate", headers=HEADERS)
+    assert copy.status_code == 201, copy.text
+    copy_id = copy.json()["project_id"]
+    copied = _view(client, copy_id)
+    assert copied["title"] == "Liburan Terakhir (salinan)"
+    assert [s["id"] for s in copied["board"]["shots"]] == [s["id"] for s in _view(client, pid)["board"]["shots"]]
+    assert copied["board"]["requests"] == [] and len(copied["chat"]) == 1
+
+    assert client.post(f"/api/director/projects/{copy_id}/delete", headers=HEADERS).status_code == 200
+    assert client.get(f"/api/director/projects/{copy_id}", headers=HEADERS).status_code == 404
+    assert pid in [p["project_id"] for p in client.get("/api/director/projects", headers=HEADERS).json()]
+
+
 def test_refused_calls_must_be_redone_before_the_reply(client, fake_llm, monkeypatch, no_skill_gate):
     pid = _built_project(client, fake_llm)
     monkeypatch.setattr(agent_mod, "REQUIRED_SKILLS", no_skill_gate)
@@ -887,6 +916,81 @@ def test_render_joins_videos_and_still_frames_into_one_mp4(client, fake_llm, bri
     out = tmp_path / "final.mp4"
     out.write_bytes(upload["content"])
     assert render.has_audio(str(out))  # silent clips still carry a track, so players and editors agree
+
+
+def test_export_options_and_download_assets(client, fake_llm, bridge, tmp_path):
+    import io
+    import zipfile
+
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2"]}, headers=HEADERS).json()
+    client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
+    _wait(pid)
+    media = _view(client, pid)["board"]["media"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+
+    bad = client.post(f"/api/director/projects/{pid}/renders", json={"fps": 25}, headers=HEADERS)
+    assert bad.status_code == 422
+    res = client.post(f"/api/director/projects/{pid}/renders", json={"resolution": "480p", "fps": 30, "format": "mov"}, headers=HEADERS)
+    assert res.status_code == 201, res.text
+    _wait(pid, timeout=120)
+    item = _view(client, pid)["board"]["renders"][-1]
+    assert item["status"] == "done" and (item["fps"], item["format"], item["height"]) == (30, "mov", 480)
+    upload = bridge.imports[-1]
+    assert upload["filename"].endswith(".mov")
+    out = tmp_path / "export.mov"
+    out.write_bytes(upload["content"])
+    probe = render._run(["-i", str(out), "-f", "null", "-"])
+    assert "30 fps" in probe and "mov" in probe
+
+    bridge.files[item["asset_id"]] = nexoclip.Downloaded(upload["content"], "video/quicktime")
+    archive = client.get(f"/api/director/projects/{pid}/assets.zip", headers=HEADERS)
+    assert archive.status_code == 200 and archive.headers["content-type"] == "application/zip"
+    names = zipfile.ZipFile(io.BytesIO(archive.content)).namelist()
+    assert "shot/01-Arrival-video.mp4" in names and "shot/02-Porch-gambar.png" in names
+    assert "video-final.mov" in names and any(n.startswith("aset/character-Maya") for n in names)
+
+
+def test_a_dissolve_overlaps_two_shots_in_the_render(client, fake_llm, bridge, tmp_path):
+    pid = _built_project(client, fake_llm)
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2"]}, headers=HEADERS).json()
+    client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
+    _wait(pid)
+    media = _view(client, pid)["board"]["media"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+    assert _edit(client, pid, "update_shot", id="s2", transition="dissolve").status_code == 200
+    assert _edit(client, pid, "update_shot", id="s2", transition="wipe").status_code == 400
+
+    assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 201
+    _wait(pid, timeout=120)
+    item = _view(client, pid)["board"]["renders"][-1]
+    assert item["status"] == "done", item
+    assert abs(item["duration_seconds"] - 5.5) < 0.3  # 2 s clip + 4 s still, overlapping by 0.5 s
+    assert [round(s["start"], 1) for s in item["segments"]] == [0.0, 1.5]
+
+
+def test_only_the_latest_three_final_videos_keep_their_file(client, fake_llm):
+    from director_service import render
+    from director_service.board import update_board
+
+    pid = _built_project(client, fake_llm)
+
+    def fill(board):
+        board["renders"] = [{"id": f"r{n}", "status": "done", "asset_id": f"render-{n}"} for n in range(5)] + [
+            {"id": "r_failed", "status": "failed", "asset_id": None}]
+
+    update_board(pid, fill)
+    removed = []
+    assert render.prune(pid, removed.append) == 2
+    assert removed == ["render-0", "render-1"]
+    renders = {r["id"]: r for r in read_board(pid)["renders"]}
+    assert renders["r0"]["deleted"] and renders["r0"]["asset_id"] is None
+    assert [renders[f"r{n}"]["asset_id"] for n in (2, 3, 4)] == ["render-2", "render-3", "render-4"]
+    assert render.prune(pid, removed.append) == 0
 
 
 def test_agent_can_render_and_a_dead_render_is_healed(client, fake_llm, bridge, tmp_path, monkeypatch):

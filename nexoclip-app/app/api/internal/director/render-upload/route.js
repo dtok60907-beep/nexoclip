@@ -60,7 +60,8 @@ export function createRenderUploadHandler({
       if (!workspace) return Response.json({ error: 'Workspace not found' }, { status: 404 });
       const filename = typeof meta.filename === 'string' && meta.filename.trim() ? meta.filename.trim().slice(0, 200) : 'director-render.mp4';
       const result = await importAsset(workspace.id, {
-        filename, contentType: 'video/mp4', body: bytes, allowVideo: true, maxBytes: MAX_RENDER_BYTES,
+        // A MOV export (the Director's Export dialog) is stored as QuickTime, everything else as MP4.
+        filename, contentType: /\.mov$/i.test(filename) ? 'video/quicktime' : 'video/mp4', body: bytes, allowVideo: true, maxBytes: MAX_RENDER_BYTES,
       }, loadStorage(), loadPool());
       return Response.json({ assetId: result.asset.id }, { status: 201 });
     } catch (error) {

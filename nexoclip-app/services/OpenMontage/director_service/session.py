@@ -114,10 +114,10 @@ def _turn(project_id: str) -> None:
                     approve_request(project_id, request["id"], by_director=True)
                 except (Busy, InvalidAction):
                     pass  # e.g. sheets still generating: approved when they finish (_after_generation)
-    # Name the project after its script once there is one, unless it was renamed since.
+    # Name the project after its script once there is one, when neither the Director nor the user named it.
     script = read_board(project_id)["script"]
-    if script and script.get("title") and read_director(project_id).get("title_auto", True):
-        update_director(project_id, title=script["title"][:80], title_auto=False)
+    if script and script.get("title") and read_director(project_id).get("title_by", "auto") == "auto":
+        update_director(project_id, title=script["title"][:80], title_by="agent")
 
 
 def _check_start_credits(owner: str) -> None:
@@ -141,6 +141,47 @@ def create_project(owner: str, first_message: str, *, run_mode: str = "guide", m
     append_chat(project_id, "user", first_message, kind="message", meta=meta or None)
     _background(project_id, "agent", lambda: _turn(project_id), BUSY_AGENT)
     return project_id
+
+
+def rename_project(project_id: str, title: str) -> None:
+    title = " ".join((title or "").split())[:80]
+    if not title:
+        raise InvalidAction("title is required")
+    update_director(project_id, title=title, title_auto=False, title_by="user")  # the Director no longer renames it
+
+
+def delete_project(project_id: str) -> None:
+    if any(activity_held(project_id, activity) for activity in ("agent", "generation", "render")):
+        raise Busy("project ini sedang bekerja (chat, generate atau render); tunggu selesai lalu hapus")
+    from director_service.store import delete_project as remove
+
+    remove(project_id)
+
+
+def duplicate_project(project_id: str) -> str:
+    """A copy to try another direction: the board as it is now (with the media already made, which stay shared
+    assets), a fresh history and chat. Nothing is generated or charged."""
+    from director_service.board import CONTENT_KEYS, read_board, update_board
+
+    source = read_director(project_id)
+    board = read_board(project_id)
+    title = f"{source['title'][:70]} (salinan)"
+    copy_id = f"{_slug(title)}-{uuid.uuid4().hex[:6]}"
+    idle = {"status": "idle", "error": None, "updated_at": now_iso()}
+    insert_project(copy_id, {"owner": source["owner"], "title": title, "title_auto": False, "title_by": "user", "llm_model": source["llm_model"],
+                             "agent": idle, "generation": idle, "run_mode": source.get("run_mode") or "guide"})
+    create_board(copy_id)
+
+    def fill(copy: dict) -> None:
+        for key in CONTENT_KEYS:
+            copy[key] = board[key]
+        copy["media"] = board["media"]  # generated sheets, frames and clips: the same assets, reused
+        copy["video_notes"] = board.get("video_notes") or {}
+
+    update_board(copy_id, fill, author="system", summary=f"Disalin dari {source['title'][:60]}")
+    append_chat(copy_id, "assistant", f"Ini salinan dari *{source['title']}*: board dan media yang sudah dibuat ikut "
+                "tersalin, riwayat chat dan generate mulai dari nol.", kind="message")
+    return copy_id
 
 
 def send_message(project_id: str, text: str, meta: Optional[dict] = None) -> None:
@@ -395,12 +436,12 @@ def resume(project_id: str) -> None:
 # ---------------------------------------------------------------- final video
 
 
-def start_render(project_id: str) -> dict:
-    """Join the shots into one MP4 in the background. Free: no model is called."""
+def start_render(project_id: str, options: Optional[dict] = None) -> dict:
+    """Join the shots into one video (the Export dialog's resolution, fps and format) in the background. Free."""
     if activity_held(project_id, "render"):
         raise Busy(BUSY_RENDER)
     try:
-        item = render.create(project_id)
+        item = render.create(project_id, options)
     except render.RenderError as exc:
         raise InvalidAction(str(exc)) from exc
     append_chat(project_id, "assistant", "Render video final", kind="render", meta={"render_id": item["id"]})

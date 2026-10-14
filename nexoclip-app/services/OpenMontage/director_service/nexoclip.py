@@ -192,6 +192,10 @@ class Bridge:
         action = {"start": "trust-asset", "status": "trust-status", "remove": "untrust-asset"}[operation]
         return str(self._post({"action": action, "assetId": asset_id}).json().get("status") or "not_trusted")
 
+    def delete_render(self, asset_id: str) -> bool:
+        """Remove an old final video from the user's workspace storage (videos only)."""
+        return bool(self._post({"action": "delete-render", "assetId": asset_id}).json().get("deleted"))
+
     def submit(self, *, kind: str, prompt: str, parameters: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
         response = self._post({
             "action": "submit", "source": SOURCE,

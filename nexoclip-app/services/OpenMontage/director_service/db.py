@@ -93,6 +93,12 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS run_mode text NOT NULL DEFAULT 'guide';
     """,
+    # Who named the project last: "auto" (its first message), "agent" (the Director) or "user". The Director may
+    # rename it until the user does.
+    """
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS title_by text NOT NULL DEFAULT 'auto';
+    UPDATE projects SET title_by = 'user' WHERE NOT title_auto;
+    """,
 ]
 
 

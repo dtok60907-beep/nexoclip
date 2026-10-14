@@ -21,6 +21,8 @@ from director_service.board import TERMINAL_OK, read_board, update_board
 from director_service.store import now_iso
 
 FPS = 24
+EXPORT_FPS = (24, 30, 60)
+EXPORT_FORMATS = ("mp4", "mov")  # both H.264 + AAC; MOV for editors that prefer QuickTime
 HEIGHTS = {"480p": 480, "720p": 720, "1080p": 1080}
 MAX_BYTES = 200 * 1024 * 1024  # MAX_RENDER_BYTES of nexoclip's render-upload route
 FFMPEG_TIMEOUT_SECONDS = 600
@@ -77,7 +79,8 @@ def plan(board: dict[str, Any]) -> list[dict[str, Any]]:
                          "asset_id": asset_id, "duration": max(1.0, float(shot.get("duration_seconds") or 5) - trim_start - trim_end),
                          "trim_start": trim_start, "trim_end": trim_end, "caption": (shot.get("caption") or "").strip(),
                          "caption_start": float(shot.get("caption_start") or 0),
-                         "caption_end": None if shot.get("caption_end") is None else float(shot["caption_end"])})
+                         "caption_end": None if shot.get("caption_end") is None else float(shot["caption_end"]),
+                         "transition": shot.get("transition") if shot.get("transition") in TRANSITIONS else "cut"})
     return segments
 
 
@@ -101,13 +104,17 @@ def has_audio(path: str) -> bool:
     return bool(re.search(r"Stream #\S+.*: Audio:", probe.stderr))
 
 
-def _video_filter(width: int, height: int) -> str:
+def _video_filter(width: int, height: int, fps: int = FPS) -> str:
     return (f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={FPS},format=yuv420p")
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps},format=yuv420p")
 
 
-ENCODE = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", str(FPS),
-          "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+def encode_args(fps: int = FPS) -> list[str]:
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", str(fps),
+            "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+
+
+ENCODE = encode_args()
 SILENCE = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
 
 
@@ -153,10 +160,10 @@ def caption_image(text: str, size: tuple[int, int], out: str) -> str:
 
 def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int, int], *,
               trim_start: float = 0.0, trim_end: float = 0.0, caption: Optional[str] = None,
-              caption_window: Optional[tuple[float, Optional[float]]] = None) -> None:
+              caption_window: Optional[tuple[float, Optional[float]]] = None, fps: int = FPS) -> None:
     """Re-encode one segment so every segment shares codec, size, fps and audio layout. A clip is cut by
     trim_start / trim_end seconds (always keeping at least a second of it); a caption image is laid on top."""
-    vf = _video_filter(*size)
+    vf = _video_filter(*size, fps)
     inputs: list[str]
     if kind == "frame":
         inputs = ["-loop", "1", "-t", f"{duration:.3f}", "-i", source]
@@ -181,7 +188,51 @@ def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int
         video = ["-filter_complex", f"[0:v]{vf}[base];[base][{overlay}:v]overlay=0:0:shortest=1{enable},format=yuv420p[v]", "-map", "[v]"]
     else:
         video = ["-vf", vf, "-map", "0:v"]
-    _run(["-y", *inputs, *video, "-map", audio, *tail, *ENCODE, out])
+    _run(["-y", *inputs, *video, "-map", audio, *tail, *encode_args(fps), out])
+
+
+# How a shot comes in after the previous one: a cut, a fade through black, or a dissolve (cross-fade).
+TRANSITIONS = ("cut", "fade", "dissolve")
+TRANSITION_SECONDS = 0.5
+XFADE = {"fade": "fadeblack", "dissolve": "fade"}
+
+
+def transition_seconds(kind: str, before: float, after: float) -> float:
+    """How long the transition into a shot overlaps the previous one (never more than a third of either clip)."""
+    if kind not in XFADE:
+        return 0.0
+    return round(max(0.0, min(TRANSITION_SECONDS, before / 3, after / 3)), 3)
+
+
+def join_with_transitions(parts: list[str], lengths: list[float], kinds: list[str], out: str, fps: int = FPS) -> list[float]:
+    """Join normalised parts, with xfade / acrossfade where a shot has a transition (re-encoded); returns where each
+    part starts in the result. Without transitions this is the plain lossless join."""
+    overlaps = [0.0] + [transition_seconds(kinds[i], lengths[i - 1], lengths[i]) for i in range(1, len(parts))]
+    starts, cursor = [], 0.0
+    for index, length in enumerate(lengths):
+        cursor -= overlaps[index]
+        starts.append(round(cursor, 3))
+        cursor += length
+    if not any(overlaps):
+        join(parts, out)
+        return starts
+    inputs, chains = [], []
+    for part in parts:
+        inputs += ["-i", part]
+    video, audio = "[0:v]", "[0:a]"
+    for index in range(1, len(parts)):
+        v_out, a_out = f"[v{index}]", f"[a{index}]"
+        if overlaps[index]:
+            chains.append(f"{video}[{index}:v]xfade=transition={XFADE[kinds[index]]}:duration={overlaps[index]}:"
+                          f"offset={starts[index]}{v_out}")
+            chains.append(f"{audio}[{index}:a]acrossfade=d={overlaps[index]}{a_out}")
+        else:
+            chains.append(f"{video}[{index}:v]concat=n=2:v=1:a=0{v_out}")
+            chains.append(f"{audio}[{index}:a]concat=n=2:v=0:a=1{a_out}")
+        video, audio = v_out, a_out
+    _run(["-y", *inputs, "-filter_complex", ";".join(chains), "-map", video, "-map", audio, *encode_args(fps),
+          "-movflags", "+faststart", out])
+    return starts
 
 
 def join(segments: list[str], out: str) -> None:
@@ -290,8 +341,26 @@ def _set(project_id: str, render_id: str, **fields: Any) -> None:
     update_board(project_id, change)
 
 
-def create(project_id: str) -> dict[str, Any]:
+def export_options(board: dict[str, Any], options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """The Export dialog's choices (resolution, frames per second, container), defaulting to the brief."""
+    from director_service.board import RESOLUTIONS
+
+    options = options or {}
+    resolution = options.get("resolution") or board["brief"].get("resolution") or "720p"
+    fps = int(options.get("fps") or FPS)
+    fmt = str(options.get("format") or "mp4").lower()
+    if resolution not in RESOLUTIONS:
+        raise RenderError(f"resolusi harus salah satu dari {', '.join(RESOLUTIONS)}")
+    if fps not in EXPORT_FPS:
+        raise RenderError(f"fps harus salah satu dari {', '.join(map(str, EXPORT_FPS))}")
+    if fmt not in EXPORT_FORMATS:
+        raise RenderError("format harus mp4 atau mov")
+    return {"resolution": resolution, "fps": fps, "format": fmt}
+
+
+def create(project_id: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     board = read_board(project_id)
+    chosen = export_options(board, options)
     segments = plan(board)
     if not segments:
         raise RenderError("belum ada shot dengan frame atau video yang sudah jadi untuk dirender")
@@ -304,7 +373,7 @@ def create(project_id: str) -> dict[str, Any]:
         "audio": sorted(audio_tracks(board)),  # separate tracks laid over the clips
         "voice_lines": len(voice_lines(board)),
         "aspect_ratio": board["brief"].get("aspect_ratio") or "16:9",
-        "resolution": board["brief"].get("resolution") or "720p",
+        "resolution": chosen["resolution"], "fps": chosen["fps"], "format": chosen["format"],
     }
 
     def change(b: dict[str, Any]) -> None:
@@ -314,8 +383,26 @@ def create(project_id: str) -> dict[str, Any]:
     return item
 
 
+KEEP_RENDERS = 3  # final videos kept per project; older files are removed from storage
+
+
+def prune(project_id: str, remove: Callable[[str], Any]) -> int:
+    """Remove the files of all but the latest KEEP_RENDERS finished renders (each export makes a new MP4)."""
+    board = read_board(project_id)
+    done = [r for r in board["renders"] if r.get("status") == "done" and r.get("asset_id")]
+    removed = 0
+    for old in done[:-KEEP_RENDERS]:
+        try:
+            remove(old["asset_id"])
+        except Exception:  # noqa: BLE001 - kept for the next export to retry
+            continue
+        _set(project_id, old["id"], asset_id=None, deleted=True)
+        removed += 1
+    return removed
+
+
 def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], tuple[bytes, str]]] = None,
-        upload: Optional[Callable[[bytes, str], str]] = None) -> dict[str, Any]:
+        upload: Optional[Callable[[bytes, str], str]] = None, remove: Optional[Callable[[str], Any]] = None) -> dict[str, Any]:
     """Build the MP4 for a created render and store it as a nexoclip asset."""
     board = read_board(project_id)
     item = find(board, render_id)
@@ -327,6 +414,7 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             raise RenderError("render butuh koneksi ke nexoclip (bridge belum dikonfigurasi)")
         download = download or (lambda asset_id: (lambda d: (d.content, d.content_type))(bridge.download(asset_id)))
         upload = upload or (lambda content, filename: bridge.upload_render(content=content, filename=filename))
+        remove = remove or bridge.delete_render
 
     by_shot = {s["shot_id"]: s for s in plan(board)}
     segments = [by_shot[sid] for sid in item["shots"] if sid in by_shot]
@@ -349,7 +437,7 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             caption = None
             if seg.get("caption"):
                 caption = caption_image(seg["caption"], size, os.path.join(tmp, f"caption_{index}.png"))
-            normalise(raw, seg["source"], seg["duration"], part, size,
+            normalise(raw, seg["source"], seg["duration"], part, size, fps=int(item.get("fps") or FPS),
                       trim_start=seg.get("trim_start", 0.0), trim_end=seg.get("trim_end", 0.0), caption=caption,
                       caption_window=(seg.get("caption_start") or 0.0, seg.get("caption_end")))
             parts.append(part)
@@ -357,15 +445,20 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             placed.append({"shot_id": seg["shot_id"], "source": seg["source"], "start": round(cursor, 3), "duration": length})
             cursor += length
             _set(project_id, render_id, progress={"done": index + 1, "total": len(segments)})
-        out = os.path.join(tmp, "final.mp4")
+        fmt = item.get("format") or "mp4"
+        out = os.path.join(tmp, f"final.{fmt}")
+        # Transitions overlap shots, so the parts are joined first and every shot's start (for VO, music and the
+        # timeline) comes from the join.
+        joined = os.path.join(tmp, f"joined.{fmt}")
+        starts_at = join_with_transitions(parts, [p["duration"] for p in placed], [s.get("transition", "cut") for s in segments],
+                                          joined, fps=int(item.get("fps") or FPS))
+        for p, start in zip(placed, starts_at):
+            p["start"] = start
         tracks = {name: asset for name, asset in audio_tracks(board).items() if name in item.get("audio", [])}
         starts = {p["shot_id"]: p["start"] for p in placed}
         offsets = {s["id"]: float(s.get("vo_offset") or 0) for s in board["shots"]}
         lines = {sid: asset for sid, asset in voice_lines(board).items() if sid in starts}
         if tracks or lines:
-            joined = os.path.join(tmp, "joined.mp4")
-            join(parts, joined)
-
             def fetch(asset_id: str, name: str) -> str:
                 content, _ = download(asset_id)
                 path = os.path.join(tmp, f"{name}.mp3")
@@ -382,17 +475,19 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             music = fetch(tracks["music"], "music") if "music" in tracks else None
             mix(joined, out, voices=voices, music=music, music_window=(board.get("audio") or {}).get("music"))
         else:
-            join(parts, out)
+            os.replace(joined, out)
         total_seconds = round(duration_of(out), 2)
         with open(out, "rb") as fh:
             data = fh.read()
     if len(data) > MAX_BYTES:
         raise RenderError(f"hasil render {len(data) // (1024 * 1024)} MB, melebihi batas 200 MB; coba resolusi lebih kecil")
     title = re.sub(r"[^A-Za-z0-9 _-]+", "", (board["script"] or {}).get("title") or project_id).strip() or "director"
-    asset_id = upload(data, f"{title[:60]}.mp4")
+    asset_id = upload(data, f"{title[:60]}.{item.get('format') or 'mp4'}")
     _set(project_id, render_id, status="done", asset_id=asset_id, size_bytes=len(data), duration_seconds=total_seconds,
          segments=placed,
          width=size[0], height=size[1], finished_at=now_iso())
+    if remove is not None:
+        prune(project_id, remove)
     return find(read_board(project_id), render_id)
 
 

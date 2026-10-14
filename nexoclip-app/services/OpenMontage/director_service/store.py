@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from director_service.db import Jsonb, notify, tx
 
-PROJECT_FIELDS = ("owner", "title", "title_auto", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render",
+PROJECT_FIELDS = ("owner", "title", "title_auto", "title_by", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render",
                   "run_mode")
 JSON_FIELDS = {"agent", "generation", "render"}
 
@@ -60,6 +60,14 @@ def list_projects(owner: str) -> list[dict[str, Any]]:
             (owner,),
         ).fetchall()
     return [_project(r) for r in rows]
+
+
+def delete_project(project_id: str) -> None:
+    """Remove a project with its board, history, chat and logs (they cascade). The media it made stay in the user's
+    nexoclip workspace as their own assets."""
+    with tx() as conn:
+        conn.execute("DELETE FROM projects WHERE id = %s", (project_id,))
+        notify(conn, project_id)
 
 
 def update_director(project_id: str, **changes: Any) -> None:

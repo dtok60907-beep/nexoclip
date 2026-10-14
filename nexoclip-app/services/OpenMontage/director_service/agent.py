@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from director_service import billing, board as boards, generation, live, llm, nexoclip, skills
-from director_service.store import add_llm_cost, append_chat, append_llm_log, now_iso, read_chat, read_director
+from director_service.store import add_llm_cost, append_chat, append_llm_log, now_iso, read_chat, read_director, update_director
 
 MAX_STEPS = 30  # "Langsung jadi" goes from a brief to approved generation in one turn
 HISTORY_ENTRIES = 40
@@ -33,6 +33,9 @@ INSTRUCTIONS = """You are the AI Director inside nexoclip, a video creation stud
 build their video on a shared project board using tools. You decide what to do next; there is no fixed pipeline.
 
 What you can do (tools):
+- set_project_title: as soon as you know what the video is (usually with the first brief), give the project a short
+  name (2-6 words, the title, product or idea, e.g. "Iklan Serum Glowria", "Peron Tujuh"); rename it when the
+  direction really changes. Keep it if the user named it.
 - update_brief: the creative brief. summary is 2-4 sentences: what the video is, the story or idea, and how it should
   feel. The detail fields: goal (sell, awareness, story, education ...), audience, platform, key_message (the one thing
   viewers must remember), product (name, look, colours, logo; empty when there is none), tone (mood, pace, music feel),
@@ -156,7 +159,9 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   the CTA with the brand). Optional: add them when the format wants them (TikTok/Reels ads usually do), keep them short
   (max ~8 words), in the video's language; set them with set_shots / update_shot.
 
-Not available yet: transitions in the render. Say so honestly; do not promise them.
+- Transitions: a shot's transition is how it comes in after the previous one in the final video: cut (default),
+  fade (through black, for a time jump or a new chapter) or dissolve (a soft blend, for mood or passing time). Cuts
+  are the norm; use the others sparingly and with a reason. They take 0.5 s and overlap the two shots.
 
 How to work:
 - Reply in the user's language (default Indonesian, casual, like a creative director). Keep replies short:
@@ -229,10 +234,12 @@ SHOT_FIELDS = {
     "vo_trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the generated line"},
     "caption_start": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot when the caption appears (default 0)"},
     "caption_end": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot when it disappears (default: the end)"},
+    "transition": {"type": "string", "enum": ["cut", "fade", "dissolve"],
+                   "description": "optional: how this shot comes in after the previous one in the final video (default cut)"},
     "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
-OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption",
+OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption", "transition",
                         "vo_trim_start", "vo_trim_end", "caption_start", "caption_end",
                         "reference_assets")
 
@@ -277,6 +284,9 @@ BRIEF_DETAIL_HINTS = {
 assert tuple(BRIEF_DETAIL_HINTS) == boards.BRIEF_DETAILS
 
 TOOLS = [
+    _tool("set_project_title", "Name the project (shown in the user's project list).", {
+        "title": {"type": "string", "description": "2-6 words in the user's language: the film, ad or product it is about"},
+    }, ["title"]),
     _tool("update_brief", "Set or change brief fields. Omit fields you are not changing.", {
         "summary": {"type": "string", "description": "2-4 sentences: what the video is, the story/idea, the feel"},
         **{key: {"type": "string", "description": desc} for key, desc in BRIEF_DETAIL_HINTS.items()},
@@ -450,6 +460,9 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if sum(1 for r in refs if r["kind"] == "video") > 3 or len(refs) > 8:
         raise ToolError(f"shot {shot['id']}: at most 8 references, 3 of them videos")
     shot["reference_assets"] = refs
+    shot["transition"] = shot.get("transition") or "cut"
+    if shot["transition"] not in ("cut", "fade", "dissolve"):
+        raise ToolError(f"shot {shot['id']}: transition must be cut, fade or dissolve")
     shot["caption"] = str(shot.get("caption") or "").strip()
     if len(shot["caption"]) > MAX_CAPTION_CHARS:
         raise ToolError(f"shot {shot['id']}: caption is longer than {MAX_CAPTION_CHARS} characters")
@@ -603,6 +616,16 @@ def _require_look(ctx: Ctx) -> None:
     _require_brief(ctx)
     if ctx.author == "agent" and not boards.read_board(ctx.project_id)["brief"].get("look"):
         raise ToolError(NEEDS_LOOK)
+
+
+def _set_project_title(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    title = " ".join(str(args.get("title") or "").split())[:80]
+    if not title:
+        raise ToolError("title is required")
+    if read_director(ctx.project_id).get("title_by") == "user":
+        return {"ok": False, "error": "the user named this project themselves; keep their name"}, "Nama project tetap"
+    update_director(ctx.project_id, title=title, title_by="agent")
+    return {"ok": True}, f"Memberi nama project: {title}"
 
 
 def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
@@ -1265,6 +1288,7 @@ def _set_lock(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
 HANDLERS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "read_skill": _read_skill,
+    "set_project_title": _set_project_title,
     "update_brief": _update_brief,
     "set_concepts": _set_concepts,
     "choose_concept": _choose_concept,

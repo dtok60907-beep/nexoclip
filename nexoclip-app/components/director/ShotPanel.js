@@ -121,6 +121,16 @@ function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy,
         </div>
       ) : <p className="text-[11px] text-white/35">Belum ada gambar atau video untuk shot ini.</p>}
       <UploadMedia shot={shot} workspaceId={workspaceId} onEdit={onEdit} busy={busy} hasFrame={!!board.media[`frame:${shot.id}`]} />
+      <label className="flex items-center justify-between gap-2 text-[11px] text-white/55">
+        <span title="Cara shot ini masuk setelah shot sebelumnya di video final (0,5 detik)">Transisi masuk</span>
+        <select value={shot.transition || 'cut'} disabled={busy || shot.locked}
+          onChange={(e) => onEdit('update_shot', { id: shot.id, transition: e.target.value })}
+          className="rounded-md border border-white/10 bg-[#0b0e13] px-1.5 py-1 text-[11px] text-white/80">
+          <option value="cut">Potong (cut)</option>
+          <option value="fade">Fade lewat hitam</option>
+          <option value="dissolve">Dissolve</option>
+        </select>
+      </label>
       <div className="flex flex-wrap gap-1.5">
         {!shot.extends && <SmallButton disabled={busy} onClick={() => onRequest([`frame:${shot.id}`], !!board.media[`frame:${shot.id}`]?.asset_id)}>Recreate gambar</SmallButton>}
         <SmallButton disabled={busy} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id)}>Recreate video</SmallButton>

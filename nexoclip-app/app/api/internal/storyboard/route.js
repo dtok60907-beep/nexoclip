@@ -3,7 +3,7 @@ import { getPool } from '../../../../src/db/pool.js';
 import { getDefaultWorkspace } from '../../../../src/services/workspaceService.js';
 import { createImageGenerationJobWithReservation, getGenerationJob, toPublicGeneration } from '../../../../src/services/generationService.js';
 import { estimateGenerationCredits } from '../../../../src/services/generationPricing.js';
-import { createAssetDownload, createStorage, importWorkspaceAsset } from '../../../../src/services/assetService.js';
+import { createAssetDownload, createStorage, deleteWorkspaceAsset, importWorkspaceAsset } from '../../../../src/services/assetService.js';
 import { appendCreditEntry } from '../../../../src/services/creditService.js';
 import { findCreditEntryByIdempotencyKey } from '../../../../src/repositories/creditRepository.js';
 import { MAX_INLINE_BYTES, analyzeVideo, videoAnalysisCredits } from '../../../../src/services/videoAnalysis.js';
@@ -27,7 +27,7 @@ import IORedis from 'ioredis';
 // caller holding it may submit on behalf of the user it names, same as Canvas.
 export const STORYBOARD_PROJECT_SCOPE = 'storyboard';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio', 'analyze-video', 'trust-asset', 'trust-status', 'untrust-asset']);
+const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio', 'analyze-video', 'trust-asset', 'trust-status', 'untrust-asset', 'delete-render']);
 // "Trust for Seedance" of a workspace image (the same workspace-wide trust Canvas uses): Seedance refuses images
 // with human faces unless they are BytePlus trusted assets. The Director borrows the trust around a video job.
 const TRUST_OPERATIONS = { 'trust-asset': 'start', 'trust-status': 'get', 'untrust-asset': 'delete' };
@@ -75,6 +75,7 @@ export function createInternalStoryboardHandler({
   priceVideoAnalysis = videoAnalysisCredits,
   fetchBytes = async (url) => Buffer.from(await (await fetch(url)).arrayBuffer()),
   trust = { start: startBytePlusAssetTrust, get: getBytePlusAssetTrust, delete: deleteBytePlusAssetTrust },
+  removeAsset = deleteWorkspaceAsset,
   logError = console.error,
 } = {}) {
   return async function POST(request) {
@@ -236,6 +237,17 @@ export function createInternalStoryboardHandler({
           body: bytes,
         }, loadStorage(), pool);
         return Response.json({ assetId: result.asset.id, reference: `/api/assets/${encodeURIComponent(result.asset.id)}/download` }, { status: 201 });
+      }
+
+      // An old final video the Director replaced: only video assets can be removed this way.
+      if (action === 'delete-render') {
+        if (typeof payload.assetId !== 'string' || !payload.assetId) return badRequest('assetId is required');
+        const storage = loadStorage();
+        const found = await getDownload(workspace.id, payload.assetId, storage);
+        if (!found) return Response.json({ deleted: false });
+        if (!String(found.asset.content_type || '').startsWith('video/')) return badRequest('Only rendered videos can be removed');
+        await removeAsset(workspace.id, payload.assetId, storage, pool);
+        return Response.json({ deleted: true });
       }
 
       if (TRUST_OPERATIONS[action]) {

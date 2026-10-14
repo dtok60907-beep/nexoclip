@@ -492,12 +492,36 @@ function SceneVideoButton({ group, board, busy, onRequest }) {
   );
 }
 
+/** What a shot has so far: a finished clip, only its still frame, or nothing yet (or something being made). */
+function shotState(board, shot) {
+  const frame = board.media[`frame:${shot.id}`];
+  const video = board.media[`video:${shot.id}`];
+  if (frame?.status === 'running' || video?.status === 'running') return { label: 'Sedang dibuat…', tone: 'bg-amber-400/90 text-black' };
+  if (video?.asset_id) return { label: video.stale ? 'Video · perlu dibuat ulang' : 'Video', tone: video.stale ? 'bg-amber-300/90 text-black' : 'bg-[#d4ff64] text-[#10130a]' };
+  if (frame?.asset_id) return { label: 'Gambar · belum ada video', tone: 'bg-white/85 text-black' };
+  return { label: 'Belum dibuat', tone: 'bg-black/70 text-white/70' };
+}
+
 function SceneShotCard({ board, item, workspaceId, ratio, picked, onToggle, onPick, wide }) {
   const { shot, label } = item;
+  const [hover, setHover] = useState(false);
+  const video = board.media[`video:${shot.id}`];
+  const clip = video?.asset_id ? assetUrl(video.asset_id, workspaceId) : null;
+  const state = shotState(board, shot);
+  const size = PORTRAIT.has(ratio) ? 'h-[200px] w-full' : `${ratio} w-full`;
   return (
-    <div className={`group relative ${wide ? 'w-full' : 'w-[220px] flex-none'} overflow-hidden rounded-lg border text-left ${picked ? 'border-[#d4ff64]/70 ring-1 ring-[#d4ff64]/40' : 'border-white/[0.06] hover:border-white/20'}`}>
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      className={`group relative ${wide ? 'w-full' : 'w-[220px] flex-none'} overflow-hidden rounded-lg border text-left ${picked ? 'border-[#d4ff64]/70 ring-1 ring-[#d4ff64]/40' : 'border-white/[0.06] hover:border-white/20'}`}>
       <button type="button" onClick={() => onPick(shot.id)} className="block w-full text-left">
-        <Thumb board={board} shot={shot} workspaceId={workspaceId} className={PORTRAIT.has(ratio) ? 'h-[200px] w-full' : `${ratio} w-full`} />
+        <div className="relative">
+          <Thumb board={board} shot={shot} workspaceId={workspaceId} className={size} />
+          {/* A shot with a clip plays it (muted) while the pointer is on the card. */}
+          {hover && clip && (
+            <video src={clip} autoPlay muted loop playsInline preload="auto" draggable={false}
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+          )}
+          <span className={`absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-semibold ${state.tone}`}>{state.label}</span>
+        </div>
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
           <span className="truncate text-[11px] text-white/80"><span className="mr-1 font-semibold">SHOT {label}</span>{shot.title}</span>
           <span className="flex-none text-[10px] text-white/35">{shot.duration_seconds}s</span>
@@ -818,11 +842,39 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
     observer.observe(node);
     return () => observer.disconnect();
   }, [numbered.length, view]);
-  const videoRef = useRef(null);
   const playerBox = useRef(null);
   const current = numbered[index];
-  const currentVideo = current && assetUrl(board.media[`video:${current.shot.id}`]?.asset_id, workspaceId);
+  const videoOf = (item) => (item ? assetUrl(board.media[`video:${item.shot.id}`]?.asset_id, workspaceId) : null);
+  const currentVideo = videoOf(current);
   const currentFrame = current && assetUrl(board.media[`frame:${current.shot.id}`]?.asset_id, workspaceId);
+  // Two players take turns (shot i plays in slot i % 2): the next shot's clip is already loading in the other one, so
+  // a cut is a swap instead of a fresh load (no black flash, no poster, no size jump).
+  const slotRefs = [useRef(null), useRef(null)];
+  const activeSlot = index % 2;
+  const slotSrc = [null, null];
+  slotSrc[activeSlot] = currentVideo;
+  slotSrc[1 - activeSlot] = videoOf(numbered[index + 1]);
+  const videoRef = slotRefs[activeSlot];
+  const trimStart = Number(current?.shot.trim_start || 0);
+  const trimEnd = Number(current?.shot.trim_end || 0);
+  const nextShot = () => { setOffset(0); if (index + 1 < numbered.length) setIndex(index + 1); else setPlaying(false); };
+  // A shot starts at its trim and ends before its cut end, as in the render.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !currentVideo) return undefined;
+    const start = () => { if (Math.abs(video.currentTime - trimStart) > 0.05) video.currentTime = trimStart; };
+    if (video.readyState >= 1) start(); else video.addEventListener('loadedmetadata', start, { once: true });
+    return () => video.removeEventListener('loadedmetadata', start);
+  }, [index, currentVideo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onSlotTime = (slot) => (event) => {
+    if (slot !== activeSlot) return;
+    const video = event.currentTarget;
+    setOffset(Math.max(0, video.currentTime - trimStart));
+    if (playing && trimEnd > 0 && Number.isFinite(video.duration) && video.currentTime >= video.duration - trimEnd) {
+      video.pause();
+      nextShot();
+    }
+  };
 
   useEffect(() => { if (current) onSelect(current.shot.id); }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
   const shotKey = numbered.map((n) => n.shot.id).join(',');
@@ -878,10 +930,13 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
   const voiced = numbered.some((n) => n.shot.vo_text && board.media[`vo:${n.shot.id}`]?.asset_id);
   useEffect(() => {
     const video = videoRef.current;
+    const other = slotRefs[1 - activeSlot].current;
+    if (other) { other.pause(); other.muted = true; } // the waiting player stays silent and still
     if (!video) return;
+    video.muted = false;
     video.volume = voiced ? 0.45 : 1;
     if (playing) video.play().catch(() => {}); else video.pause();
-  }, [playing, index, currentVideo, voiced]);
+  }, [playing, index, currentVideo, voiced]); // eslint-disable-line react-hooks/exhaustive-deps
   // The music follows the playhead within its window on the track (start, cut start, end), checked 4x a second.
   const tick = Math.floor(offset * 4);
   useEffect(() => {
@@ -997,11 +1052,12 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
               <span className="max-w-[84%] rounded-md bg-black/60 px-3 py-1.5 text-center text-[clamp(12px,2.2vw,22px)] font-bold leading-snug text-white">{current.shot.caption}</span>
             </div>
           )}
-          {!current ? <div className="text-[12px] text-white/35">Belum ada shot.</div> : currentVideo ? (
-            <video ref={videoRef} key={currentVideo} src={currentVideo} poster={currentFrame || undefined} className="max-h-full max-w-full"
-              onTimeUpdate={(e) => setOffset(e.currentTarget.currentTime)}
-              onEnded={() => { setOffset(0); if (index + 1 < numbered.length) setIndex(index + 1); else setPlaying(false); }} />
-          ) : currentFrame ? (
+          {[0, 1].map((slot) => slotSrc[slot] && (
+            <video key={slot} ref={slotRefs[slot]} src={slotSrc[slot]} preload="auto" playsInline muted={slot !== activeSlot}
+              className={`absolute inset-0 h-full w-full object-contain ${slot === activeSlot && currentVideo ? 'visible' : 'invisible'}`}
+              onTimeUpdate={onSlotTime(slot)} onEnded={() => { if (slot === activeSlot) nextShot(); }} />
+          ))}
+          {!current ? <div className="text-[12px] text-white/35">Belum ada shot.</div> : currentVideo ? null : currentFrame ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={currentFrame} alt={current.shot.title} className="max-h-full max-w-full object-contain" />
           ) : (
@@ -1121,7 +1177,50 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
 
 // ---------------------------------------------------------------- workspace
 
-export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, onChooseAudio, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering, prices = {} }) {
+/** Export: render the final video with a resolution, frame rate and container, or download every asset as a ZIP. */
+function ExportDialog({ board, rendering, onRender, assetsZipUrl, onClose }) {
+  const [choice, setChoice] = useState({ resolution: board.brief.resolution || '720p', fps: 24, format: 'mp4' });
+  const set = (patch) => setChoice((value) => ({ ...value, ...patch }));
+  const pick = (label, field, options) => (
+    <label className="block text-[11px] text-white/50">{label}
+      <div className="mt-1 flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
+        {options.map(([value, text]) => (
+          <button key={value} type="button" onClick={() => set({ [field]: value })}
+            className={`flex-1 rounded-md px-2 py-1 text-[12px] ${choice[field] === value ? 'bg-white/[0.12] text-white' : 'text-white/55 hover:text-white'}`}>{text}</button>
+        ))}
+      </div>
+    </label>
+  );
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+      <div role="dialog" aria-label="Export" onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[380px] space-y-4 rounded-2xl border border-white/10 bg-[#0e1117] p-5 shadow-[0_20px_60px_#000a]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-white">Export</h2>
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white" aria-label="Tutup">✕</button>
+        </div>
+        {pick('Resolusi', 'resolution', RESOLUTIONS.map((r) => [r, r]))}
+        {pick('Frame rate', 'fps', [[24, '24 fps'], [30, '30 fps'], [60, '60 fps']])}
+        {pick('Format', 'format', [['mp4', 'MP4'], ['mov', 'MOV']])}
+        <p className="text-[10.5px] leading-relaxed text-white/40">
+          Gratis. Video digabung dengan VO, musik dan caption. Resolusi di atas resolusi klip tidak menambah detail; 60 fps
+          mengulang frame karena klip dibuat 24 fps.
+        </p>
+        <button type="button" disabled={rendering} onClick={() => { onRender(choice); onClose(); }}
+          className="w-full rounded-lg bg-[#d4ff64] py-2 text-[13px] font-semibold text-[#10130a] hover:brightness-110 disabled:opacity-40">
+          {rendering ? 'Merender…' : 'Render video'}
+        </button>
+        <a href={assetsZipUrl} download
+          className="block w-full rounded-lg border border-white/[0.12] py-2 text-center text-[12px] text-white/80 hover:border-white/25">
+          Download Assets (ZIP): gambar, video per shot, audio
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, onChooseAudio, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering, prices = {}, assetsZipUrl }) {
+  const [exportOpen, setExportOpen] = useState(false);
   const [mode, setMode] = useState('scene');
   const [selectedId, setSelectedId] = useState(null);
   const [shotTab, setShotTab] = useState('media'); // the shot panel's tab, shared by Shot and Timeline
@@ -1182,13 +1281,14 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
               <Icon d="M5 3l14 9-14 9V3z" /> Generate semua ({plans.length} scene)
             </button>
           )}
-          <button type="button" onClick={onRender} disabled={!renderable || rendering || busy}
-            title={renderable ? 'Gabungkan semua shot jadi satu MP4 (gratis)' : 'Belum ada shot dengan frame atau video'}
+          <button type="button" onClick={() => setExportOpen(true)} disabled={!renderable || rendering || busy}
+            title={renderable ? 'Render video final atau unduh semua aset (gratis)' : 'Belum ada shot dengan frame atau video'}
             className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-white/85 hover:border-white/25 disabled:opacity-40">
             <Icon d="M12 4v11 M7 10l5 5 5-5 M5 20h14" /> {rendering ? 'Merender…' : 'Export'}
           </button>
         </div>
       </div>
+      {exportOpen && <ExportDialog board={board} rendering={rendering} onRender={onRender} assetsZipUrl={assetsZipUrl} onClose={() => setExportOpen(false)} />}
       <div className="min-h-0 flex-1 overflow-hidden p-3 md:p-4">
         {panelDef ? (
           <div className="flex h-full min-h-0 flex-col rounded-xl border border-white/[0.07] bg-[#0b0e13]">

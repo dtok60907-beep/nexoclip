@@ -18,6 +18,7 @@ import functools
 import hmac
 import io
 import json
+import re
 import os
 import tarfile
 import threading
@@ -164,7 +165,8 @@ class MessageBody(BaseModel):
 
 
 class SettingsBody(BaseModel):
-    run_mode: Literal["guide", "auto"]
+    run_mode: Optional[Literal["guide", "auto"]] = None
+    title: Optional[str] = Field(default=None, max_length=200)
 
 
 class EditBody(BaseModel):
@@ -272,8 +274,24 @@ async def post_message(project_id: str, body: MessageBody, x_nexoclip_user_id: O
 @app.post("/api/director/projects/{project_id}/settings")
 async def settings(project_id: str, body: SettingsBody, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
     await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
-    await asyncio.to_thread(_call, session.set_run_mode, project_id, body.run_mode)
+    if body.run_mode is not None:
+        await asyncio.to_thread(_call, session.set_run_mode, project_id, body.run_mode)
+    if body.title is not None:
+        await asyncio.to_thread(_call, session.rename_project, project_id, body.title)
     return {"ok": True}
+
+
+@app.post("/api/director/projects/{project_id}/delete")
+async def delete_project(project_id: str, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+    await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
+    await asyncio.to_thread(_call, session.delete_project, project_id)
+    return {"ok": True}
+
+
+@app.post("/api/director/projects/{project_id}/duplicate", status_code=201)
+async def duplicate_project(project_id: str, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+    await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
+    return {"project_id": await asyncio.to_thread(_call, session.duplicate_project, project_id)}
 
 
 @app.post("/api/director/projects/{project_id}/retry")
@@ -347,11 +365,42 @@ async def reject_request(project_id: str, request_id: str, x_nexoclip_user_id: O
     return {"rejected": request_id}
 
 
+class RenderBody(BaseModel):
+    resolution: Optional[Literal["480p", "720p", "1080p"]] = None
+    fps: Optional[Literal[24, 30, 60]] = None
+    format: Optional[Literal["mp4", "mov"]] = None
+
+
 @app.post("/api/director/projects/{project_id}/renders", status_code=201)
-async def create_render(project_id: str, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+async def create_render(project_id: str, body: Optional[RenderBody] = None,
+                        x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
     await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
-    item = await asyncio.to_thread(_call, session.start_render, project_id)
+    options = body.model_dump(exclude_none=True) if body else None
+    item = await asyncio.to_thread(_call, session.start_render, project_id, options)
     return {"render_id": item["id"], "shots": len(item["shots"]), "stills": item["stills"]}
+
+
+@app.get("/api/director/projects/{project_id}/assets.zip")
+async def download_assets(project_id: str, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> StreamingResponse:
+    """Download Assets: the project's sheets, frames, clips, audio and final video in one ZIP."""
+    from director_service import exports
+
+    project = await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
+    try:
+        archive, _ = await asyncio.to_thread(exports.build_zip, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    name = re.sub(r"[^A-Za-z0-9_-]+", "-", project["title"]).strip("-")[:60] or "project"
+
+    def chunks():
+        try:
+            while (block := archive.read(1024 * 1024)):
+                yield block
+        finally:
+            archive.close()
+
+    return StreamingResponse(chunks(), media_type="application/zip",
+                             headers={"Content-Disposition": f'attachment; filename="{name}-assets.zip"'})
 
 
 def _sse(payload: dict[str, Any]) -> str:

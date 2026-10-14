@@ -192,9 +192,39 @@ function NewProject({ initialBrief, onCreated }) {
   );
 }
 
-function ProjectSwitcher({ projects, currentId, onSelect, onNew }) {
+function ProjectSwitcher({ projects, currentId, onSelect, onNew, onChanged }) {
   const [open, setOpen] = useState(false);
+  const [working, setWorking] = useState(false);
   const current = projects.find((project) => project.project_id === currentId);
+  // Rename, duplicate or delete the open project.
+  const act = async (run) => {
+    setWorking(true);
+    try { await run(); } catch (err) { window.alert(err.message); } finally { setWorking(false); }
+  };
+  const rename = () => {
+    const title = window.prompt('Nama project', current?.title || '');
+    if (!title?.trim() || title.trim() === current?.title) return;
+    act(async () => {
+      await api(`/projects/${encodeURIComponent(currentId)}/settings`, { method: 'POST', body: JSON.stringify({ title: title.trim() }) });
+      await onChanged();
+    });
+  };
+  const duplicate = () => act(async () => {
+    const { project_id: copy } = await api(`/projects/${encodeURIComponent(currentId)}/duplicate`, { method: 'POST' });
+    await onChanged();
+    setOpen(false);
+    onSelect(copy);
+  });
+  const remove = () => {
+    if (!window.confirm(`Hapus project "${current?.title}"? Chat, board dan riwayatnya hilang. Gambar dan video yang sudah dibuat tetap ada di library aset kamu.`)) return;
+    act(async () => {
+      await api(`/projects/${encodeURIComponent(currentId)}/delete`, { method: 'POST' });
+      const list = await onChanged();
+      setOpen(false);
+      const next = (list || []).find((project) => project.project_id !== currentId);
+      if (next) onSelect(next.project_id); else onNew();
+    });
+  };
   return (
     <div className="relative">
       <button
@@ -222,6 +252,16 @@ function ProjectSwitcher({ projects, currentId, onSelect, onNew }) {
           >
             + Project baru
           </button>
+          {current && (
+            <div className="mb-1 flex gap-1 border-b border-white/[0.06] px-1.5 pb-1.5">
+              {[['Ganti nama', rename], ['Duplikat', duplicate], ['Hapus', remove]].map(([label, run]) => (
+                <button key={label} type="button" disabled={working} onClick={run}
+                  className={`flex-1 rounded-md px-2 py-1 text-[11px] hover:bg-white/[0.06] disabled:opacity-40 ${label === 'Hapus' ? 'text-red-300/80' : 'text-white/60'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {projects.map((project) => (
             <button
               key={project.project_id}
@@ -361,8 +401,11 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   const reject = (request) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/reject`, { method: 'POST' }));
   const retry = () => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/retry`, { method: 'POST' }));
   // Free: joins the finished shots into one MP4; its card in the chat shows progress and the download.
-  const startRender = () => runAction(async () => {
-    await api(`/projects/${encodeURIComponent(projectId)}/renders`, { method: 'POST' });
+  // options from the Export dialog (resolution, fps, format); a plain click renders with the defaults.
+  const startRender = (options) => runAction(async () => {
+    const chosen = options && typeof options === 'object' && 'format' in options
+      ? { resolution: options.resolution, fps: Number(options.fps), format: options.format } : null;
+    await api(`/projects/${encodeURIComponent(projectId)}/renders`, { method: 'POST', ...(chosen ? { body: JSON.stringify(chosen) } : {}) });
     setMobilePane('chat');
   });
 
@@ -496,7 +539,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
       <section style={{ '--chat-width': `${chatWidth.width}px` }}
         className={`${mobilePane === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col md:flex md:w-[var(--chat-width)] md:flex-none`}>
         <div className="border-b border-white/[0.06] p-3">
-          <ProjectSwitcher projects={projects} currentId={projectId} onSelect={onSelectProject} onNew={onNewProject} />
+          <ProjectSwitcher projects={projects} currentId={projectId} onSelect={onSelectProject} onNew={onNewProject} onChanged={onProjectsChanged} />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
           <ChatTimeline chat={view.chat} board={board} workspaceId={workspaceId} busy={actionBusy}
@@ -540,7 +583,8 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         <div className="min-h-0 flex-1">
           <Workspace board={board} workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} onChooseConcept={chooseConcept} onConfirmScript={confirmScript} busy={actionBusy || agentRunning}
             panel={panel} onOpenPanel={setPanel} onClosePanel={() => setPanel(null)} loadVersions={loadVersions} onRestore={onRestore}
-            onRender={startRender} rendering={renderRunning} onChooseAudio={chooseAudio} prices={view.video_credits_per_second} />
+            onRender={startRender} rendering={renderRunning} onChooseAudio={chooseAudio} prices={view.video_credits_per_second}
+            assetsZipUrl={`${API}/projects/${encodeURIComponent(projectId)}/assets.zip`} />
         </div>
       </section>
       {confirm && (

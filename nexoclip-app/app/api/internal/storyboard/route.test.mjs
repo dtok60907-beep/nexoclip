@@ -253,3 +253,20 @@ test('starts, reads and removes the Seedance trust of a workspace image for the 
   assert.equal((await post(signedRequestFor({ action: 'trust-asset' }))).status, 400);
   assert.deepEqual(calls[0], ['start', 'workspace-1', 'asset-1']);
 });
+
+test('the Director can remove an old final video, and nothing but videos', async () => {
+  const removed = [];
+  const assets = { 'render-1': 'video/mp4', 'photo-1': 'image/png' };
+  const post = createInternalStoryboardHandler({
+    verify: (payload, signature) => signature === signCanvasAuthorization(payload, 'bridge-secret-render'),
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }), getPool: () => ({}), logError: () => {},
+    createStorage: () => ({}),
+    getDownload: async (_workspaceId, assetId) => (assets[assetId] ? { asset: { id: assetId, content_type: assets[assetId] } } : null),
+    removeAsset: async (workspaceId, assetId) => { removed.push([workspaceId, assetId]); },
+  });
+  const sign = (payload) => signedRequest(payload, { secret: 'bridge-secret-render' });
+  assert.deepEqual(await (await post(sign({ action: 'delete-render', assetId: 'render-1' }))).json(), { deleted: true });
+  assert.equal((await post(sign({ action: 'delete-render', assetId: 'photo-1' }))).status, 400);
+  assert.deepEqual(await (await post(sign({ action: 'delete-render', assetId: 'gone' }))).json(), { deleted: false });
+  assert.deepEqual(removed, [['workspace-1', 'render-1']]);
+});

@@ -328,7 +328,7 @@ export function RenderCard({ render, workspaceId, rendering, onRender }) {
   const failed = render.status === 'failed';
   const progress = render.progress || { done: 0, total: render.shots?.length || 0 };
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
-  const src = done ? assetUrl(render.asset_id, workspaceId) : null;
+  const src = done && render.asset_id ? assetUrl(render.asset_id, workspaceId) : null;
   const notes = [];
   if (render.stills) notes.push(`${render.stills} shot masih frame diam`);
   if (render.skipped) notes.push(`${render.skipped} shot dilewati (belum ada gambar)`);
@@ -343,6 +343,8 @@ export function RenderCard({ render, workspaceId, rendering, onRender }) {
       ) : null}>
       {done && src ? (
         <video src={src} controls preload="metadata" playsInline className="w-full rounded-lg bg-black" />
+      ) : done ? (
+        <p className="text-[11.5px] leading-relaxed text-white/50">File render lama ini sudah dihapus untuk menghemat penyimpanan (yang disimpan 3 render terakhir). Render ulang kalau masih butuh.</p>
       ) : failed ? (
         <p className="text-[11.5px] leading-relaxed text-red-300/90">{render.error || 'Render gagal.'}</p>
       ) : (
@@ -356,7 +358,7 @@ export function RenderCard({ render, workspaceId, rendering, onRender }) {
         </div>
       )}
       <p className="mt-2 text-[10.5px] text-white/40">
-        {render.shots?.length || 0} shot · {render.aspect_ratio} · {render.resolution}
+        {render.shots?.length || 0} shot · {render.aspect_ratio} · {render.resolution}{render.fps ? ` · ${render.fps} fps` : ''}{render.format ? ` · ${render.format.toUpperCase()}` : ''}
         {done && render.size_bytes ? ` · ${(render.size_bytes / (1024 * 1024)).toFixed(1)} MB` : ''}
         {notes.length ? ` · ${notes.join(', ')}` : ''}
       </p>
