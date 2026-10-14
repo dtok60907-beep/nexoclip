@@ -10,7 +10,7 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from director_service import nexoclip
+from director_service import llm, nexoclip
 from director_service.store import read_director
 
 log = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ def charge_llm(project_id: str, model: str, usage: dict[str, Any]) -> float:
         return bridge.charge_text(
             model=model,
             input_tokens=int(usage.get("input_tokens") or 0),
+            cached_input_tokens=llm.cached_tokens(usage),
             output_tokens=int(usage.get("output_tokens") or 0),
             idempotency_key=f"{project_id}:{uuid.uuid4()}",
         )

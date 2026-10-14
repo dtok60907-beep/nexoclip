@@ -136,10 +136,11 @@ class Bridge:
         data = response.json()
         return {"asset_id": str(data["assetId"]), "credits": float(data.get("credits") or 0)}
 
-    def charge_text(self, *, model: str, input_tokens: int, output_tokens: int, idempotency_key: str) -> float:
+    def charge_text(self, *, model: str, input_tokens: int, output_tokens: int, idempotency_key: str,
+                    cached_input_tokens: int = 0) -> float:
         response = self._post({
             "action": "charge-text", "source": SOURCE, "model": model, "inputTokens": int(input_tokens),
-            "outputTokens": int(output_tokens), "idempotencyKey": idempotency_key,
+            "cachedInputTokens": int(cached_input_tokens), "outputTokens": int(output_tokens), "idempotencyKey": idempotency_key,
         })
         return float(response.json().get("credits") or 0)
 

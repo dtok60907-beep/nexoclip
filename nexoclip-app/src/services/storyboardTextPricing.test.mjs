@@ -20,12 +20,22 @@ test('every model the AI Director may use is billed at the same price it tracks'
   const { readFile } = await import('node:fs/promises');
   const source = await readFile(new URL('../../services/OpenMontage/director_service/llm.py', import.meta.url), 'utf8');
   const table = source.match(/PRICES_PER_MILLION = \{([\s\S]*?)\n\}/)[1];
-  const director = [...table.matchAll(/"([^"]+)": \(([\d.]+), ([\d.]+)\)/g)].map(([, model, input, output]) => ({ model, input: Number(input), output: Number(output) }));
+  const director = [...table.matchAll(/"([^"]+)": \(([\d.]+), ([\d.]+), ([\d.]+)\)/g)]
+    .map(([, model, input, cached, output]) => ({ model, input: Number(input), cached: Number(cached), output: Number(output) }));
   assert.ok(director.length >= 5);
-  for (const { model, input, output } of director) {
+  const same = (a, b) => Math.abs(a * 1e6 - b) < 1e-9;
+  for (const { model, input, cached, output } of director) {
     assert.doesNotMatch(model, /-pro|-sol/);
     const price = STORYBOARD_TEXT_PRICES[model];
     assert.ok(price, `${model} has no billing price`);
-    assert.ok(Math.abs(price.input * 1e6 - input) < 1e-9 && Math.abs(price.output * 1e6 - output) < 1e-9, `${model} price differs`);
+    assert.ok(same(price.input, input) && same(price.cached, cached) && same(price.output, output), `${model} price differs`);
   }
+});
+
+test('cached input is billed at the cached rate', () => {
+  const full = storyboardTextCostUsd({ model: 'gpt-5.6-terra', inputTokens: 1_000_000, outputTokens: 0 });
+  const cached = storyboardTextCostUsd({ model: 'gpt-5.6-terra', inputTokens: 1_000_000, cachedInputTokens: 900_000, outputTokens: 0 });
+  assert.ok(Math.abs(full - 2) < 1e-9 && Math.abs(cached - (0.1 * 2 + 0.9 * 0.2)) < 1e-9);
+  assert.equal(storyboardTextCostUsd({ model: 'gpt-4o', inputTokens: 10, cachedInputTokens: 10, outputTokens: 0 }), 10 * 2.5 / 1e6);
+  assert.throws(() => storyboardTextCostUsd({ model: 'gpt-5', inputTokens: 1, cachedInputTokens: 2, outputTokens: 0 }), /non-negative/);
 });

@@ -248,7 +248,9 @@ def test_agent_builds_the_board_with_tools(client, fake_llm, bridge):
     # Tool results go back to the model in the same turn, chained by previous_response_id.
     second = fake_llm.requests[1]
     assert second["previous"] == "resp_1" and all(i["type"] == "function_call_output" for i in second["input"])
-    assert "CURRENT PROJECT BOARD" in second["instructions"] and '"maya"' in second["instructions"]
+    # The instructions (and the board in them) stay as they were when the turn began, so the prompt cache holds.
+    assert second["instructions"] == fake_llm.requests[0]["instructions"]
+    assert "PROJECT BOARD (JSON) as it was when this turn began" in second["instructions"] and '"maya"' not in second["instructions"]
     assert [x["key"] for x in bridge.submits] == ["element:maya", "element:beach_house"]
 
 
@@ -1391,7 +1393,8 @@ def test_the_guides_follow_the_video_type(client, fake_llm, bridge):
     assert "VIDEO TYPE: not set yet" in fake_llm.requests[0]["instructions"]
     guides = [json.loads(i["output"]) for i in fake_llm.requests[2]["input"]]
     assert "# UGC Ad" in guides[0]["content"] and "# UGC Ad" in guides[1]["content"]
-    assert "VIDEO TYPE: UGC ad (ugc_ad)" in fake_llm.requests[2]["instructions"] and "8 (UGC-style ad)" in fake_llm.requests[2]["instructions"]
+    # The instructions stay identical within a turn (prompt cache); the next turn names the type.
+    assert fake_llm.requests[2]["instructions"] == fake_llm.requests[0]["instructions"]
 
     # The user changes direction: the same role names now load the drama guides.
     fake_llm.turns.append([
@@ -1400,6 +1403,8 @@ def test_the_guides_follow_the_video_type(client, fake_llm, bridge):
         {"text": "ok"},
     ])
     _say(client, pid, "eh ganti, jadi drama vertikal berseri aja")
+    turn_start = next(r for r in fake_llm.requests if r["previous"] is None and "VIDEO TYPE: UGC ad (ugc_ad)" in r["instructions"])
+    assert "8 (UGC-style ad)" in turn_start["instructions"]
     later = json.loads(fake_llm.requests[-2]["input"][1]["output"])
     assert "# Micro-Drama" in later["content"]
     assert "video_type must be one of" in json.loads(fake_llm.requests[-1]["input"][0]["output"])["error"]
@@ -1421,3 +1426,20 @@ def test_each_video_type_has_its_guides_and_example(client, fake_llm):
     for kind in skills.VIDEO_TYPES:  # every guide a type points at exists
         for role in ("idea-director", "script-director", "scene-director", "asset-director"):
             assert skills.read(role, kind)
+
+
+def test_voiceover_lines_without_a_voice_are_flagged(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([{"calls": [call("update_shot", id="s1", vo_text="Liburan terakhir.")]}, {"text": "ok"}])
+    _say(client, pid, "VO di shot 1")
+    result = json.loads(fake_llm.requests[-1]["input"][0]["output"])
+    assert result["ok"] and "no voice is chosen" in result["note"]
+
+
+def test_cached_input_is_billed_at_the_cached_rate():
+    from director_service import llm as llm_mod
+
+    payload = {"usage": {"input_tokens": 100_000, "output_tokens": 1_000, "input_tokens_details": {"cached_tokens": 90_000}}}
+    assert llm_mod.cached_tokens(payload["usage"]) == 90_000
+    cost = llm_mod._cost_usd("gpt-5.6-terra", payload)
+    assert abs(cost - (10_000 * 2.0 + 90_000 * 0.2 + 1_000 * 12.0) / 1e6) < 1e-12

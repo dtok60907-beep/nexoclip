@@ -24,16 +24,19 @@ KEY_FILE = Path(__file__).resolve().parent.parent / "director.env"
 # The models the Director may use: GPT-5 and newer, never a -pro or -sol model. USD per 1M tokens
 # (input, output), OpenAI list prices for contexts up to 272K tokens. Keep in step with
 # STORYBOARD_TEXT_PRICES in nexoclip-app/src/services/storyboardTextPricing.js, which bills them.
+# (input, cached input, output) USD per 1M tokens, OpenAI standard tier for contexts up to 272K tokens
+# (developers.openai.com/api/docs/pricing, October 2026). Every agent step resends the conversation, so most input
+# is cached and billed at the cached rate.
 PRICES_PER_MILLION = {
-    "gpt-5.6-terra": (2.00, 12.00),
-    "gpt-5.6-luna": (0.20, 1.20),
-    "gpt-5.5": (5.00, 30.00),
-    "gpt-5.4": (2.50, 15.00),
-    "gpt-5.4-mini": (0.75, 4.50),
-    "gpt-5.2": (1.75, 14.00),
-    "gpt-5.1": (1.25, 10.00),
-    "gpt-5": (1.25, 10.00),
-    "gpt-5-mini": (0.25, 2.00),
+    "gpt-5.6-terra": (2.00, 0.20, 12.00),
+    "gpt-5.6-luna": (0.20, 0.02, 1.20),
+    "gpt-5.5": (5.00, 0.50, 30.00),
+    "gpt-5.4": (2.50, 0.25, 15.00),
+    "gpt-5.4-mini": (0.75, 0.075, 4.50),
+    "gpt-5.2": (1.75, 0.175, 14.00),
+    "gpt-5.1": (1.25, 0.125, 10.00),
+    "gpt-5": (1.25, 0.125, 10.00),
+    "gpt-5-mini": (0.25, 0.025, 2.00),
 }
 # GPT-5 models reason before answering; "low" keeps a turn quick while tools still get used well.
 REASONING_EFFORT_ENV = "DIRECTOR_REASONING_EFFORT"
@@ -82,10 +85,18 @@ def _output_text(payload: dict[str, Any]) -> str:
     return "".join(chunks)
 
 
+def cached_tokens(usage: dict[str, Any]) -> int:
+    """Input tokens served from OpenAI's prompt cache (billed at the cached rate)."""
+    details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details") or {}
+    return min(int(details.get("cached_tokens") or 0), int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0))
+
+
 def _cost_usd(model: str, payload: dict[str, Any]) -> float:
     usage = payload.get("usage") or {}
-    price_in, price_out = PRICES_PER_MILLION.get(model, (0.0, 0.0))
-    cost = (usage.get("input_tokens") or 0) * price_in / 1e6 + (usage.get("output_tokens") or 0) * price_out / 1e6
+    price_in, price_cached, price_out = PRICES_PER_MILLION.get(model, (0.0, 0.0, 0.0))
+    cached = cached_tokens(usage)
+    cost = (((usage.get("input_tokens") or 0) - cached) * price_in + cached * price_cached
+            + (usage.get("output_tokens") or 0) * price_out) / 1e6
     searches = sum(1 for item in payload.get("output") or [] if item.get("type") == "web_search_call")
     return cost + searches * WEB_SEARCH_CALL_USD
 

@@ -116,15 +116,15 @@ export function createInternalStoryboardHandler({
       const source = SOURCES.has(payload.source) ? payload.source : 'storyboard';
 
       if (action === 'charge-text') {
-        const { model, inputTokens, outputTokens, idempotencyKey } = payload;
+        const { model, inputTokens, outputTokens, cachedInputTokens = 0, idempotencyKey } = payload;
         if (typeof idempotencyKey !== 'string' || !idempotencyKey || idempotencyKey.length > 200) return badRequest('idempotencyKey is required');
-        const { usd, credits } = await priceText({ model, inputTokens, outputTokens });
+        const { usd, credits } = await priceText({ model, inputTokens, outputTokens, cachedInputTokens });
         if (credits <= 0) return Response.json({ credits: 0, balance: await readBalance(pool, workspace.id) });
         const entry = {
           workspaceId: workspace.id,
           reason: `${source}_text`,
           idempotencyKey: `${source}-text:${idempotencyKey}`,
-          metadata: { model, inputTokens, outputTokens, providerCostUsd: usd },
+          metadata: { model, inputTokens, cachedInputTokens, outputTokens, providerCostUsd: usd },
         };
         let charged = credits;
         try {

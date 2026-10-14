@@ -24,7 +24,7 @@ from typing import Any, Callable, Optional
 from director_service import billing, board as boards, generation, live, llm, nexoclip, skills
 from director_service.store import add_llm_cost, append_chat, append_llm_log, read_chat, read_director
 
-MAX_STEPS = 12
+MAX_STEPS = 30  # "Langsung jadi" goes from a brief to approved generation in one turn
 HISTORY_ENTRIES = 40
 BOARD_CHARS = 30000
 _ID = re.compile(r"^[a-z0-9_]{2,40}$")
@@ -164,9 +164,9 @@ How to work:
 - Finish what you start in the same turn: never end a turn by announcing what you are about to do. Do not narrate
   reading skills; just use them.
 
-Skills (read_skill): craft guides from the OpenMontage project. Before doing a kind of work for the first time in a
-conversation (intake on a vague brief, concept, script, shot plan, element prompts, video prompts, review), read the
-matching skill and apply it. Some tools need their skill read in the same turn (if not, the guide is returned to you
+Skills (read_skill): craft guides. Read the ones a tool needs (below; they are also loaded for you when a tool asks)
+plus example-prompt before the first shot list. Read any other guide only when the task really needs it: every guide
+you read stays in the context of every later step, so a pile of optional reads makes the turn slow and expensive. Some tools need their skill read in the same turn (if not, the guide is returned to you
 and you must call the tool again): update_brief with a
 summary or set_concepts needs idea-director, write_script needs script-director, upsert_element
 needs image-gen-usage, set_shots needs seedance-basics, seedance-prompting and scene-director, a changed frame_prompt/video_prompt
@@ -666,6 +666,15 @@ def _set_scenes(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True, "scenes": count}, f"Menyusun {count} scene"
 
 
+def _voice_check(ctx: Ctx) -> dict[str, str]:
+    """Voiceover lines need a voice before they can be generated: tell the agent right away."""
+    board = boards.read_board(ctx.project_id)
+    if ctx.author == "agent" and any(s.get("vo_text") for s in board["shots"]) \
+            and not ((board.get("audio") or {}).get("voiceover") or {}).get("voice_id"):
+        return {"note": "these shots have voiceover lines but no voice is chosen: call list_voices, then set_audio(voice_id=...)"}
+    return {}
+
+
 def _set_shots(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     _require_look(ctx)
 
@@ -688,7 +697,7 @@ def _set_shots(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         return len(shots)
 
     count = ctx.update(change, f"Menyusun {len(args.get('shots') or [])} shot")
-    return {"ok": True, "shots": count}, f"Menyusun {count} shot"
+    return {"ok": True, "shots": count, **_voice_check(ctx)}, f"Menyusun {count} shot"
 
 
 def _update_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
@@ -710,7 +719,7 @@ def _update_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         return updated["title"]
 
     title = ctx.update(change, lambda title: f"Mengubah shot: {title}")
-    return {"ok": True}, f"Mengubah shot: {title}"
+    return {"ok": True, **_voice_check(ctx)}, f"Mengubah shot: {title}"
 
 
 def _remove_shot(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
@@ -1173,7 +1182,8 @@ def _instructions(project_id: str) -> str:
     if len(board_json) > BOARD_CHARS:
         board_json = board_json[:BOARD_CHARS] + " ...(truncated)"
     mode = RUN_MODE_NOTES.get(read_director(project_id).get("run_mode") or "guide", "")
-    return f"{INSTRUCTIONS}{skills.index_text()}\n\n{mode}\n\n{_video_type_note(project_id)}\n\nCURRENT PROJECT BOARD (JSON):\n{board_json}"
+    return (f"{INSTRUCTIONS}{skills.index_text()}\n\n{mode}\n\n{_video_type_note(project_id)}\n\n"
+            f"PROJECT BOARD (JSON) as it was when this turn began; your tool results tell you what changed since:\n{board_json}")
 
 
 VIDEO_TYPE_NOTES = {
@@ -1208,7 +1218,7 @@ VIDEO_TYPE_NOTES = {
 def _video_type_note(project_id: str) -> str:
     kind = boards.read_board(project_id)["brief"].get("video_type") or ""
     if not kind:
-        return ("VIDEO TYPE: not set yet. Settle it with the brief; until then the guides are the cinematic ones.")
+        return ("VIDEO TYPE: not set yet. Set it with the brief; the role guides follow it as soon as it is set.")
     meta = skills.video_type(kind)
     example = "example-prompt has a worked example for it. " if "example" in meta["roles"] else ""  # type: ignore[operator]
     return (f"VIDEO TYPE: {meta['label']} ({kind}). {VIDEO_TYPE_NOTES.get(kind, '')} {example}"
@@ -1415,8 +1425,12 @@ def run_turn(project_id: str) -> str:
             if card in cards:
                 append_chat(project_id, "assistant", card, kind="card", meta={"card": card})
 
+    # The instructions (with the board as it was when the turn began) stay identical for every step of the turn: the
+    # model's prompt cache then covers everything already sent, which is most of each step's input. Changes made during
+    # the turn reach the model through the tool results.
+    instructions = _instructions(project_id)
     for _ in range(MAX_STEPS):
-        step = llm.respond(input_items, instructions=_instructions(project_id), tools=TOOLS,
+        step = llm.respond(input_items, instructions=instructions, tools=TOOLS,
                            previous_response_id=previous_id, on_text=lambda text: live.draft(project_id, text))
         live.draft(project_id, "", force=True)  # the step's text is in the chat (or dropped) from here on
         _bill(project_id, "agent", step["usage"])
