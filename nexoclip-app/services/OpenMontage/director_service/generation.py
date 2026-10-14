@@ -46,6 +46,8 @@ def _closure(board: dict[str, Any], keys: list[str], specs: dict[str, dict[str, 
     def visit(key: str, explicit: bool) -> None:
         if key in wanted:
             return
+        if (board["media"].get(key) or {}).get("uploaded") and not (explicit and force):
+            return  # the user's own file: neither it nor what it was meant to be made from is generated
         if (explicit and force) or needs_generation(board, key, specs, memo):
             wanted.add(key)
         for dep in specs[key]["deps"]:
@@ -189,7 +191,7 @@ def _take(asset_id: str, spec_sig: Optional[str], dep_assets: list, generated_at
 
 
 def _record_take(project_id: str, key: str, *, asset_id: str, spec_sig: Optional[str], dep_assets: list,
-                 generated_at: str) -> None:
+                 generated_at: str, uploaded: bool = False) -> None:
     """A new result becomes the active take; earlier takes stay selectable (board.media[key].takes)."""
     def change(board: dict[str, Any]) -> None:
         media = board["media"].setdefault(key, {})
@@ -198,9 +200,10 @@ def _record_take(project_id: str, key: str, *, asset_id: str, spec_sig: Optional
             # media from before takes existed: keep its last result as the first take
             takes.append(_take(media["asset_id"], media["done_spec_sig"], media.get("dep_assets") or [],
                                media.get("generated_at")))
-        takes = [t for t in takes if t["asset_id"] != asset_id] + [_take(asset_id, spec_sig, dep_assets, generated_at)]
+        takes = [t for t in takes if t["asset_id"] != asset_id] + [{**_take(asset_id, spec_sig, dep_assets, generated_at),
+                                                                     **({"uploaded": True} if uploaded else {})}]
         media.update(status=TERMINAL_OK, asset_id=asset_id, error=None, done_spec_sig=spec_sig, dep_assets=dep_assets,
-                     generated_at=generated_at, takes=takes[-MAX_TAKES:])
+                     generated_at=generated_at, takes=takes[-MAX_TAKES:], uploaded=uploaded)
 
     update_board(project_id, change)
 

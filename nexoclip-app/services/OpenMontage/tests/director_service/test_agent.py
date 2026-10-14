@@ -1443,3 +1443,47 @@ def test_cached_input_is_billed_at_the_cached_rate():
     assert llm_mod.cached_tokens(payload["usage"]) == 90_000
     cost = llm_mod._cost_usd("gpt-5.6-terra", payload)
     assert abs(cost - (10_000 * 2.0 + 90_000 * 0.2 + 1_000 * 12.0) / 1e6) < 1e-12
+
+
+def test_the_users_own_media_fills_a_shot_and_stays(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    image, clip = "dddddddd-1111-4111-8111-000000000001", "dddddddd-1111-4111-8111-000000000002"
+    assert _edit(client, pid, "set_shot_media", id="s1", kind="frame", asset_id=image).status_code == 200
+    assert _edit(client, pid, "set_shot_media", id="s2", kind="video", asset_id=clip).status_code == 200
+    media = _view(client, pid)["board"]["media"]
+    assert media["frame:s1"]["asset_id"] == image and not media["frame:s1"]["stale"]
+    assert media["video:s2"]["asset_id"] == clip and not media["video:s2"]["stale"]  # no frame needed for an uploaded clip
+    # A prompt change does not mark the user's file as outdated, and the render uses it.
+    assert _edit(client, pid, "update_shot", id="s1", frame_prompt="a different opening").status_code == 200
+    assert not _view(client, pid)["board"]["media"]["frame:s1"]["stale"]
+    from director_service import render
+
+    assert [(s["shot_id"], s["source"], s["asset_id"]) for s in render.plan(read_board(pid))] == [("s1", "frame", image), ("s2", "video", clip)]
+    # "Generate semua" leaves an uploaded clip alone.
+    res = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s2"]}, headers=HEADERS)
+    assert res.status_code == 400
+    assert _edit(client, pid, "set_shot_media", id="s1", kind="sound", asset_id=image).status_code == 400
+
+
+def test_scenes_and_batches_are_managed_from_the_board(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    # The first scene added from the board takes the shots that had none.
+    assert _edit(client, pid, "add_scene", title="Siang di pantai").status_code == 200
+    board = read_board(pid)
+    first = board["scenes"][0]["id"]
+    assert all(s["scene_id"] == first for s in board["shots"])
+    assert _edit(client, pid, "add_scene", title="Malam di pantai", description="api unggun", after=first).status_code == 200
+    board = read_board(pid)
+    new = board["scenes"][1]
+    assert new["title"] == "Malam di pantai" and new["id"].startswith("scene_")
+    assert _edit(client, pid, "update_scene", id=new["id"], title="Malam terakhir").status_code == 200
+    assert _edit(client, pid, "batch_shots", ids=["s1", "s2"], action="move_scene", scene_id=new["id"]).status_code == 200
+    assert {s["scene_id"] for s in read_board(pid)["shots"]} == {new["id"]}
+    # Removing a scene keeps its shots in the scene before it.
+    assert _edit(client, pid, "remove_scene", id=new["id"]).status_code == 200
+    board = read_board(pid)
+    assert [s["title"] for s in board["scenes"]] == ["Siang di pantai"]
+    assert all(s["scene_id"] == board["scenes"][0]["id"] for s in board["shots"])
+    assert _edit(client, pid, "batch_shots", ids=["s1", "s2"], action="remove").status_code == 200
+    assert read_board(pid)["shots"] == []
+    assert _edit(client, pid, "add_scene", title="").status_code == 400

@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from director_service import billing, board as boards, generation, live, llm, nexoclip, skills
-from director_service.store import add_llm_cost, append_chat, append_llm_log, read_chat, read_director
+from director_service.store import add_llm_cost, append_chat, append_llm_log, now_iso, read_chat, read_director
 
 MAX_STEPS = 30  # "Langsung jadi" goes from a brief to approved generation in one turn
 HISTORY_ENTRIES = 40
@@ -1011,6 +1011,112 @@ def _analyze_video(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     return {"ok": True, "answer": answer["text"]}, "Menonton ulang video"
 
 
+def _set_shot_media(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: the user's own image (as the shot's frame) or video (as its clip), instead of generating one."""
+    shot_id, kind, asset_id = args.get("id"), args.get("kind"), str(args.get("asset_id") or "")
+    if kind not in ("frame", "video") or not _ASSET_ID.match(asset_id):
+        raise ToolError("kind (frame or video) and an uploaded asset_id are required")
+    board = boards.read_board(ctx.project_id)
+    item = boards.shot(board, shot_id)
+    if item is None:
+        raise ToolError(f"no shot {shot_id!r}")
+    if boards.media_specs(board).get(f"{kind}:{shot_id}") is None:
+        raise ToolError(f"shot {shot_id} has no {kind} (a continuation shot only has a video)")
+    generation._record_take(ctx.project_id, f"{kind}:{shot_id}", asset_id=asset_id, spec_sig=None, dep_assets=[],
+                            generated_at=now_iso(), uploaded=True)
+    return {"ok": True}, f"Upload {'gambar' if kind == 'frame' else 'video'}: {item['title']}"
+
+
+def _add_scene(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: a new scene (after another one, or at the end)."""
+    title = str(args.get("title") or "").strip()
+    if not title:
+        raise ToolError("a scene title is required")
+
+    def change(board: dict[str, Any]) -> str:
+        n = len(board["scenes"]) + 1
+        while boards.scene(board, f"scene_{n}"):
+            n += 1
+        item = {"id": f"scene_{n}", "title": title[:120], "description": str(args.get("description") or "").strip()[:400]}
+        after = boards.scene(board, args.get("after")) if args.get("after") else None
+        board["scenes"].insert(board["scenes"].index(after) + 1 if after else len(board["scenes"]), item)
+        if len(board["scenes"]) == 1:  # the first scene: shots without one join it
+            for s in board["shots"]:
+                s["scene_id"] = s.get("scene_id") or item["id"]
+        return item["id"]
+
+    scene_id = ctx.update(change, f"Menambah scene: {title}")
+    return {"ok": True, "scene_id": scene_id}, f"Menambah scene: {title}"
+
+
+def _update_scene(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    def change(board: dict[str, Any]) -> str:
+        item = boards.scene(board, args.get("id"))
+        if item is None:
+            raise ToolError(f"no scene {args.get('id')!r}")
+        for key, limit in (("title", 120), ("description", 400)):
+            if args.get(key) is not None:
+                item[key] = str(args[key]).strip()[:limit]
+        if not item["title"]:
+            raise ToolError("a scene title is required")
+        return item["title"]
+
+    title = ctx.update(change, lambda title: f"Mengubah scene: {title}")
+    return {"ok": True}, f"Mengubah scene: {title}"
+
+
+def _remove_scene(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: remove a scene; its shots move to the scene before it (or after it), or are removed with it."""
+    def change(board: dict[str, Any]) -> str:
+        item = boards.scene(board, args.get("id"))
+        if item is None:
+            raise ToolError(f"no scene {args.get('id')!r}")
+        index = board["scenes"].index(item)
+        rest = [s for s in board["scenes"] if s is not item]
+        shots = [s for s in board["shots"] if s.get("scene_id") == item["id"]]
+        if args.get("with_shots"):
+            for s in shots:
+                ctx.guard(s, f"shot {s['id']}")
+            board["shots"] = [s for s in board["shots"] if s.get("scene_id") != item["id"]]
+        else:
+            target = rest[index - 1] if index > 0 else (rest[0] if rest else None)
+            for s in shots:
+                s["scene_id"] = target["id"] if target else None
+        board["scenes"] = rest
+        return item["title"]
+
+    title = ctx.update(change, lambda title: f"Menghapus scene: {title}")
+    return {"ok": True}, f"Menghapus scene: {title}"
+
+
+def _batch_shots(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
+    """User only: several shots at once: remove them, or move them into a scene."""
+    ids = list(dict.fromkeys(str(i) for i in args.get("ids") or []))
+    action = args.get("action")
+    if not ids or action not in ("remove", "move_scene"):
+        raise ToolError("ids and an action (remove or move_scene) are required")
+
+    def change(board: dict[str, Any]) -> int:
+        chosen = [s for s in board["shots"] if s["id"] in ids]
+        if len(chosen) != len(ids):
+            raise ToolError("some of those shots do not exist")
+        for s in chosen:
+            ctx.guard(s, f"shot {s['id']}")
+        if action == "remove":
+            board["shots"] = [s for s in board["shots"] if s["id"] not in ids]
+        else:
+            target = boards.scene(board, args.get("scene_id"))
+            if target is None:
+                raise ToolError(f"no scene {args.get('scene_id')!r}")
+            for s in chosen:
+                s["scene_id"] = target["id"]
+        return len(chosen)
+
+    verb = "Menghapus" if action == "remove" else "Memindah"
+    count = ctx.update(change, lambda n: f"{verb} {n} shot")
+    return {"ok": True, "count": count}, f"{verb} {count} shot"
+
+
 def _use_take(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     """User only: make an earlier take of a frame/video/sheet the one the board uses."""
     key, asset_id = str(args.get("key") or ""), str(args.get("asset_id") or "")
@@ -1023,7 +1129,7 @@ def _use_take(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         if media.get("status") == "running":
             raise ToolError(f"{key} is generating; wait until it finishes")
         media.update(status=boards.TERMINAL_OK, asset_id=take["asset_id"], error=None, done_spec_sig=take["spec_sig"],
-                     dep_assets=take["dep_assets"], generated_at=take["generated_at"])
+                     dep_assets=take["dep_assets"], generated_at=take["generated_at"], uploaded=bool(take.get("uploaded")))
         return key
 
     ctx.update(change, f"Memilih take {key}")
@@ -1139,6 +1245,11 @@ USER_EDITS: dict[str, Callable[[Ctx, dict[str, Any]], tuple[dict, str]]] = {
     "remove_shot": _remove_shot,
     "move_shot": _move_shot,
     "use_take": _use_take,
+    "set_shot_media": _set_shot_media,
+    "add_scene": _add_scene,
+    "update_scene": _update_scene,
+    "remove_scene": _remove_scene,
+    "batch_shots": _batch_shots,
     "set_audio": _set_audio,
     "choose_audio_option": _choose_audio_option,
     "extend_shot": _extend_shot,

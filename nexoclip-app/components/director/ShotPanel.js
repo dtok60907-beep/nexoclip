@@ -29,6 +29,42 @@ function Player({ media, workspaceId }) {
 }
 
 // Every frame and video made for the shot; the one in use is marked, any other can be put back.
+// The user's own image (as the shot's frame) or video (as its clip), uploaded to their workspace.
+function UploadMedia({ shot, workspaceId, onEdit, busy, hasFrame }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const upload = async (file) => {
+    if (!file || !workspaceId) return;
+    const kind = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'frame' : null;
+    if (!kind) { setError('Pilih gambar atau video.'); return; }
+    if (kind === 'frame' && !hasFrame) { setError('Shot lanjutan hanya punya video.'); return; }
+    setUploading(true);
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/uploads', { method: 'POST', headers: { 'x-workspace-id': workspaceId }, body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.id) throw new Error(data.error || 'Upload gagal');
+      await onEdit('set_shot_media', { id: shot.id, kind, asset_id: data.id });
+    } catch (err) {
+      setError(err.message || 'Upload gagal');
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div>
+      <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-2.5 py-1.5 text-[11px] text-white/70 hover:border-white/40 hover:text-white ${busy || uploading ? 'pointer-events-none opacity-50' : ''}`}>
+        {uploading ? 'Mengupload…' : '↑ Upload gambar / video sendiri'}
+        <input type="file" accept="image/*,video/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
+      </label>
+      <p className="mt-1 text-[10px] text-white/30">Gambar jadi frame shot, video jadi klipnya. Tidak di-generate ulang.</p>
+      {error && <p className="mt-1 text-[10px] text-red-300/80">{error}</p>}
+    </div>
+  );
+}
+
 function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy, startAdding }) {
   const [filter, setFilter] = useState('all');
   const [adding, setAdding] = useState(startAdding); // 'before' | 'after'
@@ -75,7 +111,7 @@ function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy,
                     : <img src={src} alt="" loading="lazy" className="pointer-events-none h-full w-full object-cover" />}
                 </button>
                 <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white/85">
-                  {it.kind === 'video' ? '▶ video' : 'gambar'} {it.n}{it.take.outdated ? ' · lama' : ''}{it.active ? ' · dipakai' : ''}
+                  {it.kind === 'video' ? '▶ video' : 'gambar'} {it.n}{it.take.uploaded ? ' · upload' : ''}{it.take.outdated ? ' · lama' : ''}{it.active ? ' · dipakai' : ''}
                 </span>
                 <a href={download(it.take.asset_id, workspaceId)} download title="Download"
                   className="absolute bottom-1 right-1 hidden rounded bg-black/70 px-1.5 text-[10px] text-white group-hover:block">↓</a>
@@ -84,6 +120,7 @@ function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy,
           })}
         </div>
       ) : <p className="text-[11px] text-white/35">Belum ada gambar atau video untuk shot ini.</p>}
+      <UploadMedia shot={shot} workspaceId={workspaceId} onEdit={onEdit} busy={busy} hasFrame={!!board.media[`frame:${shot.id}`]} />
       <div className="flex flex-wrap gap-1.5">
         {!shot.extends && <SmallButton disabled={busy} onClick={() => onRequest([`frame:${shot.id}`], !!board.media[`frame:${shot.id}`]?.asset_id)}>Recreate gambar</SmallButton>}
         <SmallButton disabled={busy} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id)}>Recreate video</SmallButton>

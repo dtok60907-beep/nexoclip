@@ -466,6 +466,9 @@ def needs_generation(board: dict[str, Any], key: str, specs: Optional[dict] = No
         return memo[key]
     spec = specs[key]
     media = board["media"].get(key) or {}
+    if media.get("uploaded") and media.get("status") == TERMINAL_OK:
+        memo[key] = False  # the user's own file: it stands until they replace or regenerate it
+        return False
     needed = (
         media.get("status") != TERMINAL_OK
         or media.get("done_spec_sig") != spec_sig(spec)
@@ -532,9 +535,10 @@ def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
             # Generated media are nexoclip assets owned by the user; the browser loads them
             # from nexoclip's own /api/assets/<id>/download with its session.
             "asset_id": media.get("asset_id") if status == TERMINAL_OK else None,
+            "uploaded": bool(media.get("uploaded")) and status == TERMINAL_OK,  # the user's own file
             # Every result so far, newest first; "outdated" ones were made from an older prompt.
-            "takes": [{"asset_id": t["asset_id"], "generated_at": t.get("generated_at"),
-                       "outdated": t.get("spec_sig") != spec_sig(spec)}
+            "takes": [{"asset_id": t["asset_id"], "generated_at": t.get("generated_at"), "uploaded": bool(t.get("uploaded")),
+                       "outdated": not t.get("uploaded") and t.get("spec_sig") != spec_sig(spec)}
                       for t in reversed(media.get("takes") or [])],
         }
     return {**{k: board[k] for k in (*CONTENT_KEYS, "requests", "renders", "video_notes")}, "media": media_view,

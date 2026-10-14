@@ -102,6 +102,17 @@ function Thumb({ board, shot, workspaceId, className = '', strip = false }) {
   );
 }
 
+// Full screen for a preview box (the box itself, so its own controls and playback keep working).
+function FullscreenButton({ target }) {
+  return (
+    <button type="button" title="Layar penuh" aria-label="Layar penuh"
+      onClick={() => { const node = target.current; if (document.fullscreenElement) document.exitFullscreen?.(); else node?.requestFullscreen?.(); }}
+      className="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-md bg-black/60 text-white/80 hover:bg-black/80 hover:text-white">
+      <Icon d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" />
+    </button>
+  );
+}
+
 function ShotPreview({ board, shot, workspaceId, className = '' }) {
   const frame = board.media[`frame:${shot.id}`];
   const video = board.media[`video:${shot.id}`];
@@ -310,6 +321,7 @@ function ShotStrip({ board, groups, selectedId, onSelect, workspaceId }) {
 
 function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, onEdit, onRequest, busy, onOpenAssets, tab, onTab }) {
   const [editing, setEditing] = useState(false);
+  const previewBox = useRef(null);
   useEffect(() => { setEditing(false); }, [selected?.shot.id]);
   if (!selected) {
     return <div className="flex h-full items-center justify-center text-[12px] text-white/35">Belum ada shot. Minta Director menyusun shot list.</div>;
@@ -330,8 +342,9 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
             <LockButton locked={shot.locked} disabled={busy} onToggle={() => onEdit('set_lock', { target: `shot:${shot.id}`, locked: !shot.locked })} />
           </div>
         </div>
-        <div className="flex min-h-[220px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-black/60">
+        <div ref={previewBox} className="relative flex min-h-[220px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-black/60 [&:fullscreen_img]:h-full [&:fullscreen_img]:w-full [&:fullscreen_img]:object-contain [&:fullscreen_video]:h-full [&:fullscreen_video]:w-full">
           <ShotPreview board={board} shot={shot} workspaceId={workspaceId} />
+          <FullscreenButton target={previewBox} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!continuation && (
@@ -384,35 +397,137 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
 
 // ---------------------------------------------------------------- scene mode
 
-function SceneMode({ board, groups, workspaceId, onPick, onOpenAssets }) {
-  if (!board.shots.length && !board.scenes?.length) return <div className="flex h-full items-center justify-center text-[12px] text-white/35">Belum ada scene atau shot.</div>;
+function SceneHeader({ group, busy, onEdit }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(group.scene.title || '');
+  useEffect(() => { if (!editing) setTitle(group.scene.title || ''); }, [group.scene.title, editing]);
+  const real = !!group.scene.id; // shots without a scene come as one unnamed group
+  const save = async () => {
+    if (title.trim() && title.trim() !== group.scene.title && !(await onEdit('update_scene', { id: group.scene.id, title: title.trim() }))) return;
+    setEditing(false);
+  };
+  return (
+    <div className="mb-2 flex items-center gap-2 text-[12px]">
+      <span className="flex-none font-semibold text-white">SCENE {group.number}</span>
+      <span className="text-white/20">|</span>
+      {editing ? (
+        <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} onBlur={save}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+          className="min-w-0 flex-1 rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-[12px] text-white outline-none" />
+      ) : (
+        <button type="button" disabled={!real || busy} onClick={() => setEditing(true)} title={real ? 'Klik untuk ganti nama' : undefined}
+          className="min-w-0 truncate text-left text-white/70 hover:text-white disabled:hover:text-white/70">
+          {group.scene.title}{group.scene.description && <span className="text-white/40"> — {group.scene.description}</span>}
+        </button>
+      )}
+      {real && !editing && (
+        <button type="button" disabled={busy} title="Hapus scene (shot-nya pindah ke scene sebelumnya)"
+          onClick={() => { if (window.confirm(`Hapus scene "${group.scene.title}"? Shot di dalamnya pindah ke scene sebelumnya.`)) onEdit('remove_scene', { id: group.scene.id }); }}
+          className="ml-auto flex-none rounded px-1.5 text-[11px] text-white/30 hover:bg-white/[0.06] hover:text-red-300">✕</button>
+      )}
+    </div>
+  );
+}
+
+function SceneShotCard({ board, item, workspaceId, ratio, picked, onToggle, onPick, wide }) {
+  const { shot, label } = item;
+  return (
+    <div className={`group relative ${wide ? 'w-full' : 'w-[220px] flex-none'} overflow-hidden rounded-lg border text-left ${picked ? 'border-[#d4ff64]/70 ring-1 ring-[#d4ff64]/40' : 'border-white/[0.06] hover:border-white/20'}`}>
+      <button type="button" onClick={() => onPick(shot.id)} className="block w-full text-left">
+        <Thumb board={board} shot={shot} workspaceId={workspaceId} className={ratio === 'aspect-[9/16]' ? 'h-[200px] w-full' : `${ratio} w-full`} />
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <span className="truncate text-[11px] text-white/80"><span className="mr-1 font-semibold">SHOT {label}</span>{shot.title}</span>
+          <span className="flex-none text-[10px] text-white/35">{shot.duration_seconds}s</span>
+        </div>
+      </button>
+      <label title="Pilih shot ini" onClick={(e) => e.stopPropagation()}
+        className={`absolute left-1.5 top-1.5 grid h-5 w-5 cursor-pointer place-items-center rounded border bg-black/60 ${picked ? 'border-[#d4ff64] opacity-100' : 'border-white/40 opacity-0 group-hover:opacity-100'}`}>
+        <input type="checkbox" checked={picked} onChange={() => onToggle(shot.id)} className="sr-only" />
+        {picked && <span className="text-[11px] leading-none text-[#d4ff64]">✓</span>}
+      </label>
+    </div>
+  );
+}
+
+function SceneMode({ board, groups, numbered, workspaceId, onPick, onOpenAssets, onEdit, onRequest, busy }) {
+  const [layout, setLayout] = useState('scene'); // 'scene' | 'grid'
+  const [picked, setPicked] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState('');
+  const ids = new Set(board.shots.map((s) => s.id));
+  const chosen = picked.filter((id) => ids.has(id));
+  const toggle = (id) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
   const ratio = RATIO_CLASS[board.brief.aspect_ratio] || 'aspect-video';
+  const addScene = async () => {
+    if (title.trim() && await onEdit('add_scene', { title: title.trim() })) { setTitle(''); setAdding(false); }
+  };
+  const generate = () => onRequest(chosen.map((id) => `video:${id}`).filter((key) => board.media[key] && !board.media[key].uploaded));
+  const move = async (sceneId) => { if (sceneId && await onEdit('batch_shots', { ids: chosen, action: 'move_scene', scene_id: sceneId })) setPicked([]); };
+  const remove = async () => {
+    if (!window.confirm(`Hapus ${chosen.length} shot? Bisa dikembalikan dari Riwayat versi.`)) return;
+    if (await onEdit('batch_shots', { ids: chosen, action: 'remove' })) setPicked([]);
+  };
+  const empty = !board.shots.length && !board.scenes?.length;
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 lg:flex-row">
-      <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto pr-1">
-        {groups.map((group) => (
-          <section key={group.scene.id ?? 'all'} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-            <div className="mb-2 text-[12px]">
-              <span className="font-semibold text-white">SCENE {group.number}</span>
-              <span className="mx-2 text-white/20">|</span>
-              <span className="text-white/70">{group.scene.title}</span>
-              {group.scene.description && <span className="text-white/40"> — {group.scene.description}</span>}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
+            {[['scene', 'Per scene'], ['grid', 'Grid']].map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setLayout(id)}
+                className={`rounded-md px-2.5 py-0.5 text-[11px] ${layout === id ? 'bg-white/[0.1] text-white' : 'text-white/50 hover:text-white'}`}>{label}</button>
+            ))}
+          </div>
+          {adding ? (
+            <span className="flex items-center gap-1.5">
+              <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nama scene baru"
+                onKeyDown={(e) => { if (e.key === 'Enter') addScene(); if (e.key === 'Escape') setAdding(false); }}
+                className="w-44 rounded-md border border-white/15 bg-black/30 px-2 py-1 text-[11px] text-white outline-none" />
+              <SmallButton tone="accent" disabled={busy || !title.trim()} onClick={addScene}>Tambah</SmallButton>
+              <SmallButton onClick={() => setAdding(false)}>Batal</SmallButton>
+            </span>
+          ) : (
+            <SmallButton disabled={busy} onClick={() => setAdding(true)}>+ Scene</SmallButton>
+          )}
+          {chosen.length > 0 && (
+            <div className="ml-auto flex flex-wrap items-center gap-1.5 rounded-lg border border-[#d4ff64]/25 bg-[#d4ff64]/[0.05] px-2 py-1">
+              <span className="text-[11px] text-[#e4f5bd]">{chosen.length} shot dipilih</span>
+              <SmallButton tone="accent" disabled={busy} onClick={generate}>Generate video</SmallButton>
+              {board.scenes?.length > 0 && (
+                <select disabled={busy} value="" onChange={(e) => move(e.target.value)}
+                  className="rounded-md border border-white/10 bg-[#0b0e13] px-1.5 py-1 text-[11px] text-white/80">
+                  <option value="">Pindah ke scene…</option>
+                  {board.scenes.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                </select>
+              )}
+              <SmallButton disabled={busy} onClick={remove}>Hapus</SmallButton>
+              <button type="button" onClick={() => setPicked([])} className="px-1 text-[11px] text-white/40 hover:text-white">Batal pilih</button>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {group.shots.map(({ shot, label }) => (
-                <button key={shot.id} type="button" onClick={() => onPick(shot.id)}
-                  className="w-[220px] flex-none overflow-hidden rounded-lg border border-white/[0.06] text-left hover:border-white/20">
-                  <Thumb board={board} shot={shot} workspaceId={workspaceId} className={ratio === 'aspect-[9/16]' ? 'h-[200px] w-full' : `${ratio} w-full`} />
-                  <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-                    <span className="truncate text-[11px] text-white/80"><span className="mr-1 font-semibold">SHOT {label}</span>{shot.title}</span>
-                    <span className="flex-none text-[10px] text-white/35">{shot.duration_seconds}s</span>
-                  </div>
-                </button>
+          )}
+        </div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {empty ? (
+            <div className="flex h-full items-center justify-center text-[12px] text-white/35">Belum ada scene atau shot.</div>
+          ) : layout === 'grid' ? (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
+              {numbered.map((item) => (
+                <SceneShotCard key={item.shot.id} board={board} item={item} workspaceId={workspaceId} ratio={ratio} wide
+                  picked={chosen.includes(item.shot.id)} onToggle={toggle} onPick={onPick} />
               ))}
-              {!group.shots.length && <span className="py-6 text-[11px] text-white/25">Belum ada shot di scene ini.</span>}
             </div>
-          </section>
-        ))}
+          ) : groups.map((group) => (
+            <section key={group.scene.id ?? 'all'} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+              <SceneHeader group={group} busy={busy} onEdit={onEdit} />
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {group.shots.map((item) => (
+                  <SceneShotCard key={item.shot.id} board={board} item={item} workspaceId={workspaceId} ratio={ratio}
+                    picked={chosen.includes(item.shot.id)} onToggle={toggle} onPick={onPick} />
+                ))}
+                {!group.shots.length && <span className="py-6 text-[11px] text-white/25">Belum ada shot di scene ini.</span>}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
       <aside className="w-full flex-none overflow-y-auto lg:w-[290px]">
         <CharactersAndWorld board={board} workspaceId={workspaceId} onOpenAssets={onOpenAssets} />
@@ -513,6 +628,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
     return () => observer.disconnect();
   }, [numbered.length, view]);
   const videoRef = useRef(null);
+  const playerBox = useRef(null);
   const current = numbered[index];
   const currentVideo = current && assetUrl(board.media[`video:${current.shot.id}`]?.asset_id, workspaceId);
   const currentFrame = current && assetUrl(board.media[`frame:${current.shot.id}`]?.asset_id, workspaceId);
@@ -674,7 +790,8 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
       ) : (
       <>
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
-        <div className="flex min-h-[220px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-black">
+        <div ref={playerBox} className="relative flex min-h-[220px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-black [&:fullscreen_img]:h-full [&:fullscreen_img]:w-full [&:fullscreen_img]:object-contain [&:fullscreen_video]:h-full [&:fullscreen_video]:w-full">
+          <FullscreenButton target={playerBox} />
           {!current ? <div className="text-[12px] text-white/35">Belum ada shot.</div> : currentVideo ? (
             <video ref={videoRef} key={currentVideo} src={currentVideo} poster={currentFrame || undefined} className="max-h-full max-w-full"
               onTimeUpdate={(e) => setOffset(e.currentTarget.currentTime)}
@@ -888,8 +1005,8 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
           <ShotMode board={board} numbered={numbered} groups={groups} selected={selected} onSelect={setSelectedId}
             workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} busy={busy} onOpenAssets={openAssets} tab={shotTab} onTab={setShotTab} />
         ) : mode === 'scene' ? (
-          <SceneMode board={board} groups={groups} workspaceId={workspaceId} onOpenAssets={openAssets}
-            onPick={(id) => { setSelectedId(id); setMode('shot'); }} />
+          <SceneMode board={board} groups={groups} numbered={numbered} workspaceId={workspaceId} onOpenAssets={openAssets}
+            onEdit={onEdit} onRequest={onRequest} busy={busy} onPick={(id) => { setSelectedId(id); setMode('shot'); }} />
         ) : (
           <TimelineMode board={board} numbered={numbered} workspaceId={workspaceId} selectedId={selected?.shot.id} onSelect={setSelectedId}
             onRender={onRender} rendering={rendering || busy} onEdit={onEdit} onRequest={onRequest} busy={busy} tab={shotTab} onTab={setShotTab} />
