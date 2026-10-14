@@ -569,7 +569,8 @@ function latestRender(board) {
 function Lane({ label, color, children, empty, onAdd }) {
   return (
     <div className="relative h-7 rounded bg-white/[0.025]">
-      <span className={`sticky left-0 z-10 inline-flex h-full w-[52px] items-center rounded-l bg-[#101318] px-1.5 text-[9px] font-semibold uppercase tracking-wide ${color}`}>{label}</span>
+      {/* Over the first second of the track: lets clicks through so a block starting at 0 can still be grabbed. */}
+      <span className={`pointer-events-none sticky left-0 z-30 inline-flex h-full w-[52px] items-center rounded-l bg-[#101318]/80 px-1.5 text-[9px] font-semibold uppercase tracking-wide ${color}`}>{label}</span>
       {children}
       {empty && (
         <button type="button" onClick={onAdd} className="absolute left-16 top-1 rounded px-1.5 py-0.5 text-[10px] text-white/35 hover:bg-white/[0.06] hover:text-white/70">+ Tambah</button>
@@ -579,13 +580,140 @@ function Lane({ label, color, children, empty, onAdd }) {
 }
 
 const LANE_LABEL = 52; // px of the sticky lane label; text of a block starting under it is pushed past it
+const SNAP = 0.1; // seconds
 
-function LaneBlock({ left, width, tone, title, onClick, children }) {
+// Length of an audio file, read from its metadata in the browser (null until known).
+const durationCache = new Map();
+function useClipDuration(src) {
+  const [seconds, setSeconds] = useState(() => (src ? durationCache.get(src) ?? null : null));
+  useEffect(() => {
+    if (!src) { setSeconds(null); return undefined; }
+    if (durationCache.has(src)) { setSeconds(durationCache.get(src)); return undefined; }
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    const done = () => { if (Number.isFinite(audio.duration)) { durationCache.set(src, audio.duration); setSeconds(audio.duration); } };
+    audio.addEventListener('loadedmetadata', done);
+    audio.src = src;
+    return () => audio.removeEventListener('loadedmetadata', done);
+  }, [src]);
+  return seconds;
+}
+
+// A block on a track: drag it to move, drag an edge to cut its start or end. onCommit(mode, deltaSeconds) when let go;
+// a plain click opens it.
+function LaneBlock({ start, length, zoom, tone, title, onClick, onCommit, disabled, children }) {
+  const [drag, setDrag] = useState(null); // {mode, x0, dx}
+  const begin = (mode) => (event) => {
+    if (disabled || event.button !== 0) return;
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDrag({ mode, x0: event.clientX, dx: 0 });
+  };
+  const move = (event) => { if (drag) setDrag({ ...drag, dx: event.clientX - drag.x0 }); };
+  const end = () => {
+    if (!drag) return;
+    const seconds = Math.round(drag.dx / zoom / SNAP) * SNAP;
+    setDrag(null);
+    if (Math.abs(drag.dx) < 3) onClick?.();
+    else if (seconds) onCommit?.(drag.mode, seconds);
+  };
+  const d = drag ? drag.dx / zoom : 0;
+  const shownStart = start + (drag && drag.mode !== 'right' ? d : 0);
+  const shownLength = Math.max(0.2, length + (drag?.mode === 'left' ? -d : drag?.mode === 'right' ? d : 0));
+  const left = shownStart * zoom;
   return (
-    <button type="button" onClick={onClick} title={title} style={{ left, width: Math.max(18, width), paddingLeft: Math.max(6, LANE_LABEL - left + 6) }}
-      className={`absolute top-1 bottom-1 overflow-hidden rounded pr-1 text-left text-[9.5px] leading-[18px] text-white/90 ${tone}`}>
-      <span className="block truncate">{children}</span>
-    </button>
+    <div title={title} onPointerDown={begin('move')} onPointerMove={move} onPointerUp={end} onPointerCancel={() => setDrag(null)}
+      style={{ left, width: Math.max(18, shownLength * zoom), paddingLeft: Math.max(8, LANE_LABEL - left + 6) }}
+      className={`absolute top-1 bottom-1 select-none overflow-hidden rounded pr-2 text-left text-[9.5px] leading-[18px] text-white/90 ${disabled ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${drag ? 'z-20 ring-1 ring-white/70' : ''} ${tone}`}>
+      <span className="pointer-events-none block truncate">{children}</span>
+      {!disabled && <>
+        <span onPointerDown={begin('left')} className="absolute bottom-0 left-0 top-0 w-1.5 cursor-ew-resize bg-white/0 hover:bg-white/40" />
+        <span onPointerDown={begin('right')} className="absolute bottom-0 right-0 top-0 w-1.5 cursor-ew-resize bg-white/0 hover:bg-white/40" />
+      </>}
+    </div>
+  );
+}
+
+const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
+const r2 = (value) => Math.round(value * 100) / 100;
+
+// The shot's voiceover line: starts vo_offset seconds into the shot; its edges cut the generated clip.
+function VoBlock({ item, shotStart, zoom, board, workspaceId, busy, onEdit, onOpen }) {
+  const { shot } = item;
+  const media = board.media[`vo:${shot.id}`];
+  const ready = media?.status === 'succeeded';
+  const clip = useClipDuration(ready ? assetUrl(media.asset_id, workspaceId) : null);
+  const offset = shot.vo_offset ?? 0.3;
+  const trimStart = shot.vo_trim_start || 0;
+  const trimEnd = shot.vo_trim_end || 0;
+  const full = clip ?? Math.max(0.8, shot.vo_text.length / 13);
+  const length = Math.max(0.3, full - trimStart - trimEnd);
+  const commit = (mode, d) => {
+    if (mode === 'move') return onEdit('update_shot', { id: shot.id, vo_offset: r2(clamp(offset + d, 0, shot.duration_seconds - 0.1)) });
+    if (mode === 'left') {
+      const cut = clamp(d, -Math.min(trimStart, offset), length - 0.3);
+      return onEdit('update_shot', { id: shot.id, vo_trim_start: r2(trimStart + cut), vo_offset: r2(offset + cut) });
+    }
+    return onEdit('update_shot', { id: shot.id, vo_trim_end: r2(clamp(trimEnd - d, 0, full - trimStart - 0.3)) });
+  };
+  return (
+    <LaneBlock start={shotStart + offset} length={length} zoom={zoom} disabled={busy || shot.locked}
+      tone={ready ? 'bg-violet-500/60 hover:bg-violet-500/80' : 'border border-dashed border-violet-300/50 bg-violet-500/15 hover:bg-violet-500/30'}
+      title={`VO shot ${item.label}${ready ? '' : ' (belum di-generate)'}: ${shot.vo_text}. Seret untuk geser, tarik ujungnya untuk memotong.`}
+      onClick={onOpen} onCommit={commit}>{shot.vo_text}</LaneBlock>
+  );
+}
+
+// The shot's caption: shown from caption_start to caption_end seconds into the shot.
+function CaptionBlock({ item, shotStart, zoom, busy, onEdit, onOpen }) {
+  const { shot } = item;
+  const from = shot.caption_start || 0;
+  const to = shot.caption_end ?? shot.duration_seconds;
+  const commit = (mode, d) => {
+    if (mode === 'move') {
+      const shift = clamp(d, -from, shot.duration_seconds - to);
+      return onEdit('update_shot', { id: shot.id, caption_start: r2(from + shift), caption_end: r2(to + shift) });
+    }
+    if (mode === 'left') return onEdit('update_shot', { id: shot.id, caption_start: r2(clamp(from + d, 0, to - 0.3)), caption_end: r2(to) });
+    return onEdit('update_shot', { id: shot.id, caption_start: r2(from), caption_end: r2(clamp(to + d, from + 0.3, shot.duration_seconds)) });
+  };
+  return (
+    <LaneBlock start={shotStart + from} length={to - from} zoom={zoom} disabled={busy || shot.locked}
+      tone="bg-amber-500/45 hover:bg-amber-500/65" title={`Caption shot ${item.label}: ${shot.caption}. Seret untuk geser, tarik ujungnya untuk atur kapan muncul/hilang.`}
+      onClick={onOpen} onCommit={commit}>{shot.caption}</LaneBlock>
+  );
+}
+
+// The music bed: starts at music.start in the video, music.trim_start seconds into the track, stops at music.end.
+function musicWindow(music, trackSeconds, total) {
+  const start = music.start || 0;
+  const trim = music.trim_start || 0;
+  const natural = Math.min(total, start + Math.max(0.5, trackSeconds - trim));
+  const end = music.end != null ? Math.min(music.end, natural) : natural;
+  return { start, trim, end, natural };
+}
+
+function MusicBlock({ board, workspaceId, zoom, total, busy, onEdit, onOpen }) {
+  const music = board.audio.music;
+  const media = board.media['audio:music'];
+  const ready = media?.status === 'succeeded';
+  const track = useClipDuration(ready ? assetUrl(media.asset_id, workspaceId) : null) ?? (music.duration_seconds || total);
+  const { start, trim, end } = musicWindow(music, track, total);
+  const commit = (mode, d) => {
+    if (mode === 'move') {
+      const shift = clamp(d, -start, total - end);
+      return onEdit('set_audio', { music_start: r2(start + shift), music_end: music.end != null ? r2(end + shift) : null });
+    }
+    if (mode === 'left') {
+      const cut = clamp(d, -Math.min(start, trim), end - start - 0.5);
+      return onEdit('set_audio', { music_start: r2(start + cut), music_trim_start: r2(trim + cut) });
+    }
+    return onEdit('set_audio', { music_end: r2(clamp(end + d, start + 0.5, Math.min(total, start + track - trim))) });
+  };
+  return (
+    <LaneBlock start={start} length={end - start} zoom={zoom} disabled={busy}
+      tone={ready ? 'bg-sky-500/50 hover:bg-sky-500/70' : 'border border-dashed border-sky-300/50 bg-sky-500/15 hover:bg-sky-500/30'}
+      title={`Musik: ${music.prompt}. Seret untuk geser, tarik ujungnya untuk memotong.`} onClick={onOpen} onCommit={commit}>♪ {music.prompt}</LaneBlock>
   );
 }
 
@@ -691,24 +819,33 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
     video.volume = voiced ? 0.45 : 1;
     if (playing) video.play().catch(() => {}); else video.pause();
   }, [playing, index, currentVideo, voiced]);
+  // The music follows the playhead within its window on the track (start, cut start, end), checked 4x a second.
+  const tick = Math.floor(offset * 4);
   useEffect(() => {
     const music = musicRef.current;
     if (!music) return;
     music.volume = voiced ? 0.3 : 0.7;
-    if (!playing) { music.pause(); return; }
+    const bed = board.audio?.music || {};
+    const { start, trim, end } = musicWindow(bed, Number.isFinite(music.duration) ? music.duration : (bed.duration_seconds || total), total);
     const at = (starts[index] || 0) + offset;
-    if (Math.abs(music.currentTime - at) > 0.4) music.currentTime = at;
+    if (!playing || at < start || at >= end) { music.pause(); return; }
+    const target = trim + (at - start);
+    if (Math.abs(music.currentTime - target) > 0.4) music.currentTime = target;
     music.play().catch(() => {});
-  }, [playing, index, musicSrc]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playing, index, musicSrc, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The shot's voiceover line from its offset, with its cut start and end.
   useEffect(() => {
     const vo = voRef.current;
     if (!vo) return undefined;
     if (!playing || !voSrc) { vo.pause(); return undefined; }
-    const wait = (current.shot.vo_offset ?? 0.3) - offset;
-    if (wait <= 0) { vo.currentTime = -wait; vo.play().catch(() => {}); return undefined; }
-    vo.currentTime = 0;
-    const timer = setTimeout(() => vo.play().catch(() => {}), wait * 1000);
-    return () => clearTimeout(timer);
+    const { vo_offset: voOffset = 0.3, vo_trim_start: cutStart = 0, vo_trim_end: cutEnd = 0 } = current.shot;
+    const stopAtEnd = () => { if (Number.isFinite(vo.duration) && vo.currentTime >= vo.duration - (cutEnd || 0)) vo.pause(); };
+    vo.addEventListener('timeupdate', stopAtEnd);
+    const wait = (voOffset ?? 0.3) - offset;
+    let timer;
+    if (wait <= 0) { vo.currentTime = (cutStart || 0) - wait; vo.play().catch(() => {}); }
+    else { vo.currentTime = cutStart || 0; timer = setTimeout(() => vo.play().catch(() => {}), wait * 1000); }
+    return () => { clearTimeout(timer); vo.removeEventListener('timeupdate', stopAtEnd); };
   }, [playing, index, voSrc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!numbered.length && !finalSrc) return <div className="flex h-full items-center justify-center text-[12px] text-white/35">Timeline kosong. Belum ada shot.</div>;
@@ -792,6 +929,11 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
         <div ref={playerBox} className="relative flex min-h-[220px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-black [&:fullscreen_img]:h-full [&:fullscreen_img]:w-full [&:fullscreen_img]:object-contain [&:fullscreen_video]:h-full [&:fullscreen_video]:w-full">
           <FullscreenButton target={playerBox} />
+          {current?.shot.caption && offset >= (current.shot.caption_start || 0) && offset < (current.shot.caption_end ?? current.shot.duration_seconds) && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-[8%] z-10 flex justify-center px-6">
+              <span className="max-w-[84%] rounded-md bg-black/60 px-3 py-1.5 text-center text-[clamp(12px,2.2vw,22px)] font-bold leading-snug text-white">{current.shot.caption}</span>
+            </div>
+          )}
           {!current ? <div className="text-[12px] text-white/35">Belum ada shot.</div> : currentVideo ? (
             <video ref={videoRef} key={currentVideo} src={currentVideo} poster={currentFrame || undefined} className="max-h-full max-w-full"
               onTimeUpdate={(e) => setOffset(e.currentTarget.currentTime)}
@@ -884,31 +1026,20 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
             {!showFinal && (
               <div className="mt-1 space-y-1">
                 <Lane label="VO" color="text-violet-200" empty={!numbered.some((n) => n.shot.vo_text)} onAdd={() => onTab('voiceover')}>
-                  {numbered.map((n, i) => {
-                    if (!n.shot.vo_text) return null;
-                    const media = board.media[`vo:${n.shot.id}`];
-                    const ready = media?.status === 'succeeded';
-                    return (
-                      <LaneBlock key={n.shot.id} left={(starts[i] + (n.shot.vo_offset ?? 0.3)) * zoom}
-                        width={Math.max(0.8, n.shot.vo_text.length / 13) * zoom}
-                        tone={ready ? 'bg-violet-500/60 hover:bg-violet-500/80' : 'border border-dashed border-violet-300/50 bg-violet-500/15 hover:bg-violet-500/30'}
-                        title={`VO shot ${n.label}${ready ? '' : ' (belum di-generate)'}: ${n.shot.vo_text}`}
-                        onClick={() => { seek(i); onTab('voiceover'); }}>{n.shot.vo_text}</LaneBlock>
-                    );
-                  })}
+                  {numbered.map((n, i) => n.shot.vo_text ? (
+                    <VoBlock key={n.shot.id} item={n} shotStart={starts[i]} zoom={zoom} board={board} workspaceId={workspaceId}
+                      busy={busy} onEdit={onEdit} onOpen={() => { seek(i); onTab('voiceover'); }} />
+                  ) : null)}
                 </Lane>
                 <Lane label="Musik" color="text-sky-200" empty={!board.audio?.music?.prompt} onAdd={() => onTab('music')}>
                   {board.audio?.music?.prompt && (
-                    <LaneBlock left={0} width={Math.min(total, board.audio.music.duration_seconds || total) * zoom}
-                      tone={board.media['audio:music']?.status === 'succeeded' ? 'bg-sky-500/50 hover:bg-sky-500/70' : 'border border-dashed border-sky-300/50 bg-sky-500/15 hover:bg-sky-500/30'}
-                      title={`Musik: ${board.audio.music.prompt}`} onClick={() => onTab('music')}>♪ {board.audio.music.prompt}</LaneBlock>
+                    <MusicBlock board={board} workspaceId={workspaceId} zoom={zoom} total={total} busy={busy} onEdit={onEdit} onOpen={() => onTab('music')} />
                   )}
                 </Lane>
                 <Lane label="Caption" color="text-amber-200" empty={!numbered.some((n) => n.shot.caption)} onAdd={() => onTab('caption')}>
                   {numbered.map((n, i) => n.shot.caption ? (
-                    <LaneBlock key={n.shot.id} left={starts[i] * zoom + 2} width={n.shot.duration_seconds * zoom - 4}
-                      tone="bg-amber-500/45 hover:bg-amber-500/65" title={`Caption shot ${n.label}: ${n.shot.caption}`}
-                      onClick={() => { seek(i); onTab('caption'); }}>{n.shot.caption}</LaneBlock>
+                    <CaptionBlock key={n.shot.id} item={n} shotStart={starts[i]} zoom={zoom} busy={busy} onEdit={onEdit}
+                      onOpen={() => { seek(i); onTab('caption'); }} />
                   ) : null)}
                 </Lane>
               </div>
@@ -919,7 +1050,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
         </div>
         <p className="mt-1 text-[10px] text-white/30">{showFinal
           ? 'Isi video final per shot, sesuai durasi aslinya. Klik shot untuk lompat ke bagian itu.'
-          : 'Klik shot untuk melihatnya, seret untuk mengubah urutan, ✕ untuk menghapus. Klik blok VO, Musik, atau Caption untuk mengeditnya di panel kanan. Export menggabungkan semuanya jadi MP4.'}</p>
+          : 'Klik shot untuk melihatnya, seret untuk mengubah urutan, ✕ untuk menghapus. Blok VO, Musik, dan Caption: seret untuk menggeser, tarik ujungnya untuk memotong, klik untuk mengedit. Export menggabungkan semuanya jadi MP4.'}</p>
       </div>
     </div>
   );
@@ -967,9 +1098,6 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
             <Badge tone={board.brief.generate_audio ? 'green' : 'default'}>{board.brief.generate_audio ? 'Audio on' : 'Audio off'}</Badge>
           </button>
           <Badge>{board.brief.aspect_ratio}</Badge>
-          <button type="button" onClick={() => onOpenPanel('audio')} title="Voiceover dan musik terpisah (ElevenLabs)" className="rounded-md hover:opacity-80">
-            <Badge tone={board.media['audio:voiceover']?.asset_id || board.media['audio:music']?.asset_id ? 'accent' : 'default'}>♪ VO & musik</Badge>
-          </button>
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>
           </button>

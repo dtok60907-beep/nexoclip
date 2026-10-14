@@ -3,7 +3,7 @@
 // The Director conversation: plain-text answers, user bubbles, collapsible
 // "what I did" step groups, and artifact / generation cards.
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Badge, assetUrl, fmtCredits } from './BoardViews.js';
 import { groupShots } from './Workspace.js';
 
@@ -500,8 +500,38 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
   return <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={entry.text} /></div>;
 }
 
+// The streamed reply typed out at a steady pace (about 70 characters a second, faster when far behind),
+// instead of jumping by whole chunks as they arrive.
+function useTypewriter(target) {
+  const [shown, setShown] = useState('');
+  useEffect(() => {
+    if (!target) { setShown(''); return undefined; }
+    let frame;
+    let last = performance.now();
+    const step = (time) => {
+      const elapsed = (time - last) / 1000;
+      last = time;
+      setShown((current) => {
+        const base = target.startsWith(current) ? current : ''; // a new step's reply starts over
+        const behind = target.length - base.length;
+        if (behind <= 0) return target;
+        const add = Math.max(1, Math.round(elapsed * Math.max(70, behind * 1.5)));
+        return target.slice(0, base.length + add);
+      });
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [target]);
+  return shown;
+}
+
 export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio, draft, onContinue }) {
   const blocks = groupEntries(chat);
+  // The draft stays until the saved message with the same text is in the chat, then the message takes its place.
+  const lastReply = [...chat].reverse().find((entry) => entry.role === 'assistant' && entry.kind === 'message');
+  const pending = draft && !(lastReply && lastReply.text.trim() === draft.trim()) ? draft : '';
+  const typed = useTypewriter(pending);
   return (
     <div className="space-y-4">
       {blocks.map((block, i) => block.type === 'steps' ? (
@@ -511,11 +541,11 @@ export default function ChatTimeline({ chat, board, workspaceId, busy, generatio
           generationRunning={generationRunning} renderRunning={renderRunning} onApprove={onApprove} onReject={onReject}
           onOpenPanel={onOpenPanel} onRender={onRender} onChooseAudio={onChooseAudio} onContinue={onContinue} />
       ))}
-      {draft && (
+      {pending && (
         // The reply as it is being written; replaced by the saved message when the step ends.
-        <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={draft} /><span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-[#d4ff64]/70 align-middle" /></div>
+        <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={typed} /><span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-[#d4ff64]/70 align-middle" /></div>
       )}
-      {agentRunning && !draft && blocks[blocks.length - 1]?.type !== 'steps' && (
+      {agentRunning && !pending && blocks[blocks.length - 1]?.type !== 'steps' && (
         <div className="flex items-center gap-2 text-[10.5px] text-white/40"><Spinner /> Director sedang bekerja…</div>
       )}
     </div>

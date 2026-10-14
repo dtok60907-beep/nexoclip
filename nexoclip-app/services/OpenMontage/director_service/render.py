@@ -74,7 +74,9 @@ def plan(board: dict[str, Any]) -> list[dict[str, Any]]:
         trim_start, trim_end = float(shot.get("trim_start") or 0), float(shot.get("trim_end") or 0)
         segments.append({"shot_id": shot["id"], "title": shot.get("title") or shot["id"], "source": source,
                          "asset_id": asset_id, "duration": max(1.0, float(shot.get("duration_seconds") or 5) - trim_start - trim_end),
-                         "trim_start": trim_start, "trim_end": trim_end, "caption": (shot.get("caption") or "").strip()})
+                         "trim_start": trim_start, "trim_end": trim_end, "caption": (shot.get("caption") or "").strip(),
+                         "caption_start": float(shot.get("caption_start") or 0),
+                         "caption_end": None if shot.get("caption_end") is None else float(shot["caption_end"])})
     return segments
 
 
@@ -149,7 +151,8 @@ def caption_image(text: str, size: tuple[int, int], out: str) -> str:
 
 
 def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int, int], *,
-              trim_start: float = 0.0, trim_end: float = 0.0, caption: Optional[str] = None) -> None:
+              trim_start: float = 0.0, trim_end: float = 0.0, caption: Optional[str] = None,
+              caption_window: Optional[tuple[float, Optional[float]]] = None) -> None:
     """Re-encode one segment so every segment shares codec, size, fps and audio layout. A clip is cut by
     trim_start / trim_end seconds (always keeping at least a second of it); a caption image is laid on top."""
     vf = _video_filter(*size)
@@ -172,7 +175,9 @@ def normalise(source: str, kind: str, duration: float, out: str, size: tuple[int
     if caption:
         overlay = len([a for a in inputs if a == "-i"])
         inputs += ["-loop", "1", "-i", caption]
-        video = ["-filter_complex", f"[0:v]{vf}[base];[base][{overlay}:v]overlay=0:0:shortest=1,format=yuv420p[v]", "-map", "[v]"]
+        start, end = caption_window or (0.0, None)
+        enable = f":enable='between(t,{start:.2f},{end:.2f})'" if end is not None else (f":enable='gte(t,{start:.2f})'" if start else "")
+        video = ["-filter_complex", f"[0:v]{vf}[base];[base][{overlay}:v]overlay=0:0:shortest=1{enable},format=yuv420p[v]", "-map", "[v]"]
     else:
         video = ["-vf", vf, "-map", "0:v"]
     _run(["-y", *inputs, *video, "-map", audio, *tail, *ENCODE, out])
@@ -213,25 +218,45 @@ def voice_lines(board: dict[str, Any]) -> dict[str, str]:
     return lines
 
 
-def mix(video: str, out: str, *, voices: Optional[list[tuple[str, float]]] = None, music: Optional[str] = None) -> None:
-    """Lay voice clips (each from its start second) and the music bed over the joined video; the video's
-    length wins."""
+def _cut(trim_start: float, keep: Optional[float]) -> str:
+    """atrim + timestamp reset for a part of a clip (keep=None: to its end)."""
+    if not trim_start and keep is None:
+        return ""
+    end = f":duration={keep:.3f}" if keep is not None else ""
+    return f"atrim=start={trim_start:.3f}{end},asetpts=PTS-STARTPTS,"
+
+
+def mix(video: str, out: str, *, voices: Optional[list[tuple]] = None, music: Optional[str] = None,
+        music_window: Optional[dict[str, Any]] = None) -> None:
+    """Lay voice clips and the music bed over the joined video; the video's length wins.
+
+    voices: (path, start second, trim_start, trim_end) — the clip's first and last seconds can be cut.
+    music_window: {"start": second it starts in the video, "trim_start": seconds cut from the track,
+    "end": second it stops (None: the end)}; it fades out over its last seconds."""
     length = duration_of(video)
     voices = voices or []
     inputs, chains, labels = ["-i", video], [], []
     voiced = "with_voice" if voices else "alone"
     chains.append(f"[0:a]volume={CLIP_VOLUME[voiced]}[clips]")
     labels.append("[clips]")
-    for index, (path, start) in enumerate(voices):
+    for index, voice in enumerate(voices):
+        path, start = voice[0], voice[1]
+        trim_start, trim_end = (voice[2], voice[3]) if len(voice) > 3 else (0.0, 0.0)
+        keep = max(0.1, duration_of(path) - trim_start - trim_end) if trim_end else None
         inputs += ["-i", path]
         delay = int(round(max(0.0, start) * 1000))
-        chains.append(f"[{len(labels)}:a]aresample=48000,adelay={delay}:all=1,apad[vo{index}]")
+        chains.append(f"[{len(labels)}:a]{_cut(trim_start, keep)}aresample=48000,adelay={delay}:all=1,apad[vo{index}]")
         labels.append(f"[vo{index}]")
     if music:
+        window = music_window or {}
+        start = max(0.0, float(window.get("start") or 0))
+        end = min(length, float(window["end"])) if window.get("end") is not None else length
+        span = max(0.5, end - start)
         inputs += ["-i", music]
-        fade_at = max(0.0, length - MUSIC_FADE_SECONDS)
-        chains.append(f"[{len(labels)}:a]aresample=48000,volume={MUSIC_VOLUME[voiced]},"
-                      f"afade=t=out:st={fade_at:.2f}:d={MUSIC_FADE_SECONDS},apad[music]")
+        fade_at = max(0.0, span - MUSIC_FADE_SECONDS)
+        chains.append(f"[{len(labels)}:a]{_cut(float(window.get('trim_start') or 0), span) or f'atrim=duration={span:.3f},'}"
+                      f"aresample=48000,volume={MUSIC_VOLUME[voiced]},"
+                      f"afade=t=out:st={fade_at:.2f}:d={MUSIC_FADE_SECONDS},adelay={int(round(start * 1000))}:all=1,apad[music]")
         labels.append("[music]")
     chains.append(f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:normalize=0[mixed]")
     _run(["-y", *inputs, "-filter_complex", ";".join(chains), "-map", "0:v", "-map", "[mixed]",
@@ -324,7 +349,8 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
             if seg.get("caption"):
                 caption = caption_image(seg["caption"], size, os.path.join(tmp, f"caption_{index}.png"))
             normalise(raw, seg["source"], seg["duration"], part, size,
-                      trim_start=seg.get("trim_start", 0.0), trim_end=seg.get("trim_end", 0.0), caption=caption)
+                      trim_start=seg.get("trim_start", 0.0), trim_end=seg.get("trim_end", 0.0), caption=caption,
+                      caption_window=(seg.get("caption_start") or 0.0, seg.get("caption_end")))
             parts.append(part)
             length = round(duration_of(part), 3)
             placed.append({"shot_id": seg["shot_id"], "source": seg["source"], "start": round(cursor, 3), "duration": length})
@@ -346,11 +372,14 @@ def run(project_id: str, render_id: str, *, download: Optional[Callable[[str], t
                     fh.write(content)
                 return path
 
-            voices = [(fetch(asset, f"vo_{sid}"), starts[sid] + offsets.get(sid, 0.0)) for sid, asset in lines.items()]
+            shots = {s["id"]: s for s in board["shots"]}
+            voices = [(fetch(asset, f"vo_{sid}"), starts[sid] + offsets.get(sid, 0.0),
+                       float(shots[sid].get("vo_trim_start") or 0), float(shots[sid].get("vo_trim_end") or 0))
+                      for sid, asset in lines.items()]
             if "voiceover" in tracks:  # the older single narration, read from the start
                 voices.append((fetch(tracks["voiceover"], "voiceover"), 0.0))
             music = fetch(tracks["music"], "music") if "music" in tracks else None
-            mix(joined, out, voices=voices, music=music)
+            mix(joined, out, voices=voices, music=music, music_window=(board.get("audio") or {}).get("music"))
         else:
             join(parts, out)
         total_seconds = round(duration_of(out), 2)

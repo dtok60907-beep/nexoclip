@@ -211,10 +211,15 @@ SHOT_FIELDS = {
                                    "required": ["asset_id", "kind"], "additionalProperties": False}},
     "caption": {"type": "string", "description": "optional: on-screen text shown at the bottom for the whole shot (subtitle, tagline, CTA)"},
     "vo_offset": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot where its line starts"},
+    "vo_trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the generated line"},
+    "vo_trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the generated line"},
+    "caption_start": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot when the caption appears (default 0)"},
+    "caption_end": {"type": "number", "minimum": 0, "description": "optional: seconds into the shot when it disappears (default: the end)"},
     "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
 OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption",
+                        "vo_trim_start", "vo_trim_end", "caption_start", "caption_end",
                         "reference_assets")
 
 AUDIO_OPTION_FIELDS = {
@@ -321,6 +326,9 @@ TOOLS = [
         "music_seconds": {"type": "integer", "minimum": boards.MIN_MUSIC_SECONDS, "maximum": boards.MAX_MUSIC_SECONDS,
                           "description": "defaults to the video's length"},
         "instrumental": {"type": "boolean", "description": "music without vocals (default true)"},
+        "music_start": {"type": "number", "minimum": 0, "description": "second of the video where the music starts (default 0)"},
+        "music_trim_start": {"type": "number", "minimum": 0, "description": "seconds cut from the start of the track"},
+        "music_end": {"type": "number", "minimum": 0, "description": "second of the video where the music stops (default: the end)"},
     }, []),
     _tool("set_audio_options", "Offer 2-3 audio directions (voice + voiceover + music) and recommend one.", {
         "options": {"type": "array", "items": {"type": "object", "properties": AUDIO_OPTION_FIELDS,
@@ -438,6 +446,17 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     if not 0 <= offset < duration:
         raise ToolError(f"shot {shot['id']}: vo_offset must be within the shot (0-{duration}s)")
     shot["vo_offset"] = offset
+    # Timing set by dragging on the timeline: cuts of the voice clip, and when the caption shows.
+    try:
+        vo_trims = [round(max(0.0, float(shot.get(k) or 0)), 2) for k in ("vo_trim_start", "vo_trim_end")]
+        caption_start = round(float(shot.get("caption_start") or 0), 2)
+        caption_end = None if shot.get("caption_end") in (None, "") else round(float(shot["caption_end"]), 2)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"shot {shot['id']}: timings must be numbers") from exc
+    shot["vo_trim_start"], shot["vo_trim_end"] = vo_trims
+    if not 0 <= caption_start < duration or (caption_end is not None and not caption_start < caption_end <= duration):
+        raise ToolError(f"shot {shot['id']}: the caption must show within the shot (0-{duration}s, start before end)")
+    shot["caption_start"], shot["caption_end"] = caption_start, caption_end
     shot["locked"] = bool(raw.get("locked"))
     return shot
 
@@ -884,6 +903,16 @@ def _set_audio(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
             music["duration_seconds"] = max(boards.MIN_MUSIC_SECONDS, min(boards.MAX_MUSIC_SECONDS, boards.video_seconds(board) or 30))
         if args.get("instrumental") is not None:
             music["instrumental"] = bool(args["instrumental"])
+        try:
+            for key, field in (("music_start", "start"), ("music_trim_start", "trim_start")):
+                if args.get(key) is not None:
+                    music[field] = round(max(0.0, float(args[key])), 2)
+            if "music_end" in args:
+                music["end"] = None if args["music_end"] in (None, "") else round(float(args["music_end"]), 2)
+        except (TypeError, ValueError) as exc:
+            raise ToolError("music timings must be numbers") from exc
+        if music.get("end") is not None and music["end"] <= float(music.get("start") or 0):
+            raise ToolError("the music must end after it starts")
         board["audio"] = {**boards.empty_audio(), **audio, "voiceover": voiceover, "music": music}
         return board["audio"]
 
@@ -1543,7 +1572,10 @@ def run_turn(project_id: str) -> str:
     for _ in range(MAX_STEPS):
         step = llm.respond(input_items, instructions=instructions, tools=TOOLS,
                            previous_response_id=previous_id, on_text=lambda text: live.draft(project_id, text))
-        live.draft(project_id, "", force=True)  # the step's text is in the chat (or dropped) from here on
+        # No "clear" event here: the browser keeps the draft on screen until the saved message replaces it, so the
+        # reply never blinks out between the two.
+        if step["text"]:
+            live.draft(project_id, step["text"], force=True)  # the full text (the last streamed piece may have been throttled)
         _bill(project_id, "agent", step["usage"])
         if not step["calls"] and refused and nudges < MAX_NUDGES:
             # The model is about to wrap up (often claiming the work is done) while calls it made were

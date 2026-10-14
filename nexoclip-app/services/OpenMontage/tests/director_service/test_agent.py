@@ -1128,7 +1128,8 @@ def test_voiceover_lines_play_over_their_own_shots(client, fake_llm, bridge, tmp
     bridge.files[media["vo:s2"]["asset_id"]] = _tone(tmp_path, "line", 1.0)
     placed = []
     original = render.mix
-    render_mix = lambda video, out, voices=None, music=None: (placed.extend(voices or []), original(video, out, voices=voices, music=music))
+    render_mix = lambda video, out, voices=None, music=None, music_window=None: (
+        placed.extend(voices or []), original(video, out, voices=voices, music=music, music_window=music_window))
     import director_service.render as render_module
     render_module.mix = render_mix
     try:
@@ -1202,7 +1203,7 @@ def test_replies_stream_to_the_browser_as_they_are_written(client, fake_llm, bri
     finally:
         live.DRAFT_INTERVAL_SECONDS = monkey_interval
     assert events[:2] == ["Halo,", "Halo, mau"] and "Halo, mau bikin video apa hari ini?" in events
-    assert events[-1] == ""  # cleared once the reply is in the chat
+    assert events[-1] == "Halo, mau bikin video apa hari ini?"  # the full text last; the browser swaps in the saved message
     assert _view(client, pid)["chat"][-1]["text"] == "Halo, mau bikin video apa hari ini?"
 
 
@@ -1487,3 +1488,48 @@ def test_scenes_and_batches_are_managed_from_the_board(client, fake_llm, bridge)
     assert _edit(client, pid, "batch_shots", ids=["s1", "s2"], action="remove").status_code == 200
     assert read_board(pid)["shots"] == []
     assert _edit(client, pid, "add_scene", title="").status_code == 400
+
+
+
+def test_track_timings_are_set_on_the_timeline_and_rendered(client, fake_llm, bridge, tmp_path):
+    from director_service import render
+    from PIL import Image
+
+    pid = _built_project(client, fake_llm)
+    fake_llm.turns.append([{"calls": [call("set_audio", voice_id="JBFqnCBsd6RMkjVDRZzb", music_prompt="lo-fi",
+                                           lines=[{"shot_id": "s1", "text": "Halo."}])]}, {"text": "ok"}])
+    _say(client, pid, "VO dan musik")
+    # Dragged on the timeline: cut the line, show the caption only in the last 2 s of shot 2, music from 0.5 s to 2 s.
+    assert _edit(client, pid, "update_shot", id="s1", vo_trim_start=0.2, vo_trim_end=0.3).status_code == 200
+    assert _edit(client, pid, "update_shot", id="s2", caption="Sampai jumpa", caption_start=2, caption_end=4).status_code == 200
+    assert _edit(client, pid, "update_shot", id="s2", caption_start=3, caption_end=2).status_code == 400
+    assert _edit(client, pid, "set_audio", music_start=0.5, music_trim_start=1, music_end=2).status_code == 200
+    assert _edit(client, pid, "set_audio", music_start=3, music_end=2).status_code == 400
+    board = read_board(pid)
+    assert board["audio"]["music"]["start"] == 0.5 and board["audio"]["music"]["end"] == 2
+    # Timing never makes the generated audio outdated.
+    media = _view(client, pid)["board"]["media"]
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1", "frame:s2", "vo:s1", "audio:music"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    media = _view(client, pid)["board"]["media"]
+    bridge.files[media["video:s1"]["asset_id"]] = _media(tmp_path, "video")
+    bridge.files[media["frame:s2"]["asset_id"]] = _media(tmp_path, "frame")
+    bridge.files[media["vo:s1"]["asset_id"]] = _tone(tmp_path, "line", 1.5)
+    bridge.files[media["audio:music"]["asset_id"]] = _tone(tmp_path, "music", 10)
+    assert client.post(f"/api/director/projects/{pid}/renders", headers=HEADERS).status_code == 201
+    _wait(pid, timeout=120)
+    item = read_board(pid)["renders"][-1]
+    assert item["status"] == "done", item
+    out = tmp_path / "timed.mp4"
+    out.write_bytes(bridge.imports[-1]["content"])
+    # Shot 2 starts at 2 s: no caption at 3 s (1 s into the shot), the caption at 5 s (3 s into it).
+    def band(at):
+        still = tmp_path / f"still_{at}.png"
+        render._run(["-y", "-ss", str(at), "-i", str(out), "-frames:v", "1", str(still)])
+        image = Image.open(still).convert("RGB")
+        w, h = image.size
+        teal = image.getpixel((w // 2, h // 4))
+        pixels = [image.getpixel((x, y)) for x in range(int(w * 0.3), int(w * 0.7), 8) for y in range(int(h * 0.75), int(h * 0.95), 8)]
+        return sum(1 for p in pixels if sum(abs(a - b) for a, b in zip(p, teal)) > 60) / len(pixels)
+    assert band(3) < 0.01 and band(5) > 0.05
