@@ -47,10 +47,12 @@ export function createUsageAnalyticsService({ repository = usageAnalyticsReposit
     async report({ userId, input }) {
       if (!isPlatformOperator(userId, env)) throw operatorError();
       const filters = consoleFilters(input);
-      const [rows, sold, freeCredits, usdIdr] = await Promise.all([
+      const [rows, sold, freeCredits, usdIdr, alerts] = await Promise.all([
         repository.usage(filters), repository.soldCredits(), repository.freeCredits(filters), loadRate({ env }),
+        repository.providerAlerts ? repository.providerAlerts() : [],
       ]);
-      return { filters: { from: filters.from, to: filters.to }, ...buildUsageReport({ rows, sold, freeCredits, usdIdr, lowest: lowestIdrPerCredit() }) };
+      return { filters: { from: filters.from, to: filters.to }, providerAlerts: alerts,
+        ...buildUsageReport({ rows, sold, freeCredits, usdIdr, lowest: lowestIdrPerCredit() }) };
     },
   };
 }

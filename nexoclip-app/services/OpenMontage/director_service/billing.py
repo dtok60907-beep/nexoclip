@@ -22,10 +22,31 @@ def bridge_for(project_id: str) -> Optional[nexoclip.Bridge]:
     return nexoclip.Bridge(read_director(project_id)["owner"])
 
 
-def require_credits(project_id: str) -> None:
+# A model call is billed after it ran, so it must not start unless the balance covers the most one call can cost:
+# an AI Director step with a large, uncached context is about $0.10 (~16 credits at the production markup), a video
+# analysis a few credits. Below that the call is not made, instead of charging only what is left.
+MIN_STEP_CREDITS = 20.0
+MIN_ANALYSIS_CREDITS = 5.0
+
+
+def require_credits(project_id: str, minimum: float = 0.0) -> None:
     bridge = bridge_for(project_id)
-    if bridge is not None and bridge.balance() <= 0:
-        raise nexoclip.InsufficientCredits()
+    if bridge is not None:
+        balance = bridge.balance()
+        if balance <= 0 or balance < minimum:
+            raise nexoclip.InsufficientCredits()
+
+
+def balance_short(project_id: str, minimum: float) -> Optional[float]:
+    """The balance when it is below minimum (the call should not run), else None."""
+    bridge = bridge_for(project_id)
+    if bridge is None:
+        return None
+    try:
+        balance = bridge.balance()
+    except nexoclip.BridgeError:
+        return None  # an unreachable balance check must not block the user; the bridge still refuses at 0
+    return balance if balance < minimum else None
 
 
 def charge_llm(project_id: str, model: str, usage: dict[str, Any]) -> float:

@@ -1,4 +1,5 @@
 import { createOpenAIAdapter } from './openaiAdapter.js';
+import { providerBillingFailure } from '../../lib/providerBilling.js';
 
 export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = globalThis.fetch } = {}) {
   if (!baseUrl) throw new TypeError('baseUrl is required');
@@ -21,6 +22,7 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
       const assetNotFound = response.status === 404 || /(?:asset|reference)[^\n]*not found|not found[^\n]*(?:asset|reference)/i.test(detail || '');
       throw Object.assign(new Error(`BytePlus direct request failed${suffix}`), {
         provider: 'byteplus', status: response.status, code: 'BYTEPLUS_REQUEST_FAILED', assetNotFound,
+        ...providerBillingFailure('byteplus', detail),
       });
     }
     return response;

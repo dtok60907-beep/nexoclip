@@ -662,6 +662,15 @@ def test_the_view_shows_video_credits_per_second_and_caches_them(client, fake_ll
     assert _view(client, pid)["video_credits_per_second"]["720p"] == 5.0  # cached for an hour
 
 
+def test_a_turn_stops_before_a_step_the_balance_cannot_cover(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    calls_before = len(fake_llm.requests)
+    bridge.credits = 12.0  # below one step's worst case: the model is not called, nothing is charged below cost
+    view = _say(client, pid, "lanjut bikin shot")
+    assert len(fake_llm.requests) == calls_before
+    assert "Kredit kamu tinggal 12" in view["chat"][-1]["text"] and "Top up" in view["chat"][-1]["text"]
+
+
 def test_refused_calls_must_be_redone_before_the_reply(client, fake_llm, monkeypatch, no_skill_gate):
     pid = _built_project(client, fake_llm)
     monkeypatch.setattr(agent_mod, "REQUIRED_SKILLS", no_skill_gate)

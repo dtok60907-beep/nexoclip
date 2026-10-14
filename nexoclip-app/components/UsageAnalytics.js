@@ -55,6 +55,17 @@ export default function UsageAnalytics({ initialRange }) {
       </div>
       {error && <div role="alert" className={adminStyles.error}>{error}</div>}
       {!data && !error && <p role="status" className={adminStyles.loading}>Memuat analytics…</p>}
+      {data?.providerAlerts?.length > 0 && (
+        <div role="alert" className="mt-4 rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-sm text-red-100">
+          <p className="font-semibold">Provider menolak job karena akun kita (tagihan / kuota) dalam 24 jam terakhir</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {data.providerAlerts.map((alert) => (
+              <li key={alert.provider || 'unknown'}>{alert.provider || 'provider'}: {alert.failed} job gagal, terakhir {new Date(alert.last_at).toLocaleString('id-ID')}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-red-100/80">Bayar tagihan / tambah kuota di konsol provider. User melihat pesan "layanan sedang tidak tersedia" dan kreditnya tidak terpotong. Kegagalan audio ElevenLabs tercatat di log (event provider_billing_blocked).</p>
+        </div>
+      )}
       {data && (
         <>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

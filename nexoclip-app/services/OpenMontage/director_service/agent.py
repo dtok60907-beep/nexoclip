@@ -1051,6 +1051,8 @@ def _analyze_video(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     bridge = billing.bridge_for(ctx.project_id)
     if bridge is None:
         raise ToolError("video analysis needs the nexoclip connection")
+    if billing.balance_short(ctx.project_id, billing.MIN_ANALYSIS_CREDITS) is not None:
+        raise ToolError("not enough credits to ask the video analyst; tell the user to top up")
     key = hashlib.sha256(f"{asset_id}:{question}".encode("utf-8")).hexdigest()[:24]
     try:
         answer = bridge.analyze_video(asset_id=asset_id, question=question, idempotency_key=f"{ctx.project_id}:{key}")
@@ -1466,6 +1468,8 @@ def watch_new_videos(project_id: str) -> None:
         if video["asset_id"] in notes:
             continue
         name = video.get("name") or "video"
+        if billing.balance_short(project_id, billing.MIN_ANALYSIS_CREDITS) is not None:
+            return  # not enough credits to watch it; it is watched on a later turn, after a top-up
         append_chat(project_id, "assistant", f"Menonton video: {name}", kind="activity", meta={"tool": "analyze_video"})
         try:
             text = bridge.analyze_video(asset_id=video["asset_id"], idempotency_key=f"{project_id}:{video['asset_id']}")["text"]
@@ -1590,6 +1594,14 @@ def run_turn(project_id: str) -> str:
     # the turn reach the model through the tool results.
     instructions = _instructions(project_id)
     for _ in range(MAX_STEPS):
+        short = billing.balance_short(project_id, billing.MIN_STEP_CREDITS)
+        if short is not None:
+            show_cards()
+            reply = (f"Kredit kamu tinggal {short:g}, belum cukup untuk langkah berikutnya (butuh sekitar "
+                     f"{billing.MIN_STEP_CREDITS:g}). Aku berhenti di sini dulu; yang sudah jadi tetap tersimpan. "
+                     "Top up kredit, lalu bilang \"lanjut\".")
+            append_chat(project_id, "assistant", reply, kind="message")
+            return reply
         step = llm.respond(input_items, instructions=instructions, tools=TOOLS,
                            previous_response_id=previous_id, on_text=lambda text: live.draft(project_id, text))
         # No "clear" event here: the browser keeps the draft on screen until the saved message replaces it, so the

@@ -1,6 +1,7 @@
 // Voiceover (text to speech) and music from ElevenLabs, billed in nexoclip credits.
 // Both endpoints answer with the finished audio file, so a job is one request:
 // no queue or worker is needed, unlike image and video generation.
+import { providerBillingFailure } from '../lib/providerBilling.js';
 import { loadUsdIdrRate, usdToCredits } from './generationPricing.js';
 
 const API = 'https://api.elevenlabs.io';
@@ -96,6 +97,9 @@ export async function generateElevenLabsAudio(input, { apiKey = process.env.ELEV
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
     const message = detail?.detail?.message || detail?.detail?.[0]?.msg || `ElevenLabs returned HTTP ${response.status}`;
+    const billing = providerBillingFailure('elevenlabs', `${detail?.detail?.code || detail?.detail?.status || ''} ${message}`);
+    // 424: the request was fine, our ElevenLabs account was not; the caller shows the message as it is.
+    if (billing) throw Object.assign(new Error(billing.publicMessage), { status: 424, code: billing.code });
     throw Object.assign(new Error(message), { status: response.status === 422 || response.status === 400 ? 400 : 502, code: 'AUDIO_PROVIDER_FAILED' });
   }
   const body = Buffer.from(await response.arrayBuffer());
