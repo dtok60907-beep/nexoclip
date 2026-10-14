@@ -12,6 +12,7 @@ import { storyboardTextCredits } from '../../../../src/services/storyboardTextPr
 import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../../src/queue/bullmqGenerationQueue.js';
 import { verifyCanvasAuthorization } from '../../../../src/lib/realtime/internalAuth.js';
+import { deleteBytePlusAssetTrust, getBytePlusAssetTrust, startBytePlusAssetTrust } from '../../../../src/services/byteplusAssetTrustService.js';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 
@@ -26,7 +27,10 @@ import IORedis from 'ioredis';
 // caller holding it may submit on behalf of the user it names, same as Canvas.
 export const STORYBOARD_PROJECT_SCOPE = 'storyboard';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio', 'analyze-video']);
+const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', 'balance', 'charge-text', 'estimate', 'generate-audio', 'analyze-video', 'trust-asset', 'trust-status', 'untrust-asset']);
+// "Trust for Seedance" of a workspace image (the same workspace-wide trust Canvas uses): Seedance refuses images
+// with human faces unless they are BytePlus trusted assets. The Director borrows the trust around a video job.
+const TRUST_OPERATIONS = { 'trust-asset': 'start', 'trust-status': 'get', 'untrust-asset': 'delete' };
 // Only the models these tools are configured with may be submitted.
 export const STORYBOARD_MODELS = { image: 'bytedance-seed/seedream-4.5', video: 'byteplus/seedance-2.5-unfiltered' };
 // Bookkeeping label for which internal tool made the request; must be one of these.
@@ -70,6 +74,7 @@ export function createInternalStoryboardHandler({
   watchVideo = analyzeVideo,
   priceVideoAnalysis = videoAnalysisCredits,
   fetchBytes = async (url) => Buffer.from(await (await fetch(url)).arrayBuffer()),
+  trust = { start: startBytePlusAssetTrust, get: getBytePlusAssetTrust, delete: deleteBytePlusAssetTrust },
   logError = console.error,
 } = {}) {
   return async function POST(request) {
@@ -231,6 +236,18 @@ export function createInternalStoryboardHandler({
           body: bytes,
         }, loadStorage(), pool);
         return Response.json({ assetId: result.asset.id, reference: `/api/assets/${encodeURIComponent(result.asset.id)}/download` }, { status: 201 });
+      }
+
+      if (TRUST_OPERATIONS[action]) {
+        if (typeof payload.assetId !== 'string' || !payload.assetId) return badRequest('assetId is required');
+        try {
+          const state = await trust[TRUST_OPERATIONS[action]](workspace.id, payload.assetId);
+          if (!state) return Response.json({ error: 'Asset not found' }, { status: 404 });
+          return Response.json({ status: state.status, error: state.error?.message || null });
+        } catch (error) {
+          logError({ event: 'storyboard_trust_failed', action, errorCode: error?.code || null, errorMessage: error?.message || null });
+          return Response.json({ error: error?.message || 'Trust failed', code: error?.code || null }, { status: Number(error?.status) || 502 });
+        }
       }
 
       if (action === 'download-asset') {

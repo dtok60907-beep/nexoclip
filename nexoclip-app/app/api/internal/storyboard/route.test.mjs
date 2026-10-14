@@ -230,3 +230,26 @@ test('a video is watched by the Seed model, charged by its tokens, and answered 
   assert.deepEqual(await again.json(), { text: '00:00 seorang pria berjalan', credits: 0.1 });
   assert.equal(watched, 2);
 });
+
+test('starts, reads and removes the Seedance trust of a workspace image for the Director', async () => {
+  const calls = [];
+  const trust = {
+    start: async (workspaceId, assetId) => { calls.push(['start', workspaceId, assetId]); return { status: 'processing' }; },
+    get: async (workspaceId, assetId) => { calls.push(['get', workspaceId, assetId]); return assetId === 'gone' ? null : { status: 'active' }; },
+    delete: async () => { throw Object.assign(new Error('BytePlus Assets API request failed.'), { code: 'BYTEPLUS_ASSETS_REQUEST_FAILED', status: 400 }); },
+  };
+  // Several signed requests: verify with its own secret instead of toggling the shared env (see above).
+  const post = createInternalStoryboardHandler({
+    verify: (payload, signature) => signature === signCanvasAuthorization(payload, 'bridge-secret-trust'),
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }), getPool: () => ({}), logError: () => {}, trust,
+  });
+  const signedRequestFor = (payload) => signedRequest(payload, { secret: 'bridge-secret-trust' });
+  assert.deepEqual(await (await post(signedRequestFor({ action: 'trust-asset', assetId: 'asset-1' }))).json(), { status: 'processing', error: null });
+  assert.deepEqual(await (await post(signedRequestFor({ action: 'trust-status', assetId: 'asset-1' }))).json(), { status: 'active', error: null });
+  assert.equal((await post(signedRequestFor({ action: 'trust-status', assetId: 'gone' }))).status, 404);
+  const removed = await post(signedRequestFor({ action: 'untrust-asset', assetId: 'asset-1' }));
+  assert.equal(removed.status, 400);
+  assert.equal((await removed.json()).code, 'BYTEPLUS_ASSETS_REQUEST_FAILED');
+  assert.equal((await post(signedRequestFor({ action: 'trust-asset' }))).status, 400);
+  assert.deepEqual(calls[0], ['start', 'workspace-1', 'asset-1']);
+});

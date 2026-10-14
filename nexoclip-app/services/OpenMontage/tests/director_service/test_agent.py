@@ -80,6 +80,8 @@ class FakeBridge:
         self.fail_once: set[str] = set()
         self.imports: list[dict] = []
         self.files: dict[str, nexoclip.Downloaded] = {}  # real media for render tests
+        self.trusted: dict[str, str] = {}  # BytePlus trust per asset
+        self.trust_calls: list[tuple[str, str]] = []
         self._gens: dict[str, dict] = {}
 
     def balance(self):
@@ -117,6 +119,19 @@ class FakeBridge:
     def analyze_video(self, *, asset_id, question="", idempotency_key):
         self.watched = getattr(self, "watched", []) + [{"asset_id": asset_id, "question": question, "key": idempotency_key}]
         return {"text": f"00:00-00:03 a woman walks along the beach, handheld, golden hour ({question or 'overview'})", "credits": 0.2}
+
+    def trust(self, asset_id, operation="start"):
+        self.trust_calls.append((operation, asset_id))
+        state = self.trusted.get(asset_id, "not_trusted")
+        if operation == "start":
+            self.trusted[asset_id] = "processing"
+            return "processing"
+        if operation == "remove":
+            self.trusted.pop(asset_id, None)
+            return "not_trusted"
+        if state == "processing":  # BytePlus finishes processing between two polls
+            self.trusted[asset_id] = "active"
+        return state
 
     def upload_render(self, *, content, filename):
         self.imports.append({"content": content, "content_type": "video/mp4", "filename": filename})
@@ -574,12 +589,61 @@ def test_a_scene_is_generated_as_one_keyframed_video_and_cut_per_shot(client, fa
     assert submit["parameters"]["referenceImages"][:2] == [nexoclip.asset_reference(f"asset-{f['id']}") for f in frames]
     media = _view(client, pid)["board"]["media"]
     assert media["scene:s1"]["status"] == "succeeded" and not media["scene:s1"]["error"]
+    # Images with Maya (her sheet and both frames) were borrowed as BytePlus trusted assets and given back;
+    # the beach house sheet has no people and was never trusted.
+    people = {media["element:maya"]["asset_id"], media["frame:s1"]["asset_id"], media["frame:s2"]["asset_id"]}
+    assert {a for op, a in bridge.trust_calls if op == "start"} == people
+    assert {a for op, a in bridge.trust_calls if op == "remove"} == people and not bridge.trusted
+    assert read_board(pid)["trust_loans"] == {}  # every loan given back
+    assert media["element:beach_house"]["asset_id"] not in {a for _, a in bridge.trust_calls}
     for sid, asset, seconds in (("s1", "asset-import1", 6.0), ("s2", "asset-import2", 4.0)):
         assert media[f"video:{sid}"]["asset_id"] == asset and not media[f"video:{sid}"]["stale"]
         assert media[f"video:{sid}"]["takes"][0]["from_scene"] == "scene:s1"
         piece = tmp_path / f"{sid}.mp4"
         piece.write_bytes(next(i["content"] for i in bridge.imports if i["filename"] == f"{sid}.mp4"))
         assert abs(render.duration_of(str(piece)) - seconds) < 0.3 and render.has_audio(str(piece))
+
+
+def test_a_small_reference_video_is_fitted_once_and_rides_in_the_scene_video(client, fake_llm, bridge, tmp_path):
+    from director_service import generation as gen, render
+
+    pid = _built_project(client, fake_llm)
+    small = tmp_path / "small.mp4"  # 480x360 at 15 fps: below Seedance's 407,696 pixels and 24 fps
+    render._run(["-y", "-f", "lavfi", "-i", "testsrc=size=480x360:rate=15:duration=3", "-c:v", "libx264",
+                 "-pix_fmt", "yuv420p", str(small)])
+    bridge.files["user-ref-video"] = nexoclip.Downloaded(small.read_bytes(), "video/mp4")
+    scenes = [{"id": "arrive", "title": "Tiba", "description": "Rumah pantai, sore"}]
+    shots = [{**SHOTS[0], "scene_id": "arrive", "reference_assets": [{"asset_id": "user-ref-video", "kind": "video"}]},
+             {**SHOTS[1], "scene_id": "arrive"}]
+    fake_llm.turns.append([{"calls": [call("set_scenes", scenes=scenes), call("set_shots", shots=shots)]}, {"text": "ok"}])
+    view = _say(client, pid, "pakai video referensiku")
+    assert [b["shots"] for b in view["board"]["scene_blocks"]] == [["s1", "s2"]]  # a reference video no longer splits the scene
+    assert "@Video1 is a reference video the user gave for Shot 1" in view["board"]["media"]["scene:s1"]["prompt"]
+
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["scene:s1"]}, headers=HEADERS).json()
+    client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
+    _wait(pid, timeout=60)
+    fitted = bridge.imports[0]
+    assert fitted["filename"] == "reference-user-ref.mp4"
+    out = tmp_path / "fitted.mp4"
+    out.write_bytes(fitted["content"])
+    (width, height), fps = gen.video_shape(str(out))
+    assert width * height >= gen.MIN_VIDEO_PIXELS and abs(width / height - 4 / 3) < 0.02 and fps >= gen.MIN_FPS
+    scene_submit = next(s for s in bridge.submits if s["kind"] == "video")
+    assert scene_submit["parameters"]["referenceVideos"] == [nexoclip.asset_reference("asset-import1")]
+    assert read_board(pid)["media"]["fit:user-ref-video"]["asset_id"] == "asset-import1"  # remembered, not redone
+
+
+def test_trusts_a_crash_left_behind_are_given_back_by_the_sweep(client, fake_llm, bridge):
+    from director_service import generation as gen, session as sess
+
+    pid = _built_project(client, fake_llm)
+    bridge.trusted["asset-left"] = "active"
+    gen._loans(pid, add=["asset-left"])  # borrowed by a run that died before returning it
+    assert sess.sweep_trust_loans() == 1
+    assert ("remove", "asset-left") in bridge.trust_calls and "asset-left" not in bridge.trusted
+    assert read_board(pid)["trust_loans"] == {}
+    assert sess.sweep_trust_loans() == 0
 
 
 def test_refused_calls_must_be_redone_before_the_reply(client, fake_llm, monkeypatch, no_skill_gate):

@@ -33,7 +33,7 @@ LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
 TERMINAL_OK = "succeeded"
 CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots", "audio")
-RUNTIME_KEYS = ("media", "requests", "renders", "video_notes")
+RUNTIME_KEYS = ("media", "requests", "renders", "video_notes", "trust_loans")
 
 T = TypeVar("T")
 
@@ -76,6 +76,8 @@ def empty_board() -> dict[str, Any]:
         "renders": [],
         # what the video analyst saw in each video the user attached: asset id -> description
         "video_notes": {},
+        # images this project borrowed as BytePlus trusted assets and has not given back: asset id -> since
+        "trust_loans": {},
     }
 
 
@@ -286,6 +288,26 @@ KEEP_IDENTITY = {
 MAX_VIDEO_REFERENCES = 30  # Seedance 2.5 reference_image limit
 
 
+def shows_people(item: Optional[dict[str, Any]]) -> bool:
+    """Whether an element's image shows a human face (Seedance only takes those as BytePlus trusted assets)."""
+    if not item:
+        return False
+    return bool(item["people"]) if item.get("people") is not None else item["kind"] == "character"
+
+
+def people_deps(board: dict[str, Any], deps: list[str]) -> list[str]:
+    """The reference images of a video that show people: the sheets of such elements and the frames of shots
+    with such an element in them."""
+    out = []
+    for dep in deps:
+        kind, ref = dep.split(":", 1)
+        if kind == "element" and shows_people(element(board, ref)):
+            out.append(dep)
+        elif kind == "frame" and (s := shot(board, ref)) and any(shows_people(element(board, e)) for e in s.get("element_ids", [])):
+            out.append(dep)
+    return out
+
+
 def video_references(board: dict[str, Any], shot: dict[str, Any]) -> list[str]:
     """The shot's frame, then the reference sheet of every element in it."""
     sheets = [f"element:{e}" for e in shot.get("element_ids", []) if element(board, e)]
@@ -448,7 +470,7 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
     specs[f"video:{item['id']}"] = {
         "kind": "video", "label": f"{item['title']} — video",
         "prompt": f"{video_prompt}\n{legend}" if legend else video_prompt,
-        "deps": deps,
+        "deps": deps, "people_deps": people_deps(board, deps),
         "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio},
         **({"extra_images": images} if images else {}), **({"ref_videos": videos} if videos else {}),
     }
@@ -468,11 +490,16 @@ def _first_appearance(board: dict[str, Any], shots: list[dict[str, Any]]) -> lis
     return order
 
 
+MAX_SCENE_REFERENCE_VIDEOS = 3  # the user's reference videos in one scene video (Seedance takes 10, 30 s in total)
+
+
 def _scene_eligible(board: dict[str, Any], item: dict[str, Any]) -> bool:
-    """A shot can be part of a scene video: it has its own frame (no continuation), no reference videos of the
-    user and no video the user uploaded."""
-    return (not item.get("extends") and not user_references(item)[1]
-            and not (board["media"].get(f"video:{item['id']}") or {}).get("uploaded"))
+    """A shot can be part of a scene video: it has its own frame (no continuation) and no video the user uploaded."""
+    return not item.get("extends") and not (board["media"].get(f"video:{item['id']}") or {}).get("uploaded")
+
+
+def _scene_videos(shots: list[dict[str, Any]]) -> list[str]:
+    return list(dict.fromkeys(a for s in shots for a in user_references(s)[1]))
 
 
 def scene_blocks(board: dict[str, Any]) -> list[dict[str, Any]]:
@@ -497,7 +524,8 @@ def scene_blocks(board: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             candidate = [*run, item]
             images = len(candidate) + len(_first_appearance(board, candidate)) + sum(len(user_references(s)[0]) for s in candidate)
-            if sum(int(s["duration_seconds"]) for s in candidate) > MAX_SCENE_SECONDS or images > MAX_VIDEO_REFERENCES:
+            if (sum(int(s["duration_seconds"]) for s in candidate) > MAX_SCENE_SECONDS or images > MAX_VIDEO_REFERENCES
+                    or len(_scene_videos(candidate)) > MAX_SCENE_REFERENCE_VIDEOS):
                 close()
             run.append(item)
         close()
@@ -542,6 +570,11 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
                      f"show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
     for n in range(count + len(elements_in_order) + 1, count + len(elements_in_order) + 1 + len(user_images)):
         lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
+    user_videos = _scene_videos(shots)
+    for n, asset_id in enumerate(user_videos, start=1):
+        used_by = [str(i) for i, s in enumerate(shots, start=1) if asset_id in user_references(s)[1]]
+        lines.append(f"@Video{n} is a reference video the user gave for Shot {', '.join(used_by)}: use it only for its "
+                     f"motion, camera movement and pacing, not its people or place.")
     style, bodies = _hoisted_style([compile_mentions(s["video_prompt"], names)[0] for s in shots])
     parts = ["\n".join(lines)]
     if style:
@@ -553,8 +586,9 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
     return {
         "kind": "video", "label": f"{title} — video scene ({count} shot, {cursor}s)",
         "prompt": _with_look("\n\n".join(parts), brief), "deps": deps, "shots": list(block["shots"]),
+        "people_deps": people_deps(board, deps),
         "params": {"aspectRatio": ratio, "duration": cursor, **audio, "omniReferenceTaskType": "reference"},
-        **({"extra_images": user_images} if user_images else {}),
+        **({"extra_images": user_images} if user_images else {}), **({"ref_videos": user_videos} if user_videos else {}),
     }
 
 

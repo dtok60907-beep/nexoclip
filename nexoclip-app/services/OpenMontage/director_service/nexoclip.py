@@ -186,6 +186,12 @@ class Bridge:
             raise BridgeError(response.status_code, f"upload render gagal ({response.status_code}): {message}"[:500])
         return str(response.json()["assetId"])
 
+    def trust(self, asset_id: str, operation: str = "start") -> str:
+        """BytePlus "Trust for Seedance" of an image asset (start / status / remove): Seedance only accepts images
+        with human faces as trusted assets. Returns the trust status (not_trusted, processing, active, failed)."""
+        action = {"start": "trust-asset", "status": "trust-status", "remove": "untrust-asset"}[operation]
+        return str(self._post({"action": action, "assetId": asset_id}).json().get("status") or "not_trusted")
+
     def submit(self, *, kind: str, prompt: str, parameters: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
         response = self._post({
             "action": "submit", "source": SOURCE,

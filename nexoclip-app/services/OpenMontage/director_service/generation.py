@@ -34,6 +34,7 @@ from director_service.store import now_iso
 
 POLL_SECONDS = 5.0
 JOB_TIMEOUT_SECONDS = 1800
+TRUST_TIMEOUT_SECONDS = 180
 OPEN_STATUSES = ("pending", "running")
 
 
@@ -276,7 +277,129 @@ def _run_audio(project_id: str, bridge: nexoclip.Bridge, key: str, spec: dict[st
     _record_take(project_id, key, asset_id=result["asset_id"], spec_sig=sig, dep_assets=[], generated_at=now_iso())
 
 
+def _trust(bridge: nexoclip.Bridge, asset_ids: list[str]) -> list[str]:
+    """Make these images BytePlus trusted assets (Seedance refuses images with faces otherwise) and wait until they
+    are active. Returns the ones trusted here, to remove again after the videos: the BytePlus account holds only a
+    few dozen trusted assets, so they are borrowed per generation. A failure leaves the image untrusted."""
+    started, waiting = [], set()
+    for asset_id in dict.fromkeys(asset_ids):
+        try:
+            if bridge.trust(asset_id, "status") == "active":
+                continue
+            status = bridge.trust(asset_id, "start")
+        except nexoclip.BridgeError:
+            continue
+        started.append(asset_id)
+        if status != "active":
+            waiting.add(asset_id)
+    deadline = time.monotonic() + TRUST_TIMEOUT_SECONDS
+    while waiting and time.monotonic() < deadline:
+        time.sleep(POLL_SECONDS)
+        for asset_id in sorted(waiting):
+            try:
+                status = bridge.trust(asset_id, "status")
+            except nexoclip.BridgeError:
+                continue
+            if status != "processing":
+                waiting.discard(asset_id)
+    return started
+
+
+def _loans(project_id: str, add: list[str] = (), drop: list[str] = ()) -> dict[str, str]:
+    """The project's open trust loans, written down so a crash cannot leave them taking BytePlus slots forever."""
+    def change(board: dict[str, Any]) -> dict[str, str]:
+        loans = dict(board.get("trust_loans") or {})
+        loans.update({a: loans.get(a) or now_iso() for a in add})
+        for a in drop:
+            loans.pop(a, None)
+        board["trust_loans"] = loans
+        return loans
+
+    return update_board(project_id, change)
+
+
+def _untrust(project_id: str, bridge: nexoclip.Bridge, asset_ids: list[str]) -> None:
+    returned = []
+    for asset_id in asset_ids:
+        try:
+            bridge.trust(asset_id, "remove")
+            returned.append(asset_id)
+        except nexoclip.BridgeError:
+            pass  # stays on the loan list and is given back by the next sweep
+    if returned:
+        _loans(project_id, drop=returned)
+
+
+def release_loans(project_id: str, bridge: Optional[nexoclip.Bridge] = None) -> int:
+    """Give back every trust this project still holds (after a run, or one a crash left behind)."""
+    loans = list(read_board(project_id).get("trust_loans") or {})
+    bridge = bridge or (billing.bridge_for(project_id) if loans else None)
+    if loans and bridge is not None:
+        _untrust(project_id, bridge, loans)
+    return len(loans)
+
+
+# Seedance 2.5's limits for a reference video: at least 407,696 pixels a frame, 24-60 fps, 2-30 s.
+MIN_VIDEO_PIXELS, MIN_FPS, MAX_FPS, MAX_REFERENCE_SECONDS = 409_600, 24, 60, 30
+
+
+def video_shape(path: str) -> tuple[tuple[int, int], float]:
+    """((width, height), fps) of a video file, zeros when unknown."""
+    import re
+    import subprocess
+
+    from director_service import render
+
+    probe = subprocess.run([render.ffmpeg_exe(), "-hide_banner", "-nostdin", "-i", path], capture_output=True, text=True)
+    line = next((ln for ln in probe.stderr.splitlines() if "Video:" in ln), "")
+    size = re.search(r"\b(\d{2,5})x(\d{2,5})\b", line)
+    fps = re.search(r"([\d.]+) fps", line)
+    return (int(size.group(1)), int(size.group(2))) if size else (0, 0), float(fps.group(1)) if fps else 0.0
+
+
+def _fit_reference_video(project_id: str, bridge: nexoclip.Bridge, asset_id: str) -> str:
+    """The user's reference video as Seedance accepts it: scaled up when it is too small, frame rate brought into
+    24-60 fps, cut to 30 s. A fitted copy is uploaded once and remembered; a video that fits is sent as it is."""
+    from director_service import render
+
+    known = (read_board(project_id)["media"].get(f"fit:{asset_id}") or {}).get("asset_id")
+    if known:
+        return known
+    downloaded = bridge.download(asset_id)
+    with tempfile.TemporaryDirectory(prefix="director-ref-") as tmp:
+        source = os.path.join(tmp, "ref.mp4")
+        with open(source, "wb") as fh:
+            fh.write(downloaded.content)
+        (width, height), fps = video_shape(source)
+        length = render.duration_of(source)
+        small = 0 < width * height < MIN_VIDEO_PIXELS
+        odd_fps = fps and not MIN_FPS <= fps <= MAX_FPS
+        if not (small or odd_fps or length > MAX_REFERENCE_SECONDS):
+            fitted = asset_id
+        else:
+            scale = (MIN_VIDEO_PIXELS / (width * height)) ** 0.5 if small else 1.0
+            filters = [f"scale={int(width * scale / 2 + 1) * 2}:{int(height * scale / 2 + 1) * 2}:flags=lanczos"] if small else []
+            if odd_fps:
+                filters.append(f"fps={min(MAX_FPS, max(MIN_FPS, fps))}")
+            out = os.path.join(tmp, "fitted.mp4")
+            render._run(["-y", "-i", source, "-t", str(MAX_REFERENCE_SECONDS), *(["-vf", ",".join(filters)] if filters else []),
+                         "-map", "0:v", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                         "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", out])
+            with open(out, "rb") as fh:
+                fitted = bridge.upload_render(content=fh.read(), filename=f"reference-{asset_id[:8]}.mp4")
+    _set_media(project_id, f"fit:{asset_id}", asset_id=fitted)
+    return fitted
+
+
 def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None:
+    borrowed: list[str] = []
+    try:
+        _run_tier_keys(project_id, bridge, keys, borrowed)
+    finally:
+        _untrust(project_id, bridge, borrowed)
+
+
+def _run_tier_keys(project_id: str, bridge: nexoclip.Bridge, keys: list[str], borrowed: list[str]) -> None:
     submitted: list[str] = []
     submit_error: Optional[Exception] = None
     for key in keys:
@@ -298,9 +421,20 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
         params = dict(spec["params"])
         # Clips a key builds on (extend / edit) go as reference videos, everything else as images,
         # the user's own photos first.
-        videos = [*(a for dep, a in zip(spec["deps"], dep_assets) if dep.startswith("video:")), *spec.get("ref_videos", [])]
+        try:
+            user_videos = [_fit_reference_video(project_id, bridge, a) for a in spec.get("ref_videos", [])]
+        except Exception as exc:  # noqa: BLE001 - a broken upload fails this one item, not the run
+            _set_media(project_id, key, status="failed", error=f"video referensi tidak bisa disiapkan: {exc}"[:300])
+            continue
+        videos = [*(a for dep, a in zip(spec["deps"], dep_assets) if dep.startswith("video:")), *user_videos]
         images = [*spec.get("photos", []), *(a for dep, a in zip(spec["deps"], dep_assets) if not dep.startswith("video:")),
                   *spec.get("extra_images", [])]
+        people = [a for dep, a in zip(spec["deps"], dep_assets) if dep in spec.get("people_deps", ())]
+        if people:
+            fresh = [a for a in _trust(bridge, people) if a not in borrowed]
+            if fresh:
+                _loans(project_id, add=fresh)
+                borrowed.extend(fresh)
         if images:
             params["referenceImages"] = [nexoclip.asset_reference(a) for a in images]
         if videos:
@@ -370,9 +504,12 @@ def run_request(project_id: str, request_id: str) -> dict[str, Any]:
     request = find_request(board, request_id)
     specs = media_specs(board)
     levels = {k: tier(k, specs) for k in request["items"]}
-    for level in sorted(set(levels.values())):
-        keys = [k for k in request["items"] if levels[k] == level]
-        _run_tier(project_id, bridge, keys)
+    try:
+        for level in sorted(set(levels.values())):
+            keys = [k for k in request["items"] if levels[k] == level]
+            _run_tier(project_id, bridge, keys)
+    finally:
+        release_loans(project_id, bridge)  # also what a run interrupted by a restart had borrowed
     board = read_board(project_id)
     succeeded = [k for k in request["items"] if (board["media"].get(k) or {}).get("status") == TERMINAL_OK]
     failed = {k: (board["media"].get(k) or {}).get("error") or "failed" for k in request["items"] if k not in succeeded}

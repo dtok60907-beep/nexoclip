@@ -16,7 +16,7 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
     error: null,
     ...link,
   } : null;
-  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], deletes: [], resets: 0, cas: [] };
+  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], deletes: [], resets: 0, cas: [], groupLookups: [] };
   const client = {
     async query(text, values) {
       calls.queries.push({ text, values });
@@ -37,6 +37,8 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
       return true
     },
     async findBytePlusAssetGroup(_client, workspaceId, canvasProjectId, projectName) {
+      calls.groupLookups.push({ workspaceId, canvasProjectId });
+      if (workspaceId === null) return existingGroup;
       return current?.workspace_id === workspaceId && current?.canvas_project_id === canvasProjectId
         && current?.project_name === projectName ? (current.group_id || existingGroup) : existingGroup;
     },
@@ -211,6 +213,25 @@ test('reuses an existing project group for new trusted assets', async () => {
 
   assert.deepEqual(shared.calls.groups, []);
   assert.equal(shared.calls.assets[0].groupId, 'project-group');
+});
+
+test('workspace trust shares one group across workspaces; a new one is created only once for everyone', async () => {
+  const reused = fixture({ asset: { ...image, workspace_id: 'workspace-2' }, existingGroup: 'someone-elses-group' });
+  await reused.service.startTrust('workspace-2', 'asset-1');
+  assert.deepEqual(reused.calls.groupLookups, [{ workspaceId: null, canvasProjectId: 'workspace' }]);
+  assert.deepEqual(reused.calls.groups, []);
+  assert.equal(reused.calls.assets[0].groupId, 'someone-elses-group');
+
+  const first = fixture({ asset: image });
+  const other = fixture({ asset: { ...image, workspace_id: 'workspace-2' } });
+  await first.service.startTrust('workspace-1', 'asset-1');
+  await other.service.startTrust('workspace-2', 'asset-1');
+  // The same idempotency token from every workspace: BytePlus hands back the one shared group.
+  assert.equal(first.calls.groups[0].clientToken, other.calls.groups[0].clientToken);
+
+  const canvas = fixture({ asset: image });
+  await canvas.service.startTrust('workspace-1', 'asset-1', '11111111-1111-4111-8111-111111111111');
+  assert.equal(canvas.calls.groupLookups[0].workspaceId, 'workspace-1'); // Canvas projects keep their own group
 });
 
 test('failed retry retains the group and rotates only the asset attempt token', async () => {

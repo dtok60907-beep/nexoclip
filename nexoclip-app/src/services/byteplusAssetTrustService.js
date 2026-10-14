@@ -227,8 +227,11 @@ export function createBytePlusAssetTrustService({
       inTransaction = false;
 
       const attemptId = link.attempt_id;
+      // Workspace trust (what the Director and Studio use) shares ONE BytePlus asset group across all workspaces:
+      // the account allows only a few dozen groups, and a group is just a container.
+      const shared = canvasProjectId === 'workspace';
       const existingProjectGroup = !link.group_id && !configuredGroupId && repository.findBytePlusAssetGroup
-        ? await repository.findBytePlusAssetGroup(client, workspaceId, canvasProjectId, projectName)
+        ? await repository.findBytePlusAssetGroup(client, shared ? null : workspaceId, canvasProjectId, projectName)
         : null;
       let groupId = link.group_id || configuredGroupId || existingProjectGroup;
       const reusedGroup = Boolean(groupId) && groupId !== configuredGroupId;
@@ -236,7 +239,7 @@ export function createBytePlusAssetTrustService({
         groupId = requireProviderId(await provider.createAssetGroup({
           name: canvasProjectId === 'workspace' ? SHARED_GROUP_NAME : `${SHARED_GROUP_NAME} · ${canvasProjectId.slice(0, 8)}`,
           description: canvasProjectId === 'workspace' ? SHARED_GROUP_DESCRIPTION : `NexoClip Canvas project ${canvasProjectId}`,
-          clientToken: sharedGroupClientToken(workspaceId, canvasProjectId, projectName, replacingGroupId),
+          clientToken: sharedGroupClientToken(shared ? 'all-workspaces' : workspaceId, canvasProjectId, projectName, replacingGroupId),
         }));
         link = await repository.updateBytePlusAssetLink(client, {
           workspaceId, localAssetId: assetId, canvasProjectId, groupId, status: 'processing', error: null,

@@ -12,15 +12,25 @@ export async function findBytePlusAssetLink(client, workspaceId, localAssetId, c
   return result.rows[0] || null;
 }
 
+// workspaceId null: the group any workspace already uses for this scope (one shared group for everyone).
 export async function findBytePlusAssetGroup(client, workspaceId, canvasProjectId, projectName) {
-  const result = await client.query(
-    `SELECT group_id
-     FROM byteplus_asset_links
-     WHERE workspace_id = $1 AND canvas_project_id = $2 AND project_name = $3 AND group_id IS NOT NULL
-     ORDER BY updated_at DESC
-     LIMIT 1`,
-    [workspaceId, canvasProjectId, projectName],
-  );
+  const result = workspaceId === null
+    ? await client.query(
+      `SELECT group_id
+       FROM byteplus_asset_links
+       WHERE canvas_project_id = $1 AND project_name = $2 AND group_id IS NOT NULL
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [canvasProjectId, projectName],
+    )
+    : await client.query(
+      `SELECT group_id
+       FROM byteplus_asset_links
+       WHERE workspace_id = $1 AND canvas_project_id = $2 AND project_name = $3 AND group_id IS NOT NULL
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [workspaceId, canvasProjectId, projectName],
+    );
   return result.rows[0]?.group_id || null;
 }
 
