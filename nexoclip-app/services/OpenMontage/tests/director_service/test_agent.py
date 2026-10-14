@@ -652,6 +652,16 @@ def test_trusts_a_crash_left_behind_are_given_back_by_the_sweep(client, fake_llm
     assert sess.sweep_trust_loans() == 0
 
 
+def test_the_view_shows_video_credits_per_second_and_caches_them(client, fake_llm, bridge, monkeypatch):
+    from director_service import billing as bill
+
+    monkeypatch.setattr(bill, "_video_prices", {"at": 0.0, "credits": {}})
+    pid = _built_project(client, fake_llm)
+    assert _view(client, pid)["video_credits_per_second"] == {"480p": 5.0, "720p": 5.0, "1080p": 5.0}
+    monkeypatch.setattr(bridge, "estimate", lambda **kwargs: (_ for _ in ()).throw(AssertionError("priced again")))
+    assert _view(client, pid)["video_credits_per_second"]["720p"] == 5.0  # cached for an hour
+
+
 def test_refused_calls_must_be_redone_before_the_reply(client, fake_llm, monkeypatch, no_skill_gate):
     pid = _built_project(client, fake_llm)
     monkeypatch.setattr(agent_mod, "REQUIRED_SKILLS", no_skill_gate)

@@ -9,7 +9,7 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyb
 import { CSS } from '@dnd-kit/utilities';
 import {
   AssetsView, AudioView, Badge, BriefView, ConceptsView, HistoryView, LockButton, ResearchView, ScriptView,
-  assetUrl, inputClass, mediaStatus, SmallButton, Field, RATIOS, RESOLUTIONS,
+  assetUrl, inputClass, mediaStatus, SmallButton, Field, RATIOS, RESOLUTIONS, fmtCredits,
 } from './BoardViews.js';
 import ShotPanel from './ShotPanel.js';
 
@@ -86,7 +86,7 @@ const RATIO_CLASS = { '16:9': 'aspect-video', '9:16': 'aspect-[9/16]', '1:1': 'a
 const PORTRAIT = new Set(['aspect-[9/16]', 'aspect-[3/4]']);
 
 /** A header badge that is also a picker (aspect ratio, resolution). Changing it after videos exist asks first. */
-function BriefPicker({ board, field, options, title, warn, onEdit, busy }) {
+function BriefPicker({ board, field, options, title, warn, onEdit, busy, label = (o) => o }) {
   const value = board.brief[field];
   const change = (next) => {
     if (next === value) return;
@@ -96,7 +96,7 @@ function BriefPicker({ board, field, options, title, warn, onEdit, busy }) {
   return (
     <select value={value} disabled={busy} title={title} onChange={(e) => change(e.target.value)}
       className="cursor-pointer appearance-none rounded-md bg-white/[0.06] px-2 py-0.5 text-center text-[11px] font-medium text-white/70 outline-none hover:bg-white/[0.1] hover:text-white disabled:opacity-40">
-      {options.map((o) => <option key={o} value={o} className="bg-[#0b0e13]">{o}</option>)}
+      {options.map((o) => <option key={o} value={o} className="bg-[#0b0e13]">{label(o)}</option>)}
     </select>
   );
 }
@@ -1121,7 +1121,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
 
 // ---------------------------------------------------------------- workspace
 
-export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, onChooseAudio, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering }) {
+export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, onChooseAudio, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering, prices = {} }) {
   const [mode, setMode] = useState('scene');
   const [selectedId, setSelectedId] = useState(null);
   const [shotTab, setShotTab] = useState('media'); // the shot panel's tab, shared by Shot and Timeline
@@ -1169,7 +1169,8 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
             title="Rasio video. Ganti sebelum generate: gambar shot dan video yang sudah ada harus dibuat ulang."
             warn={(b) => hasMedia(b, ['frame:', 'video:', 'scene:']) && 'Gambar shot dan video yang sudah ada akan ditandai perlu dibuat ulang dengan rasio baru.'} />
           <BriefPicker board={board} field="resolution" options={RESOLUTIONS} onEdit={onEdit} busy={busy}
-            title="Resolusi video. 720p disarankan; 1080p kira-kira 2,5x lebih mahal per detik."
+            label={(r) => (prices[r] ? `${r} · ±${fmtCredits(Math.round(prices[r]))} kr/dtk` : r)}
+            title={`Resolusi video, dan perkiraan kredit per detik video${RESOLUTIONS.filter((r) => prices[r]).map((r) => `\n${r}: ±${fmtCredits(prices[r])} kredit/detik`).join('')}`}
             warn={(b) => hasMedia(b, ['video:', 'scene:']) && 'Video yang sudah ada akan ditandai perlu dibuat ulang dengan resolusi baru.'} />
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>

@@ -540,7 +540,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         <div className="min-h-0 flex-1">
           <Workspace board={board} workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} onChooseConcept={chooseConcept} onConfirmScript={confirmScript} busy={actionBusy || agentRunning}
             panel={panel} onOpenPanel={setPanel} onClosePanel={() => setPanel(null)} loadVersions={loadVersions} onRestore={onRestore}
-            onRender={startRender} rendering={renderRunning} onChooseAudio={chooseAudio} />
+            onRender={startRender} rendering={renderRunning} onChooseAudio={chooseAudio} prices={view.video_credits_per_second} />
         </div>
       </section>
       {confirm && (
