@@ -245,7 +245,8 @@ export function createInternalStoryboardHandler({
           if (!state) return Response.json({ error: 'Asset not found' }, { status: 404 });
           return Response.json({ status: state.status, error: state.error?.message || null });
         } catch (error) {
-          logError({ event: 'storyboard_trust_failed', action, errorCode: error?.code || null, errorMessage: error?.message || null });
+          logError({ event: 'storyboard_trust_failed', action, errorCode: error?.code || null, errorMessage: error?.message || null,
+            status: error?.status || null, providerAction: error?.action || null, providerCode: error?.providerCode || null, cause: error?.cause?.message || null });
           return Response.json({ error: error?.message || 'Trust failed', code: error?.code || null }, { status: Number(error?.status) || 502 });
         }
       }

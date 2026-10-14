@@ -171,12 +171,13 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
         body: payload,
         signal: AbortSignal.timeout(requestTimeoutMs),
       });
-    } catch {
-      throw unavailableError();
+    } catch (cause) {
+      // Server-log context only: which call failed and why (timeout, DNS, reset).
+      throw Object.assign(unavailableError(), { action, cause });
     }
     if (!response.ok) {
       if (TRANSIENT_STATUSES.has(response.status) || response.status >= 500) {
-        throw unavailableError(response.status);
+        throw Object.assign(unavailableError(response.status), { action });
       }
       let providerError;
       try {
@@ -194,7 +195,7 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
     }
     const providerError = responseBody?.ResponseMetadata?.Error;
     if (providerError) {
-      if (TRANSIENT_ERROR_CODES.has(providerError.Code)) throw unavailableError();
+      if (TRANSIENT_ERROR_CODES.has(providerError.Code)) throw Object.assign(unavailableError(), { action });
       throw requestError(response.status >= 400 ? response.status : 400, providerError, action);
     }
     if (!responseBody?.Result || typeof responseBody.Result !== 'object') throw invalidResponseError();

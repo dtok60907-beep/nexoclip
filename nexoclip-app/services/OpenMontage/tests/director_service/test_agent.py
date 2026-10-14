@@ -82,6 +82,7 @@ class FakeBridge:
         self.files: dict[str, nexoclip.Downloaded] = {}  # real media for render tests
         self.trusted: dict[str, str] = {}  # BytePlus trust per asset
         self.trust_calls: list[tuple[str, str]] = []
+        self.trust_busy = 0
         self._gens: dict[str, dict] = {}
 
     def balance(self):
@@ -122,6 +123,9 @@ class FakeBridge:
 
     def trust(self, asset_id, operation="start"):
         self.trust_calls.append((operation, asset_id))
+        if operation == "start" and self.trust_busy:
+            self.trust_busy -= 1  # BytePlus answers 429 a few times before it takes the asset
+            raise nexoclip.BridgeError(429, "BytePlus Assets API is temporarily unavailable.")
         state = self.trusted.get(asset_id, "not_trusted")
         if operation == "start":
             self.trusted[asset_id] = "processing"
@@ -157,6 +161,7 @@ def bridge(monkeypatch):
     fake = FakeBridge()
     monkeypatch.setattr(billing, "bridge_for", lambda project_id: fake if read_director(project_id)["owner"] == OWNER else None)
     monkeypatch.setattr(generation, "POLL_SECONDS", 0.0)
+    monkeypatch.setattr(generation, "RETRY_SCALE", 0.0)
     return fake
 
 
@@ -578,6 +583,7 @@ def test_a_scene_is_generated_as_one_keyframed_video_and_cut_per_shot(client, fa
     bridge.download = lambda asset_id: (nexoclip.Downloaded(clip.read_bytes(), "video/mp4")
                                         if any(s["kind"] == "video" and f"asset-{s['id']}" == asset_id for s in bridge.submits)
                                         else real_download(asset_id))
+    bridge.trust_busy = 2  # the first two trust starts are rate-limited and retried
     request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["scene:s1"]}, headers=HEADERS).json()
     assert request["items"] == ["frame:s1", "frame:s2", "scene:s1"]
     client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)

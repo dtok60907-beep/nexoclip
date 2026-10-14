@@ -277,6 +277,24 @@ def _run_audio(project_id: str, bridge: nexoclip.Bridge, key: str, spec: dict[st
     _record_take(project_id, key, asset_id=result["asset_id"], spec_sig=sig, dep_assets=[], generated_at=now_iso())
 
 
+TRUST_RETRY_SECONDS = (2, 4, 8, 16)  # BytePlus rate-limits CreateAsset (HTTP 429) when images come in quick succession
+
+
+def _start_trust(bridge: nexoclip.Bridge, asset_id: str) -> str:
+    """Start one trust, waiting and retrying while BytePlus says it is busy (429 / 5xx)."""
+    for pause in (*TRUST_RETRY_SECONDS, None):
+        try:
+            return bridge.trust(asset_id, "start")
+        except nexoclip.BridgeError as exc:
+            if pause is None or not (exc.status == 429 or exc.status >= 500):
+                raise
+            time.sleep(pause * RETRY_SCALE)
+    raise AssertionError("unreachable")
+
+
+RETRY_SCALE = 1.0  # tests set 0
+
+
 def _trust(bridge: nexoclip.Bridge, asset_ids: list[str]) -> list[str]:
     """Make these images BytePlus trusted assets (Seedance refuses images with faces otherwise) and wait until they
     are active. Returns the ones trusted here, to remove again after the videos: the BytePlus account holds only a
@@ -286,7 +304,7 @@ def _trust(bridge: nexoclip.Bridge, asset_ids: list[str]) -> list[str]:
         try:
             if bridge.trust(asset_id, "status") == "active":
                 continue
-            status = bridge.trust(asset_id, "start")
+            status = _start_trust(bridge, asset_id)
         except nexoclip.BridgeError:
             continue
         started.append(asset_id)
