@@ -264,9 +264,9 @@ def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     refused = json.loads(fake_llm.requests[1]["input"][2]["output"])
-    assert refused["ok"] is False and "needs the seedance-prompting, scene-director guide" in refused["error"]
-    assert "Seedance 2.5" in refused["skill_content"]["seedance-prompting"]  # our video model's guide
-    assert "Scene Director - Cinematic Pipeline" in refused["skill_content"]["scene-director"]  # no video type yet
+    assert refused["ok"] is False and "needs the seedance-basics, seedance-prompting, scene-director guide" in refused["error"]
+    assert "Seedance 2.5 — production reference (ByteDance" in refused["skill_content"]["seedance-prompting"]
+    assert "# Dramaturgy, detail, montage" in refused["skill_content"]["scene-director"]  # no type yet: a story film
     error = json.loads(fake_llm.requests[2]["input"][1]["output"])
     assert error["ok"] is False and "unknown element_ids" in error["error"]
     assert [s["id"] for s in read_board(pid)["shots"]] == ["s1", "s2"]
@@ -332,9 +332,9 @@ def test_skills_are_loaded_on_demand(client, fake_llm):
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     first = fake_llm.requests[0]["instructions"]
-    assert "- seedance-prompting:" in first and "## Locks: continuity across cuts" not in first
+    assert "- seedance-prompting:" in first and "## 7. The anti-collapse skeleton" not in first
     outputs = [json.loads(i["output"]) for i in fake_llm.requests[1]["input"]]
-    assert outputs[0]["ok"] and "## Locks: continuity across cuts" in outputs[0]["content"]
+    assert outputs[0]["ok"] and "## 7. The anti-collapse skeleton" in outputs[0]["content"]
     assert outputs[1]["ok"] is False and "unknown skill" in outputs[1]["error"]
     assert _view(client, pid)["chat"][1]["text"] == "Membaca skill: seedance-prompting"
 
@@ -1404,3 +1404,20 @@ def test_the_guides_follow_the_video_type(client, fake_llm, bridge):
     assert "# Micro-Drama" in later["content"]
     assert "video_type must be one of" in json.loads(fake_llm.requests[-1]["input"][0]["output"])["error"]
     assert read_board(pid)["brief"]["video_type"] == "micro_drama"
+
+
+
+def test_each_video_type_has_its_guides_and_example(client, fake_llm):
+    from director_service import skills
+
+    assert "# Worked Example — Vertical Micro-Drama" in skills.read("example-prompt", "micro_drama")
+    assert "Worked Example" in skills.read("example-prompt", "music_video")
+    assert "### Music video" in skills.read("idea-director", "music_video")  # the genre modules
+    assert "# Dramaturgy, detail, montage" in skills.read("scene-director", "short_film")
+    assert "## 2. Screenwriter mode" in skills.read("script-director", "short_film")
+    assert "Scene Director - Cinematic Pipeline" in skills.read("scene-director", "trailer")
+    with pytest.raises(KeyError):
+        skills.read("example-prompt", "presenter")  # no worked example for this type
+    for kind in skills.VIDEO_TYPES:  # every guide a type points at exists
+        for role in ("idea-director", "script-director", "scene-director", "asset-director"):
+            assert skills.read(role, kind)

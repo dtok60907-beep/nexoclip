@@ -169,11 +169,14 @@ conversation (intake on a vague brief, concept, script, shot plan, element promp
 matching skill and apply it. Some tools need their skill read in the same turn (if not, the guide is returned to you
 and you must call the tool again): update_brief with a
 summary or set_concepts needs idea-director, write_script needs script-director, upsert_element
-needs image-gen-usage, set_shots needs seedance-prompting and scene-director, a changed frame_prompt/video_prompt
+needs image-gen-usage, set_shots needs seedance-basics, seedance-prompting and scene-director, a changed frame_prompt/video_prompt
 needs seedance-prompting, and set_audio
 needs voice-performance-director for a voiceover and music-gen-usage for music.
-The four pipeline roles (idea-director, script-director, scene-director, asset-director) are the guides for THIS
-project's video type (see VIDEO TYPE below); read seedance-archetypes for the official prompt example closest to it.
+The pipeline roles (idea-director, script-director, scene-director, asset-director, example-prompt) are the guides for
+THIS project's video type (see VIDEO TYPE below). Before the first shot list of a project also read example-prompt (a
+complete worked prompt for this kind of video; skip if it has none) and video-prompt-rules; when a generated clip
+went wrong, read prompt-fixes. seedance-prompting (ByteDance's official Seedance 2.5 guide) decides the prompt syntax;
+seedance-locks adds the continuity locks; take shot language from the type's guides, not from the examples' wording.
 These guides were written for a different agent that runs local tools, files, stages and checkpoints: take the
 creative craft, and ignore instructions about tools, files, checkpoints, stages or rendering you do not have (levels,
 ducking and mastering are done by the render; voices are the ones from list_voices).
@@ -1207,8 +1210,9 @@ def _video_type_note(project_id: str) -> str:
     if not kind:
         return ("VIDEO TYPE: not set yet. Settle it with the brief; until then the guides are the cinematic ones.")
     meta = skills.video_type(kind)
-    return (f"VIDEO TYPE: {meta['label']} ({kind}). {VIDEO_TYPE_NOTES.get(kind, '')} "
-            f"Closest official Seedance 2.5 prompt archetypes: {meta['archetypes']} (seedance-archetypes).")
+    example = "example-prompt has a worked example for it. " if "example" in meta["roles"] else ""  # type: ignore[operator]
+    return (f"VIDEO TYPE: {meta['label']} ({kind}). {VIDEO_TYPE_NOTES.get(kind, '')} {example}"
+            f"Closest official Seedance 2.5 prompt archetypes: {meta['archetypes']} (seedance-archetypes, genre-modules).")
 
 
 RUN_MODE_NOTES = {
@@ -1358,7 +1362,7 @@ REQUIRED_SKILLS: dict[str, tuple[Any, Callable[[dict[str, Any]], bool]]] = {
     "set_concepts": (("idea-director",), lambda a: True),
     "write_script": (("script-director",), lambda a: True),
     "upsert_element": (("image-gen-usage",), lambda a: True),
-    "set_shots": (("seedance-prompting", "scene-director"), lambda a: True),
+    "set_shots": (("seedance-basics", "seedance-prompting", "scene-director"), lambda a: True),
     "update_shot": (("seedance-prompting",), lambda a: bool(a.get("frame_prompt") or a.get("video_prompt"))),
     "set_audio": (_audio_skills, lambda a: True),
     "set_audio_options": (("voice-performance-director", "music-gen-usage"), lambda a: True),
