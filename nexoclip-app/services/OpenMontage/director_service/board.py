@@ -62,7 +62,7 @@ def video_seconds(board: dict[str, Any]) -> int:
 
 def empty_board() -> dict[str, Any]:
     return {
-        "brief": {"summary": "", "look": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
+        "brief": {"summary": "", "look": "", "video_type": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
                   "resolution": "720p", "generate_audio": True, **{k: "" for k in BRIEF_DETAILS}},
         "concepts": {"options": [], "recommended": None, "chosen": None, "locked": False},
         "research": [],

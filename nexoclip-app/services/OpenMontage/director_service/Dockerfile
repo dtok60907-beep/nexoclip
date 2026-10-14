@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY LICENSE ./LICENSE
 COPY skills ./skills
+# Seedance 2.5 prompting (our video model) lives with the provider skills; only this one is needed.
+COPY .agents/skills/seedance-2-5 ./.agents/skills/seedance-2-5
 COPY director_service ./director_service
 
 RUN useradd --uid 1001 --no-create-home director

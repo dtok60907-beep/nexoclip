@@ -40,7 +40,7 @@ PROXY_SECRET_HEADER = "x-director-proxy-secret"
 HEARTBEAT_SECONDS = 20.0
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # What this service runs, offered to every user under AGPL-3.0 section 13.
-SOURCE_PATHS = ("LICENSE", "director_service", "skills")
+SOURCE_PATHS = ("LICENSE", "director_service", "skills", ".agents/skills/seedance-2-5")
 
 
 class Hub:

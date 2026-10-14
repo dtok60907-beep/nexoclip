@@ -264,8 +264,9 @@ def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     refused = json.loads(fake_llm.requests[1]["input"][2]["output"])
-    assert refused["ok"] is False and "needs the seedance-prompting guide" in refused["error"]
-    assert "Seedance 2.0" in refused["skill_content"]["seedance-prompting"]
+    assert refused["ok"] is False and "needs the seedance-prompting, scene-director guide" in refused["error"]
+    assert "Seedance 2.5" in refused["skill_content"]["seedance-prompting"]  # our video model's guide
+    assert "Scene Director - Cinematic Pipeline" in refused["skill_content"]["scene-director"]  # no video type yet
     error = json.loads(fake_llm.requests[2]["input"][1]["output"])
     assert error["ok"] is False and "unknown element_ids" in error["error"]
     assert [s["id"] for s in read_board(pid)["shots"]] == ["s1", "s2"]
@@ -331,9 +332,9 @@ def test_skills_are_loaded_on_demand(client, fake_llm):
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     first = fake_llm.requests[0]["instructions"]
-    assert "- seedance-prompting:" in first and "Seedance 2.0 — Prompting Guide" not in first
+    assert "- seedance-prompting:" in first and "## Locks: continuity across cuts" not in first
     outputs = [json.loads(i["output"]) for i in fake_llm.requests[1]["input"]]
-    assert outputs[0]["ok"] and "Seedance 2.0" in outputs[0]["content"]
+    assert outputs[0]["ok"] and "## Locks: continuity across cuts" in outputs[0]["content"]
     assert outputs[1]["ok"] is False and "unknown skill" in outputs[1]["error"]
     assert _view(client, pid)["chat"][1]["text"] == "Membaca skill: seedance-prompting"
 
@@ -1375,3 +1376,31 @@ def test_prompts_name_elements_with_mentions(client, fake_llm, bridge):
     assert video.startswith("Maya (@Image2) runs down the steps of Beach house (@Image3)") and "@ghost" in video
     # Prompts without mentions keep their old wording, so finished frames do not turn stale.
     assert "reference image" not in media["frame:s1"]["prompt"]
+
+
+
+def test_the_guides_follow_the_video_type(client, fake_llm, bridge):
+    # "buatin UGC skincare": the Director reads that as a UGC ad and the guides follow.
+    fake_llm.turns.append([
+        {"calls": [call("update_brief", summary="UGC TikTok review serum", video_type="ugc_ad")]},
+        {"calls": [call("read_skill", name="idea-director"), call("read_skill", name="scene-director")]},
+        {"text": "Siap, aku bikin sebagai UGC ad."},
+    ])
+    pid = client.post("/api/director/projects", json={"brief": "buatin UGC review serum"}, headers=HEADERS).json()["project_id"]
+    _wait(pid)
+    assert "VIDEO TYPE: not set yet" in fake_llm.requests[0]["instructions"]
+    guides = [json.loads(i["output"]) for i in fake_llm.requests[2]["input"]]
+    assert "# UGC Ad" in guides[0]["content"] and "# UGC Ad" in guides[1]["content"]
+    assert "VIDEO TYPE: UGC ad (ugc_ad)" in fake_llm.requests[2]["instructions"] and "8 (UGC-style ad)" in fake_llm.requests[2]["instructions"]
+
+    # The user changes direction: the same role names now load the drama guides.
+    fake_llm.turns.append([
+        {"calls": [call("update_brief", video_type="micro_drama"), call("read_skill", name="script-director")]},
+        {"calls": [call("update_brief", video_type="podcast")]},
+        {"text": "ok"},
+    ])
+    _say(client, pid, "eh ganti, jadi drama vertikal berseri aja")
+    later = json.loads(fake_llm.requests[-2]["input"][1]["output"])
+    assert "# Micro-Drama" in later["content"]
+    assert "video_type must be one of" in json.loads(fake_llm.requests[-1]["input"][0]["output"])["error"]
+    assert read_board(pid)["brief"]["video_type"] == "micro_drama"

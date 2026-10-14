@@ -38,6 +38,14 @@ What you can do (tools):
   viewers must remember), product (name, look, colours, logo; empty when there is none), tone (mood, pace, music feel),
   references (similar films, ads, creators), cta (the ending / call to action), must_have, avoid. Plus look, aspect
   ratio, target duration, visual style, resolution and native audio on/off.
+  video_type is the kind of video (ugc_ad, product_ad, short_film, micro_drama, trailer, music_video, explainer,
+  documentary, animation, presenter): it decides the craft guides, the shot language and how prompts are written.
+  Infer it yourself from what the user says and set it with the brief; never ask the user only for this. "UGC",
+  "review/testimoni ala creator" -> ugc_ad; "iklan produk/commercial" -> product_ad; "drama", "film pendek" ->
+  short_film; "drama vertikal/series/episode" -> micro_drama; "trailer/teaser" -> trailer; "video klip/music video" ->
+  music_video; "explainer/tutorial/cara kerja" -> explainer; "dokumenter" -> documentary; "animasi/kartun" ->
+  animation; "presenter/spokesperson/CEO ngomong ke kamera" -> presenter. When unclear pick the closest and say it in
+  one line. If the user changes direction later, set the new type: the guides follow it.
   Write the brief as soon as you know what the video is about, in the same call that sets the look when possible.
   Fill every field you can reasonably infer and mark guesses with "(asumsi)" so the user can correct them; ask only
   about what really matters and is unknown (usually the product and the audience), together with the look question.
@@ -74,6 +82,13 @@ What you can do (tools):
   exist unless set_shots succeeded.
 - set_shots / update_shot / remove_shot: the ordered shot list. Each shot is one generated video clip of 4-15 s with
   a frame_prompt (the first frame as a still image) and a video_prompt (motion, camera, action, sound for that clip).
+  Write video_prompt in the Seedance 2.5 shape (seedance-prompting), compressed for one clip, one labelled line each:
+  STYLE (the same line in every shot of the video: genre/format, grade, look, what must not appear), SHOT (shot type,
+  framing, camera and lens, where everyone is), ACTION (what happens, with @mentions), DIALOGUE (only when someone
+  speaks in the clip: exact words in quotes) with VOICE (one conditioning sentence per character, pasted unchanged
+  every time they speak), LIGHT (motivated source and direction), AUDIO (what is heard and what must not be).
+  A clip with cuts inside: "Shot 1: ... Hard cut. Shot 2: ...". Add a lock line when continuity is at risk (COUNT,
+  SCREEN DIRECTION, state that only advances). frame_prompt describes the opening still in the same STYLE.
   List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
   the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
   added automatically), so faces, places and products stay consistent across shots.
@@ -154,8 +169,11 @@ conversation (intake on a vague brief, concept, script, shot plan, element promp
 matching skill and apply it. Some tools need their skill read in the same turn (if not, the guide is returned to you
 and you must call the tool again): update_brief with a
 summary or set_concepts needs idea-director, write_script needs script-director, upsert_element
-needs image-gen-usage, set_shots or a changed frame_prompt/video_prompt needs seedance-prompting, and set_audio
+needs image-gen-usage, set_shots needs seedance-prompting and scene-director, a changed frame_prompt/video_prompt
+needs seedance-prompting, and set_audio
 needs voice-performance-director for a voiceover and music-gen-usage for music.
+The four pipeline roles (idea-director, script-director, scene-director, asset-director) are the guides for THIS
+project's video type (see VIDEO TYPE below); read seedance-archetypes for the official prompt example closest to it.
 These guides were written for a different agent that runs local tools, files, stages and checkpoints: take the
 creative craft, and ignore instructions about tools, files, checkpoints, stages or rendering you do not have (levels,
 ducking and mastering are done by the render; voices are the ones from list_voices).
@@ -243,6 +261,7 @@ TOOLS = [
         "aspect_ratio": {"type": "string", "enum": list(boards.ASPECT_RATIOS)},
         "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 600},
         "look": {"type": "string", "enum": list(boards.LOOKS), "description": "rendering of the whole video; ask the user if unknown"},
+        "video_type": {"type": "string", "enum": list(skills.VIDEO_TYPES), "description": "the kind of video; decides which craft guides apply"},
         "style": {"type": "string", "description": "visual style applied to every image"},
         "resolution": {"type": "string", "enum": list(boards.RESOLUTIONS)},
         "generate_audio": {"type": "boolean", "description": "native audio in video clips (ambience, effects, speech); on by default, turn off only if the user asks"},
@@ -429,13 +448,15 @@ def _same_shot(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _update_brief(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     fields = {k: v for k, v in args.items()
-              if k in ("summary", "look", "aspect_ratio", "duration_seconds", "style", "resolution", "generate_audio",
+              if k in ("summary", "look", "video_type", "aspect_ratio", "duration_seconds", "style", "resolution", "generate_audio",
                        *boards.BRIEF_DETAILS) and v is not None}
     for key in ("summary", "style", *boards.BRIEF_DETAILS):
         if key in fields:
             fields[key] = str(fields[key]).strip()
     if "look" in fields and fields["look"] not in boards.LOOKS:
         raise ToolError("look must be one of " + ", ".join(boards.LOOKS))
+    if "video_type" in fields and fields["video_type"] not in skills.VIDEO_TYPES:
+        raise ToolError("video_type must be one of " + ", ".join(skills.VIDEO_TYPES))
     if fields.get("aspect_ratio") and fields["aspect_ratio"] not in boards.ASPECT_RATIOS:
         raise ToolError("aspect_ratio must be one of " + ", ".join(boards.ASPECT_RATIOS))
     if fields.get("resolution") and fields["resolution"] not in boards.RESOLUTIONS:
@@ -1042,7 +1063,7 @@ def _render_video(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 def _read_skill(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     name = str(args.get("name") or "")
     try:
-        text = skills.read(name)
+        text = skills.read(name, boards.read_board(ctx.project_id)["brief"].get("video_type") or "")
     except KeyError as exc:
         raise ToolError(str(exc)) from exc
     note = ("Craft reference written for another agent. Use its creative guidance. Its process (stages, gates, "
@@ -1149,7 +1170,45 @@ def _instructions(project_id: str) -> str:
     if len(board_json) > BOARD_CHARS:
         board_json = board_json[:BOARD_CHARS] + " ...(truncated)"
     mode = RUN_MODE_NOTES.get(read_director(project_id).get("run_mode") or "guide", "")
-    return f"{INSTRUCTIONS}{skills.index_text()}\n\n{mode}\n\nCURRENT PROJECT BOARD (JSON):\n{board_json}"
+    return f"{INSTRUCTIONS}{skills.index_text()}\n\n{mode}\n\n{_video_type_note(project_id)}\n\nCURRENT PROJECT BOARD (JSON):\n{board_json}"
+
+
+VIDEO_TYPE_NOTES = {
+    "ugc_ad": "Looks filmed on a phone by a real person: 9:16, selfie or friend-held handheld, available light, one creator "
+              "in one place, understated imperfect performance. The creator speaks in the clips (DIALOGUE + VOICE, native "
+              "audio on), so usually no separate voiceover and no music under speech. Hook in the first 1.5 s, honest "
+              "claim per shot, spoken CTA plus a caption at the end. No cinematic camera moves or grading.",
+    "product_ad": "The product is the hero: a prop element with its exact packaging in every product shot, label to camera, "
+                  "macro details and motion that show the benefit, polished motivated light. One clear visual idea written "
+                  "as a mechanic with rules. Music bed, optional voiceover, end on the product with a CTA caption.",
+    "short_film": "Story first: a clear arc, characters kept consistent with their sheets, sparse dialogue in quotes, faces "
+                  "carry emotion, shot language motivated by the story. Score or ambience rather than wall-to-wall music.",
+    "micro_drama": "Vertical episodic drama: conflict in the first 2 s, escalation, a turn, a cliffhanger in the last 2 s. "
+                   "Dialogue-driven close-ups and reactions, 3-6 s shots, COUNT and SCREEN DIRECTION locks, one VOICE "
+                   "sentence per character. Native audio on.",
+    "trailer": "Beats escalate: world, character, conflict, rising montage, title. Short cuts that get faster, title cards as "
+               "captions, music drives the cut (set the music early), lines of dialogue as punctuation only.",
+    "music_video": "The music comes first (set the music bed early and plan shots on its sections and beats). Performance "
+                   "and/or a visual narrative, cuts on the beat, no dialogue; motion and rhythm over plot.",
+    "explainer": "Clarity first: a voiceover line per shot carries the explanation and each shot illustrates exactly its "
+                 "line (objects, process, before/after). Simple compositions, captions on, calm pacing, no dialogue.",
+    "documentary": "Observational: one lens for the whole piece (SINGLE-LENS LOCK), handheld operator, natural light, real "
+                   "places and unposed people, optional voiceover narration, ambience instead of a dramatic score.",
+    "animation": "Animated, never live-action: follow the look (3D, anime, illustration) in every prompt, characters from "
+                 "sheets with expressions, stylised motion and staging, colour script per scene.",
+    "presenter": "One presenter talking to camera (medium shot, eye line on the lens) who speaks in the clips (DIALOGUE + "
+                 "VOICE, native audio on, lip sync by the video model); plain or branded background, captions, short "
+                 "scene-safe chunks of speech, cutaways only to show what is being said.",
+}
+
+
+def _video_type_note(project_id: str) -> str:
+    kind = boards.read_board(project_id)["brief"].get("video_type") or ""
+    if not kind:
+        return ("VIDEO TYPE: not set yet. Settle it with the brief; until then the guides are the cinematic ones.")
+    meta = skills.video_type(kind)
+    return (f"VIDEO TYPE: {meta['label']} ({kind}). {VIDEO_TYPE_NOTES.get(kind, '')} "
+            f"Closest official Seedance 2.5 prompt archetypes: {meta['archetypes']} (seedance-archetypes).")
 
 
 RUN_MODE_NOTES = {
@@ -1299,7 +1358,7 @@ REQUIRED_SKILLS: dict[str, tuple[Any, Callable[[dict[str, Any]], bool]]] = {
     "set_concepts": (("idea-director",), lambda a: True),
     "write_script": (("script-director",), lambda a: True),
     "upsert_element": (("image-gen-usage",), lambda a: True),
-    "set_shots": (("seedance-prompting",), lambda a: True),
+    "set_shots": (("seedance-prompting", "scene-director"), lambda a: True),
     "update_shot": (("seedance-prompting",), lambda a: bool(a.get("frame_prompt") or a.get("video_prompt"))),
     "set_audio": (_audio_skills, lambda a: True),
     "set_audio_options": (("voice-performance-director", "music-gen-usage"), lambda a: True),

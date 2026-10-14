@@ -7,7 +7,11 @@ projects
 tests
 **/*.mp4
 **/*.mov
-.agents
+# provider skills: only Seedance 2.5 prompting goes into the Director image
+.agents/*
+!.agents/skills
+.agents/skills/*
+!.agents/skills/seedance-2-5
 docs
 remotion-composer
 ink-theater
