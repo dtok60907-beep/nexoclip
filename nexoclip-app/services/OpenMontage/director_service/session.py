@@ -260,8 +260,22 @@ def approve_request(project_id: str, request_id: str, *, by_director: bool = Fal
     if request["status"] not in ("pending", "needs_credits"):
         raise InvalidAction(f"request is {request['status']}, not pending")
     if not generation.request_is_current(board, request):
+        # Something it would generate changed after the estimate (a prompt, the ratio, the resolution...): never charge
+        # for what the user did not see. Price the same items again and show that estimate to approve instead.
         generation.set_request_status(project_id, request_id, "superseded")
-        raise InvalidAction("prompt-nya berubah setelah estimasi dibuat; minta Director siapkan estimasi baru")
+        try:
+            fresh = generation.create_request(project_id, request["requested"], force=bool(request.get("force")),
+                                              note=request.get("note") or "")
+        except generation.GenerationError as exc:
+            raise InvalidAction(f"isi permintaan berubah setelah estimasi dibuat dan sekarang tidak ada yang perlu dibuat: {exc}") from exc
+        if by_director:
+            _start(project_id, fresh["id"], log_approval=False)
+            return
+        append_chat(project_id, "assistant", "Ada yang berubah sejak estimasi dibuat, jadi estimasinya saya hitung ulang. "
+                    "Cek angka barunya, lalu approve lagi.", kind="message")
+        append_chat(project_id, "assistant", "Estimasi baru", kind="request",
+                    meta={"tool": "request_generation", "request_id": fresh["id"]})
+        return
     _start(project_id, request_id, log_approval=not by_director)
 
 

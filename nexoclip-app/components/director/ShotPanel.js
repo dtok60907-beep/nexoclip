@@ -111,7 +111,7 @@ function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy,
                     : <img src={src} alt="" loading="lazy" className="pointer-events-none h-full w-full object-cover" />}
                 </button>
                 <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white/85">
-                  {it.kind === 'video' ? '▶ video' : 'gambar'} {it.n}{it.take.uploaded ? ' · upload' : ''}{it.take.outdated ? ' · lama' : ''}{it.active ? ' · dipakai' : ''}
+                  {it.kind === 'video' ? '▶ video' : 'gambar'} {it.n}{it.take.uploaded ? ' · upload' : ''}{it.take.from_scene ? ' · dari video scene' : ''}{it.take.outdated ? ' · lama' : ''}{it.active ? ' · dipakai' : ''}
                 </span>
                 <a href={download(it.take.asset_id, workspaceId)} download title="Download"
                   className="absolute bottom-1 right-1 hidden rounded bg-black/70 px-1.5 text-[10px] text-white group-hover:block">↓</a>

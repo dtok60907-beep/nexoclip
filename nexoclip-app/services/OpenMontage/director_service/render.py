@@ -41,13 +41,14 @@ def ffmpeg_exe() -> str:
 
 
 def canvas_size(aspect_ratio: str, resolution: str) -> tuple[int, int]:
+    """The resolution is the short side; the long side follows the ratio (even pixels, as x264 needs)."""
     short = HEIGHTS.get(resolution or "720p", 720)
-    long = int(round(short * 16 / 9 / 2)) * 2
-    if aspect_ratio == "9:16":
-        return short, long
-    if aspect_ratio == "1:1":
-        return short, short
-    return long, short
+    try:
+        w, h = (int(n) for n in (aspect_ratio or "16:9").split(":"))
+    except ValueError:
+        w, h = 16, 9
+    long = int(round(short * max(w, h) / min(w, h) / 2)) * 2
+    return (long, short) if w >= h else (short, long)
 
 
 def ordered_shots(board: dict[str, Any]) -> list[dict[str, Any]]:

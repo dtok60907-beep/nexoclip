@@ -266,8 +266,8 @@ def test_tool_errors_are_returned_to_the_model(client, fake_llm, skill_gate):
     pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
     refused = json.loads(fake_llm.requests[1]["input"][2]["output"])
-    assert refused["ok"] is False and "needs the seedance-basics, seedance-prompting, scene-director guide" in refused["error"]
-    assert "Seedance 2.5 — production reference (ByteDance" in refused["skill_content"]["seedance-prompting"]
+    assert refused["ok"] is False and "needs the seedance-official-generation, scene-director guide" in refused["error"]
+    assert "Seedance 2.5 Prompt Optimizer (ByteDance sd25-pe" in refused["skill_content"]["seedance-official-generation"]
     assert "# Dramaturgy, detail, montage" in refused["skill_content"]["scene-director"]  # no type yet: a story film
     error = json.loads(fake_llm.requests[2]["input"][1]["output"])
     assert error["ok"] is False and "unknown element_ids" in error["error"]
@@ -538,6 +538,50 @@ def test_scenes_group_shots(client, fake_llm):
     assert "still use removed scenes" in json.loads(fake_llm.requests[-1]["input"][0]["output"])["error"]
 
 
+def test_a_scene_is_generated_as_one_keyframed_video_and_cut_per_shot(client, fake_llm, bridge, tmp_path):
+    from director_service import render
+
+    pid = _built_project(client, fake_llm)
+    scenes = [{"id": "arrive", "title": "Tiba", "description": "Rumah pantai, sore"}]
+    shots = [{**SHOTS[0], "scene_id": "arrive", "video_prompt": "Style: warm film look.\n" + SHOTS[0]["video_prompt"]},
+             {**SHOTS[1], "scene_id": "arrive", "video_prompt": "Style: warm film look.\n" + SHOTS[1]["video_prompt"]}]
+    fake_llm.turns.append([{"calls": [call("set_scenes", scenes=scenes), call("set_shots", shots=shots)]}, {"text": "ok"}])
+    view = _say(client, pid, "satu scene aja")
+    assert view["board"]["scene_blocks"] == [{"key": "scene:s1", "scene_id": "arrive", "shots": ["s1", "s2"], "seconds": 10}]
+    spec = view["board"]["media"]["scene:s1"]
+    assert spec["prompt"].startswith("Use @Image1 through @Image2 as keyframes in that order.")
+    assert "@Image2 defines the opening of Shot 2, reached with a hard cut at 6s." in spec["prompt"]
+    assert "@Image3 is the reference sheet of Maya" in spec["prompt"] and "@Image4 is the reference sheet of Beach house" in spec["prompt"]
+    assert spec["prompt"].count("Style: warm film look.") == 1  # said once for the whole scene
+    assert "Shot 1 | 0-6s\nMaya walks" in spec["prompt"] and "Hard cut.\n\nShot 2 | 6-10s\nMaya laughs" in spec["prompt"]
+
+    clip = tmp_path / "scene.mp4"  # what Seedance returns: 10 s with sound
+    render._run(["-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=24:duration=10", "-f", "lavfi",
+                 "-i", "sine=frequency=440:duration=10", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                 "-shortest", str(clip)])
+    real_download = bridge.download
+    bridge.download = lambda asset_id: (nexoclip.Downloaded(clip.read_bytes(), "video/mp4")
+                                        if any(s["kind"] == "video" and f"asset-{s['id']}" == asset_id for s in bridge.submits)
+                                        else real_download(asset_id))
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["scene:s1"]}, headers=HEADERS).json()
+    assert request["items"] == ["frame:s1", "frame:s2", "scene:s1"]
+    client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
+    _wait(pid, timeout=60)
+
+    submit = bridge.submits[-1]
+    assert submit["parameters"]["duration"] == 10 and submit["parameters"]["omniReferenceTaskType"] == "reference"
+    frames = [s for s in bridge.submits if s["kind"] == "image"][-2:]
+    assert submit["parameters"]["referenceImages"][:2] == [nexoclip.asset_reference(f"asset-{f['id']}") for f in frames]
+    media = _view(client, pid)["board"]["media"]
+    assert media["scene:s1"]["status"] == "succeeded" and not media["scene:s1"]["error"]
+    for sid, asset, seconds in (("s1", "asset-import1", 6.0), ("s2", "asset-import2", 4.0)):
+        assert media[f"video:{sid}"]["asset_id"] == asset and not media[f"video:{sid}"]["stale"]
+        assert media[f"video:{sid}"]["takes"][0]["from_scene"] == "scene:s1"
+        piece = tmp_path / f"{sid}.mp4"
+        piece.write_bytes(next(i["content"] for i in bridge.imports if i["filename"] == f"{sid}.mp4"))
+        assert abs(render.duration_of(str(piece)) - seconds) < 0.3 and render.has_audio(str(piece))
+
+
 def test_refused_calls_must_be_redone_before_the_reply(client, fake_llm, monkeypatch, no_skill_gate):
     pid = _built_project(client, fake_llm)
     monkeypatch.setattr(agent_mod, "REQUIRED_SKILLS", no_skill_gate)
@@ -657,7 +701,12 @@ def test_a_request_goes_stale_if_prompts_change_before_approval(client, fake_llm
     rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"]}, headers=HEADERS).json()["request_id"]
     assert _edit(client, pid, "update_shot", id="s1", frame_prompt="Maya at the door, backlit").status_code == 200
     res = client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
-    assert res.status_code == 400 and "berubah" in res.json()["detail"]
+    assert res.status_code == 200, res.text
+    view = _view(client, pid)
+    old, fresh = view["board"]["requests"][-2:]
+    assert (old["id"], old["status"]) == (rid, "superseded")
+    assert fresh["status"] == "pending" and fresh["items"] == ["frame:s1"]  # priced again, nothing generated
+    assert "berubah" in view["chat"][-2]["text"] and view["chat"][-1]["meta"]["request_id"] == fresh["id"]
 
 
 def test_reject_and_failed_job_retry(client, fake_llm, bridge):

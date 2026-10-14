@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 import time
 import uuid
 from typing import Any, Optional
@@ -23,6 +25,7 @@ from director_service.board import (
     media_specs,
     needs_generation,
     read_board,
+    shot,
     spec_sig,
     tier,
     update_board,
@@ -81,7 +84,7 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
     specs = media_specs(board)
     unknown = [k for k in keys if k not in specs]
     if unknown:
-        raise GenerationError(f"unknown media: {', '.join(unknown)}. Valid keys look like element:<id>, frame:<shot_id>, video:<shot_id>, edit:<shot_id> (after setting edit_instruction).")
+        raise GenerationError(f"unknown media: {', '.join(unknown)}. Valid keys look like element:<id>, frame:<shot_id>, video:<shot_id>, scene:<first shot_id of a scene video>, edit:<shot_id> (after setting edit_instruction).")
     open_request = None if auto else next((r for r in board["requests"] if r["status"] == "pending" and not r.get("auto")), None)
     if open_request:
         keys = list(dict.fromkeys([*(k for k in open_request["requested"] if k in specs), *keys]))
@@ -191,7 +194,7 @@ def _take(asset_id: str, spec_sig: Optional[str], dep_assets: list, generated_at
 
 
 def _record_take(project_id: str, key: str, *, asset_id: str, spec_sig: Optional[str], dep_assets: list,
-                 generated_at: str, uploaded: bool = False) -> None:
+                 generated_at: str, uploaded: bool = False, from_scene: Optional[str] = None) -> None:
     """A new result becomes the active take; earlier takes stay selectable (board.media[key].takes)."""
     def change(board: dict[str, Any]) -> None:
         media = board["media"].setdefault(key, {})
@@ -201,7 +204,8 @@ def _record_take(project_id: str, key: str, *, asset_id: str, spec_sig: Optional
             takes.append(_take(media["asset_id"], media["done_spec_sig"], media.get("dep_assets") or [],
                                media.get("generated_at")))
         takes = [t for t in takes if t["asset_id"] != asset_id] + [{**_take(asset_id, spec_sig, dep_assets, generated_at),
-                                                                     **({"uploaded": True} if uploaded else {})}]
+                                                                     **({"uploaded": True} if uploaded else {}),
+                                                                     **({"from_scene": from_scene} if from_scene else {})}]
         media.update(status=TERMINAL_OK, asset_id=asset_id, error=None, done_spec_sig=spec_sig, dep_assets=dep_assets,
                      generated_at=generated_at, takes=takes[-MAX_TAKES:], uploaded=uploaded)
 
@@ -218,6 +222,44 @@ def _edited_take(project_id: str, key: str, asset_id: str) -> None:
         return
     _record_take(project_id, video_key, asset_id=asset_id, spec_sig=current.get("done_spec_sig") or spec_sig(spec),
                  dep_assets=current.get("dep_assets") or [], generated_at=now_iso())
+
+
+def _split_scene(project_id: str, bridge: nexoclip.Bridge, key: str, asset_id: str) -> None:
+    """A scene video (several shots in one Seedance generation) is cut at the shots' timecodes, and each piece
+    becomes that shot's video take, so the timeline, trims, extends, edits and the render work per shot as before.
+    The cut follows the planned durations, scaled if the clip came out a little longer or shorter."""
+    from director_service import render
+
+    board = read_board(project_id)
+    specs = media_specs(board)
+    planned = [(sid, int(sh["duration_seconds"])) for sid in (specs.get(key) or {}).get("shots", [])
+               if (sh := shot(board, sid))]
+    if not planned:
+        return
+    downloaded = bridge.download(asset_id)
+    with tempfile.TemporaryDirectory(prefix="director-scene-") as tmp:
+        source = os.path.join(tmp, "scene.mp4")
+        with open(source, "wb") as fh:
+            fh.write(downloaded.content)
+        length = render.duration_of(source) or sum(d for _, d in planned)
+        scale = length / sum(d for _, d in planned)
+        cursor = 0.0
+        for index, (sid, seconds) in enumerate(planned):
+            part = os.path.join(tmp, f"{sid}.mp4")
+            keep = seconds * scale if index < len(planned) - 1 else max(0.5, length - cursor)
+            render._run(["-y", "-ss", f"{cursor:.3f}", "-t", f"{keep:.3f}", "-i", source, "-map", "0:v", "-map", "0:a?",
+                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "192k",
+                         "-movflags", "+faststart", part])
+            cursor += keep
+            with open(part, "rb") as fh:
+                piece = bridge.upload_render(content=fh.read(), filename=f"{sid}.mp4")
+            board = read_board(project_id)
+            spec = media_specs(board).get(f"video:{sid}")
+            if spec is None:
+                continue
+            dep_assets = [(board["media"].get(dep) or {}).get("asset_id") for dep in spec["deps"]]
+            _record_take(project_id, f"video:{sid}", asset_id=piece, spec_sig=spec_sig(spec), dep_assets=dep_assets,
+                         generated_at=now_iso(), from_scene=key)
 
 
 def _run_audio(project_id: str, bridge: nexoclip.Bridge, key: str, spec: dict[str, Any], media: dict[str, Any]) -> None:
@@ -281,7 +323,7 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
         for key in sorted(pending):
             board = read_board(project_id)
             media = board["media"][key]
-            kind = "video" if key.startswith(("video:", "edit:")) else "image"
+            kind = "video" if key.startswith(("video:", "edit:", "scene:")) else "image"
             try:
                 generation = bridge.status(media["generation_id"])
             except nexoclip.BridgeError:
@@ -300,6 +342,11 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None
                                  dep_assets=media.get("pending_dep_assets", []), generated_at=now_iso())
                     if key.startswith("edit:"):
                         _edited_take(project_id, key, asset_id)
+                    if key.startswith("scene:"):
+                        try:
+                            _split_scene(project_id, bridge, key, asset_id)
+                        except Exception as exc:  # the scene video itself is kept; only the per-shot pieces are missing
+                            _set_media(project_id, key, error=f"video scene jadi, tapi gagal dipotong per shot: {exc}"[:300])
             else:
                 _set_media(project_id, key, status="failed", error=_error_text(generation))
             pending.discard(key)

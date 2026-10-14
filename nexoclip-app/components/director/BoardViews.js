@@ -124,6 +124,10 @@ function MediaFrame({ media, aspect = 'aspect-video', label, workspaceId }) {
 
 // brief.look: how the whole video is rendered (sheets, frames and clips follow it).
 // Same keys and order as BRIEF_DETAILS in director_service/board.py.
+// ASPECT_RATIOS / RESOLUTIONS in director_service/board.py
+export const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+export const RESOLUTIONS = ['480p', '720p', '1080p'];
+
 export const BRIEF_DETAIL_LABELS = {
   goal: 'Tujuan', audience: 'Target penonton', platform: 'Platform', key_message: 'Pesan utama', product: 'Produk / brand',
   tone: 'Mood & tone', references: 'Referensi', cta: 'Penutup / CTA', must_have: 'Wajib ada', avoid: 'Hindari',
@@ -166,13 +170,13 @@ export function BriefView({ board, onEdit, busy }) {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Field label="Rasio">
               <select className={inputClass} value={draft.aspect_ratio} onChange={(e) => setDraft({ ...draft, aspect_ratio: e.target.value })}>
-                {['16:9', '9:16', '1:1'].map((r) => <option key={r}>{r}</option>)}
+                {RATIOS.map((r) => <option key={r}>{r}</option>)}
               </select>
             </Field>
             <Field label="Durasi (detik)"><input type="number" min={4} max={600} className={inputClass} value={draft.duration_seconds || ''} onChange={(e) => setDraft({ ...draft, duration_seconds: e.target.value })} /></Field>
             <Field label="Resolusi">
               <select className={inputClass} value={draft.resolution} onChange={(e) => setDraft({ ...draft, resolution: e.target.value })}>
-                {['480p', '720p', '1080p'].map((r) => <option key={r}>{r}</option>)}
+                {RESOLUTIONS.map((r) => <option key={r}>{r}</option>)}
               </select>
             </Field>
             <Field label="Audio bawaan">
@@ -529,7 +533,48 @@ function AudioTrack({ title, mediaKey, media, workspaceId, onEdit, onRequest, bu
   );
 }
 
-export function AudioView({ board, onEdit, onRequest, busy, workspaceId }) {
+/** The Director's audio proposals (set_audio_options): pick one, or none. Picking fills in the VO and music below. */
+function AudioOptions({ board, onChooseAudio, busy }) {
+  const audio = board.audio || {};
+  if (!audio.options?.length) return null;
+  const title = (id) => board.shots.find((s) => s.id === id)?.title || id;
+  return (
+    <div className="space-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+      <div className="text-[13px] font-semibold text-white/90">Usulan Director</div>
+      {audio.options.map((o) => {
+        const chosen = audio.chosen === o.id;
+        return (
+          <div key={o.id} className={`rounded-lg border p-2.5 ${chosen ? 'border-emerald-400/40 bg-emerald-400/[0.04]' : 'border-white/[0.08]'}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[12px] font-medium text-white/90">
+                  {o.title}{audio.recommended === o.id && <span className="ml-1.5"><Badge tone="accent">Rekomendasi</Badge></span>}
+                </div>
+                <p className="mt-0.5 text-[11px] text-white/45">{o.why}</p>
+              </div>
+              <SmallButton tone={chosen ? 'default' : 'accent'} disabled={busy || chosen} onClick={() => onChooseAudio(o)}>{chosen ? 'Dipakai' : 'Pakai'}</SmallButton>
+            </div>
+            {o.voiceover_lines?.length ? (
+              <div className="mt-1.5 space-y-0.5 text-[11px]">
+                <p className="text-white/35">VO · {o.voice_name || 'suara'} · {o.voiceover_lines.length} baris</p>
+                {o.voiceover_lines.map((l) => (
+                  <p key={l.shot_id} className="text-white/60"><span className="text-white/30">{title(l.shot_id)}: </span>{l.text}</p>
+                ))}
+              </div>
+            ) : <p className="mt-1.5 text-[11px] text-white/35">Tanpa voiceover</p>}
+            {o.music_prompt && <p className="mt-0.5 text-[11px] text-white/60"><span className="text-white/35">Musik: </span>{o.music_prompt}</p>}
+          </div>
+        );
+      })}
+      <button type="button" disabled={busy || audio.chosen === 'none'} onClick={() => onChooseAudio(null)}
+        className="text-[11px] text-white/40 underline-offset-2 hover:text-white/70 hover:underline disabled:no-underline disabled:opacity-60">
+        {audio.chosen === 'none' ? 'Tanpa VO & musik (dipilih)' : 'Tidak usah pakai VO & musik'}
+      </button>
+    </div>
+  );
+}
+
+export function AudioView({ board, onEdit, onRequest, onChooseAudio, busy, workspaceId }) {
   const audio = board.audio || { voiceover: {}, music: {} };
   const [voices, setVoices] = useState([]);
   const [draft, setDraft] = useState(null);
@@ -559,6 +604,7 @@ export function AudioView({ board, onEdit, onRequest, busy, workspaceId }) {
   const voTodo = voKeys.filter((k) => { const m = board.media[k]; return m?.status !== 'running' && (!m?.asset_id || m.stale); });
   return (
     <div className="space-y-4">
+      {onChooseAudio && <AudioOptions board={board} onChooseAudio={onChooseAudio} busy={busy} />}
       <p className="text-[12px] text-white/50">
         Audio terpisah yang ditimpa di atas video saat Export (ElevenLabs). Setiap baris VO dibacakan di shot-nya sendiri, jadi tetap pas walau shot digeser atau di-trim. Dengan VO, suara klip dan musik otomatis dikecilkan. Generate memakai kredit.
       </p>

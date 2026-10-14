@@ -37,7 +37,8 @@ What you can do (tools):
   feel. The detail fields: goal (sell, awareness, story, education ...), audience, platform, key_message (the one thing
   viewers must remember), product (name, look, colours, logo; empty when there is none), tone (mood, pace, music feel),
   references (similar films, ads, creators), cta (the ending / call to action), must_have, avoid. Plus look, aspect
-  ratio, target duration, visual style, resolution and native audio on/off.
+  ratio, target duration, visual style, resolution and native audio on/off. Keep resolution 720p unless the user asks
+  for another one (1080p costs about 2.5x per second). Aspect ratios: 16:9, 9:16, 1:1, 4:3, 3:4, 21:9 (cinematic wide).
   video_type is the kind of video (ugc_ad, product_ad, short_film, micro_drama, trailer, music_video, explainer,
   documentary, animation, presenter): it decides the craft guides, the shot language and how prompts are written.
   Infer it yourself from what the user says and set it with the brief; never ask the user only for this. "UGC",
@@ -82,13 +83,17 @@ What you can do (tools):
   exist unless set_shots succeeded.
 - set_shots / update_shot / remove_shot: the ordered shot list. Each shot is one generated video clip of 4-15 s with
   a frame_prompt (the first frame as a still image) and a video_prompt (motion, camera, action, sound for that clip).
-  Write video_prompt in the Seedance 2.5 shape (seedance-prompting), compressed for one clip, one labelled line each:
-  STYLE (the same line in every shot of the video: genre/format, grade, look, what must not appear), SHOT (shot type,
-  framing, camera and lens, where everyone is), ACTION (what happens, with @mentions), DIALOGUE (only when someone
-  speaks in the clip: exact words in quotes) with VOICE (one conditioning sentence per character, pasted unchanged
-  every time they speak), LIGHT (motivated source and direction), AUDIO (what is heard and what must not be).
-  A clip with cuts inside: "Shot 1: ... Hard cut. Shot 2: ...". Add a lock line when continuity is at risk (COUNT,
-  SCREEN DIRECTION, state that only advances). frame_prompt describes the opening still in the same STYLE.
+  Write video_prompt the way ByteDance's own optimizer does (seedance-official-generation), each label on its own line:
+  "Style: ..." first, word for word the same in every shot of the video (genre/format, look, grade; "No subtitles."
+  when someone speaks, the render adds captions); then "Camera: ..." (shot size, angle, movement, where everyone is
+  relative to stable objects like a door or table); "Action: ..." (subject + one main action with @mentions, then
+  "At the end: <visible state>"); "Light: ..." (motivated source, direction); "Sound: ..." with dialogue as
+  <@name>'s line (<emotion>), <language and accent>: {exact words} (one line per emotion; never repeat the words
+  outside the braces), music in ( ), sound effects in < >. Write emotions as visible face, breath and hand changes,
+  not intense labels. Only add "no music / no ..." when the user or the format wants it; no generic quality or
+  negative packs. Keep counts, ownership of props and who stands where stable across shots. Never write the
+  duration or aspect ratio in a prompt (they are parameters). frame_prompt describes the opening still in the same
+  Style.
   List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
   the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
   added automatically), so faces, places and products stay consistent across shots.
@@ -103,7 +108,12 @@ What you can do (tools):
   with update_shot and request edit:<shot_id>; the edited clip becomes the shot's new take. Both cost credits.
 - Asset reference sheets (element:<id>) are generated AUTOMATICALLY at the end of every turn in which you create or
   change elements: no request or approval is needed. Use request_generation with force only to redo an up-to-date sheet.
-- request_generation: prepare paid generation of frames and videos (frame:<shot_id>, video:<shot_id>). It adds
+- Scene videos (Seedance keyframes): consecutive shots of one scene (up to 30 s and 30 images) are generated as ONE
+  video, scene:<first shot_id>, listed in the board's scene_videos. The shots' frames are its keyframes, so the cuts,
+  light, motion and sound flow between shots; the result is cut back into each shot's video. This is the default way
+  to make videos. Use video:<shot_id> only for a shot that is not in a scene video, or to redo one shot of a finished
+  scene video without paying for the whole scene again.
+- request_generation: prepare paid generation of frames and videos (frame:<shot_id>, scene:<shot_id>, video:<shot_id>). It adds
   missing dependencies and returns a credit estimate; the user must approve that card in the UI. Never say something
   was generated until the board shows it succeeded.
 
@@ -121,7 +131,8 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   (audio.chosen "none" means they want no separate audio: do not push it again). Say in your reply whether this video
   needs a voiceover and music and which option you recommend; the options show as a card the user picks from. Make
   them really different (e.g. warm narrator + acoustic bed / energetic young voice + upbeat pop / music only). When
-  the user picks one it is applied for them, with its credit estimate to approve.
+  the user picks one it is applied for them; the audio is generated after the videos (in one request it always
+  runs last), so request vo:/audio: together with the videos or once they are done.
 - set_audio / list_voices: optional separate audio laid over the clips in the render (ElevenLabs). A voiceover is a set
   of lines, each on the shot it belongs to (lines: [{shot_id, text, offset}]): the line starts offset seconds into
   that shot (default 0.3) and stays in sync when shots move or get trimmed. Write each line for what is on screen in
@@ -169,14 +180,17 @@ plus example-prompt before the first shot list. Read any other guide only when t
 you read stays in the context of every later step, so a pile of optional reads makes the turn slow and expensive. Some tools need their skill read in the same turn (if not, the guide is returned to you
 and you must call the tool again): update_brief with a
 summary or set_concepts needs idea-director, write_script needs script-director, upsert_element
-needs image-gen-usage, set_shots needs seedance-basics, seedance-prompting and scene-director, a changed frame_prompt/video_prompt
-needs seedance-prompting, and set_audio
+needs image-gen-usage, set_shots needs seedance-official-generation and scene-director, a changed frame_prompt/video_prompt
+needs seedance-official-generation, and set_audio
 needs voice-performance-director for a voiceover and music-gen-usage for music.
 The pipeline roles (idea-director, script-director, scene-director, asset-director, example-prompt) are the guides for
 THIS project's video type (see VIDEO TYPE below). Before the first shot list of a project also read example-prompt (a
-complete worked prompt for this kind of video; skip if it has none) and video-prompt-rules; when a generated clip
-went wrong, read prompt-fixes. seedance-prompting (ByteDance's official Seedance 2.5 guide) decides the prompt syntax;
-seedance-locks adds the continuity locks; take shot language from the type's guides, not from the examples' wording.
+complete worked prompt for this kind of video; skip if it has none).
+ByteDance's own Seedance 2.5 prompt optimizer (seedance-official-generation; -workflow for many assets, -edit for
+edit/extend) decides the prompt structure and syntax and wins over every other guide. seedance-prompting adds
+realistic humans, physics and fixes for failed clips (read it when a clip went wrong or for photoreal people). The
+type's guides and example-prompt give story, shots and camera language only: write their content in the official
+syntax, not in their format.
 These guides were written for a different agent that runs local tools, files, stages and checkpoints: take the
 creative craft, and ignore instructions about tools, files, checkpoints, stages or rendering you do not have (levels,
 ducking and mastering are done by the render; voices are the ones from list_voices).
@@ -340,7 +354,7 @@ TOOLS = [
     }, ["asset_id", "question"]),
     _tool("list_voices", "List the voices available for a voiceover.", {}, []),
     _tool("request_generation", "Prepare paid generation (needs the user's approval in the UI).", {
-        "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, video:shot_01, edit:shot_01, audio:voiceover, audio:music"},
+        "items": {"type": "array", "items": {"type": "string"}, "description": "e.g. element:maya, frame:shot_01, scene:shot_01 (a scene video, see scene_videos), video:shot_01, edit:shot_01, audio:voiceover, audio:music"},
         "force": {"type": "boolean", "description": "regenerate even if already up to date"},
         "note": {"type": "string", "description": "one line for the user about what this is for"},
     }, ["items"]),
@@ -1372,7 +1386,8 @@ RUN_MODE_NOTES = {
              "(including the look when the user did not say it; state your choices in one line) and drive straight to a "
              "finished video in this turn: brief, choose a concept yourself, script, elements, scenes, shots, audio "
              "(set_audio with your recommended voice, lines and music unless it clearly needs none), then "
-             "request_generation for every shot's video (and vo:/audio: items). Requests are approved automatically "
+             "request_generation for every scene video in scene_videos plus video:<shot_id> for shots not in one "
+             "(and vo:/audio: items). Requests are approved automatically "
              "and the video is exported when everything is generated. Only ask when the request is too vague to "
              "start at all."),
 }
@@ -1512,8 +1527,8 @@ REQUIRED_SKILLS: dict[str, tuple[Any, Callable[[dict[str, Any]], bool]]] = {
     "set_concepts": (("idea-director",), lambda a: True),
     "write_script": (("script-director",), lambda a: True),
     "upsert_element": (("image-gen-usage",), lambda a: True),
-    "set_shots": (("seedance-basics", "seedance-prompting", "scene-director"), lambda a: True),
-    "update_shot": (("seedance-prompting",), lambda a: bool(a.get("frame_prompt") or a.get("video_prompt"))),
+    "set_shots": (("seedance-official-generation", "scene-director"), lambda a: True),
+    "update_shot": (("seedance-official-generation",), lambda a: bool(a.get("frame_prompt") or a.get("video_prompt"))),
     "set_audio": (_audio_skills, lambda a: True),
     "set_audio_options": (("voice-performance-director", "music-gen-usage"), lambda a: True),
 }

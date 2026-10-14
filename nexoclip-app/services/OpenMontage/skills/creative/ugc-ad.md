@@ -43,7 +43,7 @@ contrarian claim, a question to the viewer, or the product doing something visib
   code-mixing). Short sentences. No ad words ("revolusioner", "terbaik di kelasnya").
 - One claim per shot. Say the product name at most twice. Mention a small con or honest detail: it reads as real.
 - Budget: about 2.5 spoken words per second; a 5 s shot holds ~12 words.
-- Put the dialogue of each shot in the shot's video prompt in quotes (Seedance speaks it). Do not also put the same
+- Put the dialogue of each shot in the shot's video prompt in braces { } (Seedance speaks it). Do not also put the same
   words in a separate voiceover: either the creator speaks in the clip, or a voiceover tells it over silent action.
 
 ## Characters, Locations, Props
@@ -55,24 +55,24 @@ contrarian claim, a question to the viewer, or the product doing something visib
 
 ## Prompting Each Shot (Seedance 2.5)
 
-Follow the Seedance 2.5 section order, compressed for one shot. Keep the same STYLE and CAMERA lines in every shot.
+Write it in the syntax of ByteDance's own optimizer (seedance-official-generation). Keep the same Style line in every
+shot; dialogue goes in braces with the speaker, emotion and language; music in ( ), sound effects in < >.
 
 ```
-STYLE: authentic smartphone UGC, vertical 9:16, no cinematic grading, natural phone exposure and slight noise,
-  no music. Not an ad, not a commercial shoot.
-SHOT: medium close-up selfie, front camera at arm's length, slight handheld shake, @creator in @bedroom.
-ACTION: @creator holds @product next to her face, glances at it, then back to the lens, half smile.
-DIALOGUE: @creator says, casually and a bit fast: "Oke jujur, aku skeptis banget sama ini awalnya."
-VOICE: young Jakarta woman, relaxed, slightly nasal, quick tempo, natural pauses (paste this sentence unchanged
-  in every shot she speaks)
-LIGHT: soft window light from the left, warm, a little uneven.
-AUDIO: her voice close to the phone mic, quiet room tone, no music, no other voices.
+Style: authentic smartphone UGC, vertical, natural phone exposure and slight noise, no cinematic grading. No subtitles.
+Camera: medium close-up selfie, front camera at arm's length, slight handheld shake; @creator sits on the edge of the
+  bed in @bedroom, window on her left.
+Action: @creator holds @product next to her face, glances at it, then back to the lens with a half smile.
+  At the end: @product is still in her right hand, label facing the lens.
+Light: soft window light from her left, warm, a little uneven.
+Sound: @creator's line (relaxed, a bit fast), casual Jakarta Indonesian: {Oke jujur, aku skeptis banget sama ini awalnya.}
+  Quiet room tone. No music.
 ```
 
-Locks that matter for UGC (from the Seedance 2.5 guide): keep the framing type fixed for the whole video
-(selfie stays selfie), fix the creator's position in the room, state monotonicity for anything consumed or applied
-(the cream level only drops, the drink only empties), background people do their own thing and never look at the
-lens, "exactly one creator". Product shots: the product label always faces the camera, sharp, correct colours.
+Things that keep UGC believable: the framing type stays the same for the whole video (selfie stays selfie), the
+creator stays in the same spot, anything consumed or applied only goes one way (the cream level only drops), people in
+the background do their own thing and never look at the lens, exactly one creator. Product shots: the label faces the
+camera, sharp, correct colours.
 
 ## Common Pitfalls
 

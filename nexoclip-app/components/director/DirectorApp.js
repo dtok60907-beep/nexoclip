@@ -398,12 +398,16 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
 
   const openPanel = (id) => { setPanel(id); setMobilePane('board'); };
 
-  // Picking one of the Director's audio suggestions applies it and shows its credit estimate to approve;
+  // Picking one of the Director's audio suggestions applies it (and asks to generate it once the videos exist);
   // null = no separate voiceover / music.
   const chooseAudio = async (option) => {
     if (!(await onEdit('choose_audio_option', { id: option ? option.id : 'none' }))) return;
+    // Audio is laid over the finished clips: before the videos exist the choice is only saved, and "Generate semua"
+    // picks the audio up together with the videos (it runs after them).
+    const { shots, media } = view.board;
+    const videosDone = shots.length > 0 && shots.every((s) => media[`video:${s.id}`]?.asset_id);
     const items = option ? [...(option.voiceover_lines || []).map((l) => `vo:${l.shot_id}`), ...(option.music_prompt ? ['audio:music'] : [])] : [];
-    if (items.length) await onRequest(items);
+    if (items.length && videosDone) await onRequest(items);
   };
 
   // Picking a concept: confirm, record it, then tell the Director so it carries on right away.
@@ -497,7 +501,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
           <ChatTimeline chat={view.chat} board={board} workspaceId={workspaceId} busy={actionBusy}
             generationRunning={generationRunning} renderRunning={renderRunning} agentRunning={agentRunning}
-            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender} onChooseAudio={chooseAudio}
+            onApprove={approve} onReject={reject} onOpenPanel={openPanel} onRender={startRender}
             draft={agentRunning ? draft : ''} onContinue={continueRequest} />
           {view.agent?.status === 'error' && (
             <button type="button" onClick={retry} disabled={actionBusy} className="mt-3 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-white/80 hover:border-white/30 disabled:opacity-50">
@@ -536,7 +540,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
         <div className="min-h-0 flex-1">
           <Workspace board={board} workspaceId={workspaceId} onEdit={onEdit} onRequest={onRequest} onChooseConcept={chooseConcept} onConfirmScript={confirmScript} busy={actionBusy || agentRunning}
             panel={panel} onOpenPanel={setPanel} onClosePanel={() => setPanel(null)} loadVersions={loadVersions} onRestore={onRestore}
-            onRender={startRender} rendering={renderRunning} />
+            onRender={startRender} rendering={renderRunning} onChooseAudio={chooseAudio} />
         </div>
       </section>
       {confirm && (

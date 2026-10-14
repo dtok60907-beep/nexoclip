@@ -21,8 +21,12 @@ MAX_CHARS = 36000  # the official Seedance 2.5 reference is ~32k characters
 # jnMetaCode's ai-shortfilm-prompts templates (MIT).
 VS = "skills/external/visual-skills/video/references/"
 SF = "skills/external/shortfilm-prompts/templates/"
-SEEDANCE = VS + "seedance-25.md"  # from ByteDance's official Seedance 2.5 guides
+SEEDANCE = VS + "seedance-25.md"  # a summary of ByteDance's official Seedance 2.5 guides
+# Left out on purpose, to keep one source for prompt syntax (ByteDance's own optimizer, SD25_PE): visual-skills'
+# seedance.md (Seedance 1.x/2.0), universal-rules.md and fixes-and-skeletons.md (multi-model skeletons, default
+# negatives), shortfilm-prompts' negative-prompts.md, OpenMontage's seedance-2-5 SKILL.md and video-gen-prompting.md.
 SEEDANCE_TECHNIQUES = ".agents/skills/seedance-2-5/reference/techniques.md"
+SD25_PE = "skills/external/seedance-sd25-pe/"  # ByteDance's own Seedance 2.5 prompt optimizer, split in three parts
 CINEMATIC = {"idea": "skills/pipelines/cinematic/idea-director.md", "script": "skills/pipelines/cinematic/script-director.md",
              "scene": "skills/pipelines/cinematic/scene-director.md", "asset": "skills/pipelines/cinematic/asset-director.md"}
 # Story-led films: arcs and genre modules, the screenwriter's beat breakdown, the director's scene method.
@@ -94,21 +98,18 @@ SKILLS: dict[str, tuple[str, str]] = {
     "color-grading": ("skills/core/color-grading.md", "palette and grade language for a consistent look"),
     "typography": ("skills/creative/typography.md", "on-screen text, captions and title cards"),
     "image-gen-usage": ("skills/creative/image-gen-usage.md", "writing image prompts (characters, locations, frames)"),
-    "video-gen-prompting": ("skills/creative/video-gen-prompting.md", "universal video prompt vocabulary: camera, motion, light"),
-    "seedance-prompting": (SEEDANCE, "Seedance 2.5 (our video model), from ByteDance's official guides: prompt formula, dialogue/audio syntax, references, anti-collapse skeleton, realistic humans, failure fixes"),
-    "seedance-basics": (VS + "seedance.md", "Seedance family basics: Details Law, multi-shot syntax, 11-block skeleton, @img references, failure fixes"),
+    "seedance-prompting": (SEEDANCE, "a summary of ByteDance's Seedance 2.5 guides with extras: anti-collapse skeleton, realistic humans (anti AI face), physics, failure modes and fixes"),
     "seedance-archetypes": (SEEDANCE_TECHNIQUES, "the ten official Seedance 2.5 prompt categories (UGC, product, drama, action, documentary...)"),
-    "seedance-locks": (".agents/skills/seedance-2-5/SKILL.md", "Seedance 2.5 locks for continuity across cuts, character sheets, voice conditioning"),
-    "video-prompt-rules": (VS + "universal-rules.md", "rules every video prompt follows (one anchor, micro-actions, banned vague words)"),
+    "seedance-official-workflow": (SD25_PE + "1-workflow.md", "ByteDance's official Seedance 2.5 prompt optimizer, part 1: principles, story contract, asset inventory, mapping every asset to one role, choosing generation/edit/extend"),
+    "seedance-official-generation": (SD25_PE + "2-generation.md", "official optimizer part 2: generation templates, many references, stages and timecodes, keyframes ('Use @Image1 through @ImageN as keyframes'), storyboard grids, blockouts, emotion, camera, ()<>{}【】 sound syntax"),
+    "seedance-official-edit": (SD25_PE + "3-edit-extend-output.md", "official optimizer part 3: video and audio editing, forward/backward extension, output contract, final checklist"),
     "dramaturgy": (VS + "dramaturgy.md", "scene formula, three-detail rule, blocking, subtext, shot functions, rhythm"),
     "genre-modules": (VS + "patterns-and-genres.md", "montage patterns and genre modules: commercial, music video, UGC, drama, action, fashion; story arcs"),
     "role-modes": (VS + "role-modes.md", "director treatment, screenwriter beat breakdown and dialogue, editor timecoded beats"),
-    "prompt-fixes": (VS + "fixes-and-skeletons.md", "what to change when a generated clip fails, prompt skeletons"),
     "camera-lighting": (VS + "camera-lighting-vocabulary.md", "camera moves, lenses and lighting vocabulary"),
     "camera-moves": (SF + "camera-move-library.md", "a library of camera moves with prompt wording"),
     "atmosphere": (SF + "atmosphere-prefabs.md", "ready atmosphere/weather/light descriptions"),
     "genre-camera": (SF + "genre-camera-sop.md", "camera habits per genre (horror, romance, action, documentary...)"),
-    "negative-prompts": (SF + "negative-prompts.md", "what to exclude per genre and how to phrase it"),
     "reviewer": ("skills/meta/reviewer.md", "critically reviewing a plan or result before showing it"),
     "video-reference-analyst": ("skills/meta/video-reference-analyst.md", "turning a reference video the user sent into a plan"),
     "voice-performance-director": ("skills/meta/voice-performance-director.md", "writing and directing a voiceover: pacing, pauses, energy, delivery"),

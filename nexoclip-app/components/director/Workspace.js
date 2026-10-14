@@ -9,7 +9,7 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyb
 import { CSS } from '@dnd-kit/utilities';
 import {
   AssetsView, AudioView, Badge, BriefView, ConceptsView, HistoryView, LockButton, ResearchView, ScriptView,
-  assetUrl, inputClass, mediaStatus, SmallButton, Field,
+  assetUrl, inputClass, mediaStatus, SmallButton, Field, RATIOS, RESOLUTIONS,
 } from './BoardViews.js';
 import ShotPanel from './ShotPanel.js';
 
@@ -62,7 +62,46 @@ export function groupShots(board) {
   return { groups, numbered };
 }
 
-const RATIO_CLASS = { '16:9': 'aspect-video', '9:16': 'aspect-[9/16]', '1:1': 'aspect-square' };
+/**
+ * What to generate so these shots get their video. Shots that are all still missing inside a scene video block go as
+ * that one scene video (one Seedance generation, the shots' frames as keyframes); the rest go one by one, so a shot
+ * that is already fine is never paid for again.
+ */
+export function videoPlan(board, shotIds) {
+  const ids = new Set(shotIds);
+  const media = (key) => board.media[key];
+  const blocks = (board.scene_blocks || []).filter((b) => b.shots.every((id) => ids.has(id)));
+  const running = shotIds.some((id) => media(`video:${id}`)?.status === 'running') || blocks.some((b) => media(b.key)?.status === 'running');
+  const missing = shotIds.filter((id) => media(`video:${id}`) && (!media(`video:${id}`).asset_id || media(`video:${id}`).stale));
+  const whole = blocks.filter((b) => b.shots.every((id) => missing.includes(id)));
+  const inWhole = new Set(whole.flatMap((b) => b.shots));
+  const keys = [...whole.map((b) => b.key), ...missing.filter((id) => !inWhole.has(id)).map((id) => `video:${id}`)];
+  // Redoing a finished scene: its scene videos again, plus the shots that are not in one (not the user's uploads).
+  const inBlock = new Set(blocks.flatMap((b) => b.shots));
+  const redo = [...blocks.map((b) => b.key), ...shotIds.filter((id) => !inBlock.has(id) && media(`video:${id}`) && !media(`video:${id}`).uploaded).map((id) => `video:${id}`)];
+  return { keys, missing, running, redo };
+}
+
+const RATIO_CLASS = { '16:9': 'aspect-video', '9:16': 'aspect-[9/16]', '1:1': 'aspect-square', '4:3': 'aspect-[4/3]', '3:4': 'aspect-[3/4]', '21:9': 'aspect-[21/9]' };
+const PORTRAIT = new Set(['aspect-[9/16]', 'aspect-[3/4]']);
+
+/** A header badge that is also a picker (aspect ratio, resolution). Changing it after videos exist asks first. */
+function BriefPicker({ board, field, options, title, warn, onEdit, busy }) {
+  const value = board.brief[field];
+  const change = (next) => {
+    if (next === value) return;
+    if (warn(board) && !window.confirm(`${warn(board)} Lanjut?`)) return;
+    onEdit('update_brief', { [field]: next });
+  };
+  return (
+    <select value={value} disabled={busy} title={title} onChange={(e) => change(e.target.value)}
+      className="cursor-pointer appearance-none rounded-md bg-white/[0.06] px-2 py-0.5 text-center text-[11px] font-medium text-white/70 outline-none hover:bg-white/[0.1] hover:text-white disabled:opacity-40">
+      {options.map((o) => <option key={o} value={o} className="bg-[#0b0e13]">{o}</option>)}
+    </select>
+  );
+}
+
+const hasMedia = (board, prefixes) => Object.keys(board.media).some((k) => prefixes.some((p) => k.startsWith(p)) && board.media[k]?.asset_id && !board.media[k]?.uploaded);
 
 function Thumb({ board, shot, workspaceId, className = '', strip = false }) {
   const frame = board.media[`frame:${shot.id}`];
@@ -397,7 +436,7 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
 
 // ---------------------------------------------------------------- scene mode
 
-function SceneHeader({ group, busy, onEdit }) {
+function SceneHeader({ group, board, busy, onEdit, onRequest }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(group.scene.title || '');
   useEffect(() => { if (!editing) setTitle(group.scene.title || ''); }, [group.scene.title, editing]);
@@ -420,12 +459,36 @@ function SceneHeader({ group, busy, onEdit }) {
           {group.scene.title}{group.scene.description && <span className="text-white/40"> — {group.scene.description}</span>}
         </button>
       )}
+      {!editing && <span className="ml-auto" />}
+      {!editing && group.shots.length > 0 && <SceneVideoButton group={group} board={board} busy={busy} onRequest={onRequest} />}
       {real && !editing && (
         <button type="button" disabled={busy} title="Hapus scene (shot-nya pindah ke scene sebelumnya)"
           onClick={() => { if (window.confirm(`Hapus scene "${group.scene.title}"? Shot di dalamnya pindah ke scene sebelumnya.`)) onEdit('remove_scene', { id: group.scene.id }); }}
-          className="ml-auto flex-none rounded px-1.5 text-[11px] text-white/30 hover:bg-white/[0.06] hover:text-red-300">✕</button>
+          className="flex-none rounded px-1.5 text-[11px] text-white/30 hover:bg-white/[0.06] hover:text-red-300">✕</button>
       )}
     </div>
+  );
+}
+
+/** The scene's one video button: makes whatever its shots still miss (as a scene video when it can), or redoes it. */
+function SceneVideoButton({ group, board, busy, onRequest }) {
+  const ids = group.shots.map((item) => item.shot.id);
+  const plan = videoPlan(board, ids);
+  const seconds = group.shots.reduce((t, item) => t + item.shot.duration_seconds, 0);
+  const partial = plan.missing.length > 0 && plan.missing.length < ids.length;
+  const label = plan.running ? 'Membuat video…'
+    : partial ? `▶ Generate ${plan.missing.length} shot yang belum`
+      : plan.missing.length ? `▶ Generate video · ${seconds} dtk` : 'Buat ulang video';
+  const title = plan.running ? 'Video scene ini sedang dibuat.'
+    : plan.missing.length ? 'Shot di scene ini dibuat sekaligus jadi satu video (gambar shot jadi patokan), lalu dipotong per shot. Estimasi kredit muncul di chat sebelum generate.'
+      : 'Buat ulang semua video di scene ini. Untuk satu shot saja, buka shot-nya lalu Recreate video.';
+  const fresh = plan.missing.length > 0;
+  return (
+    <button type="button" disabled={busy || plan.running || !(fresh ? plan.keys : plan.redo).length} title={title}
+      onClick={() => onRequest(fresh ? plan.keys : plan.redo, !fresh)}
+      className={`flex-none whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium disabled:opacity-50 ${fresh ? 'bg-[#d4ff64] text-[#10130a] hover:brightness-110' : 'border border-white/10 text-white/55 hover:text-white'}`}>
+      {label}
+    </button>
   );
 }
 
@@ -434,7 +497,7 @@ function SceneShotCard({ board, item, workspaceId, ratio, picked, onToggle, onPi
   return (
     <div className={`group relative ${wide ? 'w-full' : 'w-[220px] flex-none'} overflow-hidden rounded-lg border text-left ${picked ? 'border-[#d4ff64]/70 ring-1 ring-[#d4ff64]/40' : 'border-white/[0.06] hover:border-white/20'}`}>
       <button type="button" onClick={() => onPick(shot.id)} className="block w-full text-left">
-        <Thumb board={board} shot={shot} workspaceId={workspaceId} className={ratio === 'aspect-[9/16]' ? 'h-[200px] w-full' : `${ratio} w-full`} />
+        <Thumb board={board} shot={shot} workspaceId={workspaceId} className={PORTRAIT.has(ratio) ? 'h-[200px] w-full' : `${ratio} w-full`} />
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
           <span className="truncate text-[11px] text-white/80"><span className="mr-1 font-semibold">SHOT {label}</span>{shot.title}</span>
           <span className="flex-none text-[10px] text-white/35">{shot.duration_seconds}s</span>
@@ -517,7 +580,7 @@ function SceneMode({ board, groups, numbered, workspaceId, onPick, onOpenAssets,
             </div>
           ) : groups.map((group) => (
             <section key={group.scene.id ?? 'all'} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-              <SceneHeader group={group} busy={busy} onEdit={onEdit} />
+              <SceneHeader group={group} board={board} busy={busy} onEdit={onEdit} onRequest={onRequest} />
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {group.shots.map((item) => (
                   <SceneShotCard key={item.shot.id} board={board} item={item} workspaceId={workspaceId} ratio={ratio}
@@ -1058,7 +1121,7 @@ function TimelineMode({ board, numbered, workspaceId, selectedId, onSelect, onRe
 
 // ---------------------------------------------------------------- workspace
 
-export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering }) {
+export default function Workspace({ board, workspaceId, onEdit, onRequest, onChooseConcept, onConfirmScript, onChooseAudio, busy, panel, onOpenPanel, onClosePanel, loadVersions, onRestore, onRender, rendering }) {
   const [mode, setMode] = useState('scene');
   const [selectedId, setSelectedId] = useState(null);
   const [shotTab, setShotTab] = useState('media'); // the shot panel's tab, shared by Shot and Timeline
@@ -1071,8 +1134,13 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
   const renderable = numbered.some((n) => ready(`video:${n.shot.id}`) || ready(`frame:${n.shot.id}`));
   // Every shot whose video is missing or outdated, in one request: one estimate to approve in the chat
   // (their missing frames are added by the Director).
-  const todo = numbered.map((n) => `video:${n.shot.id}`)
-    .filter((key) => { const m = board.media[key]; return m?.status !== 'running' && (!m?.asset_id || m.stale); });
+  // The same as pressing every scene's button: each scene that is not running and still misses videos.
+  const plans = groups.map((g) => videoPlan(board, g.shots.map((item) => item.shot.id))).filter((p) => !p.running && p.keys.length);
+  const missing = plans.flatMap((p) => p.missing);
+  // VO and music that are set but not made yet ride along; they are generated after the videos.
+  const audioTodo = Object.keys(board.media).filter((k) => (k.startsWith('vo:') || k === 'audio:music')
+    && board.media[k].status !== 'running' && (!board.media[k].asset_id || board.media[k].stale));
+  const todo = [...plans.flatMap((p) => p.keys), ...(missing.length ? audioTodo : [])];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -1097,15 +1165,20 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
             className="rounded-md hover:opacity-80 disabled:opacity-40">
             <Badge tone={board.brief.generate_audio ? 'green' : 'default'}>{board.brief.generate_audio ? 'Audio on' : 'Audio off'}</Badge>
           </button>
-          <Badge>{board.brief.aspect_ratio}</Badge>
+          <BriefPicker board={board} field="aspect_ratio" options={RATIOS} onEdit={onEdit} busy={busy}
+            title="Rasio video. Ganti sebelum generate: gambar shot dan video yang sudah ada harus dibuat ulang."
+            warn={(b) => hasMedia(b, ['frame:', 'video:', 'scene:']) && 'Gambar shot dan video yang sudah ada akan ditandai perlu dibuat ulang dengan rasio baru.'} />
+          <BriefPicker board={board} field="resolution" options={RESOLUTIONS} onEdit={onEdit} busy={busy}
+            title="Resolusi video. 720p disarankan; 1080p kira-kira 2,5x lebih mahal per detik."
+            warn={(b) => hasMedia(b, ['video:', 'scene:']) && 'Video yang sudah ada akan ditandai perlu dibuat ulang dengan resolusi baru.'} />
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>
           </button>
           {todo.length > 0 && (
             <button type="button" onClick={() => onRequest(todo)} disabled={busy}
-              title="Hitung estimasi kredit untuk semua shot yang belum punya video; generate setelah kamu approve di chat"
+              title="Sama dengan menekan tombol video di setiap scene yang belum jadi. Estimasi kredit muncul di chat dulu; generate setelah kamu approve."
               className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#d4ff64] px-3 py-1.5 text-[12px] font-medium text-[#10130a] hover:brightness-110 disabled:opacity-40">
-              <Icon d="M5 3l14 9-14 9V3z" /> Generate semua ({todo.length})
+              <Icon d="M5 3l14 9-14 9V3z" /> Generate semua ({plans.length} scene)
             </button>
           )}
           <button type="button" onClick={onRender} disabled={!renderable || rendering || busy}
@@ -1124,7 +1197,7 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
               <div className="mx-auto max-w-[920px]">
-                <panelDef.View board={board} onEdit={onEdit} onRequest={onRequest} onChooseConcept={onChooseConcept} onConfirmScript={onConfirmScript} busy={busy} workspaceId={workspaceId}
+                <panelDef.View board={board} onEdit={onEdit} onRequest={onRequest} onChooseConcept={onChooseConcept} onConfirmScript={onConfirmScript} onChooseAudio={onChooseAudio} busy={busy} workspaceId={workspaceId}
                   loadVersions={loadVersions} onRestore={onRestore} />
               </div>
             </div>

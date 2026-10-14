@@ -22,7 +22,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 from director_service.db import Jsonb, notify, tx
 
-ASPECT_RATIOS = ("16:9", "9:16", "1:1")
+ASPECT_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "21:9")  # all of them Seedance 2.5 output ratios
 RESOLUTIONS = ("480p", "720p", "1080p")
 ELEMENT_KINDS = ("character", "location", "prop")
 # The look of the whole video. Asked up front: it decides how every sheet, frame and clip is rendered.
@@ -371,6 +371,9 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 "deps": [f"video:{item['id']}"],
                 "params": {"aspectRatio": "adaptive", "duration": -1, **audio, "omniReferenceTaskType": "edit"},
             }
+    clip_audio = {"resolution": brief.get("resolution") or "720p", "generateAudio": bool(brief.get("generate_audio"))}
+    for block in scene_blocks(board):
+        specs[block["key"]] = _scene_spec(board, block, ratio, clip_audio)
     audio = board.get("audio") or empty_audio()
     voiceover = audio.get("voiceover") or {}
     if voiceover.get("voice_id"):
@@ -451,6 +454,110 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
     }
 
 
+MAX_SCENE_SECONDS = 30  # Seedance 2.5's longest single generation
+
+
+def _first_appearance(board: dict[str, Any], shots: list[dict[str, Any]]) -> list[str]:
+    """Element ids of these shots in the order they first appear: mentions in the prompts, then element_ids.
+    Seedance maps references to characters best when they are uploaded in that order."""
+    order: list[str] = []
+    for item in shots:
+        for element_id in [*mentioned_elements(board, item.get("video_prompt") or ""), *item.get("element_ids", [])]:
+            if element(board, element_id) and element_id not in order:
+                order.append(element_id)
+    return order
+
+
+def _scene_eligible(board: dict[str, Any], item: dict[str, Any]) -> bool:
+    """A shot can be part of a scene video: it has its own frame (no continuation), no reference videos of the
+    user and no video the user uploaded."""
+    return (not item.get("extends") and not user_references(item)[1]
+            and not (board["media"].get(f"video:{item['id']}") or {}).get("uploaded"))
+
+
+def scene_blocks(board: dict[str, Any]) -> list[dict[str, Any]]:
+    """Runs of consecutive shots of one scene that are generated together as one Seedance video, the shots' frames
+    as keyframes: at most 30 s and 30 reference images each, at least two shots (one shot is just its own video).
+    A block is keyed by its first shot: "scene:<shot_id>"."""
+    blocks: list[dict[str, Any]] = []
+    for sc in board["scenes"]:
+        run: list[dict[str, Any]] = []
+
+        def close() -> None:
+            if len(run) >= 2:
+                blocks.append({"key": f"scene:{run[0]['id']}", "scene_id": sc["id"], "shots": [s["id"] for s in run],
+                               "seconds": sum(int(s["duration_seconds"]) for s in run)})
+            run.clear()
+
+        for item in board["shots"]:
+            if item.get("scene_id") != sc["id"]:
+                continue
+            if not _scene_eligible(board, item):
+                close()
+                continue
+            candidate = [*run, item]
+            images = len(candidate) + len(_first_appearance(board, candidate)) + sum(len(user_references(s)[0]) for s in candidate)
+            if sum(int(s["duration_seconds"]) for s in candidate) > MAX_SCENE_SECONDS or images > MAX_VIDEO_REFERENCES:
+                close()
+            run.append(item)
+        close()
+    return blocks
+
+
+STYLE_LINE = re.compile(r"^\s*(style:.*?)(?=\s+camera:|\n|$)", re.IGNORECASE | re.DOTALL)
+
+
+def _hoisted_style(prompts: list[str]) -> tuple[str, list[str]]:
+    """The "Style: ..." part every shot starts with (its own line, or up to "Camera:"), said once for the scene."""
+    found = [STYLE_LINE.match(p or "") for p in prompts]
+    styles = {m.group(1).strip() for m in found if m}
+    if len(styles) == 1 and all(found):
+        return styles.pop(), [(p or "")[m.end():].strip() for p, m in zip(prompts, found)]
+    return "", [(p or "").strip() for p in prompts]
+
+
+def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio: dict[str, Any]) -> dict[str, Any]:
+    """One video for several shots (Seedance 2.5 keyframes): each shot's frame is the keyframe at the moment the
+    shot starts, the elements' sheets follow in order of first appearance, then the user's reference images."""
+    brief = board["brief"]
+    shots = [shot(board, sid) for sid in block["shots"]]
+    elements_in_order = _first_appearance(board, shots)
+    user_images = [a for s in shots for a in user_references(s)[0]]
+    frames = [f"frame:{s['id']}" for s in shots]
+    deps = [*frames, *(f"element:{e}" for e in elements_in_order)]
+    count = len(frames)
+    names: dict[str, str] = {}
+    lines = [f"Use @Image1 through @Image{count} as keyframes in that order.", "Use @Image1 as the first frame.",
+             "It defines the opening of Shot 1: composition, subject positions, poses, props and camera direction."]
+    starts, cursor = [], 0
+    for s in shots:
+        starts.append(cursor)
+        cursor += int(s["duration_seconds"])
+    for n in range(2, count + 1):
+        lines.append(f"@Image{n} defines the opening of Shot {n}, reached with a hard cut at {starts[n - 1]}s.")
+    for n, element_id in enumerate(elements_in_order, start=count + 1):
+        item = element(board, element_id)
+        names[element_id] = f"{item['name']} (@Image{n})"
+        lines.append(f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one image: "
+                     f"show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
+    for n in range(count + len(elements_in_order) + 1, count + len(elements_in_order) + 1 + len(user_images)):
+        lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
+    style, bodies = _hoisted_style([compile_mentions(s["video_prompt"], names)[0] for s in shots])
+    parts = ["\n".join(lines)]
+    if style:
+        parts.append(style)
+    for n, (s, body, start) in enumerate(zip(shots, bodies, starts), start=1):
+        end = start + int(s["duration_seconds"])
+        parts.append(f"Shot {n} | {start}-{end}s\n{body}" + ("\nHard cut." if n < count else ""))
+    title = (scene(board, block["scene_id"]) or {}).get("title") or block["scene_id"]
+    return {
+        "kind": "video", "label": f"{title} — video scene ({count} shot, {cursor}s)",
+        "prompt": _with_look("\n\n".join(parts), brief), "deps": deps, "shots": list(block["shots"]),
+        "params": {"aspectRatio": ratio, "duration": cursor, **audio, "omniReferenceTaskType": "reference"},
+        **({"extra_images": user_images} if user_images else {}),
+    }
+
+
 def spec_sig(spec: dict[str, Any]) -> str:
     basis = {k: spec[k] for k in ("kind", "prompt", "params", "deps")}
     for key in ("photos", "extra_images", "ref_videos"):  # only when present, so older specs keep their signature
@@ -479,11 +586,16 @@ def needs_generation(board: dict[str, Any], key: str, specs: Optional[dict] = No
     return needed
 
 
+AUDIO_TIER = 9  # voiceover and music go last, once the clips they are laid over exist
+
+
 def tier(key: str, specs: Optional[dict[str, dict[str, Any]]] = None) -> int:
     """Generation order: everything a key depends on runs in an earlier tier (a continuation after
-    the clip it extends, an edit after the clip it edits)."""
+    the clip it extends, an edit after the clip it edits), and audio after all of it."""
+    if key.startswith(("vo:", "audio:")):
+        return AUDIO_TIER
     if specs is None or key not in specs:
-        return {"element": 0, "audio": 0, "vo": 0, "frame": 1, "video": 2, "edit": 3}[key.split(":", 1)[0]]
+        return {"element": 0, "audio": 0, "vo": 0, "frame": 1, "video": 2, "scene": 2, "edit": 3}[key.split(":", 1)[0]]
     return 1 + max((tier(dep, specs) for dep in specs[key]["deps"]), default=-1)
 
 
@@ -509,6 +621,8 @@ def summary_for_agent(board: dict[str, Any]) -> dict[str, Any]:
     view["elements"] = [{**e, "image": media_state(f"element:{e['id']}")} for e in board["elements"]]
     view["shots"] = [{**s, "frame": media_state(f"frame:{s['id']}"), "video": media_state(f"video:{s['id']}")}
                      for s in board["shots"]]
+    # several shots generated as one video (keyframes); its result is cut back into the shots' videos
+    view["scene_videos"] = [{**b, "video": media_state(b["key"])} for b in scene_blocks(board)]
     view["audio"] = {**empty_audio(), **copy.deepcopy(board.get("audio") or {}),
                      "voiceover_media": media_state("audio:voiceover"), "music_media": media_state("audio:music")}
     view["pending_requests"] = [
@@ -538,8 +652,9 @@ def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
             "uploaded": bool(media.get("uploaded")) and status == TERMINAL_OK,  # the user's own file
             # Every result so far, newest first; "outdated" ones were made from an older prompt.
             "takes": [{"asset_id": t["asset_id"], "generated_at": t.get("generated_at"), "uploaded": bool(t.get("uploaded")),
+                       "from_scene": t.get("from_scene"),
                        "outdated": not t.get("uploaded") and t.get("spec_sig") != spec_sig(spec)}
                       for t in reversed(media.get("takes") or [])],
         }
     return {**{k: board[k] for k in (*CONTENT_KEYS, "requests", "renders", "video_notes")}, "media": media_view,
-            "version": board.get("version")}
+            "scene_blocks": scene_blocks(board), "version": board.get("version")}

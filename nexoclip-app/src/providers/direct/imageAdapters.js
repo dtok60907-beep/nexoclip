@@ -14,6 +14,9 @@ const BYTEPLUS_IMAGE_SIZES = {
   '3:2': '2560x1728',
   '9:16': '1728x3072',
   '16:9': '3072x1728',
+  '4:3': '2304x1728',
+  '3:4': '1728x2304',
+  '21:9': '3136x1344',
 };
 
 function openAIImageSize(aspectRatio, fallback) {

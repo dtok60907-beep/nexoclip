@@ -1,8 +1,8 @@
 # Micro-Drama — Idea, Script and Shot Guide
 
 > Sources: patterns of vertical short-drama apps (ReelShort, DramaBox, ShortMax), TikTok/Reels series formats,
-> Seedance 2.5 prompt categories 1 (dramatic exterior) and 6 (multi-character, consistent faces), the Seedance 2.5
-> "Locks" and "Voice" sections (`.agents/skills/seedance-2-5/SKILL.md`), OpenMontage `short-form.md`.
+> Seedance 2.5 prompt categories 1 (dramatic exterior) and 6 (multi-character, consistent faces), ByteDance's
+> Seedance 2.5 prompt optimizer (sd25-pe), OpenMontage `short-form.md`.
 
 ## When To Use
 
@@ -47,29 +47,29 @@ One action per shot. 3-6 s per shot keeps the rhythm; dialogue lines decide the 
 
 ## Prompting Each Shot (Seedance 2.5)
 
-Multi-character drama is the hardest category for consistency. Use every lock:
+Multi-character drama is the hardest category for consistency. Write it in the syntax of ByteDance's own optimizer
+(seedance-official-generation):
 
 - Every character is an element with a reference sheet; mention them with @id in every prompt.
-- `COUNT LOCK`: state exactly who is in frame ("exactly two people: @nadia and @arga, no one else visible").
-- `SCREEN DIRECTION`: keep who stands screen-left / screen-right fixed across a dialogue scene.
-- `VOICE`: one conditioning sentence per character (accent, pitch, tempo, manner), pasted unchanged every time
-  that character speaks.
+- Say exactly who is in frame ("exactly two people: @nadia and @arga").
+- Place people relative to stable objects (the glass table, the door), and keep it across a dialogue scene.
+- Dialogue: `@name's line (emotion), language: {words}`, one line per emotion; the listener keeps their mouth closed.
 - Wardrobe and props by state: if a glass shatters or a dress gets wet, it stays so in later shots.
 
 ```
-STYLE: glossy vertical TV drama, 9:16, soft high-key interior light, subtle teal-orange grade, no music.
-SHOT: medium close-up over @arga's shoulder onto @nadia, in @mansion_living_room. Exactly two people visible.
-  @nadia screen-right, @arga screen-left with his back to camera.
-ACTION: @nadia slowly pulls off the engagement ring and puts it on the glass table; she does not look down.
-DIALOGUE: @nadia, quiet and steady: "Simpan saja. Aku sudah tahu semuanya."
-VOICE (@nadia): young woman, low and controlled, slight tremble at the end of sentences, slow tempo.
-LIGHT: warm lamp from screen-right on her face, cooler fill from the window behind.
-AUDIO: her voice, the small click of the ring on glass, quiet room tone. No music, no other voices.
+Style: glossy vertical TV drama, soft high-key interior light, subtle teal-orange grade. No subtitles.
+Camera: medium close-up over @arga's shoulder onto @nadia in @mansion_living_room; exactly two people. @nadia stands
+  behind the glass table facing the camera, @arga in front of it with his back to the camera.
+Action: @nadia slowly pulls off the engagement ring and puts it on the glass table without looking down.
+  At the end: the ring lies alone on the table, @nadia's hands at her sides.
+Light: warm lamp from her right on her face, cooler fill from the window behind.
+Sound: @nadia's line (quiet, steady, a slight tremble at the end), Indonesian: {Simpan saja. Aku sudah tahu semuanya.}
+  @arga keeps his mouth closed. <the small click of the ring on glass>, quiet room tone. No music.
 ```
 
 ## Common Pitfalls
 
 - Spending the first 10 seconds on scenery. Open on conflict.
 - Too many characters in one shot: faces drift. Keep two per frame when possible.
-- Changing a character's voice description between shots.
+- Changing how a character speaks (accent, delivery) between shots.
 - Ending on a resolved moment instead of a question.

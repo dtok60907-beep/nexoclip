@@ -149,7 +149,19 @@ function Stack({ items }) {
   );
 }
 
-function ArtifactCard({ card, board, workspaceId, onOpen, onChooseAudio, busy }) {
+const CARD_NAMES = { brief: 'Brief', concepts: 'Arah kreatif', research: 'Riset', script: 'Naskah', assets: 'Aset', shots: 'Shot list', audio: 'Audio' };
+
+/** An older copy of a card (a newer one is further down) or a closed request: one quiet line, no repeat. */
+function FoldedLine({ text, onOpen }) {
+  return (
+    <button type="button" onClick={onOpen} disabled={!onOpen}
+      className="flex items-center gap-1.5 text-[10.5px] text-white/35 hover:text-white/70 disabled:hover:text-white/35">
+      <span className="text-[#d4ff64]/50">↺</span>{text}
+    </button>
+  );
+}
+
+function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
   if (card === 'script') {
     if (!board.script) return null;
     return (
@@ -217,61 +229,28 @@ function ArtifactCard({ card, board, workspaceId, onOpen, onChooseAudio, busy })
       </CardShell>
     );
   }
-  if (card === 'audio' && board.audio?.options?.length) {
-    const audio = board.audio;
-    const title = (id) => board.shots.find((s) => s.id === id)?.title || id;
-    return (
-      <CardShell icon="♪" title="Usulan audio" accent={audio.chosen ? (audio.chosen === 'none' ? 'tanpa audio' : 'dipilih') : `${audio.options.length} opsi`}
-        action="View" onAction={() => onOpen('audio')}>
-        <div className="space-y-2">
-          {audio.options.map((o) => {
-            const chosen = audio.chosen === o.id;
-            return (
-              <div key={o.id} className={`rounded-lg border p-2.5 ${chosen ? 'border-emerald-400/40 bg-emerald-400/[0.04]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-[12px] font-medium text-white/90">
-                      {o.title}
-                      {audio.recommended === o.id && <span className="ml-1.5 text-[10px] text-[#d4ff64]/80">rekomendasi</span>}
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-white/45">{o.why}</p>
-                  </div>
-                  <button type="button" disabled={busy || chosen} onClick={() => onChooseAudio(o)}
-                    className="flex-none rounded-full border border-white/15 px-2.5 py-1 text-[11px] text-white/80 hover:border-[#d4ff64]/50 disabled:opacity-50">
-                    {chosen ? 'Dipakai' : 'Pakai'}
-                  </button>
-                </div>
-                {o.voiceover_lines?.length ? (
-                  <div className="mt-1.5 space-y-0.5 text-[11px]">
-                    <p className="text-white/35">VO · {o.voice_name || 'suara'} · {o.voiceover_lines.length} baris</p>
-                    {o.voiceover_lines.slice(0, 3).map((l) => (
-                      <p key={l.shot_id} className="line-clamp-1 text-white/60"><span className="text-white/30">{title(l.shot_id)}: </span>{l.text}</p>
-                    ))}
-                    {o.voiceover_lines.length > 3 && <p className="text-white/30">+{o.voiceover_lines.length - 3} baris lagi</p>}
-                  </div>
-                ) : <p className="mt-1.5 text-[11px] text-white/35">Tanpa voiceover</p>}
-                {o.music_prompt && <p className="mt-0.5 line-clamp-1 text-[11px] text-white/60"><span className="text-white/35">Musik: </span>{o.music_prompt}</p>}
-              </div>
-            );
-          })}
-          <button type="button" disabled={busy || audio.chosen === 'none'} onClick={() => onChooseAudio(null)}
-            className="text-[11px] text-white/40 underline-offset-2 hover:text-white/70 hover:underline disabled:no-underline disabled:opacity-60">
-            {audio.chosen === 'none' ? 'Tanpa VO & musik (dipilih)' : 'Tidak usah pakai VO & musik'}
-          </button>
-        </div>
-      </CardShell>
-    );
-  }
   if (card === 'audio') {
     const audio = board.audio || {};
+    const chosen = audio.options?.find((o) => o.id === audio.chosen);
     const voLines = board.shots.filter((s) => s.vo_text).length;
     const lines = [
       voLines ? `VO (${audio.voiceover?.voice_name || 'suara'}): ${voLines} baris di ${voLines} shot` : audio.voiceover?.text && `VO (${audio.voiceover.voice_name || 'suara'}): ${audio.voiceover.text}`,
       audio.music?.prompt && `Musik: ${audio.music.prompt}`,
     ].filter(Boolean);
+    const options = audio.options?.length && !audio.chosen;
+    const accent = audio.chosen === 'none' ? 'tanpa audio' : chosen ? chosen.title : options ? `${audio.options.length} usulan` : null;
     return (
-      <CardShell icon="♪" title="Audio" action="View" onAction={() => onOpen('audio')}>
-        {lines.map((line) => <p key={line} className="line-clamp-2 text-[12px] leading-relaxed text-white/65">{line}</p>)}
+      <CardShell icon="♪" title="Audio" accent={accent} action={options ? 'Lihat & pilih' : 'View'} onAction={() => onOpen('audio')}>
+        {options ? (
+          <ul className="space-y-1">
+            {audio.options.map((o) => (
+              <li key={o.id} className="truncate text-[12px] text-white/75">
+                {o.title}{audio.recommended === o.id && <span className="ml-1.5 text-[11px] text-[#d4ff64]/80">rekomendasi</span>}
+              </li>
+            ))}
+          </ul>
+        ) : lines.length ? lines.map((line) => <p key={line} className="line-clamp-2 text-[12px] leading-relaxed text-white/65">{line}</p>)
+          : <p className="text-[12px] text-white/45">Tanpa voiceover dan musik.</p>}
       </CardShell>
     );
   }
@@ -477,15 +456,22 @@ function UserMessage({ entry, workspaceId, videoNotes }) {
   );
 }
 
-function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio, onContinue }) {
+function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender, onContinue, folded }) {
   if (entry.kind === 'credit_gate') return <CreditGateCard entry={entry} board={board} busy={busy} onContinue={onContinue} />;
   if (entry.kind === 'render') {
     const render = (board.renders || []).find((r) => r.id === entry.meta?.render_id);
     return <RenderCard render={render} workspaceId={workspaceId} rendering={busy || renderRunning} onRender={onRender} />;
   }
-  if (entry.kind === 'card') return <ArtifactCard card={entry.meta?.card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} onChooseAudio={onChooseAudio} busy={busy} />;
+  if (entry.kind === 'card') {
+    const card = entry.meta?.card;
+    if (folded) return <FoldedLine text={`${CARD_NAMES[card] || card} diperbarui`} onOpen={() => onOpenPanel(card === 'shots' ? null : card)} />;
+    return <ArtifactCard card={card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} busy={busy} />;
+  }
   if (entry.kind === 'request') {
     const request = board.requests.find((r) => r.id === entry.meta?.request_id);
+    if (request && (request.status === 'superseded' || request.status === 'rejected')) {
+      return <FoldedLine text={`Estimasi generate ${requestSummary(request.estimate || {})} — ${REQUEST_STATUS[request.status].label.toLowerCase()}`} />;
+    }
     return <RequestCard request={request} board={board} workspaceId={workspaceId} busy={busy} generationRunning={generationRunning}
       onApprove={() => onApprove(request)} onReject={() => onReject(request)} />;
   }
@@ -526,8 +512,11 @@ function useTypewriter(target) {
   return shown;
 }
 
-export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, onChooseAudio, draft, onContinue }) {
+export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, draft, onContinue }) {
   const blocks = groupEntries(chat);
+  // Every card shows the board as it is now, so only the newest card of each kind is drawn in full.
+  const newest = {};
+  blocks.forEach((block) => { if (block.type !== 'steps' && block.entry.kind === 'card') newest[block.entry.meta?.card] = block.key; });
   // The draft stays until the saved message with the same text is in the chat, then the message takes its place.
   const lastReply = [...chat].reverse().find((entry) => entry.role === 'assistant' && entry.kind === 'message');
   const pending = draft && !(lastReply && lastReply.text.trim() === draft.trim()) ? draft : '';
@@ -539,7 +528,8 @@ export default function ChatTimeline({ chat, board, workspaceId, busy, generatio
       ) : (
         <Entry key={block.key} entry={block.entry} board={board} workspaceId={workspaceId} busy={busy}
           generationRunning={generationRunning} renderRunning={renderRunning} onApprove={onApprove} onReject={onReject}
-          onOpenPanel={onOpenPanel} onRender={onRender} onChooseAudio={onChooseAudio} onContinue={onContinue} />
+          onOpenPanel={onOpenPanel} onRender={onRender} onContinue={onContinue}
+          folded={block.entry.kind === 'card' && newest[block.entry.meta?.card] !== block.key} />
       ))}
       {pending && (
         // The reply as it is being written; replaced by the saved message when the step ends.
