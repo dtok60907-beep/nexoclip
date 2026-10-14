@@ -1,10 +1,12 @@
 import { getPool } from '../db/pool.js';
+import { USAGE_ROWS_SQL } from './usageRowsSql.js';
 
 const definitions = {
   customers: { table: 'workspace_memberships m JOIN users u ON u.id = m.user_id', scope: 'm.workspace_id', id: 'u.id', date: 'm.created_at', search: "u.email || ' ' || COALESCE(u.display_name, '')", fields: 'u.id, u.email, u.display_name, m.role, m.created_at AS joined_at, u.created_at AS registered_at' },
   transactions: { table: 'credit_topups t', scope: 't.workspace_id', id: 't.id', date: 't.created_at', search: "t.order_id || ' ' || t.package_code", status: 't.status', fields: 't.id, t.order_id, t.package_code, t.amount_idr, t.credits, t.status, t.is_sandbox, t.provider_key, t.created_at, t.completed_at, t.credit_ledger_id' },
   credits: { table: 'credit_ledger l', scope: 'l.workspace_id', id: 'l.id', date: 'l.created_at', search: 'l.reason', fields: 'l.id, l.amount, l.balance_after, l.reason, l.created_at' },
-  jobs: { table: 'generation_jobs j', scope: 'j.workspace_id', id: 'j.id', date: 'j.created_at', search: "COALESCE(j.model, '') || ' ' || j.id::text", status: 'j.status', fields: 'j.id, j.kind, j.model, j.status, j.estimated_cost, j.settlement_status, j.attempt_count, j.max_attempts, j.created_at, j.started_at, j.finished_at' },
+  // Generation jobs plus LLM, audio and video-analysis calls billed straight to the ledger (see usageRowsSql.js).
+  jobs: { table: `(${USAGE_ROWS_SQL}) j`, scope: 'j.workspace_id', id: 'j.id', date: 'j.created_at', search: "COALESCE(j.model, '') || ' ' || j.kind || ' ' || j.source || ' ' || j.id::text", status: 'j.status', fields: 'j.id, j.kind, j.source, j.model, j.status, j.estimated_cost, j.credits_charged, j.provider_cost_usd, j.settlement_status, j.attempt_count, j.max_attempts, j.created_at, j.started_at, j.finished_at' },
 };
 
 export function createAdminConsoleRepository(pool) {

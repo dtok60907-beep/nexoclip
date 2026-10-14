@@ -7,20 +7,26 @@ import { getStoredWorkspaceId, setStoredWorkspaceId } from '../src/lib/saas/stor
 import { idr, credits } from '../src/lib/economicsDisplay.js';
 
 const field = adminStyles.field;
+export const USAGE_SOURCE_LABELS = { director: 'AI Director', canvas: 'Canvas', studio: 'Studio', storyboard: 'AI Storyboard' };
+export const USAGE_KIND_LABELS = { image: 'Gambar', video: 'Video', llm: 'LLM (teks)', voiceover: 'Voiceover', music: 'Musik', audio: 'Audio', video_analysis: 'Analisis video' };
 const titles = { overview: 'Overview', customers: 'Customers & Workspaces', transactions: 'Transactions', credits: 'Credits ledger', jobs: 'Jobs' };
 const columns = {
   customers: [['email', 'Email'], ['display_name', 'Nama'], ['role', 'Role workspace'], ['joined_at', 'Bergabung (UTC)']],
   transactions: [['order_id', 'Order'], ['package_code', 'Paket'], ['amount_idr', 'Nilai'], ['credits', 'Kredit'], ['status', 'Status'], ['is_sandbox', 'Sandbox'], ['created_at', 'Dibuat (UTC)']],
   credits: [['reason', 'Alasan'], ['amount', 'Perubahan kredit'], ['balance_after', 'Saldo setelah'], ['created_at', 'Tanggal (UTC)']],
-  jobs: [['model', 'Model'], ['kind', 'Jenis'], ['status', 'Status'], ['estimated_cost', 'Estimasi kredit'], ['settlement_status', 'Settlement'], ['created_at', 'Dibuat (UTC)']],
+  jobs: [['source', 'Sumber'], ['kind', 'Jenis'], ['model', 'Model'], ['status', 'Status'], ['credits_charged', 'Kredit terpotong'], ['provider_cost_usd', 'Biaya provider (USD)'], ['settlement_status', 'Settlement'], ['created_at', 'Dibuat (UTC)']],
 };
-const labels = { id: 'ID', registered_at: 'Pendaftaran (UTC)', completed_at: 'Pembayaran selesai (UTC)', credit_ledger_id: 'ID ledger', provider_key: 'Gateway', attempt_count: 'Attempt', max_attempts: 'Batas attempt', started_at: 'Mulai (UTC)', finished_at: 'Selesai (UTC)' };
+const labels = { estimated_cost: 'Estimasi kredit', id: 'ID', registered_at: 'Pendaftaran (UTC)', completed_at: 'Pembayaran selesai (UTC)', credit_ledger_id: 'ID ledger', provider_key: 'Gateway', attempt_count: 'Attempt', max_attempts: 'Batas attempt', started_at: 'Mulai (UTC)', finished_at: 'Selesai (UTC)' };
 function value(key, item) {
   const v = item[key];
+  if ((v === null || v === undefined) && key === 'provider_cost_usd') return 'belum diketahui';
   if (v === null || v === undefined || v === '') return '—';
   if (key.endsWith('_at')) return new Date(v).toLocaleString('id-ID', { timeZone: 'UTC' });
   if (key === 'amount_idr') return idr(v);
-  if (['amount', 'balance_after', 'credits', 'estimated_cost', 'balance', 'budget_credits'].includes(key)) return credits(v);
+  if (['amount', 'balance_after', 'credits', 'estimated_cost', 'credits_charged', 'balance', 'budget_credits'].includes(key)) return credits(v);
+  if (key === 'provider_cost_usd') return `$${Number(v).toFixed(4)}`;
+  if (key === 'source') return USAGE_SOURCE_LABELS[v] || v;
+  if (key === 'kind' && item.source !== undefined) return USAGE_KIND_LABELS[v] || v;
   if (typeof v === 'boolean') return v ? 'Ya' : 'Tidak';
   return String(v);
 }

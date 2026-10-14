@@ -27,3 +27,23 @@ test('workspace usage omits actor filter and uses canonical settlement charge', 
   assert.match(db.calls[0].text, /settlement_status IN \('released', 'refunded'\)/);
   assert.doesNotMatch(db.calls[0].text, /pu\.actual_cost/);
 });
+
+test('usage includes the LLM, audio and video-analysis calls billed to the ledger without a job', async () => {
+  const db = pool();
+  await listUsageHistory(db, { workspaceId: 'w1', userId: 'u1', scope: 'me', page: 1, pageSize: 25 });
+  const { text, values } = db.calls[0];
+  assert.match(text, /UNION ALL/);
+  assert.match(text, /_\(text\|audio\|video_analysis\)\$/);
+  // my usage: the charge names me, or an older one without a user while I own the workspace
+  assert.match(text, /c\.metadata->>'userId' = \$3/);
+  assert.match(text, /m\.role = 'owner'/);
+  assert.deepEqual(values.slice(0, 3), ['w1', 'u1', 'u1']);
+});
+
+test('the monthly summary breaks credits down per kind and source', async () => {
+  const db = pool();
+  await getUsageSummary(db, { workspaceId: 'w1', userId: 'u1', scope: 'workspace', periodStart: new Date('2026-09-01T00:00:00Z') });
+  assert.equal(db.calls.length, 2);
+  assert.match(db.calls[1].text, /GROUP BY 1, 2/);
+  assert.match(db.calls[1].text, /AS source/);
+});

@@ -129,7 +129,7 @@ export function createInternalStoryboardHandler({
           workspaceId: workspace.id,
           reason: `${source}_text`,
           idempotencyKey: `${source}-text:${idempotencyKey}`,
-          metadata: { model, inputTokens, cachedInputTokens, outputTokens, providerCostUsd: usd },
+          metadata: { model, inputTokens, cachedInputTokens, outputTokens, providerCostUsd: usd, userId: body.userId },
         };
         let charged = credits;
         try {
@@ -163,7 +163,7 @@ export function createInternalStoryboardHandler({
         const assetId = imported.asset.id;
         const entry = {
           workspaceId: workspace.id, reason: `${source}_audio`, idempotencyKey: key,
-          metadata: { type: audio.type, assetId, providerCostUsd: usd, characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds },
+          metadata: { type: audio.type, assetId, providerCostUsd: usd, characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds, userId: body.userId },
         };
         let charged = credits;
         try {
@@ -211,7 +211,7 @@ export function createInternalStoryboardHandler({
         const { usd, credits } = await priceVideoAnalysis(result.usage);
         const entry = {
           workspaceId: workspace.id, reason: `${source}_video_analysis`, idempotencyKey: key,
-          metadata: { assetId, text: result.text, usage: result.usage, providerCostUsd: usd },
+          metadata: { assetId, text: result.text, usage: result.usage, providerCostUsd: usd, userId: body.userId },
         };
         let charged = credits;
         try {

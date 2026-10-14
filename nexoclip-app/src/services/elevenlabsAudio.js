@@ -11,11 +11,13 @@ export const MAX_VOICEOVER_CHARS = 5000; // eleven_v3's limit per request
 export const MIN_MUSIC_SECONDS = 3;
 export const MAX_MUSIC_SECONDS = 300;
 
-// USD, pay-as-you-go API prices (elevenlabs.io/pricing/api, October 2026).
-// Third-party pages disagree on music ($0.15–$0.30 per minute), so the higher
-// figure is used and nobody is undercharged. Update by hand when they change.
+// USD we really pay, which is the plan, not the list price: the Starter plan is $6 a month for 39,482 credits
+// (about $0.152 per 1,000), a voiceover character costs one credit and a minute of music about 1,650 (measured
+// October 2026: 10 s = 275 credits, about $0.25 a minute). Rounded up so neither is sold below cost; the list prices
+// (elevenlabs.io/pricing/api: $0.08 per 1,000 characters, $0.15 a minute) are lower than what the plan costs us.
+// Update by hand when the plan or its quota changes.
 export const ELEVENLABS_PRICES = {
-  voiceoverPerThousandChars: 0.08,
+  voiceoverPerThousandChars: 0.16,
   musicPerMinute: 0.30,
 };
 

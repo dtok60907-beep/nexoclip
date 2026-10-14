@@ -31,6 +31,7 @@ function mapItem(row) {
     credits: String(row.credits ?? '0'),
     estimated: Boolean(row.estimated),
     units: row.units || {},
+    source: row.source || 'studio',
   };
 }
 
@@ -57,6 +58,7 @@ export function createUsageService({ repository: repo, now = () => new Date() })
         summary: {
           creditsUsed: String(summary.credits_used ?? '0'),
           generationCount: Number(summary.generation_count || 0),
+          breakdown: (summary.breakdown || []).map((row) => ({ kind: row.kind, source: row.source, count: Number(row.count || 0), credits: String(row.credits ?? '0') })),
           periodStart: periodStart.toISOString(),
         },
         permissions: { canViewWorkspace: ADMIN_ROLES.has(role) },

@@ -1,9 +1,9 @@
 import Link from 'next/link';
-export const adminLinks = [['/admin', 'Overview'], ['/admin/customers', 'Customers'], ['/admin/accounts', 'Accounts'], ['/admin/billing', 'Business billing'], ['/admin/provider-billing', 'Billing provider'], ['/admin/transactions', 'Transactions'], ['/admin/credits', 'Credits'], ['/admin/jobs', 'Jobs'], ['/admin/economics', 'Economics'], ['/admin/models', 'Model & tarif']];
+export const adminLinks = [['/admin', 'Overview'], ['/admin/customers', 'Customers'], ['/admin/accounts', 'Accounts'], ['/admin/billing', 'Business billing'], ['/admin/provider-billing', 'Billing provider'], ['/admin/transactions', 'Transactions'], ['/admin/credits', 'Credits'], ['/admin/jobs', 'Jobs'], ['/admin/economics', 'Economics'], ['/admin/analytics', 'Analytics'], ['/admin/models', 'Model & tarif']];
 const groups = [
  { label: 'Workspace', paths: ['/admin','/admin/customers','/admin/accounts'] },
  { label: 'Billing & credits', paths: ['/admin/billing','/admin/provider-billing','/admin/transactions','/admin/credits'] },
- { label: 'Operasional', paths: ['/admin/jobs','/admin/economics','/admin/models'] },
+ { label: 'Operasional', paths: ['/admin/jobs','/admin/economics','/admin/analytics','/admin/models'] },
 ];
 const icons = {
  '/admin': 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
@@ -15,6 +15,7 @@ const icons = {
  '/admin/credits': 'M3 5h18v14H3z M3 9h18 M7 15h3',
  '/admin/jobs': 'M9 3h6v4H9z M7 5H4v16h16V5h-3 M8 11h8 M8 15h5',
  '/admin/economics': 'M3 3v18h18 M7 15l4-5 4 3 5-8',
+ '/admin/analytics': 'M4 20V10 M10 20V4 M16 20v-7 M22 20H2',
  '/admin/models': 'M12 3l9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5',
 };
 export default function AdminNavigation({ active, onNavigate, mobile = false }) {
