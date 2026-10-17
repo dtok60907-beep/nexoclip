@@ -124,6 +124,8 @@ const frame = (model: ModelConfig, extra: Partial<ModelConfig> = {}): ModelConfi
 })
 
 const SEEDANCE_20 = video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s'])
+const SEEDANCE_20_FAST = video('seedance-2.0-fast', 'Seedance 2.0 Fast', 'dreamina-seedance-2-0-fast-260128', ['480p', '720p'], ['5s', '10s', '15s'])
+const SEEDANCE_25_MINI = video('seedance-2.5-mini', 'Seedance 2.5 Mini', 'dreamina-seedance-2-0-mini-260615', ['480p', '720p'], ['5s', '10s', '15s'])
 const SEEDANCE_20_UNFILTERED = video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s'])
 const SEEDANCE_25 = video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
 const SEEDANCE_25_UNFILTERED = video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
@@ -141,6 +143,10 @@ const SEEDANCE_20_OMNI: Partial<ModelConfig> = {
 export const VIDEO_MODELS: ModelConfig[] = [
   omni(SEEDANCE_20, SEEDANCE_20_OMNI),
   frame(SEEDANCE_20),
+  omni(SEEDANCE_20_FAST, SEEDANCE_20_OMNI),
+  frame(SEEDANCE_20_FAST),
+  omni(SEEDANCE_25_MINI, SEEDANCE_20_OMNI),
+  frame(SEEDANCE_25_MINI),
   omni(SEEDANCE_20_UNFILTERED, SEEDANCE_20_OMNI),
   frame(SEEDANCE_20_UNFILTERED),
   omni(SEEDANCE_25, SEEDANCE_25_OMNI),
@@ -153,6 +159,10 @@ export const FAL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS]
 const MODELS = FAL_MODELS
 const LEGACY_ALIASES: Record<string, string> = {
   'seedance-1.5': 'seedance-2.0',
+  'seedance-2.0-mini': 'seedance-2.5-mini',
+  'seedance-2.0-mini-frame': 'seedance-2.5-mini-frame',
+  'dreamina-seedance-2-0-fast-260128': 'seedance-2.0-fast',
+  'dreamina-seedance-2-0-mini-260615': 'seedance-2.5-mini',
   'bytedance-seedream-v4.5': 'seedream-4.5',
   'seedream-5.0': 'seedream-5',
 }

@@ -9,6 +9,10 @@ test('exposes only the requested direct model families', () => {
   assert.deepEqual(getVideoModels().map((model) => model.name), [
     'Seedance 2.0 · Omni',
     'Seedance 2.0 · Frame',
+    'Seedance 2.0 Fast · Omni',
+    'Seedance 2.0 Fast · Frame',
+    'Seedance 2.5 Mini · Omni',
+    'Seedance 2.5 Mini · Frame',
     'Seedance 2.0 Unfiltered · Omni',
     'Seedance 2.0 Unfiltered · Frame',
     'Seedance 2.5 · Omni',

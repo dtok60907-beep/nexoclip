@@ -204,7 +204,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (tenantReferences.some((url) => !/^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url) && !isLegacyCanvasReference(url))) {
     throw Object.assign(new Error('Video references must be tenant assets or owned Canvas references'), { status: 400 })
   }
-  const isSeedance25 = typeof body.model === 'string' && body.model.includes('seedance-2.5')
+  const isSeedance25 = typeof body.model === 'string' && body.model.includes('seedance-2.5') && !body.model.includes('mini')
   const isExtend = settings.omniReferenceTaskType === 'extend'
   const isEdit = settings.omniReferenceTaskType === 'edit'
   const requestedRatio = typeof settings.aspectRatio === 'string' ? settings.aspectRatio : ''

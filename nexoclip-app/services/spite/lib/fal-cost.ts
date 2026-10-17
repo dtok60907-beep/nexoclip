@@ -25,6 +25,8 @@ const COST_TABLE: Record<string, { unit: Unit; price: number }> = {
   // Video models
   'seedance-1.5':        { unit: 'video', price: 4.50 },  // ~5sec 720p — same tier as 2.0
   'seedance-2.0':        { unit: 'video', price: 4.50 },  // ~5sec 720p Seedance
+  'seedance-2.0-fast':   { unit: 'video', price: 3.60 },
+  'seedance-2.5-mini':   { unit: 'video', price: 2.25 },
   'kling-1.0':           { unit: 'video', price: 0.50 },
   'kling-1.5':           { unit: 'video', price: 0.50 },
   'kling-1.6':           { unit: 'video', price: 0.50 },
