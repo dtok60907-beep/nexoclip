@@ -1,15 +1,15 @@
 // Callers hold the credit-account lock and share the account/ledger transaction.
 // FIFO and invariants execute in PostgreSQL so NUMERIC precision is preserved.
 export async function createCreditLot(client, {
-  workspaceId, sourceLedgerId, credits, sourceType = 'unknown', amountIdr = null, paymentFeeIdr = null,
+  workspaceId, sourceLedgerId, credits, sourceType = 'unknown', amountIdr = null, paymentFeeIdr = null, expiresAt = null,
 }) {
   const result = await client.query(
-    `INSERT INTO credit_lots (workspace_id, source_ledger_id, source_type, granted_credits, available_credits, amount_idr, payment_fee_idr)
-     SELECT workspace_id, id, $4, $3::numeric(20, 6), $3::numeric(20, 6), $5::numeric, $6::numeric
+    `INSERT INTO credit_lots (workspace_id, source_ledger_id, source_type, granted_credits, available_credits, amount_idr, payment_fee_idr, expires_at)
+     SELECT workspace_id, id, $4, $3::numeric(20, 6), $3::numeric(20, 6), $5::numeric, $6::numeric, $7::timestamptz
      FROM credit_ledger WHERE workspace_id = $1 AND id = $2 AND amount = $3::numeric(20, 6) AND amount > 0
      ON CONFLICT (workspace_id, source_ledger_id) DO NOTHING
-     RETURNING id, workspace_id, source_ledger_id, source_type, granted_credits, available_credits, amount_idr, payment_fee_idr`,
-    [workspaceId, sourceLedgerId, credits, sourceType, amountIdr, paymentFeeIdr],
+     RETURNING id, workspace_id, source_ledger_id, source_type, granted_credits, available_credits, amount_idr, payment_fee_idr, expires_at`,
+    [workspaceId, sourceLedgerId, credits, sourceType, amountIdr, paymentFeeIdr, expiresAt],
   );
   return result.rows[0] || null;
 }

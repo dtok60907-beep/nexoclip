@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { requireCanSpend, resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { topupService } from '../../../../src/services/topupService.js';
+import { subscriptionsEnabled } from '../../../../src/services/subscriptionPlans.js';
+import { subscriptionService } from '../../../../src/services/subscriptionService.js';
 
 async function context(request) {
   const workspaceId = request.headers.get('x-workspace-id') || new URL(request.url).searchParams.get('workspace_id');
@@ -40,6 +42,10 @@ export async function POST(request) {
   try {
     const tenant = await context(request);
     requireCanSpend(tenant);
+    // With subscriptions on, top-ups are an add-on for subscribers.
+    if (subscriptionsEnabled() && !(await subscriptionService().hasActiveSubscription(tenant.workspace.id))) {
+      throw Object.assign(new Error('Top-up is available to subscribers. Choose a plan first.'), { status: 403, code: 'SUBSCRIPTION_REQUIRED' });
+    }
     const body = await request.json().catch(() => ({}));
     const topup = await topupService().createTopup({
       workspaceId: tenant.workspace.id,

@@ -5,6 +5,7 @@ import { getPool, closePool } from '../db/pool.js';
 import { createReferenceStorage, createStorage } from '../services/assetService.js';
 import { createDefaultSaasVideoHandler } from '../services/saasVideoGeneration.js';
 import { createSeedanceAutoTrust } from '../services/seedanceAutoTrust.js';
+import { createSubscriptionService } from '../services/subscriptionService.js';
 import { findBytePlusAssetLink } from '../repositories/byteplusAssetRepository.js';
 import { persistGenerationResult } from '../services/generationOutputService.js';
 import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
@@ -50,6 +51,7 @@ export async function createVideoWorker({
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   findBytePlusAssetLink: findAssetLink = findBytePlusAssetLink,
   createAutoTrust = createSeedanceAutoTrust,
+  createSubscriptions = createSubscriptionService,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
 } = {}) {
   const config = videoWorkerConfig(env);
@@ -57,9 +59,16 @@ export async function createVideoWorker({
   const pool = loadPool();
   const queue = createQueue({ Queue, Worker, connection, queueName: generationQueueName('video') });
   const autoTrust = createAutoTrust({ pool });
+  // Subscription months falling due, lapsed subscriptions and expired credits: every 5 min.
+  const subscriptions = createSubscriptions({ pool, env });
+  let subscriptionsRunAt = 0;
   const recoverNow = async () => {
     // Gives back BytePlus trusts held by generations that ended or whose worker died.
     await autoTrust.sweep().catch(onError);
+    if (Date.now() - subscriptionsRunAt >= 5 * 60_000) {
+      subscriptionsRunAt = Date.now();
+      await subscriptions.runDue().catch(onError);
+    }
     await recoverUnreserved(pool);
     const expired = await recoverExpired(pool, { kind: 'video', graceMs: EXPIRED_GRACE_MS, staleAfterMs: EXPIRED_STALE_MS });
     for (const job of expired) {

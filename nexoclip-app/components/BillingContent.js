@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { saasFetch } from '../src/lib/saas/api.js';
+import SubscriptionSection from './SubscriptionSection';
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_LIMIT = 36; // About three minutes after returning from checkout.
@@ -147,6 +148,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
 
   return <main className={`${embedded ? 'h-full overflow-auto p-4 text-white sm:p-6' : 'h-full overflow-auto p-5 text-white md:p-8'}`}>
     <div className="mx-auto max-w-5xl">
+      <SubscriptionSection workspaceId={workspaceId} onCompleted={onCompleted} />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Top up credits</h1>

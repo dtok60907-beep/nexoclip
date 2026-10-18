@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getPool } from '../../../../../src/db/pool.js';
 import { webhookSecretMatches } from '../../../../../src/lib/billing/pakasirClient.js';
 import { createBillingWebhookService } from '../../../../../src/services/billingService.js';
+import { subscriptionService } from '../../../../../src/services/subscriptionService.js';
 import { topupService } from '../../../../../src/services/topupService.js';
 
 // Pakasir posts here when a payment completes. The X-Secret check only keeps
@@ -16,7 +17,8 @@ export async function POST(request) {
   const service = createBillingWebhookService({
     pool: getPool(),
     verifier: async ({ signature }) => webhookSecretMatches(process.env.PAKASIR_WEBHOOK_SECRET, signature),
-    handler: async ({ eventId }) => { await topupService().settleByTxnId(eventId); },
+    // A subscription payment settles its order; any other transaction is a top-up.
+    handler: async ({ eventId }) => { if (!(await subscriptionService().settleByTxnId(eventId))) await topupService().settleByTxnId(eventId); },
   });
 
   try {

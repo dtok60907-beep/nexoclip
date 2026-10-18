@@ -28,7 +28,7 @@ export async function grantCreditLotInTransaction(client, { workspaceId, entry, 
     amountIdr = 0;
     paymentFeeIdr = 0;
   }
-  await createCreditLot(client, { workspaceId, sourceLedgerId: entry.id, credits, sourceType, amountIdr, paymentFeeIdr });
+  await createCreditLot(client, { workspaceId, sourceLedgerId: entry.id, credits, sourceType, amountIdr, paymentFeeIdr, expiresAt: creditLot?.expiresAt ?? null });
   await assertCreditLotBalance(client, workspaceId);
 }
 
