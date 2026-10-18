@@ -14,7 +14,6 @@ import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { ResizableNodeFrame } from './resizable-node-frame'
 import { fitMediaNodeSize, shouldAutoSizeMediaNode } from '@/lib/media-node-size'
-import { useImageTrust } from '@/hooks/use-image-trust'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 
 const REFERENCE_NODE_BOUNDS = { minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }
@@ -62,26 +61,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   }, [data, durableMediaUrl, id, patchNodeData])
   const isAudio = (data.mediaType as string) === 'audio' || /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(thumbnail || '')
   const isVideo = !isAudio && ((data.mediaType as string) === 'video' || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(thumbnail || ''))
-  const imageTrust = useImageTrust({
-    url: thumbnail,
-    workspaceAssetId: data.workspaceAssetId,
-    canvasProjectId: projectId,
-    filename: `${String(data.label || 'reference-image')}.png`,
-    // Not gated on `selected` — the trust border on the card (below) needs
-    // to reflect real status at a glance for every reference node on the
-    // canvas, not just whichever one is currently clicked. This only costs
-    // one extra GET per node on mount/thumbnail-change; the hook's own
-    // polling loop only runs while a request is actually 'processing'.
-    enabled: Boolean(thumbnail) && !isUploading && !isAudio && !isVideo,
-    onCanonicalized: useCallback(async (canonicalUrl: string, workspaceAssetId: string) => {
-      if (!(await nodeLock.claim())) return
-      setThumbnail(canonicalUrl)
-      // `assetId` is the Canvas (generation_history) id that folders validate
-      // against — keep it. Overwriting it with the workspace id made
-      // Add-to-folder fail with "Asset not found" right after Trust.
-      patchNodeData(id, { thumbnail: canonicalUrl, workspaceAssetId })
-    }, [id, nodeLock, patchNodeData]),
-  })
 
   const handleShotSelect = async (shotId: string) => {
     if (!(await nodeLock.claim())) return
@@ -133,13 +112,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         selected={selected}
         locked={Boolean(data.locked)}
         onAddToFolder={handleAddToFolder}
-        trustAction={thumbnail && !isAudio && !isVideo ? {
-          label: imageTrust.label,
-          disabled: imageTrust.disabled,
-          active: imageTrust.state.status === 'active',
-          processing: imageTrust.inFlight || imageTrust.state.status === 'processing',
-          onClick: imageTrust.trust,
-        } : undefined}
       />
 
       {!isAudio && (
@@ -208,17 +180,11 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
           width: '100%',
           height: '100%',
           background: '#0D0F12',
-          // Trust status outranks shot-tag/selected — it's a content
-          // verification signal, not a layout one, so it should read at a
-          // glance across the whole canvas rather than get lost behind
-          // whichever node happens to be selected right now.
-          border: imageTrust.state.status === 'active'
-            ? '1.5px solid rgba(52,211,153,0.8)'
-            : isTaggedToShot
-              ? '1.5px solid rgba(251,191,36,0.7)'
-              : selected
-                ? '1.5px solid rgba(107,143,168,0.85)'
-                : '1.5px solid rgba(107,143,168,0.25)',
+          border: isTaggedToShot
+            ? '1.5px solid rgba(251,191,36,0.7)'
+            : selected
+              ? '1.5px solid rgba(107,143,168,0.85)'
+              : '1.5px solid rgba(107,143,168,0.25)',
         }}
       >
         {/* Media area */}

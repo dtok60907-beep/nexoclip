@@ -1,6 +1,6 @@
 import { transitionGeneration, isRetryableFailure, retryDelayMs } from './generationStateMachine.js';
 import { captureGenerationCredits, recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
-import { transitionGenerationJob, retryGenerationJob, failGenerationJob, completeGenerationJob } from '../repositories/generationStateRepository.js';
+import { transitionGenerationJob, retryGenerationJob, failGenerationJob, completeGenerationJob, recordGenerationProviderError } from '../repositories/generationStateRepository.js';
 import { randomUUID } from 'node:crypto';
 import { actualGenerationCredits, actualGenerationCostUsd } from '../services/generationPricing.js';
 
@@ -197,6 +197,8 @@ export function createGenerationProcessor({
         // provider response bodies. Keep the durable job record deliberately generic.
         message: error.publicMessage || `${job.kind === 'video' ? 'Video' : 'Image'} generation failed. Please retry or select another model.`,
       };
+      await recordGenerationProviderError(pool, { workspaceId, generationId: job.id, detail: error?.message })
+        .catch((recordError) => onError(recordError, job));
       if (failure.retryable && attempt < limit) {
         const delay = retryDelayMs(attempt, { baseDelayMs, maxDelayMs });
         await retryGenerationJob(pool, {

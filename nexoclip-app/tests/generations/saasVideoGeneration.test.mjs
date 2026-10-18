@@ -449,3 +449,131 @@ test('a last frame that cannot be downloaded does not fail the video', async () 
   const result = await setup.run({ returnLastFrame: true });
   assert.deepEqual(result.outputs, [{ assetId: 'asset-1' }]);
 });
+
+const sharp = (await import('sharp')).default;
+
+function realPersonError(...indexes) {
+  return Object.assign(new Error(`BytePlus direct request failed: The request failed because the input image ${indexes.map((i) => `'content[${i}]'`).join(' ')} may contain real person. Request id: 0217abc`), {
+    code: 'BYTEPLUS_REQUEST_FAILED', status: 400,
+  });
+}
+
+// A Seedance handler whose trust lives in `links`; the fake auto trust activates what it borrows.
+function autoTrustHandler({ submitErrors = [], flagged = [], trustFails = [], images = {} } = {}) {
+  const links = {};
+  const calls = { submitted: [], borrowed: [], marked: [], released: [] };
+  const autoTrust = {
+    async flagged(_workspaceId, assetIds) { return assetIds.filter((id) => flagged.includes(id)); },
+    async markNeedsTrust(_workspaceId, assetIds) { calls.marked.push(...assetIds); },
+    async borrow({ assetIds }) {
+      calls.borrowed.push(...assetIds);
+      for (const id of assetIds) if (!trustFails.includes(id)) links[id] = { status: 'active', provider_asset_id: `provider-${id}` };
+      return assetIds.filter((id) => trustFails.includes(id));
+    },
+    async release(generationId) { calls.released.push(generationId); },
+  };
+  const handler = createSaasVideoHandler({
+    pool: {
+      async query(_sql, values) { return { rows: [{ storage_key: `key-${values[1]}`, content_type: 'image/png' }] }; },
+      async connect() { return { release() {} }; },
+    },
+    storage: {
+      async createDownloadUrl({ key }) { return { url: key }; },
+      async get(key) { return { body: images[key.replace(/^key-/, '')] || Buffer.from(key), contentType: 'image/png' }; },
+      async put() {},
+    },
+    providerRouter: {
+      async submitVideo(request) {
+        calls.submitted.push(request);
+        const error = submitErrors.shift();
+        if (error) throw error;
+        return { id: 'provider-job', provider: 'byteplus' };
+      },
+      async pollVideo() { return { status: 'completed' }; },
+      async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
+    },
+    findBytePlusAssetLink: async (_pool, _workspaceId, assetId) => (links[assetId] ? { project_name: 'default', ...links[assetId] } : null),
+    createAsset: async () => ({ id: 'output-1' }),
+    sleep: async () => {},
+    autoTrust,
+  });
+  const run = (parameters) => handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'bytedance/seedance-2.5', prompt: 'hello', parameters });
+  return { run, calls };
+}
+
+test('a reference Seedance refuses as a real person is trusted and the video is submitted again', async () => {
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(2)] });
+
+  const result = await setup.run({ referenceImages: [assetUrl('asset-1'), assetUrl('asset-2')] });
+
+  assert.equal(result.status, 'succeeded');
+  assert.deepEqual(setup.calls.marked, ['asset-2']);
+  assert.deepEqual(setup.calls.borrowed, ['asset-2']);
+  assert.equal(setup.calls.submitted.length, 2);
+  assert.match(setup.calls.submitted[1].referenceImages[0], /^data:image\/png;base64,/);
+  assert.equal(setup.calls.submitted[1].referenceImages[1], 'asset://provider-asset-2');
+  assert.deepEqual(setup.calls.released, ['job-1']);
+});
+
+test('content numbering continues from reference images into frames', async () => {
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(2)] });
+
+  await setup.run({ referenceImages: [assetUrl('asset-1')], frameImages: [{ url: assetUrl('frame-1'), frameType: 'last_frame' }] });
+
+  assert.deepEqual(setup.calls.borrowed, ['frame-1']);
+});
+
+test('an image Seedance refused before is trusted before the first submission', async () => {
+  const setup = autoTrustHandler({ flagged: ['asset-1'] });
+
+  await setup.run({ referenceImages: [assetUrl('asset-1')] });
+
+  assert.equal(setup.calls.submitted.length, 1);
+  assert.deepEqual(setup.calls.submitted[0].referenceImages, ['asset://provider-asset-1']);
+});
+
+test('a real-person refusal that cannot be trusted fails with a message naming the image', async () => {
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(1)], trustFails: ['asset-1'] });
+
+  await assert.rejects(setup.run({ referenceImages: [assetUrl('asset-1')] }),
+    (error) => /reference image 1 as showing a real person/.test(error.publicMessage) && !/Request id/.test(error.publicMessage));
+  assert.equal(setup.calls.submitted.length, 1);
+  assert.deepEqual(setup.calls.released, ['job-1']);
+});
+
+test('a second real-person refusal after trusting is not retried again', async () => {
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(1), realPersonError(1)] });
+
+  await assert.rejects(setup.run({ referenceImages: [assetUrl('asset-1')] }), /may contain real person/);
+  assert.equal(setup.calls.submitted.length, 2);
+});
+
+test('other Seedance parameter refusals reach the user without the request id', async () => {
+  const refusal = Object.assign(new Error('BytePlus direct request failed: The parameter `ratio` is not valid. Request id: 0217xyz'), {
+    code: 'BYTEPLUS_REQUEST_FAILED', status: 400,
+  });
+  const setup = autoTrustHandler({ submitErrors: [refusal] });
+
+  await assert.rejects(setup.run({ referenceImages: [assetUrl('asset-1')] }),
+    (error) => error.publicMessage === 'Seedance rejected the request: The parameter `ratio` is not valid.');
+});
+
+test('a reference image under the Seedance minimum is enlarged before it is sent', async () => {
+  const small = await sharp({ create: { width: 350, height: 233, channels: 3, background: '#808080' } }).png().toBuffer();
+  const setup = autoTrustHandler({ images: { 'asset-1': small } });
+
+  await setup.run({ referenceImages: [assetUrl('asset-1')] });
+
+  const sent = Buffer.from(setup.calls.submitted[0].referenceImages[0].split(',')[1], 'base64');
+  const { width, height } = await sharp(sent).metadata();
+  assert.ok(width * height >= 90_000 && Math.min(width, height) >= 300, `${width}x${height}`);
+});
+
+test('a reference image large enough for Seedance is sent unchanged', async () => {
+  const large = await sharp({ create: { width: 640, height: 480, channels: 3, background: '#808080' } }).png().toBuffer();
+  const setup = autoTrustHandler({ images: { 'asset-1': large } });
+
+  await setup.run({ referenceImages: [assetUrl('asset-1')] });
+
+  assert.equal(setup.calls.submitted[0].referenceImages[0], `data:image/png;base64,${large.toString('base64')}`);
+});

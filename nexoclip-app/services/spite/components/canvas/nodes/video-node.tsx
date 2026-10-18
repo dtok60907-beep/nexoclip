@@ -16,7 +16,6 @@ import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { CREDIT_CONFIRM_THRESHOLD, formatCredits, formatCreditsShort, useGenerationCredits } from '@/lib/generation-credits'
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
-import { findUntrustedReferences } from '@/lib/byteplus-trust'
 import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
@@ -879,17 +878,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
 
-    // Seedance rejects real-person photos that aren't trusted, but only after
-    // the job is queued. Name the untrusted references and let the user decide.
-    const untrusted = await findUntrustedReferences([
-      ...(connectedImageUrl ? [{ url: connectedImageUrl, label: 'the connected first-frame image' }] : []),
-      ...(connectedEndImageUrl ? [{ url: connectedEndImageUrl, label: 'the connected end-frame image' }] : []),
-      ...referenceGroups.flatMap((group, index) => group.urls.map((url) => ({
-        url,
-        label: 'folderName' in group && group.folderName ? `@${group.folderName}` : `connected reference ${index + 1}`,
-      }))),
-    ], projectId)
-    // Trust only exists for images, so reference videos and audio can never be
+    // Reference images showing a real person are trusted by the server when Seedance
+    // asks for it. Trust only exists for images, so reference videos and audio can never be
     // trusted. Say so once per browser session instead of on every generate.
     const MEDIA_TRUST_ACK = 'seedance-media-trust-ack'
     let mediaAcknowledged = false
@@ -898,17 +888,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       ...(connectedVideoUrls.length ? [`${connectedVideoUrls.length} reference video${connectedVideoUrls.length === 1 ? '' : 's'}`] : []),
       ...(connectedAudioUrls.length ? [`${connectedAudioUrls.length} audio clip${connectedAudioUrls.length === 1 ? '' : 's'}`] : []),
     ]
-    if ((untrusted.length > 0 || untrustableMedia.length > 0) && !await confirmDialog({
-      title: untrusted.length > 0 ? 'Untrusted references' : 'Video and audio cannot be trusted',
+    if (untrustableMedia.length > 0 && !await confirmDialog({
+      title: 'Video and audio cannot be trusted',
       confirmLabel: 'Generate anyway',
-      description: (untrusted.length > 0
-        ? `Not trusted for Seedance: ${untrusted.join(', ')}.\n\n` +
-          'If any of these shows a real person, BytePlus will reject the video. Trust them first (shield icon) and wait until they turn green.\n\n'
-        : '') +
-      (untrustableMedia.length > 0
-        ? `This request sends ${untrustableMedia.join(' and ')}. Only images can be trusted, so if a video shows a real person's face, BytePlus will reject the job.\n\n`
-        : '') +
-      'Generate anyway?',
+      description: `This request sends ${untrustableMedia.join(' and ')}. Only images can be trusted, so if a video shows a real person's face, BytePlus will reject the job.\n\n` +
+        'Generate anyway?',
     })) {
       stopBeforeSubmit(null)
       return

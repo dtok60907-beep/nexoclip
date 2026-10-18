@@ -24,7 +24,6 @@ import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { MAX_IMAGE_PROMPT_CHARS } from '@/lib/prompt-limits'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
-import { useImageTrust } from '@/hooks/use-image-trust'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -195,17 +194,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (!syncGuardRef.current.allowsPersistence()) return
     patchNodeDataRef.current(id, patch, { undoable: false })
   }, [id])
-  const imageTrust = useImageTrust({
-    url: outputUrl,
-    workspaceAssetId: data.workspaceAssetId,
-    canvasProjectId: projectId,
-    filename: `${String(data.label || 'generated-image')}.png`,
-    enabled: Boolean(selected) && Boolean(outputUrl) && !['submitting', 'in_queue', 'in_progress'].includes(status),
-    onCanonicalized: useCallback((canonicalUrl: string, workspaceAssetId: string) => {
-      setOutputUrl(canonicalUrl)
-      patchSystemNodeData({ outputUrl: canonicalUrl, workspaceAssetId })
-    }, [patchSystemNodeData]),
-  })
   
   // Prompt text is read from the connected Text node at render and again
   // immediately before recovery/submission; this node never owns a prompt.
@@ -1059,13 +1047,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         assetUrl={outputUrl || undefined}
         assetType="image"
         locked={Boolean(data.locked)}
-        trustAction={outputUrl ? {
-          label: imageTrust.label,
-          disabled: imageTrust.disabled,
-          active: imageTrust.state.status === 'active',
-          processing: imageTrust.inFlight || imageTrust.state.status === 'processing',
-          onClick: imageTrust.trust,
-        } : undefined}
         onRename={handleRename}
         onAddToFolder={outputUrl ? handleAddToFolder : undefined}
         onViewFullscreen={outputUrl ? () => setLightboxOpen(true) : undefined}

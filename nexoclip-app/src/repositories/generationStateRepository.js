@@ -137,6 +137,15 @@ export async function recordGenerationProgressById(pool, { generationId, progres
   return result.rows[0] || null;
 }
 
+// The provider's own failure text, kept for admins only (generation_jobs.error reaches the browser).
+export async function recordGenerationProviderError(pool, { workspaceId, generationId, detail }) {
+  if (!detail) return;
+  await pool.query(
+    'UPDATE generation_jobs SET provider_error = $3 WHERE workspace_id = $1 AND id = $2',
+    [workspaceId, generationId, String(detail).slice(0, 2000)],
+  );
+}
+
 export async function failGenerationJob(pool, { workspaceId, generationId, error, attempt, claimToken }) {
   const [claimedAttempt, token] = fence({ attempt, claimToken });
   const result = await pool.query(

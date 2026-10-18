@@ -9,6 +9,7 @@ import { isDirectBytePlusSeedance } from '../providers/providerRegistry.js';
 import { resolveReferenceImages, resolveReferenceMedia } from './saasImageGeneration.js';
 import { recordGenerationProviderRequest } from '../repositories/generationStateRepository.js';
 import { extraReferenceImages, isFrameTask } from './videoTaskType.js';
+import { createSeedanceAutoTrust, realPersonContentIndexes } from './seedanceAutoTrust.js';
 
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'expired']);
 
@@ -53,16 +54,58 @@ function providerFailure(status) {
   });
 }
 
-export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest, onProviderUsage = null }) {
+// Seedance refuses reference images under 90,000 pixels or 300 px on a side (a 350×233
+// thumbnail failed this way). Enlarge those instead of failing the job.
+const SEEDANCE_MIN_PIXELS = 90_000;
+const SEEDANCE_MIN_SIDE = 300;
+
+export async function enlargeSmallReference(body, contentType) {
+  if (!/^image\//i.test(contentType || '')) return null;
+  try {
+    const { default: sharp } = await import('sharp');
+    const { width, height } = await sharp(body).metadata();
+    if (!width || !height) return null;
+    const scale = Math.max(Math.sqrt(SEEDANCE_MIN_PIXELS / (width * height)), SEEDANCE_MIN_SIDE / Math.min(width, height));
+    if (scale <= 1) return null;
+    const enlarged = await sharp(body).resize(Math.ceil(width * scale), Math.ceil(height * scale)).png().toBuffer();
+    return `data:image/png;base64,${enlarged.toString('base64')}`;
+  } catch {
+    return null; // not a readable image: send it as it is and let the provider judge
+  }
+}
+
+const assetIdOf = (url) => (typeof url === 'string' ? url.match(/^\/api\/assets\/([^/]+)\/download(?:\?|$)/)?.[1] : null) || null;
+
+// BytePlus explains a refused request ("... must be greater than or equal to 90000 ..."). Show
+// that to the user without the request id; other provider failures stay generic.
+function seedanceRejection(error) {
+  const detail = String(error?.message || '').replace(/^BytePlus direct request failed:?\s*/, '').replace(/\s*Request id:.*$/s, '').trim();
+  if (error?.code !== 'BYTEPLUS_REQUEST_FAILED' || error?.status !== 400 || !detail) return error;
+  const realPerson = realPersonContentIndexes(error);
+  const publicMessage = realPerson
+    ? `Seedance refused reference image ${realPerson.join(', ')} as showing a real person, and it could not be cleared automatically. Try again, or use a different image.`
+    : `Seedance rejected the request: ${detail}`;
+  return Object.assign(error, { publicMessage });
+}
+
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest, onProviderUsage = null, autoTrust = null }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
-  const submitToProvider = async (job, observe) => {
+  const buildRequest = async (job) => {
     let hasTrustedAsset = false;
     const trustedMappings = [];
     const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
     const canvasProjectId = job.parameters?.canvasProjectId || 'workspace';
-    const resolveWorkspaceAsset = isDirectBytePlusSeedance(job.model, env)
+    const seedance = isDirectBytePlusSeedance(job.model, env);
+    // A Canvas job uses its project's trust first, then the workspace trust auto trust creates.
+    const findLink = async (workspaceId, assetId) => {
+      const link = await findBytePlusAssetLink(pool, workspaceId, assetId, canvasProjectId);
+      if (canvasProjectId === 'workspace' || (link?.status === 'active' && link.provider_asset_id?.trim())) return { link, scope: canvasProjectId };
+      const shared = await findBytePlusAssetLink(pool, workspaceId, assetId, 'workspace');
+      return shared?.status === 'active' ? { link: shared, scope: 'workspace' } : { link, scope: canvasProjectId };
+    };
+    const resolveWorkspaceAsset = seedance
       ? async ({ workspaceId, assetId }) => {
-        const link = await findBytePlusAssetLink(pool, workspaceId, assetId, canvasProjectId);
+        const { link, scope } = await findLink(workspaceId, assetId);
         if (!link) return null;
         if (link.project_name !== projectName) {
           throw Object.assign(new Error('Trusted BytePlus asset belongs to another project. Recreate Trust for Seedance.'), {
@@ -72,7 +115,7 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
         if (link.status === 'active' && link.provider_asset_id?.trim()) {
           hasTrustedAsset = true;
           trustedMappings.push({
-            workspaceId, localAssetId: assetId, canvasProjectId, providerAssetId: link.provider_asset_id.trim(),
+            workspaceId, localAssetId: assetId, canvasProjectId: scope, providerAssetId: link.provider_asset_id.trim(),
             attemptId: link.attempt_id,
           });
           return `asset://${link.provider_asset_id.trim()}`;
@@ -83,7 +126,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
         return null;
       }
       : undefined;
-    const resolution = { workspaceId: job.workspace_id, pool, storage, referenceStorage, resolveWorkspaceAsset };
+    const resolveWorkspaceAssetContent = seedance ? ({ body, contentType }) => enlargeSmallReference(body, contentType) : undefined;
+    const resolution = { workspaceId: job.workspace_id, pool, storage, referenceStorage, resolveWorkspaceAsset, resolveWorkspaceAssetContent };
     const parameters = job.parameters || {};
     // A first/last-frame task sends the wired frames with their frame roles and
     // nothing else. Otherwise every image is an omni reference: Canvas already
@@ -94,30 +138,65 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const keptFrames = frameTask
       ? parameters.frameImages
       : (parameters.frameImages || []).filter((frame) => !referencedUrls.has(frame.url));
-    const referenceImages = await resolveReferenceImages({ ...resolution, referenceImages: frameTask ? extraReferenceImages(parameters) : parameters.referenceImages });
-    const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: keptFrames.map((frame) => frame.url) });
+    const referenceUrls = (frameTask ? extraReferenceImages(parameters) : parameters.referenceImages) || [];
+    const frameUrls = keptFrames.map((frame) => frame.url);
+    const referenceImages = await resolveReferenceImages({ ...resolution, referenceImages: referenceUrls });
+    const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: frameUrls });
     const referenceVideos = await resolveReferenceMedia({ workspaceId: job.workspace_id, references: parameters.referenceVideos, kind: 'video', pool, storage, referenceStorage });
     const referenceAudios = await resolveReferenceMedia({ workspaceId: job.workspace_id, references: parameters.referenceAudios, kind: 'audio', pool, storage, referenceStorage });
     const frameJob = { ...job, parameters: { ...parameters, frameImages: keptFrames } };
     const request = videoRequest(frameJob, { referenceImages, frameImages, referenceVideos, referenceAudios });
     if (frameTask) request.frameTask = true;
+    // BytePlus numbers the request content: [0] is the prompt, then reference images, then frames.
+    const imageAssetIds = [...referenceUrls, ...frameUrls].map(assetIdOf);
+    return { request: hasTrustedAsset ? markTrustedAssetRequest(request) : request, trustedMappings, imageAssetIds, seedance };
+  };
+
+  const submitToProvider = async (job, observe) => {
+    let built = await buildRequest(job);
+    const trust = built.seedance ? autoTrust : null;
+    const workspaceId = job.workspace_id;
+    const borrowTrust = async (assetIds) => {
+      const failed = await trust.borrow({ generationId: job.id, workspaceId, assetIds });
+      built = await buildRequest(job);
+      return failed;
+    };
+    // Images Seedance refused before are trusted up front instead of failing first.
+    if (trust) {
+      const known = await trust.flagged(workspaceId, built.imageAssetIds.filter(Boolean));
+      if (known.length) await borrowTrust(known);
+    }
     let submitted;
-    try {
-      submitted = await providerRouter.submitVideo(hasTrustedAsset ? markTrustedAssetRequest(request) : request,
-        observe ? { onProviderUsage: observe } : undefined);
-    } catch (error) {
-      if (!error?.assetNotFound || trustedMappings.length === 0) throw error;
-      await Promise.all(trustedMappings.map(mapping => markBytePlusAssetLinkStale(pool, {
-        ...mapping, errorCode: 'BYTEPLUS_ASSET_NOT_FOUND',
-      })));
-      throw Object.assign(new Error('Trusted BytePlus asset is missing. Trust this asset again before generating.'), {
-        code: 'BYTEPLUS_ASSET_STALE', status: 422,
-      });
+    for (let round = 0; ; round += 1) {
+      try {
+        submitted = await providerRouter.submitVideo(built.request, observe ? { onProviderUsage: observe } : undefined);
+        break;
+      } catch (error) {
+        const refused = realPersonContentIndexes(error);
+        const assetIds = refused?.map((index) => built.imageAssetIds[index - 1]);
+        if (trust && round === 0 && assetIds?.length && assetIds.every(Boolean)) {
+          console.info('[seedance-trust] trusting refused references', JSON.stringify({ generationId: job.id, assetIds }));
+          await trust.markNeedsTrust(workspaceId, assetIds);
+          const failed = await borrowTrust(assetIds);
+          if (!failed.length) continue;
+        }
+        if (!error?.assetNotFound || built.trustedMappings.length === 0) throw seedanceRejection(error);
+        await handleMissingAsset(built.trustedMappings);
+      }
     }
     const provider = submitted.provider || 'openrouter';
     const providerRequestId = submitted.id || submitted.providerRequestId;
     if (!providerRequestId) throw Object.assign(new Error('Provider returned no video request id'), { code: 'PROVIDER_INVALID_RESPONSE' });
     return { provider, providerRequestId, usage: submitted.usage || {} };
+  };
+
+  const handleMissingAsset = async (trustedMappings) => {
+    await Promise.all(trustedMappings.map(mapping => markBytePlusAssetLinkStale(pool, {
+      ...mapping, errorCode: 'BYTEPLUS_ASSET_NOT_FOUND',
+    })));
+    throw Object.assign(new Error('Trusted BytePlus asset is missing. Trust this asset again before generating.'), {
+      code: 'BYTEPLUS_ASSET_STALE', status: 422,
+    });
   };
 
   // The last frame is a bonus output: a failure here is logged and the video
@@ -144,7 +223,7 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     }
   };
 
-  return async (job, _message, context = {}) => {
+  const runJob = async (job, _message, context = {}) => {
     const observer = context.onProviderUsage || onProviderUsage;
     let latestObservation = null;
     const observe = observer ? async (observation) => {
@@ -214,8 +293,19 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
       throw error;
     }
   };
+
+  if (!autoTrust) return runJob;
+  // Trusts borrowed for this job are given back however it ends; a worker that dies
+  // leaves them to the worker's sweep.
+  return async (job, message, context) => {
+    try {
+      return await runJob(job, message, context);
+    } finally {
+      await autoTrust.release(job.id).catch((error) => console.error('[seedance-trust] release failed', job.id, error?.message));
+    }
+  };
 }
 
-export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env, maxPolls, pollIntervalMs, onProviderUsage = null }) {
-  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter, findBytePlusAssetLink, env, onProviderUsage, ...(maxPolls ? { maxPolls } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}) });
+export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter(), findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env, maxPolls, pollIntervalMs, onProviderUsage = null, autoTrust = createSeedanceAutoTrust({ pool }) }) {
+  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter, findBytePlusAssetLink, env, onProviderUsage, autoTrust, ...(maxPolls ? { maxPolls } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}) });
 }

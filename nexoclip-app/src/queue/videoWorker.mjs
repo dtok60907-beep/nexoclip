@@ -4,6 +4,7 @@ import IORedis from 'ioredis';
 import { getPool, closePool } from '../db/pool.js';
 import { createReferenceStorage, createStorage } from '../services/assetService.js';
 import { createDefaultSaasVideoHandler } from '../services/saasVideoGeneration.js';
+import { createSeedanceAutoTrust } from '../services/seedanceAutoTrust.js';
 import { findBytePlusAssetLink } from '../repositories/byteplusAssetRepository.js';
 import { persistGenerationResult } from '../services/generationOutputService.js';
 import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
@@ -48,13 +49,17 @@ export async function createVideoWorker({
   recordCost = recordGenerationCostObservation,
   createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   findBytePlusAssetLink: findAssetLink = findBytePlusAssetLink,
+  createAutoTrust = createSeedanceAutoTrust,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
 } = {}) {
   const config = videoWorkerConfig(env);
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
   const pool = loadPool();
   const queue = createQueue({ Queue, Worker, connection, queueName: generationQueueName('video') });
+  const autoTrust = createAutoTrust({ pool });
   const recoverNow = async () => {
+    // Gives back BytePlus trusts held by generations that ended or whose worker died.
+    await autoTrust.sweep().catch(onError);
     await recoverUnreserved(pool);
     const expired = await recoverExpired(pool, { kind: 'video', graceMs: EXPIRED_GRACE_MS, staleAfterMs: EXPIRED_STALE_MS });
     for (const job of expired) {
@@ -70,7 +75,7 @@ export async function createVideoWorker({
   const storage = loadStorage(env);
   const processor = createGenerationProcessor({
     pool,
-    handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage), findBytePlusAssetLink: findAssetLink, env, maxPolls: config.maxPolls, pollIntervalMs: config.pollIntervalMs }),
+    handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage), findBytePlusAssetLink: findAssetLink, autoTrust, env, maxPolls: config.maxPolls, pollIntervalMs: config.pollIntervalMs }),
     provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs, recordCost:(pool,input)=>recordCost(pool,{...input,env}),
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
