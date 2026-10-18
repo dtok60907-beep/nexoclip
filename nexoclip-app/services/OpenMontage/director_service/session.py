@@ -89,8 +89,6 @@ def heal(project_id: str) -> None:
     if (director.get("agent") or {}).get("status") == "running" and not activity_held(project_id, "agent"):
         _set_activity(project_id, "agent", "error", "Balasan terputus (service restart). Coba lagi.")
     if not activity_held(project_id, "generation"):
-        if generation.resume_running(project_id) is None:
-            generation.release_loans(project_id)  # nothing will finish the crashed run: give its trusts back
         resume(project_id)
     if not activity_held(project_id, "render"):
         render.interrupted(project_id)
@@ -401,24 +399,6 @@ def reject_request(project_id: str, request_id: str) -> None:
         raise InvalidAction("there is no pending request with that id")
     generation.set_request_status(project_id, request_id, "rejected")
     append_chat(project_id, "user", "Batal generate", kind="approval", meta={"request_id": request_id})
-
-
-def sweep_trust_loans() -> int:
-    """Give back BytePlus trusts held by projects that are not generating (a crash, a project nobody reopens)."""
-    from director_service.db import tx
-
-    with tx() as conn:
-        rows = conn.execute("SELECT project_id FROM boards WHERE runtime->'trust_loans' IS NOT NULL "
-                            "AND runtime->'trust_loans' <> '{}'::jsonb").fetchall()
-    released = 0
-    for row in rows:
-        project_id = row["project_id"]
-        if not activity_held(project_id, "generation") and generation.resume_running(project_id) is None:
-            try:
-                released += generation.release_loans(project_id)
-            except Exception:  # noqa: BLE001 - one project's failure must not stop the sweep
-                traceback.print_exc()
-    return released
 
 
 def resume(project_id: str) -> None:

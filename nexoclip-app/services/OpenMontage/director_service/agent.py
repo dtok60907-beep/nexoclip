@@ -319,9 +319,6 @@ TOOLS = [
         "interaction": {"type": "string", "description": "props only, and only if needed: how a character uses it"},
         "photos": {"type": "array", "items": {"type": "string"},
                    "description": "asset ids of the user's own photos of it (from their attachments); its sheet is made from them"},
-        "people": {"type": "boolean", "description": "its image shows a human face (default: true for characters, false "
-                   "otherwise). false for a non-human character (robot, animal); true for a place or prop whose photos "
-                   "show people. Seedance only accepts such images as BytePlus trusted assets."},
     }, ["id", "kind", "name", "description"]),
     _tool("remove_element", "Remove an element.", {"id": {"type": "string"}}, ["id"]),
     _tool("set_scenes", "Replace the ordered scene list (shots keep their scene_id).", {
@@ -639,8 +636,6 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         if len(photos) > boards.MAX_ELEMENT_PHOTOS or not all(_ASSET_ID.match(p) for p in photos):
             raise ToolError(f"photos must be up to {boards.MAX_ELEMENT_PHOTOS} asset ids")
         item["photos"] = photos
-    if args.get("people") is not None:
-        item["people"] = bool(args["people"])
     if item["kind"] not in boards.ELEMENT_KINDS:
         raise ToolError("kind must be character, location or prop")
     if not item["name"] or len(item["description"]) < 20:

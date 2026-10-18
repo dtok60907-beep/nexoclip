@@ -85,18 +85,6 @@ class Hub:
 hub = Hub()
 
 
-TRUST_SWEEP_SECONDS = 900
-
-
-def _sweep_loans(stop: threading.Event) -> None:
-    """Every 15 minutes, give back BytePlus trusts that no running generation holds any more."""
-    while not stop.wait(TRUST_SWEEP_SECONDS):
-        try:
-            session.sweep_trust_loans()
-        except Exception:  # noqa: BLE001 - the sweep must keep running
-            pass
-
-
 @contextlib.asynccontextmanager
 async def lifespan(_: FastAPI):
     await asyncio.to_thread(db.migrate)
@@ -105,7 +93,6 @@ async def lifespan(_: FastAPI):
     stop = threading.Event()
     listener = threading.Thread(target=db.listen, args=(hub.publish_threadsafe, stop), name="director-listen", daemon=True)
     listener.start()
-    threading.Thread(target=_sweep_loans, args=(stop,), name="director-trust-sweep", daemon=True).start()
     try:
         yield
     finally:

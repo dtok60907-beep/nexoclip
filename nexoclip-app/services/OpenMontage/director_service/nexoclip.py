@@ -186,12 +186,6 @@ class Bridge:
             raise BridgeError(response.status_code, f"upload render gagal ({response.status_code}): {message}"[:500])
         return str(response.json()["assetId"])
 
-    def trust(self, asset_id: str, operation: str = "start") -> str:
-        """BytePlus "Trust for Seedance" of an image asset (start / status / remove): Seedance only accepts images
-        with human faces as trusted assets. Returns the trust status (not_trusted, processing, active, failed)."""
-        action = {"start": "trust-asset", "status": "trust-status", "remove": "untrust-asset"}[operation]
-        return str(self._post({"action": action, "assetId": asset_id}).json().get("status") or "not_trusted")
-
     def delete_render(self, asset_id: str) -> bool:
         """Remove an old final video from the user's workspace storage (videos only)."""
         return bool(self._post({"action": "delete-render", "assetId": asset_id}).json().get("deleted"))

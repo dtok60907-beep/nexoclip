@@ -80,9 +80,6 @@ class FakeBridge:
         self.fail_once: set[str] = set()
         self.imports: list[dict] = []
         self.files: dict[str, nexoclip.Downloaded] = {}  # real media for render tests
-        self.trusted: dict[str, str] = {}  # BytePlus trust per asset
-        self.trust_calls: list[tuple[str, str]] = []
-        self.trust_busy = 0
         self._gens: dict[str, dict] = {}
 
     def balance(self):
@@ -121,22 +118,6 @@ class FakeBridge:
         self.watched = getattr(self, "watched", []) + [{"asset_id": asset_id, "question": question, "key": idempotency_key}]
         return {"text": f"00:00-00:03 a woman walks along the beach, handheld, golden hour ({question or 'overview'})", "credits": 0.2}
 
-    def trust(self, asset_id, operation="start"):
-        self.trust_calls.append((operation, asset_id))
-        if operation == "start" and self.trust_busy:
-            self.trust_busy -= 1  # BytePlus answers 429 a few times before it takes the asset
-            raise nexoclip.BridgeError(429, "BytePlus Assets API is temporarily unavailable.")
-        state = self.trusted.get(asset_id, "not_trusted")
-        if operation == "start":
-            self.trusted[asset_id] = "processing"
-            return "processing"
-        if operation == "remove":
-            self.trusted.pop(asset_id, None)
-            return "not_trusted"
-        if state == "processing":  # BytePlus finishes processing between two polls
-            self.trusted[asset_id] = "active"
-        return state
-
     def delete_render(self, asset_id):
         self.deleted = getattr(self, "deleted", []) + [asset_id]
         return True
@@ -165,7 +146,6 @@ def bridge(monkeypatch):
     fake = FakeBridge()
     monkeypatch.setattr(billing, "bridge_for", lambda project_id: fake if read_director(project_id)["owner"] == OWNER else None)
     monkeypatch.setattr(generation, "POLL_SECONDS", 0.0)
-    monkeypatch.setattr(generation, "RETRY_SCALE", 0.0)
     return fake
 
 
@@ -587,7 +567,6 @@ def test_a_scene_is_generated_as_one_keyframed_video_and_cut_per_shot(client, fa
     bridge.download = lambda asset_id: (nexoclip.Downloaded(clip.read_bytes(), "video/mp4")
                                         if any(s["kind"] == "video" and f"asset-{s['id']}" == asset_id for s in bridge.submits)
                                         else real_download(asset_id))
-    bridge.trust_busy = 2  # the first two trust starts are rate-limited and retried
     request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["scene:s1"]}, headers=HEADERS).json()
     assert request["items"] == ["frame:s1", "frame:s2", "scene:s1"]
     client.post(f"/api/director/projects/{pid}/requests/{request['request_id']}/approve", headers=HEADERS)
@@ -599,13 +578,6 @@ def test_a_scene_is_generated_as_one_keyframed_video_and_cut_per_shot(client, fa
     assert submit["parameters"]["referenceImages"][:2] == [nexoclip.asset_reference(f"asset-{f['id']}") for f in frames]
     media = _view(client, pid)["board"]["media"]
     assert media["scene:s1"]["status"] == "succeeded" and not media["scene:s1"]["error"]
-    # Images with Maya (her sheet and both frames) were borrowed as BytePlus trusted assets and given back;
-    # the beach house sheet has no people and was never trusted.
-    people = {media["element:maya"]["asset_id"], media["frame:s1"]["asset_id"], media["frame:s2"]["asset_id"]}
-    assert {a for op, a in bridge.trust_calls if op == "start"} == people
-    assert {a for op, a in bridge.trust_calls if op == "remove"} == people and not bridge.trusted
-    assert read_board(pid)["trust_loans"] == {}  # every loan given back
-    assert media["element:beach_house"]["asset_id"] not in {a for _, a in bridge.trust_calls}
     for sid, asset, seconds in (("s1", "asset-import1", 6.0), ("s2", "asset-import2", 4.0)):
         assert media[f"video:{sid}"]["asset_id"] == asset and not media[f"video:{sid}"]["stale"]
         assert media[f"video:{sid}"]["takes"][0]["from_scene"] == "scene:s1"
@@ -642,18 +614,6 @@ def test_a_small_reference_video_is_fitted_once_and_rides_in_the_scene_video(cli
     scene_submit = next(s for s in bridge.submits if s["kind"] == "video")
     assert scene_submit["parameters"]["referenceVideos"] == [nexoclip.asset_reference("asset-import1")]
     assert read_board(pid)["media"]["fit:user-ref-video"]["asset_id"] == "asset-import1"  # remembered, not redone
-
-
-def test_trusts_a_crash_left_behind_are_given_back_by_the_sweep(client, fake_llm, bridge):
-    from director_service import generation as gen, session as sess
-
-    pid = _built_project(client, fake_llm)
-    bridge.trusted["asset-left"] = "active"
-    gen._loans(pid, add=["asset-left"])  # borrowed by a run that died before returning it
-    assert sess.sweep_trust_loans() == 1
-    assert ("remove", "asset-left") in bridge.trust_calls and "asset-left" not in bridge.trusted
-    assert read_board(pid)["trust_loans"] == {}
-    assert sess.sweep_trust_loans() == 0
 
 
 def test_the_view_shows_video_credits_per_second_and_caches_them(client, fake_llm, bridge, monkeypatch):

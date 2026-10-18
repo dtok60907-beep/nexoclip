@@ -34,7 +34,6 @@ from director_service.store import now_iso
 
 POLL_SECONDS = 5.0
 JOB_TIMEOUT_SECONDS = 1800
-TRUST_TIMEOUT_SECONDS = 180
 OPEN_STATUSES = ("pending", "running")
 
 
@@ -277,86 +276,6 @@ def _run_audio(project_id: str, bridge: nexoclip.Bridge, key: str, spec: dict[st
     _record_take(project_id, key, asset_id=result["asset_id"], spec_sig=sig, dep_assets=[], generated_at=now_iso())
 
 
-TRUST_RETRY_SECONDS = (2, 4, 8, 16)  # BytePlus rate-limits CreateAsset (HTTP 429) when images come in quick succession
-
-
-def _start_trust(bridge: nexoclip.Bridge, asset_id: str) -> str:
-    """Start one trust, waiting and retrying while BytePlus says it is busy (429 / 5xx)."""
-    for pause in (*TRUST_RETRY_SECONDS, None):
-        try:
-            return bridge.trust(asset_id, "start")
-        except nexoclip.BridgeError as exc:
-            if pause is None or not (exc.status == 429 or exc.status >= 500):
-                raise
-            time.sleep(pause * RETRY_SCALE)
-    raise AssertionError("unreachable")
-
-
-RETRY_SCALE = 1.0  # tests set 0
-
-
-def _trust(bridge: nexoclip.Bridge, asset_ids: list[str]) -> list[str]:
-    """Make these images BytePlus trusted assets (Seedance refuses images with faces otherwise) and wait until they
-    are active. Returns the ones trusted here, to remove again after the videos: the BytePlus account holds only a
-    few dozen trusted assets, so they are borrowed per generation. A failure leaves the image untrusted."""
-    started, waiting = [], set()
-    for asset_id in dict.fromkeys(asset_ids):
-        try:
-            if bridge.trust(asset_id, "status") == "active":
-                continue
-            status = _start_trust(bridge, asset_id)
-        except nexoclip.BridgeError:
-            continue
-        started.append(asset_id)
-        if status != "active":
-            waiting.add(asset_id)
-    deadline = time.monotonic() + TRUST_TIMEOUT_SECONDS
-    while waiting and time.monotonic() < deadline:
-        time.sleep(POLL_SECONDS)
-        for asset_id in sorted(waiting):
-            try:
-                status = bridge.trust(asset_id, "status")
-            except nexoclip.BridgeError:
-                continue
-            if status != "processing":
-                waiting.discard(asset_id)
-    return started
-
-
-def _loans(project_id: str, add: list[str] = (), drop: list[str] = ()) -> dict[str, str]:
-    """The project's open trust loans, written down so a crash cannot leave them taking BytePlus slots forever."""
-    def change(board: dict[str, Any]) -> dict[str, str]:
-        loans = dict(board.get("trust_loans") or {})
-        loans.update({a: loans.get(a) or now_iso() for a in add})
-        for a in drop:
-            loans.pop(a, None)
-        board["trust_loans"] = loans
-        return loans
-
-    return update_board(project_id, change)
-
-
-def _untrust(project_id: str, bridge: nexoclip.Bridge, asset_ids: list[str]) -> None:
-    returned = []
-    for asset_id in asset_ids:
-        try:
-            bridge.trust(asset_id, "remove")
-            returned.append(asset_id)
-        except nexoclip.BridgeError:
-            pass  # stays on the loan list and is given back by the next sweep
-    if returned:
-        _loans(project_id, drop=returned)
-
-
-def release_loans(project_id: str, bridge: Optional[nexoclip.Bridge] = None) -> int:
-    """Give back every trust this project still holds (after a run, or one a crash left behind)."""
-    loans = list(read_board(project_id).get("trust_loans") or {})
-    bridge = bridge or (billing.bridge_for(project_id) if loans else None)
-    if loans and bridge is not None:
-        _untrust(project_id, bridge, loans)
-    return len(loans)
-
-
 # Seedance 2.5's limits for a reference video: at least 407,696 pixels a frame, 24-60 fps, 2-30 s.
 MIN_VIDEO_PIXELS, MIN_FPS, MAX_FPS, MAX_REFERENCE_SECONDS = 409_600, 24, 60, 30
 
@@ -410,14 +329,6 @@ def _fit_reference_video(project_id: str, bridge: nexoclip.Bridge, asset_id: str
 
 
 def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None:
-    borrowed: list[str] = []
-    try:
-        _run_tier_keys(project_id, bridge, keys, borrowed)
-    finally:
-        _untrust(project_id, bridge, borrowed)
-
-
-def _run_tier_keys(project_id: str, bridge: nexoclip.Bridge, keys: list[str], borrowed: list[str]) -> None:
     submitted: list[str] = []
     submit_error: Optional[Exception] = None
     for key in keys:
@@ -447,12 +358,7 @@ def _run_tier_keys(project_id: str, bridge: nexoclip.Bridge, keys: list[str], bo
         videos = [*(a for dep, a in zip(spec["deps"], dep_assets) if dep.startswith("video:")), *user_videos]
         images = [*spec.get("photos", []), *(a for dep, a in zip(spec["deps"], dep_assets) if not dep.startswith("video:")),
                   *spec.get("extra_images", [])]
-        people = [a for dep, a in zip(spec["deps"], dep_assets) if dep in spec.get("people_deps", ())]
-        if people:
-            fresh = [a for a in _trust(bridge, people) if a not in borrowed]
-            if fresh:
-                _loans(project_id, add=fresh)
-                borrowed.extend(fresh)
+        # Images showing a real person are trusted by nexoclip's video worker when Seedance refuses them.
         if images:
             params["referenceImages"] = [nexoclip.asset_reference(a) for a in images]
         if videos:
@@ -522,12 +428,9 @@ def run_request(project_id: str, request_id: str) -> dict[str, Any]:
     request = find_request(board, request_id)
     specs = media_specs(board)
     levels = {k: tier(k, specs) for k in request["items"]}
-    try:
-        for level in sorted(set(levels.values())):
-            keys = [k for k in request["items"] if levels[k] == level]
-            _run_tier(project_id, bridge, keys)
-    finally:
-        release_loans(project_id, bridge)  # also what a run interrupted by a restart had borrowed
+    for level in sorted(set(levels.values())):
+        keys = [k for k in request["items"] if levels[k] == level]
+        _run_tier(project_id, bridge, keys)
     board = read_board(project_id)
     succeeded = [k for k in request["items"] if (board["media"].get(k) or {}).get("status") == TERMINAL_OK]
     failed = {k: (board["media"].get(k) or {}).get("error") or "failed" for k in request["items"] if k not in succeeded}
