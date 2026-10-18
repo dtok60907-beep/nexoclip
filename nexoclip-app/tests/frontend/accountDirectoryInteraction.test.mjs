@@ -20,7 +20,7 @@ test('Accounts resets pagination on filters, ignores stale responses, retries er
  const module={exports:{}};
  vm.runInNewContext(code,{module,exports:module.exports,URLSearchParams,AbortController,crypto:globalThis.crypto,require:name=>{
   if(name==='./AdminShell')return ({children})=>React.createElement('main',null,children);
-  if(name==='./AccountAccessPanel'||name==='./ImpersonatePanel')return ()=>null;
+  if(['./AccountAccessPanel','./ImpersonatePanel','./CompanyProfilePanel'].includes(name))return ()=>null;
   if(name.endsWith('/saas/api.js'))return {saasFetch:(path,options)=>new Promise((resolve,reject)=>calls.push({params:new URL(path,'http://localhost').searchParams,signal:options?.signal,resolve,reject}))};
   return createRequire(url)(name);
  }});
