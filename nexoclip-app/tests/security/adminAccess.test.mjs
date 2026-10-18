@@ -34,9 +34,11 @@ test('page guard fails closed without allowlist and never trusts capability flag
 test('all admin page entry points and root layout are protected during direct and partial navigation',async()=>{
   const base=new URL('../../app/admin/',import.meta.url);
   const layout=await readFile(new URL('layout.js',base),'utf8');assert.match(layout,/await requireAdminPage\(/);
-  for(const entry of await readdir(base,{withFileTypes:true})){
-    const name=entry.isDirectory()?`${entry.name}/page.js`:entry.name==='page.js'?'page.js':null;if(!name)continue;
-    const source=await readFile(new URL(name,base),'utf8');
+  // Every page.js under app/admin, nested dynamic routes (documents/[orderId]) included.
+  const pages=(await readdir(base,{recursive:true})).filter(name=>name==='page.js'||name.endsWith('/page.js'));
+  assert.ok(pages.length>10);
+  for(const name of pages){
+    const source=await readFile(new URL(name.split('/').map(encodeURIComponent).join('/'),base),'utf8');
     if(/AdminConsolePage/.test(source))assert.match(await readFile(new URL('../../components/AdminConsolePage.js',import.meta.url),'utf8'),/await requireAdminPage\(/);
     else if(/BackofficePage/.test(source))assert.match(await readFile(new URL('../../components/BackofficePage.js',import.meta.url),'utf8'),/await requireAdminPage\(/);
     else assert.match(source,/await requireAdminPage\(/,name);
