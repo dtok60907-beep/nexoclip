@@ -240,12 +240,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     }
   }, [editing])
 
-  const enterEdit = async () => {
+  const enterEdit = async (onFocused?: () => void): Promise<boolean> => {
     if (readOnly) {
       setEditorLockError(locked ? 'This node is locked. Unlock it to edit.' : 'Canvas is read-only. Reconnect before editing.')
-      return
+      return false
     }
-    if (editing || claimingEditorLock) return
+    if (editing || claimingEditorLock) return false
     setClaimingEditorLock(true)
     setEditorLockError(null)
     try {
@@ -256,18 +256,48 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
         setEditorLockError(status === 409 && holder === 'self'
           ? 'Prompt ini sedang dibuka di tab lain kamu. Tutup editornya di tab itu atau tunggu ±15 detik.'
           : describeLockFailure(status, holder))
-        return
+        return false
       }
       void refreshFolders()
       setEditing(true)
       // Defer focus until after the overlay unmounts so the editor div
       // can actually receive focus.
-      setTimeout(() => editorRef.current?.focus(), 0)
+      setTimeout(() => { editorRef.current?.focus(); onFocused?.() }, 0)
+      return true
     } catch {
       setEditorLockError('Tidak bisa mengunci editor. Coba lagi.')
+      return false
     } finally {
       setClaimingEditorLock(false)
     }
+  }
+
+  // On a node that is already selected, pressing on the text edits it right away and
+  // the same drag selects text (it used to move the node; editing took a double-click).
+  // The selection follows the pointer once the editor lock is claimed and it is focused.
+  const editFromPointer = (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const anchor = { x: event.clientX, y: event.clientY }
+    let focus = anchor
+    let focused = false
+    let released = false
+    const select = () => {
+      const editor = cardRef.current?.querySelector('[contenteditable]')
+      const start = caretFromPoint(anchor.x, anchor.y)
+      const end = caretFromPoint(focus.x, focus.y)
+      if (!editor || !start || !end || !editor.contains(start.node) || !editor.contains(end.node)) return
+      window.getSelection()?.setBaseAndExtent(start.node, start.offset, end.node, end.offset)
+    }
+    const onMove = (e: MouseEvent) => { focus = { x: e.clientX, y: e.clientY }; if (focused) select() }
+    const stop = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    const onUp = () => { released = true; if (focused) stop() }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    void enterEdit(() => { focused = true; select(); if (released) stop() }).then((started) => { if (!started) stop() })
   }
 
   return (
@@ -348,7 +378,14 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
             from any mousedown on the card. Double-click flips into
             edit mode and the overlay unmounts so the contentEditable
             below takes over. */}
-        {!editing && (
+        {!editing && (selected && !readOnly ? (
+          <div
+            className="nodrag nopan absolute inset-0"
+            title={claimingEditorLock ? 'Claiming editor lock…' : 'Click or drag to edit and select text'}
+            style={{ cursor: 'text' }}
+            onMouseDown={(e) => { if (e.button === 0) editFromPointer(e) }}
+          />
+        ) : (
           <div
             className="absolute inset-0"
             onDoubleClick={() => { void enterEdit() }}
@@ -357,7 +394,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
             onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.cursor = 'grabbing' }}
             onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.cursor = 'grab' }}
           />
-        )}
+        ))}
       </div>
     </div>
   )
@@ -367,5 +404,13 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
 // from React Flow are referentially equal. ReactFlow only swaps a node's
 // `data` reference when *that* node's data is mutated, so unrelated changes
 // to other nodes no longer re-render this one.
+function caretFromPoint(x: number, y: number): { node: Node; offset: number } | null {
+  const doc = document as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null }
+  const position = doc.caretPositionFromPoint?.(x, y)
+  if (position) return { node: position.offsetNode, offset: position.offset }
+  const range = document.caretRangeFromPoint?.(x, y)
+  return range ? { node: range.startContainer, offset: range.startOffset } : null
+}
+
 export const PromptNode = memo(PromptNodeImpl)
 PromptNode.displayName = 'PromptNode'

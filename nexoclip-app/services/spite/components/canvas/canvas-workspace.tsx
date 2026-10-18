@@ -1194,18 +1194,25 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }
     }
 
-    // Paste — image from system clipboard takes priority; falls back to node clipboard
+    // Paste — media from the system clipboard (an image, or a copied video/audio file)
+    // takes priority; falls back to node clipboard
     function onPaste(e: ClipboardEvent) {
       if (isEditingText(e.target)) return
-      const items = Array.from(e.clipboardData?.items ?? [])
-      const imageItem = items.find(i => i.type.startsWith('image/'))
-      if (imageItem) {
+      const isMedia = (type: string) => /^(image|video|audio)\//.test(type)
+      const copiedFiles = Array.from(e.clipboardData?.files ?? []).filter(file => isMedia(file.type))
+      const files = copiedFiles.length
+        ? copiedFiles
+        : Array.from(e.clipboardData?.items ?? [])
+          .filter(item => item.kind === 'file' && isMedia(item.type))
+          .map(item => item.getAsFile())
+          .filter((file): file is File => Boolean(file))
+      if (files.length) {
         e.preventDefault()
-        const file = imageItem.getAsFile()
-        if (file) pasteImageFile(file)
+        const center = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+        files.forEach((file, i) => pasteImageFile(file, { x: center.x + i * 20, y: center.y + i * 20 }))
         return
       }
-      // No image in clipboard — paste copied nodes if any
+      // No media in clipboard — paste copied nodes if any
       if (allowDocumentMutation && clipboardNodes.length) {
         e.preventDefault()
         pasteClipboardNodes()
@@ -1218,7 +1225,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('paste', onPaste)
     }
-  }, [addNode, allNodes, allowDocumentMutation, commands, deleteSelected, duplicateSelected, nodes, pasteClipboardNodes, pasteImageFile, redo, selectedNodeIds, undo])
+  }, [addNode, allNodes, allowDocumentMutation, commands, deleteSelected, duplicateSelected, nodes, pasteClipboardNodes, pasteImageFile, redo, screenToFlowPosition, selectedNodeIds, undo])
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()

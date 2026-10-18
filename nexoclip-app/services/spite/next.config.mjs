@@ -25,6 +25,12 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    // Middleware runs on every API route and Next buffers the request body for it,
+    // keeping only the first 10 MB by default: every video over 10 MB failed to
+    // upload. Match /api/r2-upload's own 200 MB cap.
+    middlewareClientMaxBodySize: '200mb',
+  },
   // What build is live, exposed to the client. The version + build stamp are
   // what the UI shows (readable, ordered); the SHA is kept for the tooltip so
   // a build can still be traced back to an exact commit.
