@@ -2,13 +2,13 @@ import PrintButton from './PrintButton';
 import { STAMP_DUTY_THRESHOLD_IDR } from '../src/services/businessDocumentsService.js';
 import { terbilang } from '../src/lib/terbilang.js';
 
-const idr = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
-const num = (v, digits = 0) => Number(v || 0).toLocaleString('id-ID', { maximumFractionDigits: digits });
-const date = (v) => (v ? new Date(v).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : '—');
+export const idr = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
+export const num = (v, digits = 0) => Number(v || 0).toLocaleString('id-ID', { maximumFractionDigits: digits });
+export const date = (v) => (v ? new Date(v).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : '—');
 const addDays = (v, days) => new Date(new Date(v).getTime() + days * 86_400_000);
-const missing = (value, label) => value || <span className="missing">[{label} belum diisi di profil perusahaan]</span>;
+export const missing = (value, label) => value || <span className="missing">[{label} belum diisi di profil perusahaan]</span>;
 
-const styles = `
+export const documentStyles = `
   .doc-page { background: #e5e7eb; min-height: 100vh; padding: 24px 12px; color: #111827; font-family: 'Helvetica Neue', Arial, sans-serif; }
   .doc { background: #fff; max-width: 210mm; margin: 0 auto; padding: 18mm 16mm; box-shadow: 0 2px 12px rgba(0,0,0,.12); font-size: 12.5px; line-height: 1.55; }
   .doc h1 { font-size: 20px; margin: 0; letter-spacing: .5px; }
@@ -37,7 +37,7 @@ export default function BusinessDocument({ data }) {
   const issued = ['receipt', 'activation'].includes(type) ? order.paid_at : order.created_at;
   return (
     <div className="doc-page">
-      <style>{styles}</style>
+      <style>{documentStyles}</style>
       <div className="doc-bar"><span>{title} · {order.company_name}</span><PrintButton /></div>
       <article className="doc">
         <header className="head">
