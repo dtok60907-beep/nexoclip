@@ -123,3 +123,17 @@ test('no new OPENROUTER_V2V_MODEL_MAP entries were added this pass', () => {
     'wan2.7-video-extend',
   ]);
 });
+
+test('every credited Seedance model in the Studio sends a resolution, defaulting to 720p where offered', async () => {
+  const models = await import('../../packages/studio/src/models.js');
+  const seedance = [...models.t2vModels.map((m) => [m, models.getResolutionsForVideoModel(m.id)]), ...models.i2vModels.map((m) => [m, models.getResolutionsForI2VModel(m.id)])]
+    .filter(([m]) => /seedance|^ep-/.test(models.OPENROUTER_VIDEO_MODEL_MAP[m.id] || ''));
+  assert.ok(seedance.length > 10);
+  for (const [model, resolutions] of seedance) {
+    assert.ok(resolutions.length > 0, `${model.id} offers no resolution`);
+    if (model.id.endsWith('-480p')) assert.deepEqual(resolutions, ['480p'], model.id);
+  }
+  const seedance20 = models.t2vModels.find((m) => m.id === 'seedance-v2.0-t2v');
+  assert.equal(seedance20.inputs.resolution.default, '720p');
+  assert.equal(seedance20.inputs.quality, undefined);
+});

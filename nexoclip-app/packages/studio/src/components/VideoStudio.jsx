@@ -506,7 +506,7 @@ export default function VideoStudio({
   // ── control visibility ──
   const [showAr, setShowAr] = useState(true);
   const [showDuration, setShowDuration] = useState(true);
-  const [showResolution, setShowResolution] = useState(false);
+  const [showResolution, setShowResolution] = useState(() => getResolutionsForVideoModel(defaultModel.id).length > 0);
   const [showQuality, setShowQuality] = useState(false);
   const [showMode, setShowMode] = useState(false);
   const [showEffect, setShowEffect] = useState(false);
@@ -658,7 +658,9 @@ export default function VideoStudio({
         ? getResolutionsForI2VModel(modelId)
         : getResolutionsForVideoModel(modelId);
       if (resolutions.length > 0) {
-        setSelectedResolution(resolutions[0]);
+        // The model's own default (720p for Seedance), not the cheapest option listed first.
+        const preferred = model?.inputs?.resolution?.default;
+        setSelectedResolution(resolutions.includes(preferred) ? preferred : resolutions[0]);
         setShowResolution(true);
       } else {
         setShowResolution(false);

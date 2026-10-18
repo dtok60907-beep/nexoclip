@@ -19773,6 +19773,31 @@ export const getDurationsForI2VModel = (modelId) => {
     return [];
 };
 
+// Seedance models on the credited BytePlus pipeline whose MuAPI schemas list no resolution (Seedance 2.0 lists
+// a "quality" the provider ignores). Without one Seedance rendered its own default while credits were held at
+// the 1080p rate, and the "480p" variants were not 480p. The Studio offers these and always sends one.
+const SEEDANCE_RESOLUTIONS = {
+  'seedance-v2.0-t2v': ['480p', '720p', '1080p'],
+  'seedance-v2.0-i2v': ['480p', '720p', '1080p'],
+  'seedance-2-text-to-video-fast': ['480p', '720p'],
+  'seedance-2-image-to-video-fast': ['480p', '720p'],
+  'seedance-2.5-first-last-frame': ['480p', '720p', '1080p'],
+  'seedance-2.5-omni-reference': ['480p', '720p', '1080p'],
+  'seedance-2.5-text-to-video-480p': ['480p'],
+  'seedance-2.5-image-to-video-480p': ['480p'],
+  'seedance-2.5-first-last-frame-480p': ['480p'],
+  'seedance-2.5-omni-reference-480p': ['480p'],
+};
+for (const model of [...t2vModels, ...i2vModels]) {
+  const resolutions = SEEDANCE_RESOLUTIONS[model.id];
+  if (!resolutions) continue;
+  const { quality: _ignored, ...inputs } = model.inputs || {};
+  model.inputs = {
+    ...inputs,
+    resolution: { enum: resolutions, title: 'Resolution', name: 'resolution', type: 'string', default: resolutions.includes('720p') ? '720p' : resolutions[0] },
+  };
+}
+
 export const getResolutionsForI2VModel = (modelId) => {
     const model = getI2VModelById(modelId);
     if (!model) return [];
