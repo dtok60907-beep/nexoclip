@@ -16,7 +16,7 @@ test('history pagers are independent, discard stale data, reset with account and
  Object.defineProperties(globalThis,{window:{value:dom.window,configurable:true},document:{value:dom.window.document,configurable:true},navigator:{value:dom.window.navigator,configurable:true},IS_REACT_ACT_ENVIRONMENT:{value:true,configurable:true}});
  const calls=[],exports=[],module={exports:{}};
  vm.runInNewContext(code,{module,exports:module.exports,URLSearchParams,AbortController,require:name=>{
-  if(['./AdminShell','./AccountAccessPanel'].includes(name))return ()=>null;
+  if(['./AdminShell','./AccountAccessPanel','./ImpersonatePanel'].includes(name))return ()=>null;
   if(name.endsWith('/saas/downloadCsv.js'))return {downloadCsv:(path,options)=>new Promise((resolve,reject)=>exports.push({params:new URL(path,'http://localhost').searchParams,...options,resolve,reject}))};
   if(name.endsWith('/saas/api.js'))return {saasFetch:(path,options)=>new Promise((resolve,reject)=>calls.push({params:new URL(path,'http://localhost').searchParams,signal:options?.signal,resolve,reject}))};
   return createRequire(url)(name);

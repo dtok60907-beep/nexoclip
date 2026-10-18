@@ -6,6 +6,12 @@ import { useEffect, useRef } from 'react';
 export default function LowBalanceDialog({ level, balance, onTopUp, onClose }) {
   const dialog = useRef(null);
   useEffect(() => {
+    // An operator impersonating this customer is not the one to top up, and a modal
+    // dialog would cover the impersonation banner and its way back.
+    if (document.cookie.split('; ').some((cookie) => cookie.startsWith('nexoclip_impersonation='))) {
+      onClose();
+      return undefined;
+    }
     const previous = document.activeElement;
     dialog.current?.showModal();
     return () => previous?.focus?.();

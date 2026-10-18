@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
-import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
+import { requireCanSpend, resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { topupService } from '../../../../src/services/topupService.js';
 
 async function context(request) {
@@ -39,6 +39,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const tenant = await context(request);
+    requireCanSpend(tenant);
     const body = await request.json().catch(() => ({}));
     const topup = await topupService().createTopup({
       workspaceId: tenant.workspace.id,

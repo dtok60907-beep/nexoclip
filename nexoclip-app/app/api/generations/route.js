@@ -1,5 +1,5 @@
 import { SESSION_COOKIE } from '../../../src/lib/auth/session.js';
-import { resolveTenantContext } from '../../../src/services/tenantContext.js';
+import { requireCanSpend, resolveTenantContext } from '../../../src/services/tenantContext.js';
 import { createImageGenerationJobWithReservation, toPublicGeneration } from '../../../src/services/generationService.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../src/queue/bullmqGenerationQueue.js';
@@ -35,6 +35,7 @@ export function createGenerationsPostHandler({
       const id = workspaceId(request);
       if (!id) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
       const tenant = await resolveContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId: id });
+      requireCanSpend(tenant);
       const input = await request.json();
       const idempotencyKey = input.idempotencyKey || request.headers.get('idempotency-key');
       const database = pool || (await import('../../../src/db/pool.js')).getPool();

@@ -34,6 +34,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // An operator impersonating a customer in read-only mode (the main app sets this
+  // cookie) may open the canvas but not change it through the API.
+  if (request.cookies.get('nexoclip_impersonation')?.value === 'read-only'
+    && appPath.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+    return NextResponse.json({ error: 'Mode lihat saja: saat impersonate, canvas ini tidak bisa diubah.' }, { status: 403 })
+  }
+
   // Kubernetes health checks must not depend on runtime provider configuration
   // or a user session.
   if (appPath === '/healthz' || pathname.endsWith('/healthz')) {

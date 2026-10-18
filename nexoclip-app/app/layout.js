@@ -1,6 +1,7 @@
 import './globals.css';
 import './suite.css';
 import { Bricolage_Grotesque, Geist_Mono, Poppins } from "next/font/google";
+import ImpersonationBanner from '../components/ImpersonationBanner';
 
 // Self-hosted by next/font (the CSP blocks fonts.googleapis.com).
 // Poppins for all UI text, Geist Mono for numbers/timecodes (`font-mono`),
@@ -33,7 +34,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${sans.variable} ${mono.variable} ${display.variable}`}>{children}</body>
+      <body className={`${sans.variable} ${mono.variable} ${display.variable}`}>{children}<ImpersonationBanner /></body>
     </html>
   );
 }

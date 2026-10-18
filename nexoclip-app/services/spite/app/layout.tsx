@@ -3,6 +3,7 @@ import { Montserrat, Inter, Geist_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import { DialogHost } from '@/components/ui/dialog-host'
 import './globals.css'
+import ImpersonationBanner from '@/components/impersonation-banner'
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -59,6 +60,7 @@ export default function RootLayout({
         {children}
         <Toaster theme="dark" position="bottom-right" />
         <DialogHost />
+        <ImpersonationBanner />
       </body>
     </html>
   )

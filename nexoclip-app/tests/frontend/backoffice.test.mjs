@@ -9,7 +9,7 @@ import { transformSync } from '@babel/core';
 const url=new URL('../../components/BackofficeDashboard.js',import.meta.url);
 const {code}=transformSync(await readFile(url,'utf8'),{filename:url.pathname,configFile:false,babelrc:false,presets:[['@babel/preset-react',{runtime:'automatic'}]],plugins:['@babel/plugin-transform-modules-commonjs']});
 const module={exports:{}},require=createRequire(url);
-vm.runInNewContext(code,{require:name=>['./AdminShell','./AccountAccessPanel'].includes(name)?()=>null:require(name),module,exports:module.exports});
+vm.runInNewContext(code,{require:name=>['./AdminShell','./AccountAccessPanel','./ImpersonatePanel'].includes(name)?()=>null:require(name),module,exports:module.exports});
 test('customer profile distinguishes shared workspace money, account activity, and unknown economics',()=>{
  const data={workspace:{name:'Business',balance:'750.000000',reserved:'6.300000'},account:{email:'<script>bad</script>',role:'member',created_at:'2026-10-01'},sessions:[],jobs:[],payments:[],ledger:[],lots:[],audit:[],economics:{since:'2026-09-08',until:'2026-10-08',totals:{recognizedRevenueIdr:0,providerCostIdr:806,contributionIdr:null,coverage:{complete:false}}}};
  const html=renderToStaticMarkup(React.createElement(module.exports.CustomerProfile,{data}));

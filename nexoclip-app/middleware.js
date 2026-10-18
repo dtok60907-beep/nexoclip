@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { IMPERSONATION_COOKIE, allowedWhileReadOnly } from './src/lib/auth/impersonation.js';
 
 function addSecurityHeaders(response) {
     // Prevent MIME type sniffing (CWE-693)
@@ -22,6 +23,17 @@ function addSecurityHeaders(response) {
 
 export function middleware(request) {
     const url = request.nextUrl;
+
+    // An operator impersonating a customer in read-only mode may look but not change
+    // anything (generate, top up, edit, delete). Generation and top-up also check the
+    // session itself, so removing this cookie does not get around them.
+    if (request.cookies.get(IMPERSONATION_COOKIE)?.value === 'read-only'
+        && url.pathname.startsWith('/api/') && !allowedWhileReadOnly(request.method, url.pathname)) {
+        return addSecurityHeaders(NextResponse.json(
+            { error: 'Mode lihat saja: saat impersonate, data akun ini tidak bisa diubah.' },
+            { status: 403 },
+        ));
+    }
 
     // Catch requests to /api/workflow, /api/app, and /api/v1
     const isMuApi = url.pathname.startsWith('/api/workflow') ||

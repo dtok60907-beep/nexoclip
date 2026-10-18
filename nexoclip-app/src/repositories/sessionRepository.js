@@ -12,9 +12,11 @@ export async function createSessionRecord(client, { userId, tokenHash, expiresAt
 export async function findActiveSession(client, tokenHash) {
   const result = await client.query(
     `SELECT s.id, s.user_id, s.expires_at, s.created_at,
-            u.email, u.display_name
+            u.email, u.display_name,
+            i.operator_user_id AS impersonator_user_id, i.read_only AS impersonation_read_only
      FROM sessions s
      JOIN users u ON u.id = s.user_id
+     LEFT JOIN impersonation_sessions i ON i.session_id = s.id
      WHERE s.token_hash = $1
        AND u.suspended_at IS NULL
        AND s.revoked_at IS NULL

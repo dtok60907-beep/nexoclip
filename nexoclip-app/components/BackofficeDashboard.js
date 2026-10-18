@@ -2,6 +2,7 @@
 import { useEffect,useRef,useState } from 'react';
 import AdminShell from './AdminShell';
 import AccountAccessPanel from './AccountAccessPanel';
+import ImpersonatePanel from './ImpersonatePanel';
 import { adminStyles as s } from '../src/lib/adminStyles.js';
 import { downloadCsv } from '../src/lib/saas/downloadCsv.js';
 import { saasFetch } from '../src/lib/saas/api.js';
@@ -152,6 +153,7 @@ export default function BackofficeDashboard({mode}) {
  {error&&<p role="alert" className={s.error}>{error}</p>}{notice&&<p role="status" className="my-4 rounded-xl border border-cyan-300/20 p-4 text-sm text-cyan-200">{notice}</p>}
  {workspaceId&&customerId&&!profile&&!error&&<p className={s.loading}>Memuat profil…</p>}
  {mode==='accounts'&&customerId&&<AccountAccessPanel key={customerId} targetUserId={customerId} onSaved={()=>setRevision(value=>value+1)}/>}
+ {mode==='accounts'&&customerId&&<ImpersonatePanel key={`imp-${customerId}`} targetUserId={customerId}/>}
  {mode==='accounts'&&profile&&<CustomerProfile data={profile}/>}
  {mode==='billing'&&workspaceId&&<>
  {customerId&&<section className={`${s.panel} mt-5 p-5`}><h2 className="font-semibold">Buat invoice kredit khusus</h2><p className="mt-2 text-xs text-white/45">Ketentuan disimpan tetap. Kredit tidak kedaluwarsa pada versi ini. Bonus masuk dalam total kredit untuk menghitung nilai per kredit. Invoice belum berarti pembayaran diterima.</p><form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={e=>{e.preventDefault();submit('create',terms);}}>
