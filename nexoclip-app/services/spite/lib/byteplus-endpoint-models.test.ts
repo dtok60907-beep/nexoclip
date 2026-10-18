@@ -22,7 +22,9 @@ test('exposes three dedicated BytePlus endpoint models as distinct choices', () 
 test('preserves standard BytePlus model routes', () => {
   assert.equal(getModelById('seedance-2.0')?.providerModel, 'dreamina-seedance-2-0-260128')
   assert.equal(getModelById('seedance-2.0-fast')?.providerModel, 'dreamina-seedance-2-0-fast-260128')
-  assert.equal(getModelById('seedance-2.5-mini')?.providerModel, 'dreamina-seedance-2-0-mini-260615')
+  assert.equal(getModelById('seedance-2.0-mini')?.providerModel, 'dreamina-seedance-2-0-mini-260615')
+  assert.equal(getModelById('seedance-2.5-mini')?.id, 'seedance-2.0-mini')
+  assert.equal(getModelById('seedance-2.5-mini-frame')?.id, 'seedance-2.0-mini-frame')
   assert.equal(getModelById('seedance-2.5')?.providerModel, 'dreamina-seedance-2-5-260628')
   // The Frame variant is the same BytePlus model.
   assert.equal(getModelById('seedance-2.5-frame')?.providerModel, 'dreamina-seedance-2-5-260628')

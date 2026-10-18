@@ -75,7 +75,7 @@ function findModelId(m: string | null): string | null {
 }
 function cleanModel(m: string | null): string {
   if (!m) return ''
-  const known = FAL_MODELS.find((x) => x.id === m || x.name === m || x.falModel === m || x.editModel === m)
+  const known = getModelById(m) || FAL_MODELS.find((x) => x.name === m || x.falModel === m || x.editModel === m)
   if (known) return known.name
   return m.replace(/^fal-ai\//, '').replace(/^openai\//, '').split('/')[0]
 }
