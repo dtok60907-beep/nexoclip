@@ -6,18 +6,22 @@ import { getPool } from '../db/pool.js';
 import { createBackofficeRepository } from '../repositories/backofficeRepository.js';
 import { appendCreditEntryInTransaction } from './creditService.js';
 import { isPlatformOperator, operatorError, mapEconomicsTotals } from './economicsService.js';
+import { contractPricing, costIdrPerCredit } from './enterpriseContractPricing.js';
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
 const text=(v,max,label)=>{if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw fail(`${label} tidak valid`);return v.trim();};
 const count=(v,zero=false)=>{if(!['number','string'].includes(typeof v)||! /^\d{1,8}(\.\d{1,6})?$/.test(String(v))||!Number.isFinite(Number(v))||Number(v)>(10000000)||Number(v)<(zero?0:0.000001))throw fail('Jumlah kredit tidak valid');return Number(v);};
+// The share of the price that is profit once the credits are bought at cost; null when the deal sells below cost.
+const profitShare=(amount,totalCredits,cost)=>{const share=Math.floor((1-totalCredits*cost/amount)*10000)/100;return share>=0?share:null;};
 const money=v=>{if(!['number','string'].includes(typeof v)||! /^\d+$/.test(String(v))||!Number.isSafeInteger(Number(v))||Number(v)<1||Number(v)>2000000000)throw fail('Harga IDR tidak valid');return Number(v);};
 export function createBackofficeService({ repository, env=process.env, grant=appendCreditEntryInTransaction }={}) {
  const repo=()=>repository||createBackofficeRepository(getPool());
  function authorize(userId) {if(!isPlatformOperator(userId,env))throw operatorError();}
  function ids(workspaceId,customerId) {if(!uuid(workspaceId)||(customerId&&!uuid(customerId)))throw fail('ID tidak valid');}
  return {
-  async read({userId,workspaceId,customerId,q,status,page,pageSize,history,from,to,category}) {
+  async read({userId,workspaceId,customerId,q,status,page,pageSize,history,from,to,category,pricing}) {
    authorize(userId);
+   if(pricing)return contractPricing(env);
    if(history!=null){
     ids(workspaceId,customerId);if(!customerId)throw fail('ID akun diperlukan');
     const result=await repo().history(workspaceId,customerId,accountHistoryFilters({history,page,pageSize,from,to,category}));
@@ -46,7 +50,8 @@ export function createBackofficeService({ repository, env=process.env, grant=app
     if(!input.customerId||!await r.member(db,workspaceId,input.customerId))throw fail('Pelanggan tidak ada pada workspace ini',404);
     const audit=(action,reason,entityId)=>r.audit(db,{workspaceId,userId,customerId:input.customerId,action,reason,entityId});
     if(input.action==='create') {
-     const v={workspaceId,userId,customerId:input.customerId,requestKey:input.requestKey,invoice:`NXB-${randomUUID().toUpperCase()}`,company:text(input.company,160,'Perusahaan'),credits:count(input.credits),bonus:count(input.bonus??0,true),amount:money(input.amount),notes:typeof input.notes==='string'?input.notes.trim():''};
+     const v={workspaceId,userId,customerId:input.customerId,requestKey:input.requestKey,invoice:`NXB-${randomUUID().toUpperCase()}`,company:text(input.company,160,'Perusahaan'),credits:count(input.credits),bonus:count(input.bonus??0,true),amount:money(input.amount),notes:typeof input.notes==='string'?input.notes.trim():'',costIdrPerCredit:costIdrPerCredit(env)};
+     v.profitPercent=profitShare(v.amount,v.credits+v.bonus,v.costIdrPerCredit);
      if(v.notes.length>1000||v.credits+v.bonus>10000000)throw fail('Ketentuan tidak valid');
      const order=await r.createOrder(db,v);
      if(order.customer_user_id!==v.customerId||order.company_name!==v.company||Number(order.credits)!==v.credits||Number(order.bonus_credits)!==v.bonus||Number(order.amount_idr)!==v.amount||order.notes!==v.notes)throw fail('Kunci permintaan telah dipakai untuk ketentuan berbeda',409);

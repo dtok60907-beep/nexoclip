@@ -1,4 +1,5 @@
 import {requirePlatformOperator} from '../../../../src/lib/auth/platformOperator.js';
+import { isSameOriginRequest } from '../../../../src/lib/auth/sameOrigin.js';
 import {SESSION_COOKIE} from '../../../../src/lib/auth/session.js';
 import {getCurrentSession} from '../../../../src/services/authService.js';
 import {accountAccessService} from '../../../../src/services/accountAccessService.js';
@@ -10,7 +11,7 @@ export function createAccountAccessHandlers({sessionLookup=getCurrentSession,ser
    if(!session)return Response.json({error:'Authentication required'},{status:401,headers});
    requirePlatformOperator(session.user_id,env);
    if(method==='GET')return Response.json(await service.read({userId:session.user_id,targetUserId:new URL(request.url).searchParams.get('targetUserId')}),{headers});
-   if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origin tidak valid'},{status:403,headers});
+   if(!isSameOriginRequest(request,env))return Response.json({error:'Origin tidak valid'},{status:403,headers});
    if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))return Response.json({error:'JSON diperlukan'},{status:415,headers});
    const reader=request.body?.getReader();let size=0;const chunks=[];
    if(reader){try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>4000){await reader.cancel();throw Object.assign(new Error('Permintaan terlalu besar'),{status:413});}chunks.push(value);}}finally{reader.releaseLock();}}

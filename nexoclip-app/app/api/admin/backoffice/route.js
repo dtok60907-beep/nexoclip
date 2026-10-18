@@ -1,4 +1,5 @@
 import { requirePlatformOperator } from '../../../../src/lib/auth/platformOperator.js';
+import { isSameOriginRequest } from '../../../../src/lib/auth/sameOrigin.js';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { getCurrentSession } from '../../../../src/services/authService.js';
 import { backofficeService } from '../../../../src/services/backofficeService.js';
@@ -10,7 +11,7 @@ export function createBackofficeHandlers({ sessionLookup=getCurrentSession,servi
    if(!session)return Response.json({error:'Authentication required'},{status:401,headers});
    requirePlatformOperator(session.user_id,env);
    if(method==='POST'){
-    if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origin tidak valid'},{status:403,headers});
+    if(!isSameOriginRequest(request,env))return Response.json({error:'Origin tidak valid'},{status:403,headers});
     if(!request.headers.get('content-type')?.startsWith('application/json'))return Response.json({error:'JSON diperlukan'},{status:415,headers});
     if(Number(request.headers.get('content-length')||0)>12000)return Response.json({error:'Permintaan terlalu besar'},{status:413,headers});
     const body=await request.text();if(body.length>12000)return Response.json({error:'Permintaan terlalu besar'},{status:413,headers});
@@ -24,7 +25,7 @@ export function createBackofficeHandlers({ sessionLookup=getCurrentSession,servi
     const result=await service.exportHistory({userId:session.user_id,workspaceId:p.get('workspaceId'),customerId:p.get('customerId'),history:p.get('history'),from:p.get('from'),to:p.get('to'),category:p.get('category')});
     return new Response(result.csv,{headers:{...headers,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="${result.filename}"`,'X-Content-Type-Options':'nosniff'}});
    }
-   return Response.json(await service.read({userId:session.user_id,workspaceId:p.get('workspaceId'),customerId:p.get('customerId'),q:p.get('q'),status:p.get('status'),page:p.get('page'),pageSize:p.get('pageSize'),history:p.get('history'),from:p.get('from'),to:p.get('to'),category:p.get('category')}),{headers});
+   return Response.json(await service.read({userId:session.user_id,workspaceId:p.get('workspaceId'),customerId:p.get('customerId'),q:p.get('q'),status:p.get('status'),page:p.get('page'),pageSize:p.get('pageSize'),history:p.get('history'),from:p.get('from'),to:p.get('to'),category:p.get('category'),pricing:p.get('pricing')==='contract'}),{headers});
   }catch(e){const status=e.status||(e.code==='23505'?409:500);return Response.json({error:status>=500?'Backoffice tidak dapat diproses':e.code==='23505'?'Referensi pembayaran sudah digunakan':e.message},{status,headers});}
  };
  return {GET:handle('GET'),POST:handle('POST')};

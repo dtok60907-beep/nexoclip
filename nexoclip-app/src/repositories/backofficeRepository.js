@@ -2,7 +2,7 @@ import { accountHistoryFilters } from '../lib/accountHistoryFilters.js';
 import { accountDirectoryFilters } from '../lib/accountDirectoryFilters.js';
 import { getEconomicsReport } from './economicsRepository.js';
 export function createBackofficeRepository(pool) {
- const orderFields = 'id, workspace_id, customer_user_id, invoice_number, company_name, credits, bonus_credits, amount_idr, notes, status, payment_reference, payment_fee_idr, paid_at, created_at, credit_ledger_id, topup_id';
+ const orderFields = 'id, workspace_id, customer_user_id, invoice_number, company_name, credits, bonus_credits, amount_idr, notes, profit_percent, cost_idr_per_credit, status, payment_reference, payment_fee_idr, paid_at, created_at, credit_ledger_id, topup_id';
  const api = {
   async directory(input = {}) {
    const {q,status,page,pageSize}=accountDirectoryFilters(input);
@@ -82,8 +82,8 @@ export function createBackofficeRepository(pool) {
   async lockWorkspace(db,id) { return (await db.query('SELECT id FROM workspaces WHERE id=$1 FOR UPDATE',[id])).rows[0]; },
   async findOrder(db,workspaceId,id) { return (await db.query('SELECT * FROM business_credit_orders WHERE workspace_id=$1 AND id=$2 FOR UPDATE',[workspaceId,id])).rows[0]; },
   async createOrder(db,v) {
-   return (await db.query(`INSERT INTO business_credit_orders (workspace_id,customer_user_id,created_by_user_id,invoice_number,request_key,company_name,credits,bonus_credits,amount_idr,notes)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (workspace_id,request_key) DO NOTHING RETURNING *`,[v.workspaceId,v.customerId,v.userId,v.invoice,v.requestKey,v.company,v.credits,v.bonus,v.amount,v.notes])).rows[0] || (await db.query('SELECT * FROM business_credit_orders WHERE workspace_id=$1 AND request_key=$2',[v.workspaceId,v.requestKey])).rows[0];
+   return (await db.query(`INSERT INTO business_credit_orders (workspace_id,customer_user_id,created_by_user_id,invoice_number,request_key,company_name,credits,bonus_credits,amount_idr,notes,profit_percent,cost_idr_per_credit)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (workspace_id,request_key) DO NOTHING RETURNING *`,[v.workspaceId,v.customerId,v.userId,v.invoice,v.requestKey,v.company,v.credits,v.bonus,v.amount,v.notes,v.profitPercent,v.costIdrPerCredit])).rows[0] || (await db.query('SELECT * FROM business_credit_orders WHERE workspace_id=$1 AND request_key=$2',[v.workspaceId,v.requestKey])).rows[0];
   },
   async recordPayment(db,order,userId,reference,paidAt,fee,entry) {
    const topup=(await db.query(`INSERT INTO credit_topups (workspace_id,user_id,package_code,amount_idr,credits,provider_key,order_id,provider_txn_id,status,credit_ledger_id,completed_at)

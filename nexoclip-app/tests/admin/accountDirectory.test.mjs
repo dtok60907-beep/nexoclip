@@ -29,7 +29,7 @@ test('directory query binds literal wildcard searches and shares its snapshot co
 test('directory GET forwards only trusted operator identity and filters and denies customer access',async()=>{
  const request=new Request('http://localhost/api/admin/backoffice?q=Alice&status=suspended&page=2&pageSize=50&userId=forged');request.cookies={get:()=>({value:'session'})};
  let called=0;
- const service={read:async input=>{called++;assert.deepEqual(input,{userId:operator,workspaceId:null,customerId:null,q:'Alice',status:'suspended',page:'2',pageSize:'50',history:null,from:null,to:null,category:null});return {pagination:{page:2,pageSize:50,total:100,pages:2}};}};
+ const service={read:async input=>{called++;assert.deepEqual(input,{userId:operator,workspaceId:null,customerId:null,q:'Alice',status:'suspended',page:'2',pageSize:'50',history:null,from:null,to:null,category:null,pricing:false});return {pagination:{page:2,pageSize:50,total:100,pages:2}};}};
  const response=await createBackofficeHandlers({env,service,sessionLookup:async()=>({user_id:operator})}).GET(request);
  assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'private, no-store');
  assert.equal((await createBackofficeHandlers({env,service,sessionLookup:async()=>({user_id:'customer'})}).GET(request)).status,403);
