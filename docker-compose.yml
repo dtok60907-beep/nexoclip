@@ -364,9 +364,12 @@ services:
       context: ./nexoclip-app/services/OpenMontage
       dockerfile: director_service/Dockerfile
     env_file:
-      # DIRECTOR_OPENAI_API_KEY (and optional DIRECTOR_LLM_MODEL); gitignored.
+      # Optional DIRECTOR_LLM_MODEL, and DIRECTOR_OPENAI_API_KEY for a GPT model; gitignored.
       - ./nexoclip-app/services/OpenMontage/director.env
     environment:
+      # The default text model (dola-seed-2-1-turbo) runs on BytePlus ModelArk.
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-https://ark.ap-southeast.bytepluses.com/api/v3}
       DIRECTOR_PROXY_SECRET: ${DIRECTOR_PROXY_SECRET:?DIRECTOR_PROXY_SECRET is required}
       NEXOCLIP_INTERNAL_URL: http://nexoclip-app:3000
       NEXOCLIP_BRIDGE_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}

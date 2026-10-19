@@ -1,8 +1,8 @@
-"""OpenAI Responses API client for the director's text LLM.
+"""Responses API client for the director's text LLM.
 
-Reads DIRECTOR_OPENAI_API_KEY (not OPENAI_API_KEY) so OpenMontage's own
-OpenAI-backed tools (TTS, GPT Image) never pick this key up — it is for the
-director's text model only.
+A dola-seed model runs on BytePlus ModelArk (BYTEPLUS_API_KEY, BYTEPLUS_BASE_URL), whose Responses API matches
+OpenAI's. A GPT model runs on OpenAI with DIRECTOR_OPENAI_API_KEY (not OPENAI_API_KEY) so OpenMontage's own
+OpenAI-backed tools (TTS, GPT Image) never pick this key up — it is for the director's text model only.
 """
 
 from __future__ import annotations
@@ -17,17 +17,20 @@ from typing import Any, Callable, Optional
 import requests
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_MODEL = "gpt-5.6-terra"
+DEFAULT_MODEL = "dola-seed-2-1-turbo-260628"
 KEY_ENV = "DIRECTOR_OPENAI_API_KEY"
+BYTEPLUS_KEY_ENV = "BYTEPLUS_API_KEY"
+BYTEPLUS_URL_ENV = "BYTEPLUS_BASE_URL"
 KEY_FILE = Path(__file__).resolve().parent.parent / "director.env"
 
-# The models the Director may use: GPT-5 and newer, never a -pro or -sol model. USD per 1M tokens
-# (input, output), OpenAI list prices for contexts up to 272K tokens. Keep in step with
-# STORYBOARD_TEXT_PRICES in nexoclip-app/src/services/storyboardTextPricing.js, which bills them.
-# (input, cached input, output) USD per 1M tokens, OpenAI standard tier for contexts up to 272K tokens
-# (developers.openai.com/api/docs/pricing, October 2026). Every agent step resends the conversation, so most input
-# is cached and billed at the cached rate.
+# The models the Director may use: Seed 2.1 on BytePlus, or GPT-5 and newer, never a -pro or -sol model.
+# Keep in step with STORYBOARD_TEXT_PRICES in nexoclip-app/src/services/storyboardTextPricing.js, which bills them.
+# (input, cached input, output) USD per 1M tokens; GPT: OpenAI standard tier for contexts up to 272K tokens
+# (developers.openai.com/api/docs/pricing, October 2026). Every agent step resends the conversation, so on OpenAI
+# most input is cached and billed at the cached rate.
 PRICES_PER_MILLION = {
+    # BytePlus ModelArk standard online inference (ai.byteplus.com model pricing, October 2026).
+    "dola-seed-2-1-turbo-260628": (0.50, 0.10, 2.50),
     "gpt-5.6-terra": (2.00, 0.20, 12.00),
     "gpt-5.6-luna": (0.20, 0.02, 1.20),
     "gpt-5.5": (5.00, 0.50, 30.00),
@@ -38,7 +41,7 @@ PRICES_PER_MILLION = {
     "gpt-5": (1.25, 0.125, 10.00),
     "gpt-5-mini": (0.25, 0.025, 2.00),
 }
-# GPT-5 models reason before answering; "low" keeps a turn quick while tools still get used well.
+# The models reason before answering; "low" keeps a turn quick while tools still get used well.
 REASONING_EFFORT_ENV = "DIRECTOR_REASONING_EFFORT"
 WEB_SEARCH_CALL_USD = 0.025
 
@@ -54,8 +57,29 @@ def model_name() -> str:
 def _checked_model() -> str:
     model = model_name()
     if model not in PRICES_PER_MILLION:
-        raise LLMError(f"model {model!r} is not allowed for the Director (GPT-5 or newer, not -pro / -sol)")
+        raise LLMError(f"model {model!r} is not allowed for the Director (Seed 2.1, or GPT-5 or newer, not -pro / -sol)")
     return model
+
+
+def _on_byteplus(model: str) -> bool:
+    return model.startswith("dola-seed-")
+
+
+def _provider(model: str) -> str:
+    return "BytePlus" if _on_byteplus(model) else "OpenAI"
+
+
+def _endpoint(model: str) -> tuple[str, str]:
+    """(Responses API URL, API key) for the model's provider."""
+    if _on_byteplus(model):
+        key, base = os.environ.get(BYTEPLUS_KEY_ENV), (os.environ.get(BYTEPLUS_URL_ENV) or "").rstrip("/")
+        if not key or not base:
+            raise LLMError(f"{BYTEPLUS_KEY_ENV} and {BYTEPLUS_URL_ENV} must be set")
+        return f"{base}/responses", key
+    key = _api_key()
+    if not key:
+        raise LLMError(f"{KEY_ENV} is not set")
+    return OPENAI_RESPONSES_URL, key
 
 
 def _reasoning() -> dict[str, str]:
@@ -86,7 +110,7 @@ def _output_text(payload: dict[str, Any]) -> str:
 
 
 def cached_tokens(usage: dict[str, Any]) -> int:
-    """Input tokens served from OpenAI's prompt cache (billed at the cached rate)."""
+    """Input tokens served from the provider's prompt cache (billed at the cached rate)."""
     details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details") or {}
     return min(int(details.get("cached_tokens") or 0), int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0))
 
@@ -107,10 +131,9 @@ def chat(
     web_search: bool = False,
     max_tokens: int = 16000,
 ) -> tuple[str, dict[str, Any]]:
-    api_key = _api_key()
-    if not api_key:
-        raise LLMError(f"{KEY_ENV} is not set")
     model = _checked_model()
+    url, api_key = _endpoint(model)
+    provider = _provider(model)
     body: dict[str, Any] = {
         "model": model,
         "reasoning": _reasoning(),
@@ -121,33 +144,34 @@ def chat(
         body["tools"] = [{"type": "web_search"}]
         # Without this the model happily skips searching and invents sources.
         body["tool_choice"] = "required"
-        # Without this the response only carries URLs the model chose to
-        # annotate, so real search results look "invented" to the source check.
-        body["include"] = ["web_search_call.action.sources"]
+        if not _on_byteplus(model):
+            # Without this the response only carries URLs the model chose to
+            # annotate, so real search results look "invented" to the source check.
+            body["include"] = ["web_search_call.action.sources"]
     # No json_object mode: on long prompts it can stall emitting whitespace
     # until max_output_tokens; extract_json handles fenced or bare JSON instead.
     try:
         response = requests.post(
-            OPENAI_RESPONSES_URL,
+            url,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json=body,
             timeout=(10, 600),
         )
     except requests.RequestException as exc:
-        raise LLMError(f"OpenAI request failed: {exc}") from exc
+        raise LLMError(f"{provider} request failed: {exc}") from exc
     if not response.ok:
         try:
             detail = response.json().get("error", {}).get("message")
         except ValueError:
             detail = response.text[:300]
-        raise LLMError(f"OpenAI returned {response.status_code}: {detail}")
+        raise LLMError(f"{provider} returned {response.status_code}: {detail}")
     payload = response.json()
     if payload.get("status") not in (None, "completed"):
         reason = (payload.get("incomplete_details") or {}).get("reason")
-        raise LLMError(f"OpenAI response {payload.get('status')}: {reason}")
+        raise LLMError(f"{provider} response {payload.get('status')}: {reason}")
     text = _output_text(payload)
     if not text:
-        raise LLMError("OpenAI returned no text output")
+        raise LLMError(f"{provider} returned no text output")
     usage = dict(payload.get("usage") or {})
     usage["cost"] = _cost_usd(model, payload)
     usage["cited_urls"] = _cited_urls(payload)
@@ -157,7 +181,7 @@ def chat(
 CONNECT_RETRIES = 2
 
 
-def _post(api_key: str, body: dict[str, Any], *, stream: bool = False) -> requests.Response:
+def _post(url: str, api_key: str, body: dict[str, Any], *, stream: bool = False) -> requests.Response:
     """POST to the Responses API, retrying only failures to connect.
 
     A connection that never got established cannot have been billed, so it is
@@ -166,7 +190,7 @@ def _post(api_key: str, body: dict[str, Any], *, stream: bool = False) -> reques
     for attempt in range(CONNECT_RETRIES + 1):
         try:
             return requests.post(
-                OPENAI_RESPONSES_URL,
+                url,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json=body,
                 timeout=(10, 600),
@@ -174,10 +198,10 @@ def _post(api_key: str, body: dict[str, Any], *, stream: bool = False) -> reques
             )
         except requests.ConnectionError as exc:
             if attempt == CONNECT_RETRIES or not _before_send(exc):
-                raise LLMError(f"OpenAI request failed: {exc}") from exc
+                raise LLMError(f"{_provider(body['model'])} request failed: {exc}") from exc
             time.sleep(1.5 * (attempt + 1))
         except requests.RequestException as exc:
-            raise LLMError(f"OpenAI request failed: {exc}") from exc
+            raise LLMError(f"{_provider(body['model'])} request failed: {exc}") from exc
     raise AssertionError("unreachable")
 
 
@@ -216,10 +240,9 @@ def respond(
     Within one agent turn, later steps pass previous_response_id and only the
     function_call_output items, so the model keeps its own tool-call context.
     """
-    api_key = _api_key()
-    if not api_key:
-        raise LLMError(f"{KEY_ENV} is not set")
     model = _checked_model()
+    url, api_key = _endpoint(model)
+    provider = _provider(model)
     body: dict[str, Any] = {
         "model": model,
         "reasoning": _reasoning(),
@@ -233,17 +256,17 @@ def respond(
         body["previous_response_id"] = previous_response_id
     if on_text is not None:
         body["stream"] = True
-    response = _post(api_key, body, stream=on_text is not None)
+    response = _post(url, api_key, body, stream=on_text is not None)
     if not response.ok:
         try:
             detail = response.json().get("error", {}).get("message")
         except ValueError:
             detail = response.text[:300]
-        raise LLMError(f"OpenAI returned {response.status_code}: {detail}")
+        raise LLMError(f"{provider} returned {response.status_code}: {detail}")
     payload = _read_stream(response, on_text) if on_text is not None else response.json()
     if payload.get("status") not in (None, "completed"):
         reason = (payload.get("incomplete_details") or {}).get("reason")
-        raise LLMError(f"OpenAI response {payload.get('status')}: {reason}")
+        raise LLMError(f"{provider} response {payload.get('status')}: {reason}")
     calls = [
         {"call_id": item["call_id"], "name": item["name"], "arguments": item.get("arguments") or "{}"}
         for item in payload.get("output") or []
@@ -275,12 +298,12 @@ def _read_stream(response: requests.Response, on_text: Callable[[str], None]) ->
             elif kind in ("response.completed", "response.incomplete", "response.failed"):
                 return event.get("response") or {}
             elif kind == "error":
-                raise LLMError(f"OpenAI stream error: {event.get('message') or event.get('code')}")
+                raise LLMError(f"Stream error: {event.get('message') or event.get('code')}")
     except requests.RequestException as exc:
-        raise LLMError(f"OpenAI stream broke off: {exc}") from exc
+        raise LLMError(f"Stream broke off: {exc}") from exc
     finally:
         response.close()
-    raise LLMError("OpenAI stream ended without a response")
+    raise LLMError("Stream ended without a response")
 
 
 def _cited_urls(payload: dict[str, Any]) -> list[str]:

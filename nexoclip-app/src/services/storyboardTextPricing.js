@@ -1,6 +1,6 @@
 import { loadUsdIdrRate, usdToCredits } from './generationPricing.js';
 
-// OpenAI list prices in USD per token for the text models the internal AI tools
+// List prices in USD per token for the text models the internal AI tools
 // (the AI Storyboards Director / Jellyfish, and OpenDirector) use for script
 // breakdown, extraction and prompt writing. Unknown models are refused rather
 // than billed at a guess.
@@ -10,8 +10,10 @@ export const STORYBOARD_TEXT_PRICES = {
   'gpt-5': { input: 1.25 / 1e6, cached: 0.125 / 1e6, output: 10 / 1e6 },
   'gpt-5-mini': { input: 0.25 / 1e6, cached: 0.025 / 1e6, output: 2 / 1e6 },
   // The AI Director (services/OpenMontage/director_service/llm.py, PRICES_PER_MILLION):
-  // GPT-5 and newer, never -pro / -sol. Prices for contexts up to 272K tokens; `cached` is the rate for input
-  // served from OpenAI's prompt cache (most of an agent turn, which resends the conversation every step).
+  // Seed 2.1 on BytePlus ModelArk (standard online inference, October 2026), or GPT-5 and newer, never -pro / -sol.
+  'dola-seed-2-1-turbo-260628': { input: 0.5 / 1e6, cached: 0.1 / 1e6, output: 2.5 / 1e6 },
+  // GPT: OpenAI prices for contexts up to 272K tokens; `cached` is the rate for input
+  // served from the provider's prompt cache (most of an agent turn, which resends the conversation every step).
   'gpt-5.1': { input: 1.25 / 1e6, cached: 0.125 / 1e6, output: 10 / 1e6 },
   'gpt-5.2': { input: 1.75 / 1e6, cached: 0.175 / 1e6, output: 14 / 1e6 },
   'gpt-5.4': { input: 2.5 / 1e6, cached: 0.25 / 1e6, output: 15 / 1e6 },

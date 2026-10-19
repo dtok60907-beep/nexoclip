@@ -73,7 +73,7 @@ export const IMAGE_MODELS: ModelConfig[] = [
   image('nano-banana-pro', 'Nano Banana Pro', 'google', 'gemini-3-pro-image', NANO_RATIOS, ['1K', '2K', '4K']),
   image('nano-banana-2', 'Nano Banana 2', 'google', 'gemini-3.1-flash-image', NANO_RATIOS, ['1K', '2K', '4K'], 'auto', '1K'),
   image('nano-banana-2-lite', 'Nano Banana 2 Lite', 'google', 'gemini-3.1-flash-lite-image', NANO_RATIOS),
-  image('gpt-image-1.5', 'GPT Image 1.5', 'openai', 'gpt-image-1.5', ['1:1', '2:3', '3:2'], ['low', 'medium', 'high'], '1:1', 'medium'),
+  // GPT Image 1.5 is gone: OpenRouter does not carry it and there is no direct OpenAI key.
   image('gpt-image-2', 'GPT Image 2', 'openai', 'gpt-image-2', STANDARD_RATIOS, ['1K', '2K', '4K'], 'auto', '2K'),
   image('seedream-3', 'Seedream 3', 'byteplus', 'seedream-3.0-t2i', SEEDREAM_RATIOS),
   image('seedream-4', 'Seedream 4', 'byteplus', 'seedream-4-0-250828', SEEDREAM_RATIOS, ['1K', '2K', '4K'], '1:1', '4K'),

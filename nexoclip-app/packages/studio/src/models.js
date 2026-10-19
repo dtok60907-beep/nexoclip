@@ -3412,8 +3412,7 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
   'minimax-hailuo-2.3-pro-i2v': 'minimax/hailuo-2.3',
   'minimax-hailuo-2.3-standard-t2v': 'minimax/hailuo-2.3',
   'minimax-hailuo-2.3-standard-i2v': 'minimax/hailuo-2.3',
-  'openai-sora-2-pro-text-to-video': 'openai/sora-2-pro',
-  'openai-sora-2-pro-image-to-video': 'openai/sora-2-pro',
+  // Sora 2 Pro is not listed: OpenRouter rejects it and there is no direct OpenAI key.
   'seedance-2-mini-image-to-video': 'bytedance/seedance-2.0-mini',
   'kling-o1-text-to-video': 'kwaivgi/kling-video-o1',
   'kling-o1-image-to-video': 'kwaivgi/kling-video-o1',

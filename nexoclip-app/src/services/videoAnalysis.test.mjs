@@ -25,5 +25,5 @@ test('flags an unreachable video URL so the caller can send the file inline', as
 });
 
 test('prices the tokens it used', () => {
-  assert.equal(videoAnalysisCostUsd({ prompt_tokens: 1_000_000, completion_tokens: 1_000_000 }), 2.25);
+  assert.equal(videoAnalysisCostUsd({ prompt_tokens: 1_000_000, completion_tokens: 1_000_000 }), 3);
 });

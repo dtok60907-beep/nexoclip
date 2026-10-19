@@ -9,6 +9,7 @@ export const LEDGER_USAGE_WHERE = (alias) => `${alias}.amount < 0 AND ${alias}.r
 export const ledgerKindSql = (alias) => `CASE WHEN ${alias}.reason LIKE '%\\_text' THEN 'llm'
          WHEN ${alias}.reason LIKE '%\\_video\\_analysis' THEN 'video_analysis'
          ELSE COALESCE(${alias}.metadata->>'type', 'audio') END`;
+// Video analyses from before the model was recorded used seed-2-0-lite.
 export const ledgerModelSql = (alias) => `COALESCE(${alias}.metadata->>'model',
              CASE WHEN ${alias}.reason LIKE '%\\_video\\_analysis' THEN 'byteplus/seed-2-0-lite'
                   WHEN ${alias}.metadata->>'type' = 'music' THEN 'elevenlabs/music_v1'

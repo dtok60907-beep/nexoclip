@@ -1039,13 +1039,24 @@ def test_projects_without_a_look_keep_their_old_prompts():
     assert boards.media_specs(board)["frame:s1"]["prompt"] == shot["frame_prompt"]
 
 
-def test_only_gpt5_class_models_are_allowed(monkeypatch):
-    for model in ("gpt-5.6-sol", "gpt-5.5-pro", "gpt-4.1-mini"):
+def test_only_seed_and_gpt5_class_models_are_allowed(monkeypatch):
+    for model in ("gpt-5.6-sol", "gpt-5.5-pro", "gpt-4.1-mini", "seed-2-0-lite-260428"):
         monkeypatch.setenv("DIRECTOR_LLM_MODEL", model)
         with pytest.raises(llm.LLMError, match="not allowed"):
             llm._checked_model()
     monkeypatch.delenv("DIRECTOR_LLM_MODEL")
-    assert llm._checked_model() == "gpt-5.6-terra"
+    assert llm._checked_model() == "dola-seed-2-1-turbo-260628"
+
+
+def test_seed_runs_on_byteplus_and_gpt_on_openai(monkeypatch):
+    monkeypatch.setenv("BYTEPLUS_API_KEY", "bp")
+    monkeypatch.setenv("BYTEPLUS_BASE_URL", "https://ark.example/api/v3/")
+    monkeypatch.setenv("DIRECTOR_OPENAI_API_KEY", "oa")
+    assert llm._endpoint("dola-seed-2-1-turbo-260628") == ("https://ark.example/api/v3/responses", "bp")
+    assert llm._endpoint("gpt-5.6-terra") == (llm.OPENAI_RESPONSES_URL, "oa")
+    monkeypatch.delenv("BYTEPLUS_BASE_URL")
+    with pytest.raises(llm.LLMError, match="BYTEPLUS_BASE_URL"):
+        llm._endpoint("dola-seed-2-1-turbo-260628")
 
 
 def test_the_brief_is_written_before_anything_is_built(client, fake_llm, bridge):

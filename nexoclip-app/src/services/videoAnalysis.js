@@ -3,9 +3,9 @@
 // the tokens it used.
 import { loadUsdIdrRate, usdToCredits } from './generationPricing.js';
 
-export const SEED_VIDEO_MODEL = 'seed-2-0-lite-260428';
-// USD per million tokens (BytePlus ModelArk pricing, prompts up to 128K tokens, October 2026).
-export const SEED_VIDEO_PRICES = { input: 0.25, output: 2.0 };
+export const SEED_VIDEO_MODEL = 'dola-seed-2-1-turbo-260628';
+// USD per million tokens (BytePlus ModelArk standard online inference, October 2026).
+export const SEED_VIDEO_PRICES = { input: 0.5, output: 2.5 };
 export const FRAMES_PER_SECOND = 1;
 export const MAX_INLINE_BYTES = 30 * 1024 * 1024; // a video sent inline (base64) when its URL is not reachable
 
@@ -42,6 +42,8 @@ export async function analyzeVideo({ url, question = DEFAULT_QUESTION, env = pro
     body: JSON.stringify({
       model: SEED_VIDEO_MODEL,
       max_tokens: 2000,
+      // Without thinking the whole token budget goes to the description.
+      thinking: { type: 'disabled' },
       messages: [{ role: 'user', content: [
         { type: 'video_url', video_url: { url, fps: FRAMES_PER_SECOND } },
         { type: 'text', text: String(question).slice(0, 2000) },

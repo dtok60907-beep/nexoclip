@@ -6,7 +6,7 @@ import { estimateGenerationCredits } from '../../../../src/services/generationPr
 import { createAssetDownload, createStorage, deleteWorkspaceAsset, importWorkspaceAsset } from '../../../../src/services/assetService.js';
 import { appendCreditEntry } from '../../../../src/services/creditService.js';
 import { findCreditEntryByIdempotencyKey } from '../../../../src/repositories/creditRepository.js';
-import { MAX_INLINE_BYTES, analyzeVideo, videoAnalysisCredits } from '../../../../src/services/videoAnalysis.js';
+import { MAX_INLINE_BYTES, SEED_VIDEO_MODEL, analyzeVideo, videoAnalysisCredits } from '../../../../src/services/videoAnalysis.js';
 import { audioCredits, generateElevenLabsAudio, validateAudioInput } from '../../../../src/services/elevenlabsAudio.js';
 import { storyboardTextCredits } from '../../../../src/services/storyboardTextPricing.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
@@ -212,7 +212,7 @@ export function createInternalStoryboardHandler({
         const { usd, credits } = await priceVideoAnalysis(result.usage);
         const entry = {
           workspaceId: workspace.id, reason: `${source}_video_analysis`, idempotencyKey: key,
-          metadata: { assetId, text: result.text, usage: result.usage, providerCostUsd: usd, userId: body.userId },
+          metadata: { assetId, model: `byteplus/${SEED_VIDEO_MODEL}`, text: result.text, usage: result.usage, providerCostUsd: usd, userId: body.userId },
         };
         let charged = credits;
         try {
