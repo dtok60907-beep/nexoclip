@@ -80,7 +80,13 @@ export function createBusinessDocumentsService({ pool = null, env = process.env 
     if (!order) throw fail('Invoice tidak ditemukan', 404);
     if (kind.needsPayment && order.status !== 'completed') throw fail(`${kind.title} hanya untuk invoice yang sudah lunas`, 409);
     const company = (await db().query('SELECT * FROM company_profile WHERE id = 1')).rows[0] || {};
-    return { type, title: kind.title, number: documentNumber(order), order, company, pricing: contractPricing(env) };
+    // The workspace balance before this invoice's credits: what it held when they were
+    // added, or what it holds now while the invoice is unpaid.
+    const before = order.credit_ledger_id
+      ? (await db().query('SELECT balance_after - amount AS balance FROM credit_ledger WHERE id = $1', [order.credit_ledger_id])).rows[0]
+      : (await db().query('SELECT balance FROM credit_accounts WHERE workspace_id = $1', [order.workspace_id])).rows[0];
+    const balanceBefore = Math.max(0, Number(before?.balance || 0));
+    return { type, title: kind.title, number: documentNumber(order), order, company, balanceBefore, pricing: contractPricing(env) };
   }
 
   return { readProfile, saveProfile, documentData };

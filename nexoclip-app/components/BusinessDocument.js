@@ -34,6 +34,7 @@ export const documentStyles = `
 export default function BusinessDocument({ data }) {
   const { type, title, number, order, company: c, pricing } = data;
   const credits = Number(order.credits), bonus = Number(order.bonus_credits), total = credits + bonus;
+  const before = Number(data.balanceBefore) || 0, overall = before + total;
   const issued = ['receipt', 'activation'].includes(type) ? order.paid_at : order.created_at;
   return (
     <div className="doc-page">
@@ -76,7 +77,8 @@ export default function BusinessDocument({ data }) {
               {bonus > 0 && <tr><td>Bonus kredit</td><td>{num(bonus)} kredit</td></tr>}
               <tr className="total"><td>Total kredit aktif</td><td>{num(total)} kredit</td></tr>
             </tbody></table>
-            <Estimates pricing={pricing} total={total} />
+            <BalanceBreakdown before={before} added={total} />
+            <Estimates pricing={pricing} total={overall} />
             <p className="muted">Kredit dipakai bersama oleh anggota workspace dan saat ini tidak memiliki masa kedaluwarsa. Sisa kredit dapat dilihat di menu Billing aplikasi.</p>
           </>
         ) : (
@@ -88,7 +90,7 @@ export default function BusinessDocument({ data }) {
                 <tr className="total"><td colSpan={2}>Total</td><td className="right">{idr(order.amount_idr)}</td></tr>
               </tbody>
             </table>
-            {type === 'quotation' && <Estimates pricing={pricing} total={total} />}
+            {type === 'quotation' && <><BalanceBreakdown before={before} added={total} /><Estimates pricing={pricing} total={overall} /></>}
             {type === 'invoice' ? (
               <>
                 <h2>Pembayaran</h2>
@@ -100,10 +102,9 @@ export default function BusinessDocument({ data }) {
               <>
                 <h2>Ketentuan</h2>
                 <ul>
-                  <li>Penawaran berlaku sampai {date(addDays(order.created_at, 14))}.</li>
                   <li>Kredit ditambahkan ke workspace setelah pembayaran diterima, dan tidak dapat diuangkan atau dikembalikan.</li>
                   <li>Estimasi durasi di atas mengikuti kurs USD/IDR dan pemakaian sebenarnya, belum termasuk generate yang diulang.</li>
-                  <li>Penggunaan tunduk pada Syarat & Ketentuan NexoClip, termasuk larangan konten tertentu dan izin atas wajah orang di gambar referensi.</li>
+                  <li>Penggunaan tunduk pada Syarat & Ketentuan NexoClip.</li>
                   <li>Pajak mengikuti ketentuan yang berlaku.</li>
                 </ul>
               </>
@@ -123,12 +124,31 @@ export default function BusinessDocument({ data }) {
   );
 }
 
-function Estimates({ pricing, total }) {
+// The credits already in the workspace plus this invoice's, when there were some before.
+function BalanceBreakdown({ before, added }) {
+  if (!(before > 0)) return null;
   return <>
-    <h2>Perkiraan hasil</h2>
-    <ul>
-      {pricing.videos.filter((v) => /720p/.test(v.label)).map((v) => <li key={v.label}>± {num(total / v.creditsPerSecond / 60, 1)} menit video {v.label}</li>)}
-      {pricing.images.map((i) => <li key={i.label}>atau ± {num(Math.floor(total / i.creditsPerImage))} gambar {i.label}</li>)}
-    </ul>
+    <h2>Saldo kredit</h2>
+    <table><tbody>
+      <tr><td>Sisa saldo sebelumnya</td><td className="right">{num(before, 1)} kredit</td></tr>
+      <tr><td>Tambahan dari dokumen ini</td><td className="right">{num(added, 1)} kredit</td></tr>
+      <tr className="total"><td>Total kredit</td><td className="right">{num(before + added, 1)} kredit</td></tr>
+    </tbody></table>
+  </>;
+}
+
+// What the credits buy, model by model: video duration and image count.
+function Estimates({ pricing, total }) {
+  const duration = (seconds) => `± ${num(seconds / 60, 1)} menit (${num(seconds)} detik)`;
+  return <>
+    <h2>Perkiraan hasil dari {num(total, 1)} kredit</h2>
+    <table>
+      <thead><tr><th>Model</th><th className="right">Jika dipakai seluruhnya</th></tr></thead>
+      <tbody>
+        {pricing.videos.map((v) => <tr key={v.label}><td>Video {v.label}</td><td className="right">{duration(total / v.creditsPerSecond)}</td></tr>)}
+        {pricing.images.map((i) => <tr key={i.label}><td>Gambar {i.label}</td><td className="right">± {num(Math.floor(total / i.creditsPerImage))} gambar</td></tr>)}
+      </tbody>
+    </table>
+    <p className="muted">Masing-masing jika seluruh kredit dipakai untuk satu model saja; pemakaian campuran dibagi sesuai porsinya.</p>
   </>;
 }
