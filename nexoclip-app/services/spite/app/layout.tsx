@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { DialogHost } from '@/components/ui/dialog-host'
 import './globals.css'
 import ImpersonationBanner from '@/components/impersonation-banner'
+import SupportChat from '@/components/support-chat'
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -61,6 +62,7 @@ export default function RootLayout({
         <Toaster theme="dark" position="bottom-right" />
         <DialogHost />
         <ImpersonationBanner />
+        <SupportChat />
       </body>
     </html>
   )
