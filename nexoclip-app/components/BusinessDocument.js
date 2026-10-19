@@ -44,7 +44,8 @@ export default function BusinessDocument({ data }) {
           <div>
             <h1>{missing(c.legal_name, 'Nama badan usaha')}</h1>
             <div className="muted">{missing(c.address, 'Alamat')}</div>
-            <div className="muted">{c.npwp ? `NPWP ${c.npwp}` : missing('', 'NPWP')}{c.email ? ` · ${c.email}` : ''}{c.phone ? ` · ${c.phone}` : ''}</div>
+            {/* NPWP, email and phone are optional: shown when filled in. */}
+            <div className="muted">{[c.npwp && `NPWP ${c.npwp}`, c.email, c.phone].filter(Boolean).join(' · ')}</div>
           </div>
           <div className="right">
             <h1>{title.toUpperCase()}</h1>
