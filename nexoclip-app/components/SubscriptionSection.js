@@ -8,6 +8,26 @@ const number = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDi
 const day = (v) => (v ? new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const DAY_MS = 86_400_000;
 
+// What the button does for this account now (see quotePlan on the server).
+function quoteLabel(plan, current) {
+  const q = plan.quote || { kind: 'new' };
+  if (q.kind === 'upgrade') return `Upgrade · pay ${rupiah(q.amountIdr)}`;
+  if (q.kind === 'switch') return `Switch to yearly · ${rupiah(q.amountIdr)}`;
+  if (q.kind === 'downgrade') return `Switch from ${day(q.startsAt)}`;
+  if (q.kind === 'scheduled') return `Starts ${day(q.startsAt)}`;
+  if (q.kind === 'renew' || current) return `Renew ${plan.name}`;
+  return `Choose ${plan.name}`;
+}
+
+function quoteNote(q) {
+  if (!q) return null;
+  if (q.kind === 'upgrade') return `Prorated for the rest of your period: +${number(q.creditsNow)} credits now (until ${day(q.creditsExpireAt)}), then the bigger plan every month. Your renewal date stays.`;
+  if (q.kind === 'switch') return 'A new yearly period starts today; credits you already have keep their dates.';
+  if (q.kind === 'downgrade') return `Your current plan runs to its end; this one starts ${day(q.startsAt)}. Paid now.`;
+  if (q.kind === 'renew') return `Adds another period after ${day(q.startsAt)}.`;
+  return null;
+}
+
 // Monthly and yearly plans above the top-ups. Renders nothing while subscriptions are
 // off (SUBSCRIPTIONS_ENABLED). Payment is one period at a time; renewing is manual.
 export default function SubscriptionSection({ workspaceId, onCompleted }) {
@@ -68,9 +88,12 @@ export default function SubscriptionSection({ workspaceId, onCompleted }) {
         {['monthly', 'yearly'].map((i) => <button key={i} type="button" onClick={() => setPeriod(i)} className={`rounded-lg px-3 py-1.5 ${period === i ? 'bg-white/10 text-white' : 'text-white/50'}`}>{i === 'monthly' ? 'Monthly' : 'Yearly · 2 months free'}</button>)}
       </div>
     </div>
-    {active && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${daysLeft <= 7 ? tones.info : 'border-white/10 bg-white/[.03] text-white/70'}`}>
-      {sub.name} ({sub.interval}) · {number(sub.monthlyCredits)} credits a month · renews manually by {day(sub.currentPeriodEnd)}{daysLeft <= 7 ? ` — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left. Renew below to keep your monthly credits.` : ''}
-    </p>}
+    {active && <div className={`mt-4 grid gap-3 rounded-xl border p-4 text-sm sm:grid-cols-3 ${daysLeft <= 7 ? tones.info : 'border-white/10 bg-white/[.03] text-white/75'}`}>
+      <div><p className="text-xs text-white/45">Your plan</p><p className="mt-1 font-semibold text-white">{sub.name} · {sub.interval}</p><p className="text-xs text-white/45">{number(sub.monthlyCredits)} credits every month</p></div>
+      <div><p className="text-xs text-white/45">This month</p><p className="mt-1 font-semibold text-white">{number(data.expiringCredits?.credits)} credits left</p><p className="text-xs text-white/45">expire {day(sub.monthEndsAt)}{sub.monthEndsAt ? ` · ${Math.max(0, Math.ceil((new Date(sub.monthEndsAt) - new Date()) / DAY_MS))} days` : ''}</p></div>
+      <div><p className="text-xs text-white/45">Renews manually</p><p className="mt-1 font-semibold text-white">by {day(sub.currentPeriodEnd)}</p><p className="text-xs text-white/45">{daysLeft} day{daysLeft === 1 ? '' : 's'} left{daysLeft <= 7 ? ' — renew below to keep your monthly credits' : ''}</p></div>
+      {sub.pendingPlan && <p className="text-xs sm:col-span-3">From {day(sub.pendingPlan.startsAt)} your plan becomes <b>{sub.pendingPlan.name} ({sub.pendingPlan.interval})</b>.</p>}
+    </div>}
     {sub && !active && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tones.info}`}>Your {sub.name} plan ended on {day(sub.currentPeriodEnd)}. Choose a plan to get monthly credits again.</p>}
     {message && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tones[message.tone]}`}>{message.text}</p>}
     <div className="mt-5 grid gap-4 sm:grid-cols-3">
@@ -82,9 +105,10 @@ export default function SubscriptionSection({ workspaceId, onCompleted }) {
           <p className="mt-3 text-3xl font-bold">{number(plan.monthlyCredits)}<span className="ml-1 text-sm font-medium text-white/45">credits / month</span></p>
           <p className="mt-1 text-lg font-semibold text-white/90">{rupiah(plan.priceIdr)}<span className="text-sm font-medium text-white/45"> / {plan.interval === 'yearly' ? 'year' : 'month'}</span></p>
           {plan.interval === 'yearly' && <p className="mt-1 text-xs text-white/45">{rupiah(plan.priceIdr / 12)} a month, credits delivered monthly</p>}
+          {quoteNote(plan.quote) && <p className="mt-3 text-xs text-cyan-100/80">{quoteNote(plan.quote)}</p>}
           <div className="flex-1" />
-          <button type="button" disabled={buying !== null} onClick={() => buy(plan.code)} className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#22d3ee] text-black hover:bg-cyan-300' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}>
-            {buying === plan.code ? 'Opening checkout…' : current ? `Renew ${plan.name}` : `Choose ${plan.name}`}
+          <button type="button" disabled={buying !== null || plan.quote?.kind === 'scheduled'} onClick={() => buy(plan.code)} className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#22d3ee] text-black hover:bg-cyan-300' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}>
+            {buying === plan.code ? 'Opening checkout…' : quoteLabel(plan, current)}
           </button>
         </div>;
       })}
