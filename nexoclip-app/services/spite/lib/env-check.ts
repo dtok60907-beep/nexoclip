@@ -6,14 +6,13 @@
 
 const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
-  'GEMINI_API_KEY',
-  'OPENAI_API_KEY',
   'BYTEPLUS_API_KEY',
   'R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
 ] as const
+// Image models run through the main app (OpenRouter), so no Gemini or OpenAI key is needed here.
 
 export type RequiredEnvVar = (typeof REQUIRED_ENV_VARS)[number]
 
@@ -34,8 +33,6 @@ export function checkRequiredEnv(): EnvCheckResult {
 // value. Keep these short — full instructions live in the README.
 export const ENV_VAR_HINTS: Record<RequiredEnvVar, string> = {
   DATABASE_URL: 'Neon Postgres connection string — neon.tech → your project → Connection string',
-  GEMINI_API_KEY: 'Google Gemini API key for Nano Banana models',
-  OPENAI_API_KEY: 'OpenAI API key for GPT Image models',
   BYTEPLUS_API_KEY: 'BytePlus Ark API key for Seedream and Seedance models',
   R2_ACCOUNT_ID: 'Cloudflare R2 account ID — visible in the right sidebar of any R2 page',
   R2_ACCESS_KEY_ID: 'Cloudflare R2 access key — Cloudflare dashboard → R2 → Manage API tokens',
