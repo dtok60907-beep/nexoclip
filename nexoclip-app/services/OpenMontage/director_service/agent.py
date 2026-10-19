@@ -1502,8 +1502,23 @@ def watch_new_videos(project_id: str) -> None:
         boards.update_board(project_id, change)
 
 
+# A reply that is only a tool log ("[tool used: ...]") instead of a tool call. Some models (Seed) copy the log
+# lines they see in the history rather than calling the tool, which ends the turn with nothing done.
+FAKE_TOOL_LOG = re.compile(r"^\s*(\[(tool used|system)\b[^\]]*\]\s*)+$", re.IGNORECASE)
+
+
 def build_history(project_id: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    tools_used: list[str] = []
+
+    def flush_tools() -> None:
+        # Tool use is told to the model as a note, never as words the assistant said: a model shown assistant
+        # turns that read "[tool used: ...]" learns to write that line instead of calling the tool.
+        if tools_used:
+            items.append({"role": "user", "content": "[system note: tools the assistant ran here: "
+                                                     + "; ".join(tools_used) + "]"})
+            tools_used.clear()
+
     entries = read_chat(project_id, limit=HISTORY_ENTRIES)
     with_images = [i for i, e in enumerate(entries) if e.get("role") == "user"
                    and any(a.get("kind") == "image" for a in (e.get("meta") or {}).get("attachments") or [])]
@@ -1511,22 +1526,25 @@ def build_history(project_id: str) -> list[dict[str, Any]]:
     video_notes = boards.read_board(project_id).get("video_notes") or {}
     for index, entry in enumerate(entries):
         kind, text = entry.get("kind"), entry.get("text") or ""
+        if kind in ("activity", "request") and entry.get("role") != "user":
+            if not (kind == "activity" and (entry.get("meta") or {}).get("tool") == "analyze_video"
+                    and text.startswith("Menonton video:")):  # the analyst's notes are on the user's message itself
+                tools_used.append(text)
+            continue
+        if kind == "card" or (kind == "message" and entry.get("role") == "assistant" and FAKE_TOOL_LOG.match(text)):
+            continue  # a UI card the tool notes already cover, or an earlier fake tool log
+        flush_tools()
         if kind == "edit":
             items.append({"role": "user", "content": f"[user edited: {text}]"})
-        elif kind == "card":
-            continue  # a UI card for something the tool log already covers
-        elif kind == "activity" and (entry.get("meta") or {}).get("tool") == "analyze_video" and text.startswith("Menonton video:"):
-            continue  # the analyst's notes are on the user's message itself
         elif kind == "request" and entry.get("role") == "user":
             items.append({"role": "user", "content": f"[user prepared generation: {text}]"})
         elif entry.get("role") == "user":
             items.append({"role": "user", "content": _user_content(project_id, entry, index in shown, video_notes)})
-        elif kind in ("activity", "request"):
-            items.append({"role": "assistant", "content": f"[tool used: {text}]"})
         elif kind in ("generation", "error"):
-            items.append({"role": "assistant", "content": f"[system: {text}]"})
+            items.append({"role": "user", "content": f"[system note: {text}]"})
         else:
             items.append({"role": "assistant", "content": text})
+    flush_tools()
     return items
 
 
@@ -1635,6 +1653,15 @@ def run_turn(project_id: str) -> str:
             input_items = [{"role": "user", "content": (
                 "[system] Not done yet: these calls were NOT applied because their guide had to load first: "
                 + "; ".join(refused.values()) + ". The guides are loaded now. Call them again now, then reply.")}]
+            previous_id = step["id"]
+            continue
+        if not step["calls"] and FAKE_TOOL_LOG.match(step["text"] or "") and nudges < MAX_NUDGES:
+            # It wrote a tool log line instead of calling the tool: nothing was done. Have it do the work.
+            nudges += 1
+            live.draft(project_id, "", force=True)
+            input_items = [{"role": "user", "content": (
+                "[system] Your last reply was only a tool log line; no tool was called and nothing was done. "
+                "Do the work now by calling the tools, then reply to the user in normal words.")}]
             previous_id = step["id"]
             continue
         if not step["calls"]:

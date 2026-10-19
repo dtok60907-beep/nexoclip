@@ -231,6 +231,24 @@ def test_greeting_only_talks(client, fake_llm, bridge):
     assert len(bridge.charges) == 1 and bridge.submits == []
 
 
+def test_tool_use_reaches_the_model_as_a_note_and_a_fake_tool_log_is_redone(client, fake_llm):
+    pid = _built_project(client, fake_llm)
+    # Seed-style: the reply is only the log line it saw in the history; after the nudge it calls the tool.
+    fake_llm.turns.append([{"text": "[tool used: Menulis naskah UGC Morning Rush]"},
+                           {"calls": [call("write_script", title="Morning Rush", text="Pagi telat bangun...")]},
+                           {"text": "Naskahnya sudah aku tulis."}])
+    view = _say(client, pid, "lanjut")
+    assert view["board"]["script"]["title"] == "Morning Rush"
+    assert view["chat"][-1]["text"] == "Naskahnya sudah aku tulis."
+    assert not any(c["text"].startswith("[tool used") for c in view["chat"])
+    history, nudge = fake_llm.requests[-3]["input"], fake_llm.requests[-2]
+    assert "no tool was called" in nudge["input"][0]["content"] and nudge["previous"] is not None
+    # Tools appear only as notes from the system, never as something the assistant said.
+    assert not any(i["role"] == "assistant" and "[tool used" in str(i["content"]) for i in history)
+    notes = [i["content"] for i in history if i["role"] == "user" and str(i["content"]).startswith("[system note: tools")]
+    assert notes and "Menambah karakter: Maya" in notes[0]
+
+
 def test_agent_builds_the_board_with_tools(client, fake_llm, bridge):
     pid = _built_project(client, fake_llm)
     view = _view(client, pid)
@@ -1045,7 +1063,8 @@ def test_only_seed_and_gpt5_class_models_are_allowed(monkeypatch):
         with pytest.raises(llm.LLMError, match="not allowed"):
             llm._checked_model()
     monkeypatch.delenv("DIRECTOR_LLM_MODEL")
-    assert llm._checked_model() == "dola-seed-2-1-turbo-260628"
+    assert llm._checked_model() == "ep-20261019153353-45w94"
+    assert llm._reasoning() == {"effort": "medium"}
 
 
 def test_seed_runs_on_byteplus_and_gpt_on_openai(monkeypatch):
@@ -1053,6 +1072,7 @@ def test_seed_runs_on_byteplus_and_gpt_on_openai(monkeypatch):
     monkeypatch.setenv("BYTEPLUS_BASE_URL", "https://ark.example/api/v3/")
     monkeypatch.setenv("DIRECTOR_OPENAI_API_KEY", "oa")
     assert llm._endpoint("dola-seed-2-1-turbo-260628") == ("https://ark.example/api/v3/responses", "bp")
+    assert llm._endpoint("ep-20261019153353-45w94") == ("https://ark.example/api/v3/responses", "bp")
     assert llm._endpoint("gpt-5.6-terra") == (llm.OPENAI_RESPONSES_URL, "oa")
     monkeypatch.delenv("BYTEPLUS_BASE_URL")
     with pytest.raises(llm.LLMError, match="BYTEPLUS_BASE_URL"):

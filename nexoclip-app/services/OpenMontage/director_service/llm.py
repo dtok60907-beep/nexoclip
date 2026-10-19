@@ -1,6 +1,6 @@
 """Responses API client for the director's text LLM.
 
-A dola-seed model runs on BytePlus ModelArk (BYTEPLUS_API_KEY, BYTEPLUS_BASE_URL), whose Responses API matches
+A dola-seed model, or a BytePlus endpoint (ep-...), runs on BytePlus ModelArk (BYTEPLUS_API_KEY, BYTEPLUS_BASE_URL), whose Responses API matches
 OpenAI's. A GPT model runs on OpenAI with DIRECTOR_OPENAI_API_KEY (not OPENAI_API_KEY) so OpenMontage's own
 OpenAI-backed tools (TTS, GPT Image) never pick this key up — it is for the director's text model only.
 """
@@ -17,7 +17,8 @@ from typing import Any, Callable, Optional
 import requests
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_MODEL = "dola-seed-2-1-turbo-260628"
+# Our BytePlus inference endpoint for Seed 2.1 Turbo (thinking on, reasoning effort medium in its settings).
+DEFAULT_MODEL = "ep-20261019153353-45w94"
 KEY_ENV = "DIRECTOR_OPENAI_API_KEY"
 BYTEPLUS_KEY_ENV = "BYTEPLUS_API_KEY"
 BYTEPLUS_URL_ENV = "BYTEPLUS_BASE_URL"
@@ -31,6 +32,7 @@ KEY_FILE = Path(__file__).resolve().parent.parent / "director.env"
 PRICES_PER_MILLION = {
     # BytePlus ModelArk standard online inference (ai.byteplus.com model pricing, October 2026).
     "dola-seed-2-1-turbo-260628": (0.50, 0.10, 2.50),
+    "ep-20261019153353-45w94": (0.50, 0.10, 2.50),  # Seed 2.1 Turbo endpoint
     "gpt-5.6-terra": (2.00, 0.20, 12.00),
     "gpt-5.6-luna": (0.20, 0.02, 1.20),
     "gpt-5.5": (5.00, 0.50, 30.00),
@@ -41,7 +43,7 @@ PRICES_PER_MILLION = {
     "gpt-5": (1.25, 0.125, 10.00),
     "gpt-5-mini": (0.25, 0.025, 2.00),
 }
-# The models reason before answering; "low" keeps a turn quick while tools still get used well.
+# The models reason before answering; "medium" matches the Seed endpoint's own setting (sent every request, so it wins).
 REASONING_EFFORT_ENV = "DIRECTOR_REASONING_EFFORT"
 WEB_SEARCH_CALL_USD = 0.025
 
@@ -62,7 +64,7 @@ def _checked_model() -> str:
 
 
 def _on_byteplus(model: str) -> bool:
-    return model.startswith("dola-seed-")
+    return model.startswith(("dola-seed-", "ep-"))  # a Seed model, or one of our BytePlus inference endpoints
 
 
 def _provider(model: str) -> str:
@@ -83,7 +85,7 @@ def _endpoint(model: str) -> tuple[str, str]:
 
 
 def _reasoning() -> dict[str, str]:
-    return {"effort": os.environ.get(REASONING_EFFORT_ENV) or "low"}
+    return {"effort": os.environ.get(REASONING_EFFORT_ENV) or "medium"}
 
 
 def _api_key() -> str | None:
