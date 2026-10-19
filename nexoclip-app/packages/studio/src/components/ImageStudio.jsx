@@ -28,6 +28,7 @@ import {
   OPENROUTER_IMAGE_MODEL_MAP,
 } from "../models.js";
 import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
+import { mergeHistory, useServerHistory } from "../lib/serverHistory.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -947,7 +948,22 @@ export default function ImageStudio({
   const [localHistory, setLocalHistory] = useState([]); // [{id,url,prompt,model,aspect_ratio,timestamp}]
 
   // Use prop history if provided, otherwise local
-  const history = historyItems ?? localHistory;
+  // Signed-in accounts read their history from the server; deleting hides an entry here.
+  const serverHistory = useServerHistory("image", { enabled: !persistScope });
+  const HIDDEN_KEY = `${PERSIST_KEY}:hidden-history`;
+  const [hiddenHistoryIds, setHiddenHistoryIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"); } catch { return []; }
+  });
+  const history = historyItems ?? mergeHistory(serverHistory.entries, localHistory, hiddenHistoryIds);
+  const removeHistoryEntry = (entry) => {
+    const key = entry.id || entry.url;
+    setLocalHistory((prev) => prev.filter((e) => (e.id || e.url) !== key));
+    setHiddenHistoryIds((prev) => {
+      const next = [...new Set([...prev, key])].slice(-500);
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(next)); } catch { /* storage blocked */ }
+      return next;
+    });
+  };
 
   // ── Refs ────────────────────────────────────────────────────────────────
   const textareaRef = useRef(null);
@@ -1232,11 +1248,12 @@ export default function ImageStudio({
     (entry) => {
       if (!historyItems) {
         setLocalHistory((prev) => [entry, ...prev.slice(0, 49)]);
+        serverHistory.refresh();
       }
       setActiveHistoryIdx(0);
       setCurrentImageUrl(entry.url);
     },
-    [historyItems],
+    [historyItems, serverHistory.refresh], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ── View state ─────────────────────────────────────
@@ -1420,7 +1437,7 @@ export default function ImageStudio({
                     onClick={async (e) => {
                       e.stopPropagation();
                       if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
-                        setLocalHistory(prev => prev.filter((_, i) => i !== idx));
+                        removeHistoryEntry(entry);
                       }
                     }}
                     className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
@@ -1450,7 +1467,7 @@ export default function ImageStudio({
                       danger: true,
                       onSelect: async () => {
                         if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
-                          setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+                          removeHistoryEntry(entry);
                         }
                       },
                     },

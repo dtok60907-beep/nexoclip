@@ -1,5 +1,6 @@
 const RETURN_COLS = 'id, workspace_id, kind, status, parameters, result, error, created_at, updated_at';
-const LIST_COLS = `${RETURN_COLS}, (SELECT asset_id FROM generation_outputs WHERE workspace_id = generation_jobs.workspace_id AND generation_job_id = generation_jobs.id ORDER BY output_index LIMIT 1) AS output_asset_id`;
+// The history lists also show what was asked for and with which model.
+const LIST_COLS = `${RETURN_COLS}, prompt, model, (SELECT asset_id FROM generation_outputs WHERE workspace_id = generation_jobs.workspace_id AND generation_job_id = generation_jobs.id ORDER BY output_index LIMIT 1) AS output_asset_id`;
 
 export async function insertJob(client, { workspaceId, kind, params }) {
   const result = await client.query(

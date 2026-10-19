@@ -24,7 +24,8 @@ export function createJobsListHandler({
     const statuses = url.searchParams.get('status') === 'active' ? ['queued', 'running'] : null;
     const kind = url.searchParams.get('kind') || null;
     const resolvedPool = pool ?? poolFactory();
-    const { jobs } = await listJobs({ pool: resolvedPool, workspaceId: workspace.id, statuses, kind });
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
+    const { jobs } = await listJobs({ pool: resolvedPool, workspaceId: workspace.id, statuses, kind, limit });
     return Response.json({ jobs });
   };
 }

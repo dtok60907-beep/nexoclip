@@ -31,6 +31,7 @@ import {
   OPENROUTER_V2V_MODEL_MAP,
 } from "../models.js";
 import { formatCredits, useGenerationPrice } from "../lib/useGenerationPrice.js";
+import { mergeHistory, useServerHistory } from "../lib/serverHistory.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -537,6 +538,9 @@ export default function VideoStudio({
   // ── history ──
   const [localHistory, setLocalHistory] = useState([]);
   const [activeHistoryIdx, setActiveHistoryIdx] = useState(0);
+  // Signed-in accounts read their history from the server; deleting hides an entry here.
+  const [hiddenHistoryIds, setHiddenHistoryIds] = useState([]);
+  const serverHistory = useServerHistory("video", { enabled: !persistScope });
 
   // ── dropdown ──
   const [openDropdown, setOpenDropdown] = useState(null); // 'model'|'ar'|'duration'|'resolution'|'quality'|'mode'|null
@@ -575,7 +579,12 @@ export default function VideoStudio({
   const hasRestored = useRef(false);
 
   // ── derived data ──
-  const history = historyItems ?? localHistory;
+  const history = historyItems ?? mergeHistory(serverHistory.entries, localHistory, hiddenHistoryIds);
+  const removeHistoryEntry = (entry) => {
+    const key = entry.id || entry.url;
+    setLocalHistory((prev) => prev.filter((e) => (e.id || e.url) !== key));
+    setHiddenHistoryIds((prev) => [...new Set([...prev, key])].slice(-500));
+  };
 
   const getCurrentModels = useCallback(() => {
     if (v2vMode) return v2vModels;
@@ -722,6 +731,7 @@ export default function VideoStudio({
         if (data.uploadedVideoName) setUploadedVideoName(data.uploadedVideoName);
         if (data.prompt) setPrompt(data.prompt);
         if (data.localHistory) setLocalHistory(data.localHistory);
+        if (Array.isArray(data.hiddenHistoryIds)) setHiddenHistoryIds(data.hiddenHistoryIds);
 
         // Update control visibility based on restored model/mode
         applyControlsForModel(
@@ -758,6 +768,7 @@ export default function VideoStudio({
     uploadedVideoName,
     prompt,
     localHistory,
+    hiddenHistoryIds,
   };
 
   const writePersistedState = useCallback(() => {
@@ -788,6 +799,7 @@ export default function VideoStudio({
     uploadedVideoName,
     prompt,
     localHistory,
+    hiddenHistoryIds,
     writePersistedState,
   ]);
 
@@ -1146,7 +1158,8 @@ export default function VideoStudio({
   const addToLocalHistory = useCallback((entry) => {
     setLocalHistory((prev) => [entry, ...prev].slice(0, 30));
     setActiveHistoryIdx(0);
-  }, []);
+    serverHistory.refresh();
+  }, [serverHistory.refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── show result in canvas ─────────────────────────────────────────────────
   const showVideoInCanvas = useCallback((url, model) => {
@@ -1540,7 +1553,7 @@ export default function VideoStudio({
                       onClick={async (e) => {
                         e.stopPropagation();
                         if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
-                          setLocalHistory(prev => prev.filter((_, i) => i !== idx));
+                          removeHistoryEntry(entry);
                         }
                       }}
                       className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
@@ -1577,7 +1590,7 @@ export default function VideoStudio({
                         danger: true,
                         onSelect: async () => {
                           if (await confirmDialog({ title: "Delete this generated item?", confirmLabel: "Delete", destructive: true })) {
-                            setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+                            removeHistoryEntry(entry);
                           }
                         },
                       },

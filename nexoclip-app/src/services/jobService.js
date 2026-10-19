@@ -13,6 +13,8 @@ function toJob(row) {
     kind: row.kind,
     status: row.status,
     params: row.parameters ?? {},
+    ...(row.prompt !== undefined ? { prompt: row.prompt } : {}),
+    ...(row.model !== undefined ? { model: row.model } : {}),
     result,
     error: row.error ?? null,
     createdAt: row.created_at,
