@@ -67,6 +67,17 @@ export function createBackofficeService({ repository, env=process.env, grant=app
      const entry=await grant(db,{workspaceId,amount,reason:`admin_${input.type}`,idempotencyKey:key,metadata:{operatorId:userId,customerId:input.customerId,type:input.type,reason},creditLot:{sourceType:'promo'}});
      await audit('credit_granted',`${input.type}: ${reason}`,entry.id);return {entry};
     }
+    if(input.action==='adjust') {
+     // Sets the workspace balance to a target (0 empties it): the ledger takes the difference.
+     const target=count(input.targetBalance,true);const reason=text(input.reason,500,'Alasan');
+     const key=`admin-adjust:${input.requestKey}`;const existing=await r.existingGrant(db,workspaceId,key);
+     if(existing){if(existing.metadata?.targetBalance!==target||existing.metadata?.customerId!==input.customerId||existing.metadata?.reason!==reason||existing.metadata?.operatorId!==userId)throw fail('Kunci permintaan sudah dipakai',409);return {entry:existing};}
+     const previous=Number((await db.query('SELECT balance FROM credit_accounts WHERE workspace_id=$1 FOR UPDATE',[workspaceId])).rows[0]?.balance||0);
+     const delta=Math.round((target-previous)*1e6)/1e6;
+     if(delta===0)return {entry:null,balance:previous};
+     const entry=await grant(db,{workspaceId,amount:delta,reason:'admin_adjustment',idempotencyKey:key,metadata:{operatorId:userId,customerId:input.customerId,reason,targetBalance:target,previousBalance:previous},...(delta>0?{creditLot:{sourceType:'promo'}}:{})});
+     await audit('credit_adjusted',`Saldo ${previous} → ${target}: ${reason}`,entry.id);return {entry,balance:target};
+    }
     if(!['settle','cancel'].includes(input.action)||!uuid(input.orderId))throw fail('Aksi tidak valid');
     const order=await r.findOrder(db,workspaceId,input.orderId);
     if(!order||order.customer_user_id!==input.customerId)throw fail('Invoice tidak ditemukan',404);
@@ -76,6 +87,8 @@ export function createBackofficeService({ repository, env=process.env, grant=app
     }
     const reference=text(input.reference,160,'Referensi bukti pembayaran');
     const paidAt=new Date(input.paidAt);if(typeof input.paidAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(input.paidAt)||!Number.isFinite(paidAt.getTime())||paidAt.toISOString().slice(0,19)!==input.paidAt.slice(0,19)||paidAt>new Date())throw fail('Waktu pembayaran tidak valid');
+    // Settled invoices cannot be edited, so a mistyped year must not get through.
+    if(paidAt<new Date(Date.now()-366*86400000))throw fail('Waktu pembayaran lebih dari setahun lalu. Periksa tahunnya.');
     const fee=input.fee===null||input.fee===undefined||input.fee===''?null:Number(input.fee);
     if(fee!==null&&(!['number','string'].includes(typeof input.fee)||! /^\d+(\.\d{1,2})?$/.test(String(input.fee))||!Number.isFinite(fee)||fee>Number(order.amount_idr)))throw fail('Biaya pembayaran tidak valid');
     if(order.status==='completed'){if(order.payment_reference!==reference||Number(order.payment_fee_idr??-1)!==Number(fee??-1)||new Date(order.paid_at).getTime()!==paidAt.getTime())throw fail('Invoice sudah dibayar dengan bukti berbeda',409);return {order};}
