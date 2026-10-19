@@ -27,9 +27,12 @@ const display = Bricolage_Grotesque({
   display: "swap",
 });
 
+// The app is not for search engines: nexoclip.com is the public site. Every page here says noindex
+// (robots.txt still lets crawlers in, so they can read it).
 export const metadata = {
-  title: 'Nexoclip — AI Image & Video Studio',
-  description: 'Generate AI images and videos using 200+ models — Flux, Midjourney, Kling, Veo, Seedance and more.',
+  title: 'Nexo Clip Studio',
+  description: 'Studio AI Nexo Clip untuk membuat gambar dan video: Seedance, Veo, Kling, Nano Banana, GPT Image, dan AI Director.',
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }) {
