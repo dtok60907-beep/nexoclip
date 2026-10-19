@@ -1067,6 +1067,20 @@ def test_only_seed_and_gpt5_class_models_are_allowed(monkeypatch):
     assert llm._reasoning() == {"effort": "medium"}
 
 
+def test_a_stream_without_charset_is_read_as_utf8():
+    import io
+    import requests
+    events = [{"type": "response.output_text.delta", "delta": "Siap 🎵 — lanjut"},
+              {"type": "response.completed", "response": {"id": "r1"}}]
+    response = requests.Response()
+    response.status_code = 200
+    response.headers["Content-Type"] = "text/event-stream"  # no charset, as BytePlus sends it
+    response.raw = io.BytesIO("".join(f"data: {json.dumps(e, ensure_ascii=False)}\n\n" for e in events).encode("utf-8"))
+    seen = []
+    assert llm._read_stream(response, seen.append) == {"id": "r1"}
+    assert seen == ["Siap 🎵 — lanjut"]
+
+
 def test_seed_runs_on_byteplus_and_gpt_on_openai(monkeypatch):
     monkeypatch.setenv("BYTEPLUS_API_KEY", "bp")
     monkeypatch.setenv("BYTEPLUS_BASE_URL", "https://ark.example/api/v3/")

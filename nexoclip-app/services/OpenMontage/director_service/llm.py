@@ -283,7 +283,10 @@ def _read_stream(response: requests.Response, on_text: Callable[[str], None]) ->
     """Follow a streamed Responses API reply (server-sent events) and return its final response object."""
     text = ""
     try:
-        for raw in response.iter_lines(decode_unicode=True):
+        # Decoded here as UTF-8: BytePlus sends text/event-stream without a charset, which requests would read as
+        # ISO-8859-1, turning every emoji and dash into mojibake ("ðµ", "â").
+        for line in response.iter_lines():
+            raw = line.decode("utf-8", errors="replace") if isinstance(line, bytes) else line
             if not raw or not raw.startswith("data:"):
                 continue
             data = raw[5:].strip()
