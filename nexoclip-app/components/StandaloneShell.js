@@ -46,6 +46,7 @@ const MarketingStudio = studioLazy('MarketingStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
 
+const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
 const TABS = [
@@ -552,6 +553,39 @@ export default function StandaloneShell({ initialTab, children }) {
     if (tabId === 'image') setImageVisited(true);
     setActiveTab(tabId);
   }, [requireAuth]);
+
+  // A brief handed over from the landing page (/studio/director?prompt=…) opens the
+  // Director's new-project form with it. It is kept in sessionStorage so it survives
+  // signing in with Google, which leaves the page; once the Director has it, it is dropped.
+  const pendingPromptFromStorage = useRef(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const fromUrl = (url.searchParams.get('prompt') || '').trim().slice(0, 2000);
+    let prompt = fromUrl;
+    try {
+      if (fromUrl) window.sessionStorage.setItem(PENDING_PROMPT_KEY, fromUrl);
+      else prompt = window.sessionStorage.getItem(PENDING_PROMPT_KEY) || '';
+    } catch { /* storage blocked */ }
+    if (fromUrl) {
+      url.searchParams.delete('prompt');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } else if (prompt) {
+      pendingPromptFromStorage.current = true;
+    }
+    if (prompt) setStudioPrompt(prompt);
+  }, []);
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !studioPrompt) return;
+    // Back from Google with a brief still waiting: take it to the Director.
+    if (pendingPromptFromStorage.current && activeTab !== 'director') {
+      pendingPromptFromStorage.current = false;
+      handleTabChange('director', studioPrompt);
+      return;
+    }
+    if (activeTab === 'director') {
+      try { window.sessionStorage.removeItem(PENDING_PROMPT_KEY); } catch { /* storage blocked */ }
+    }
+  }, [authStatus, activeTab, studioPrompt, handleTabChange]);
 
   const handleOpenNotification = useCallback((notification) => {
     handleTabChange(notification.tabId);
