@@ -80,3 +80,12 @@ test('Google state rejection happens before profile authentication or operator r
   assert.equal(response.headers.get('location'), 'https://app.example/studio/home?auth=login&error=google_state');
   assert.equal(called, false);
 });
+
+test('Google sign-in redirects to the public origin, not the internal address behind the proxy', async () => {
+  const url = new URL('http://0.0.0.0:8080/api/auth/google/callback?code=code&state=forged');
+  const request = { nextUrl: url, url: url.href, headers: new Headers({ 'x-forwarded-host': 'app.example', 'x-forwarded-proto': 'https' }), cookies: { get: () => ({ value: 'trusted-state' }) } };
+  const response = await createGoogleCallbackHandler({ env })(request);
+  assert.equal(response.headers.get('location'), 'https://app.example/studio/home?auth=login&error=google_state');
+  const pinned = await createGoogleCallbackHandler({ env: { ...env, PUBLIC_APP_URL: 'https://studio.example/' } })(request);
+  assert.equal(pinned.headers.get('location'), 'https://studio.example/studio/home?auth=login&error=google_state');
+});

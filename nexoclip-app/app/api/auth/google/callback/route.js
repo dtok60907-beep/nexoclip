@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server.js';
 import { SESSION_COOKIE, sessionCookieOptions } from '../../../../../src/lib/auth/session.js';
+import { publicAppOrigin } from '../../../../../src/lib/auth/sameOrigin.js';
 import { loginWithGoogle } from '../../../../../src/services/authService.js';
 import { isPlatformOperator } from '../../../../../src/services/economicsService.js';
 
@@ -15,7 +16,8 @@ function decodeJwtPayload(idToken) {
 export function createGoogleCallbackHandler({ authenticate = loginWithGoogle, fetchImpl = globalThis.fetch, env = process.env } = {}) {
   return async function GET(request) {
     const url = request.nextUrl;
-    const loginUrl = new URL('/studio/home?auth=login', url.origin);
+    const origin = env.GOOGLE_OAUTH_ORIGIN || publicAppOrigin(request, env);
+    const loginUrl = new URL('/studio/home?auth=login', origin);
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     const cookieState = request.cookies.get('g_oauth_state')?.value;
@@ -29,7 +31,6 @@ export function createGoogleCallbackHandler({ authenticate = loginWithGoogle, fe
       return NextResponse.redirect(loginUrl);
     }
 
-    const origin = env.GOOGLE_OAUTH_ORIGIN || url.origin;
     const redirectUri = `${origin}/api/auth/google/callback`;
 
     try {
@@ -56,7 +57,7 @@ export function createGoogleCallbackHandler({ authenticate = loginWithGoogle, fe
 
       // New regular accounts continue into onboarding.
       const destination = isPlatformOperator(user.id, env) ? '/admin/economics' : isNew ? '/onboarding' : '/studio';
-      const response = NextResponse.redirect(new URL(destination, url.origin));
+      const response = NextResponse.redirect(new URL(destination, origin));
       response.cookies.set(SESSION_COOKIE, token, { ...sessionCookieOptions(request), expires: new Date(expiresAt) });
       response.cookies.set('g_oauth_state', '', { path: '/', maxAge: 0 });
       return response;

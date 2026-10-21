@@ -55,3 +55,27 @@ test('monthly to yearly starts a new year now; smaller plans start when the peri
   assert.equal(quotePlan(plan('sub_starter_monthly'), { ...creatorMonthly, pending_plan_code: 'sub_starter_monthly' }, at).kind, 'scheduled');
   assert.equal(quotePlan(plan('sub_creator_monthly'), { ...monthlyStarter, current_period_end: '2026-11-10T00:00:00Z' }, at).kind, 'new');
 });
+
+const { firstPaymentPromo } = await import('../../src/services/subscriptionPlans.js');
+
+test('launch promo: 20% off the first monthly payment until the end of 30 Nov (WIB)', () => {
+  const at = new Date('2026-11-16T00:00:00Z'), promo = firstPaymentPromo({}, at);
+  assert.deepEqual(promo, { percent: 20, endsAt: '2026-11-30T17:00:00.000Z', interval: 'monthly' });
+  assert.deepEqual(quotePlan(plan('sub_pro_monthly'), null, at, promo), {
+    kind: 'new', amountIdr: 719200, creditsNow: 5800, startsAt: '2026-11-16T00:00:00.000Z',
+    listPriceIdr: 899000, promoPercent: 20, promoEndsAt: '2026-11-30T17:00:00.000Z',
+  });
+  assert.equal(quotePlan(plan('sub_pro_yearly'), null, at, promo).amountIdr, 8990000);
+  assert.equal(quotePlan(plan('sub_creator_monthly'), monthlyStarter, at, promo).kind, 'upgrade');
+  assert.equal(firstPaymentPromo({}, new Date('2026-11-30T17:00:00Z')), null);
+  assert.equal(firstPaymentPromo({ SUBSCRIPTION_PROMO_PERCENT: '0' }, at), null);
+  assert.equal(firstPaymentPromo({ SUBSCRIPTION_PROMO_PERCENT: '40' }, at), null);
+});
+
+test('every plan stays above provider cost at the promo price, all credits used', () => {
+  // 1 credit = 1/160 USD of provider cost (60% markup), priced at Rp17,915 per USD.
+  const costPerCredit = 17915 / 160;
+  for (const p of SUBSCRIPTION_PLANS.filter((x) => x.interval === 'monthly')) {
+    assert.ok(p.priceIdr * 0.8 / p.monthlyCredits > costPerCredit * 1.05, p.code);
+  }
+});

@@ -19,8 +19,15 @@ function quoteLabel(plan, current) {
   return `Choose ${plan.name}`;
 }
 
+// A signed-out visitor sees what a new workspace pays (quotePlan on the server).
+function guestQuote(plan, promo) {
+  if (!promo || plan.interval !== promo.interval) return { kind: 'new', amountIdr: plan.priceIdr };
+  return { kind: 'new', amountIdr: Math.round(plan.priceIdr * (100 - promo.percent) / 100), listPriceIdr: plan.priceIdr, promoPercent: promo.percent, promoEndsAt: promo.endsAt };
+}
+
 function quoteNote(q) {
   if (!q) return null;
+  if (q.promoPercent) return `${q.promoPercent}% off your first month, full credits. Then ${rupiah(q.listPriceIdr)} a month.`;
   if (q.kind === 'upgrade') return `Prorated for the rest of your period: +${number(q.creditsNow)} credits now (until ${day(q.creditsExpireAt)}), then the bigger plan every month. Your renewal date stays.`;
   if (q.kind === 'switch') return 'A new yearly period starts today; credits you already have keep their dates.';
   if (q.kind === 'downgrade') return `Your current plan runs to its end; this one starts ${day(q.startsAt)}. Paid now.`;
@@ -36,7 +43,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
   const headers = workspaceId ? { 'x-workspace-id': workspaceId } : {};
   const load = useCallback(() => (workspaceId
     ? saasFetch('/api/billing/subscription', { headers })
-    : saasFetch('/api/public/plans').then((p) => ({ enabled: p.subscriptionsEnabled, plans: p.plans, subscription: null }))
+    : saasFetch('/api/public/plans').then((p) => ({ enabled: p.subscriptionsEnabled, plans: p.plans.map((plan) => ({ ...plan, quote: guestQuote(plan, p.promo) })), subscription: null }))
   ).then(setData), [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load().catch(() => {}); }, [load]);
 
@@ -72,6 +79,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
   const active = sub && sub.status === 'active' && new Date(sub.currentPeriodEnd) > new Date();
   const daysLeft = active ? Math.ceil((new Date(sub.currentPeriodEnd) - new Date()) / DAY_MS) : null;
   const plans = data.plans.filter((p) => p.interval === period);
+  const promo = data.plans.find((p) => p.quote?.promoPercent)?.quote;
 
   async function buy(planCode) {
     if (!workspaceId) { onRequireAuth?.(); return; }
@@ -93,6 +101,10 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
         {['monthly', 'yearly'].map((i) => <button key={i} type="button" onClick={() => setPeriod(i)} className={`rounded-lg px-3 py-1.5 ${period === i ? 'bg-white/10 text-white' : 'text-white/50'}`}>{i === 'monthly' ? 'Monthly' : 'Yearly · 2 months free'}</button>)}
       </div>
     </div>
+    {promo && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300/30 bg-gradient-to-r from-amber-300/15 to-pink-400/10 px-4 py-3 text-sm">
+      <p className="text-amber-50"><b>Launch promo: {promo.promoPercent}% off your first month</b> on any monthly plan. You still get every credit.</p>
+      <p className="text-xs text-amber-100/70">Until {day(new Date(new Date(promo.promoEndsAt) - 1))}</p>
+    </div>}
     {active && <div className={`mt-4 grid gap-3 rounded-xl border p-4 text-sm sm:grid-cols-3 ${daysLeft <= 7 ? tones.info : 'border-white/10 bg-white/[.03] text-white/75'}`}>
       <div><p className="text-xs text-white/45">Your plan</p><p className="mt-1 font-semibold text-white">{sub.name} · {sub.interval}</p><p className="text-xs text-white/45">{number(sub.monthlyCredits)} credits every month</p></div>
       <div><p className="text-xs text-white/45">This month</p><p className="mt-1 font-semibold text-white">{number(data.expiringCredits?.credits)} credits left</p><p className="text-xs text-white/45">expire {day(sub.monthEndsAt)}{sub.monthEndsAt ? ` · ${Math.max(0, Math.ceil((new Date(sub.monthEndsAt) - new Date()) / DAY_MS))} days` : ''}</p></div>
@@ -108,7 +120,9 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
           {plan.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#22d3ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
           <p className="text-sm font-semibold text-white/80">{plan.name}</p>
           <p className="mt-3 text-3xl font-bold">{number(plan.monthlyCredits)}<span className="ml-1 text-sm font-medium text-white/45">credits / month</span></p>
-          <p className="mt-1 text-lg font-semibold text-white/90">{rupiah(plan.priceIdr)}<span className="text-sm font-medium text-white/45"> / {plan.interval === 'yearly' ? 'year' : 'month'}</span></p>
+          {plan.quote?.promoPercent
+            ? <p className="mt-1 text-lg font-semibold text-white/90"><s className="mr-1.5 text-sm font-medium text-white/35">{rupiah(plan.quote.listPriceIdr)}</s>{rupiah(plan.quote.amountIdr)}<span className="text-sm font-medium text-white/45"> first month</span> <span className="ml-1 rounded-full bg-amber-300/20 px-2 py-0.5 align-middle text-[10px] font-bold text-amber-100">-{plan.quote.promoPercent}%</span></p>
+            : <p className="mt-1 text-lg font-semibold text-white/90">{rupiah(plan.priceIdr)}<span className="text-sm font-medium text-white/45"> / {plan.interval === 'yearly' ? 'year' : 'month'}</span></p>}
           {plan.interval === 'yearly' && <p className="mt-1 text-xs text-white/45">{rupiah(plan.priceIdr / 12)} a month, credits delivered monthly</p>}
           {quoteNote(plan.quote) && <p className="mt-3 text-xs text-cyan-100/80">{quoteNote(plan.quote)}</p>}
           <div className="flex-1" />
@@ -118,5 +132,11 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
         </div>;
       })}
     </div>
+    <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-white/45">
+      <span>🔒 Secure checkout via Pakasir (QRIS, virtual account)</span>
+      <span>No auto-debit: you renew when you choose</span>
+      <span>Top-up credits never expire</span>
+      <span>Help on WhatsApp</span>
+    </p>
   </section>;
 }

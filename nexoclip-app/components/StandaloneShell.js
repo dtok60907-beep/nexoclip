@@ -9,6 +9,7 @@ import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
 import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
 import PricingModal from './PricingModal';
+import { PlanPill, PromoBanner, usePlanStatus } from './PlanStatus';
 import LowBalanceDialog from './LowBalanceDialog';
 import { lowBalanceLevel, nextLowBalanceDialog } from '../src/lib/lowBalance.js';
 import StudioTour from './tour/StudioTour';
@@ -362,6 +363,7 @@ export default function StandaloneShell({ initialTab, children }) {
   const [balance, setBalance] = useState(null);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const creditLevel = lowBalanceLevel(balance);
+  const planStatus = usePlanStatus(authStatus, `${sessionVersion}:${pricingOpen}`);
   const [tourOpen, setTourOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
@@ -736,6 +738,8 @@ export default function StandaloneShell({ initialTab, children }) {
       )}
 
 
+      {isHeaderVisible && <PromoBanner status={planStatus} onOpen={() => setPricingOpen(true)} />}
+
       {/* Header */}
       {isHeaderVisible && (
         <header className="suite-topbar flex-shrink-0 h-14 border-b border-white/[0.05] flex items-center justify-between px-4 bg-[#0a0a0b]/80 backdrop-blur-md z-50 gap-4">
@@ -785,6 +789,7 @@ export default function StandaloneShell({ initialTab, children }) {
             <button type="button" className="suite-header-help" aria-label="Studio help" title="Studio help" onClick={() => setTourOpen(true)}>?</button>
             <button type="button" data-tour="top-up" className="suite-header-link" onClick={() => setPricingOpen(true)}>Pricing</button>
             <a className="suite-header-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
+            <PlanPill status={planStatus} onClick={() => setPricingOpen(true)} />
             <button data-tour="credit-balance" onClick={() => (creditLevel ? setPricingOpen(true) : handleTabChange('usage'))}
               className={`suite-credit-pill${creditLevel ? ` suite-credit-pill--${creditLevel}` : ''}`}
               aria-label={creditLevel ? 'Credits are running low, top up' : 'View credit usage'}

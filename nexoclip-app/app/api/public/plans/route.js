@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_PLANS, subscriptionsEnabled } from '../../../../src/services/subscriptionPlans.js';
+import { firstPaymentPromo, SUBSCRIPTION_PLANS, subscriptionsEnabled } from '../../../../src/services/subscriptionPlans.js';
 import { TOPUP_PACKAGES } from '../../../../src/services/topupPackages.js';
 
 // Prices for the public site (nexoclip.com): the plans when subscriptions are on, the
@@ -18,6 +18,8 @@ export function GET(request) {
   return Response.json({
     subscriptionsEnabled: subscriptionsEnabled(),
     plans: SUBSCRIPTION_PLANS,
+    // First monthly payment of a new workspace; null when no promo runs.
+    promo: subscriptionsEnabled() ? firstPaymentPromo() : null,
     topups: TOPUP_PACKAGES,
   }, { headers: corsHeaders(request) });
 }

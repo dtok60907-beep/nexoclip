@@ -1,7 +1,7 @@
 import { getPool } from '../db/pool.js';
 import { pakasirClient } from '../lib/billing/pakasirClient.js';
 import { appendCreditEntryInTransaction } from './creditService.js';
-import { findSubscriptionPlan, SUBSCRIPTION_PLANS, subscriptionsEnabled } from './subscriptionPlans.js';
+import { findSubscriptionPlan, firstPaymentPromo, promoPrice, SUBSCRIPTION_PLANS, subscriptionsEnabled } from './subscriptionPlans.js';
 import { newOrderId, withQuery } from './topupService.js';
 
 const PROVIDER_KEY = 'pakasir';
@@ -38,8 +38,14 @@ export function currentMonth(sub) {
 //  switch    monthly to yearly: full yearly price, a new period from now; credits already
 //            granted keep their expiry
 //  downgrade a smaller plan, or yearly to monthly: full price, starts when the period ends
-export function quotePlan(plan, sub, at = new Date()) {
-  if (!isActive(sub, at)) return { kind: 'new', amountIdr: plan.priceIdr, creditsNow: plan.monthlyCredits, startsAt: at.toISOString() };
+// `promo` (firstPaymentPromo) is passed only for a workspace that never subscribed; it
+// takes its share off a new monthly plan.
+export function quotePlan(plan, sub, at = new Date(), promo = null) {
+  if (!isActive(sub, at)) {
+    const quote = { kind: 'new', amountIdr: plan.priceIdr, creditsNow: plan.monthlyCredits, startsAt: at.toISOString() };
+    if (!promo || plan.interval !== promo.interval) return quote;
+    return { ...quote, amountIdr: promoPrice(plan.priceIdr, promo), listPriceIdr: plan.priceIdr, promoPercent: promo.percent, promoEndsAt: promo.endsAt };
+  }
   const current = findSubscriptionPlan(sub.plan_code);
   const end = new Date(sub.current_period_end);
   if (!current || current.code === plan.code) return { kind: 'renew', amountIdr: plan.priceIdr, creditsNow: 0, startsAt: end.toISOString() };
@@ -120,7 +126,7 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     ]);
     return {
       enabled: subscriptionsEnabled(env),
-      plans: SUBSCRIPTION_PLANS.map((plan) => ({ ...plan, quote: quotePlan(plan, row, at) })),
+      plans: SUBSCRIPTION_PLANS.map((plan) => ({ ...plan, quote: quotePlan(plan, row, at, row ? null : firstPaymentPromo(env, at)) })),
       subscription: toPublicSubscription(row, at),
       expiringCredits: { credits: Number(lots.rows[0].credits), nextExpiresAt: lots.rows[0].expires_at },
       orders: orders.rows.map(toPublicOrder),
@@ -133,7 +139,8 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     if (!plan) throw fail('Unknown plan', 400, 'INVALID_PLAN');
     if (!gateway.isConfigured()) throw fail('Payments are not configured', 503, 'PAYMENTS_DISABLED');
     const sub = await current(workspaceId);
-    const quote = quotePlan(plan, sub, now());
+    const at = now();
+    const quote = quotePlan(plan, sub, at, sub ? null : firstPaymentPromo(env, at));
     if (quote.kind === 'scheduled') throw fail(`${plan.name} already starts when your current plan ends`, 409, 'PLAN_ALREADY_SCHEDULED');
     const order = (await db().query(
       `INSERT INTO subscription_orders (workspace_id, user_id, plan_code, months, monthly_credits, amount_idr, order_id, kind, from_plan_code, prorated_credits)
@@ -262,15 +269,19 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     if (order.kind === 'renew' && active && sub.plan_code === plan.code) {
       await client.query(
         `UPDATE workspace_subscriptions SET current_period_end = $2, next_credit_grant_at = COALESCE(next_credit_grant_at, current_period_end),
+           monthly_value_idr = $3,
            pending_plan_code = NULL, pending_months = NULL, pending_monthly_credits = NULL, pending_monthly_value_idr = NULL, updated_at = now()
          WHERE id = $1`,
-        [sub.id, addMonths(new Date(sub.current_period_end), plan.months).toISOString()],
+        [sub.id, addMonths(new Date(sub.current_period_end), plan.months).toISOString(), monthValue],
       );
       return;
     }
 
-    // new, switch, or a renewal/downgrade of a plan that has already ended.
-    const started = await startPeriod(client, order.workspace_id, plan, at, monthValue, order.id);
+    // new, switch, or a renewal/downgrade of a plan that has already ended. Valued at what
+    // was paid, so a promo month's credits carry the discounted price; a renewal at full
+    // price sets the value back.
+    const paidMonthValue = sandbox ? 0 : Number(order.amount_idr) / plan.months;
+    const started = await startPeriod(client, order.workspace_id, plan, at, paidMonthValue, order.id);
     await grantDueMonths(client, started, sandbox);
   }
 

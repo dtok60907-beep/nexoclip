@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSessionToken, sessionCookieOptions } from '../../../../src/lib/auth/session.js';
+import { publicAppOrigin } from '../../../../src/lib/auth/sameOrigin.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -7,13 +8,14 @@ export const dynamic = 'force-dynamic';
 // Kicks off Google OAuth: redirect the user to Google's consent screen.
 export async function GET(request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
+  // Behind the proxy request.nextUrl carries the internal address (0.0.0.0:8080).
+  const origin = process.env.GOOGLE_OAUTH_ORIGIN || publicAppOrigin(request);
   if (!clientId) {
-    const loginUrl = new URL('/studio/home?auth=login', request.nextUrl.origin);
+    const loginUrl = new URL('/studio/home?auth=login', origin);
     loginUrl.searchParams.set('error', 'google_unconfigured');
     return NextResponse.redirect(loginUrl);
   }
 
-  const origin = process.env.GOOGLE_OAUTH_ORIGIN || request.nextUrl.origin;
   const redirectUri = `${origin}/api/auth/google/callback`;
   const state = createSessionToken();
 
