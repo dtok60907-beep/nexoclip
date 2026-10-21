@@ -365,11 +365,13 @@
 
 /* Desktop: the sidebar runs the full height on the left; the header only spans the content column. */
 @media(min-width:768px) {
-  .suite-shell.suite-shell-split { display:grid; grid-template-columns:auto minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
-  .suite-shell-split > header { grid-column:2; grid-row:1; min-width:0; }
+  /* Row 1 is the promo banner (empty when there is none), row 2 the header. */
+  .suite-shell.suite-shell-split { display:grid; grid-template-columns:auto minmax(0,1fr); grid-template-rows:auto auto minmax(0,1fr); }
+  .suite-shell-split > .suite-promo-banner { grid-column:2; grid-row:1; min-width:0; }
+  .suite-shell-split > header { grid-column:2; grid-row:2; min-width:0; }
   .suite-shell-split > .suite-body { display:contents; }
-  .suite-shell-split .suite-sidebar { grid-column:1; grid-row:1 / span 2; align-self:stretch; height:calc(100% - 24px)!important; }
-  .suite-shell-split .suite-content { grid-column:2; grid-row:2; height:100%; }
+  .suite-shell-split .suite-sidebar { grid-column:1; grid-row:1 / span 3; align-self:stretch; height:calc(100% - 24px)!important; }
+  .suite-shell-split .suite-content { grid-column:2; grid-row:3; height:100%; }
 }
 
 /* Sidebar type: same font as the app, readable sizes. */
