@@ -30,11 +30,15 @@ function quoteNote(q) {
 
 // Monthly and yearly plans above the top-ups. Renders nothing while subscriptions are
 // off (SUBSCRIPTIONS_ENABLED). Payment is one period at a time; renewing is manual.
-export default function SubscriptionSection({ workspaceId, onCompleted }) {
+// Signed out, the plans come from the public price list and choosing one asks to log in.
+export default function SubscriptionSection({ workspaceId, onCompleted, onRequireAuth }) {
   const [data, setData] = useState(null), [period, setPeriod] = useState('monthly'), [buying, setBuying] = useState(null), [message, setMessage] = useState(null);
   const headers = workspaceId ? { 'x-workspace-id': workspaceId } : {};
-  const load = useCallback(() => saasFetch('/api/billing/subscription', { headers }).then(setData), [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (workspaceId) load().catch(() => {}); }, [workspaceId, load]);
+  const load = useCallback(() => (workspaceId
+    ? saasFetch('/api/billing/subscription', { headers })
+    : saasFetch('/api/public/plans').then((p) => ({ enabled: p.subscriptionsEnabled, plans: p.plans, subscription: null }))
+  ).then(setData), [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load().catch(() => {}); }, [load]);
 
   // Back from Pakasir with ?subscription=<order>: poll until it settles.
   useEffect(() => {
@@ -70,6 +74,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted }) {
   const plans = data.plans.filter((p) => p.interval === period);
 
   async function buy(planCode) {
+    if (!workspaceId) { onRequireAuth?.(); return; }
     setBuying(planCode); setMessage(null);
     try {
       const { order } = await saasFetch('/api/billing/subscription', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ planCode }) });

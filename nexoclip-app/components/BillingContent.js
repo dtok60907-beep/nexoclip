@@ -69,10 +69,10 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
     setTopups(data.topups);
   }, [workspaceId]);
 
+  // Package prices are public, so signed-out visitors see them too.
   useEffect(() => {
-    if (!workspaceId) return;
     load().catch((reason) => setError(reason.message));
-  }, [workspaceId, load]);
+  }, [load]);
 
   // After checkout Pakasir redirects back with ?topup=<id>; poll until settled.
   useEffect(() => {
@@ -148,7 +148,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
 
   return <main className={`${embedded ? 'h-full overflow-auto p-4 text-white sm:p-6' : 'h-full overflow-auto p-5 text-white md:p-8'}`}>
     <div className="mx-auto max-w-5xl">
-      <SubscriptionSection workspaceId={workspaceId} onCompleted={onCompleted} />
+      <SubscriptionSection workspaceId={workspaceId} onCompleted={onCompleted} onRequireAuth={onRequireAuth} />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Top up credits</h1>
