@@ -466,3 +466,7 @@
 .studio-auth-google[aria-disabled="true"] { pointer-events:none; opacity:.6; }
 .studio-auth-inner > .studio-auth-divider { display:flex; align-items:center; gap:10px; margin:14px 0 0; color:#848a94; font-size:11px; line-height:1; }
 .studio-auth-divider::before, .studio-auth-divider::after { content:""; flex:1; height:1px; background:#ffffff14; }
+/* Sign-in dialog, split: studios slideshow on the left, Google and email on the right. */
+.studio-auth-dialog.studio-auth-split { max-width:1100px; width:calc(100% - 32px); height:min(720px, 92dvh); max-height:none; overflow:hidden; border-radius:28px; background:#121412; border-color:#ffffff14; }
+@media (max-width:767px) { .studio-auth-dialog.studio-auth-split { height:auto; max-height:92dvh; overflow:auto; } }
+@keyframes auth-progress { from { width:0%; } to { width:100%; } }
