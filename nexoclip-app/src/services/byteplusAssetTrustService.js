@@ -7,6 +7,7 @@ import {
   findBytePlusAssetLink,
   findBytePlusAssetGroup,
   markBytePlusAssetLinkStale,
+  moveBytePlusAssetGroup,
   resetBytePlusAssetLink,
   updateBytePlusAssetLink,
 } from '../repositories/byteplusAssetRepository.js';
@@ -115,6 +116,7 @@ const defaultRepository = {
   findBytePlusAssetLink,
   findBytePlusAssetGroup,
   markBytePlusAssetLinkStale,
+  moveBytePlusAssetGroup,
   resetBytePlusAssetLink,
   updateBytePlusAssetLink,
 };
@@ -245,6 +247,9 @@ export function createBytePlusAssetTrustService({
           workspaceId, localAssetId: assetId, canvasProjectId, groupId, status: 'processing', error: null,
           expectedAttemptId: attemptId,
         });
+        if (link && replacingGroupId) {
+          await repository.moveBytePlusAssetGroup(client, { fromGroupId: replacingGroupId, toGroupId: groupId, projectName });
+        }
         return Boolean(link);
       };
       if (!groupId && !(await createGroup())) {
@@ -267,7 +272,14 @@ export function createBytePlusAssetTrustService({
           console.error('[byteplus-trust] createAsset failed in remembered group; creating a new group', JSON.stringify({
             groupId, action: error.action, providerCode: error.providerCode, status: error.status,
           }));
-          if (!(await createGroup(groupId))) {
+          // Another trust may have replaced the group meanwhile (and moved this link): use that.
+          const moved = await repository.findBytePlusAssetLink(client, workspaceId, assetId, canvasProjectId);
+          const replacement = moved?.group_id && moved.group_id !== groupId
+            ? moved.group_id
+            : await repository.findBytePlusAssetGroup?.(client, shared ? null : workspaceId, canvasProjectId, projectName);
+          if (replacement && replacement !== groupId) {
+            groupId = replacement;
+          } else if (!(await createGroup(groupId))) {
             return projectBytePlusTrustState(await repository.findBytePlusAssetLink(client, workspaceId, assetId, canvasProjectId));
           }
           created = await createAsset(`:regroup:${groupId}`);

@@ -47,6 +47,17 @@ export async function createProcessingBytePlusAssetLink(client, {
   return result.rows[0] || findBytePlusAssetLink(client, workspaceId, localAssetId, canvasProjectId);
 }
 
+// A group deleted on BytePlus is replaced once for everyone: every link that remembered it
+// moves to the replacement, so the next image does not create yet another group.
+export async function moveBytePlusAssetGroup(client, { fromGroupId, toGroupId, projectName }) {
+  const result = await client.query(
+    `UPDATE byteplus_asset_links SET group_id = $2
+     WHERE group_id = $1 AND project_name = $3`,
+    [fromGroupId, toGroupId, projectName],
+  );
+  return result.rowCount || 0;
+}
+
 export async function updateBytePlusAssetLink(client, {
   workspaceId, localAssetId, canvasProjectId = 'workspace', groupId, providerAssetId, status, error, expectedAttemptId,
 }) {

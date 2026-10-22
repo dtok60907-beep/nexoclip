@@ -16,7 +16,7 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
     error: null,
     ...link,
   } : null;
-  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], deletes: [], resets: 0, cas: [], groupLookups: [] };
+  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], deletes: [], resets: 0, cas: [], groupLookups: [], moves: [] };
   const client = {
     async query(text, values) {
       calls.queries.push({ text, values });
@@ -35,6 +35,12 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
       if (!current || current.attempt_id !== input.attemptId || current.provider_asset_id !== input.providerAssetId) return false
       current = null
       return true
+    },
+    async moveBytePlusAssetGroup(_client, input) {
+      calls.moves.push(input);
+      if (current?.group_id === input.fromGroupId) current = { ...current, group_id: input.toGroupId };
+      if (existingGroup === input.fromGroupId) existingGroup = input.toGroupId;
+      return 1;
     },
     async findBytePlusAssetGroup(_client, workspaceId, canvasProjectId, projectName) {
       calls.groupLookups.push({ workspaceId, canvasProjectId });
@@ -130,7 +136,7 @@ function fixture({ asset, link, existingGroup = null, casLosesTo, providerGet, e
     attemptIdFactory: (() => { let value = 0; return () => `00000000-0000-4000-8000-${String(++value).padStart(12, '0')}`; })(),
     now,
   });
-  return { service, provider, calls, getLink: () => current };
+  return { service, provider, repository, calls, getLink: () => current };
 }
 
 const image = {
@@ -569,6 +575,55 @@ test('replaces a remembered project group that was deleted on BytePlus', async (
   assert.notEqual(shared.calls.assets[0].clientToken, shared.calls.assets[1].clientToken);
   assert.equal(shared.getLink().group_id, 'group-secret');
   assert.equal(shared.getLink().provider_asset_id, 'provider-asset-secret');
+});
+
+test('moves every link off a deleted group to its replacement, so other images reuse it', async () => {
+  const shared = fixture({ asset: { ...image, id: 'asset-2' }, existingGroup: 'deleted-group' });
+  const createAsset = shared.provider.createAsset;
+  shared.provider.createAsset = async (input) => {
+    if (input.groupId === 'deleted-group') {
+      shared.calls.assets.push(input);
+      throw new BytePlusAssetsError('BytePlus Assets API request failed.', { code: 'NotFound', status: 404 });
+    }
+    return createAsset(input);
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await shared.service.startTrust('workspace-1', 'asset-2');
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.deepEqual(shared.calls.moves, [{ fromGroupId: 'deleted-group', toGroupId: 'group-secret', projectName: 'project-x' }]);
+});
+
+test('uses a replacement group another trust already made instead of creating one more', async () => {
+  const shared = fixture({
+    asset: { ...image, id: 'asset-2' },
+    link: { workspace_id: 'workspace-1', local_asset_id: 'asset-2', status: 'failed', group_id: 'deleted-group' },
+  });
+  const createAsset = shared.provider.createAsset;
+  shared.provider.createAsset = async (input) => {
+    if (input.groupId === 'deleted-group') {
+      shared.calls.assets.push(input);
+      // Meanwhile another worker replaced the group and moved this link.
+      await shared.repository.moveBytePlusAssetGroup(null, { fromGroupId: 'deleted-group', toGroupId: 'replacement-group', projectName: 'project-x' });
+      throw new BytePlusAssetsError('BytePlus Assets API request failed.', { code: 'NotFound', status: 404 });
+    }
+    return createAsset(input);
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await shared.service.startTrust('workspace-1', 'asset-2');
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(shared.calls.groups.length, 0);
+  assert.deepEqual(shared.calls.assets.map((input) => input.groupId), ['deleted-group', 'replacement-group']);
+  assert.equal(shared.getLink().group_id, 'replacement-group');
 });
 
 test('does not replace a configured shared group when asset creation fails', async () => {

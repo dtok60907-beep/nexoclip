@@ -6,12 +6,12 @@ const shell = () => readFile(new URL('../../components/StandaloneShell.js', impo
 
 test('the sidebar renders only the curated agents and tools', async () => {
   const source = await shell();
+  const nav = source.match(/<nav data-tour="studio-nav"[\s\S]*?<\/nav>/)?.[0] || '';
   // Agents: only the AI Director (Chat Mode was removed).
-  assert.match(source, /renderAgentItem\('director', 'Director Mode'/);
+  assert.match(nav, /aria-label="AI Director"/);
   assert.doesNotMatch(source, /Chat Mode/);
-  const tools = source.match(/const toolItems = \[([\s\S]*?)\];/)?.[1] || '';
   for (const id of ['lipsync', 'body-swap', 'marketing', 'vibe-motion']) {
-    assert.doesNotMatch(tools, new RegExp(`'${id}'`));
+    assert.doesNotMatch(nav, new RegExp(`navLink\\('${id}'`));
   }
 });
 
