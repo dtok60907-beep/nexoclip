@@ -17,6 +17,10 @@ const POLL_MS = 3_000;
 const TIMEOUT_MS = 3 * 60_000;
 // A loan outlives its generation only when a worker died mid-run.
 const STALE_LOAN_MS = 3 * 60 * 60_000;
+// BytePlus Assets sometimes answers "temporarily unavailable" (throttling, a 5xx, a dropped
+// connection), e.g. when several generations trust their references at once. Wait and try
+// again before giving up on an image: a refused image fails the whole generation.
+const RETRY_DELAYS_MS = [2_000, 6_000, 15_000];
 
 export function createSeedanceAutoTrust({
   pool,
@@ -25,6 +29,7 @@ export function createSeedanceAutoTrust({
   now = () => Date.now(),
   pollMs = POLL_MS,
   timeoutMs = TIMEOUT_MS,
+  retryDelaysMs = RETRY_DELAYS_MS,
   log = console,
 }) {
   // Built on first use: the trust service needs BytePlus and storage configuration.
@@ -61,26 +66,39 @@ export function createSeedanceAutoTrust({
   async function borrow({ generationId, workspaceId, assetIds }) {
     const failed = [];
     for (const assetId of [...new Set(assetIds)]) {
-      try {
-        let state = await trusts().getTrust(workspaceId, assetId, TRUST_SCOPE);
-        const lent = await pool.query(
-          'SELECT 1 FROM byteplus_trust_loans WHERE workspace_id = $1 AND local_asset_id = $2 LIMIT 1',
-          [workspaceId, assetId],
-        );
-        // Active with no loans: someone trusted it on purpose (Studio, Director). Use it, never remove it.
-        if (state?.status === 'active' && !lent.rows.length) continue;
-        await pool.query(
-          `INSERT INTO byteplus_trust_loans (generation_id, workspace_id, local_asset_id)
-           VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-          [generationId, workspaceId, assetId],
-        );
-        if (state?.status !== 'active' && state?.status !== 'processing') {
-          state = await trusts().startTrust(workspaceId, assetId, TRUST_SCOPE);
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          let state = await trusts().getTrust(workspaceId, assetId, TRUST_SCOPE);
+          const lent = await pool.query(
+            'SELECT 1 FROM byteplus_trust_loans WHERE workspace_id = $1 AND local_asset_id = $2 LIMIT 1',
+            [workspaceId, assetId],
+          );
+          // Active with no loans: someone trusted it on purpose (Studio, Director). Use it, never remove it.
+          if (state?.status === 'active' && !lent.rows.length) break;
+          await pool.query(
+            `INSERT INTO byteplus_trust_loans (generation_id, workspace_id, local_asset_id)
+             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+            [generationId, workspaceId, assetId],
+          );
+          if (state?.status !== 'active' && state?.status !== 'processing') {
+            state = await trusts().startTrust(workspaceId, assetId, TRUST_SCOPE);
+          }
+          if (!(await waitActive(workspaceId, assetId, state))) failed.push(assetId);
+          break;
+        } catch (error) {
+          const retry = Boolean(error?.retryable) && attempt < retryDelaysMs.length;
+          // The provider's own status and code, and the network cause, so a failure says why.
+          log.error('[seedance-trust] could not trust reference', JSON.stringify({
+            generationId, assetId, attempt: attempt + 1, willRetry: retry,
+            code: error?.code, message: error?.message, action: error?.action, status: error?.status,
+            providerCode: error?.providerCode, cause: error?.cause?.code || error?.cause?.name || error?.cause?.message,
+          }));
+          if (!retry) {
+            failed.push(assetId);
+            break;
+          }
+          await sleep(retryDelaysMs[attempt]);
         }
-        if (!(await waitActive(workspaceId, assetId, state))) failed.push(assetId);
-      } catch (error) {
-        log.error('[seedance-trust] could not trust reference', JSON.stringify({ generationId, assetId, code: error?.code, message: error?.message }));
-        failed.push(assetId);
       }
     }
     return failed;

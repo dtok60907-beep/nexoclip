@@ -119,3 +119,37 @@ test('sweep gives back loans of generations that ended and keeps running ones', 
   assert.deepEqual(trust.calls.deleted, ['a1']);
   assert.deepEqual(pool.loans.map((l) => l.generationId), ['live']);
 });
+
+test('borrow tries again when BytePlus is briefly unavailable', async () => {
+  const pool = fakePool();
+  const trust = fakeTrust();
+  let starts = 0;
+  trust.startTrust = async (_w, assetId) => {
+    starts += 1;
+    if (starts < 3) throw Object.assign(new Error('BytePlus Assets API is temporarily unavailable.'), { code: 'BYTEPLUS_ASSETS_UNAVAILABLE', retryable: true });
+    trust.states[assetId] = 'active';
+    return { status: 'active' };
+  };
+  const waits = [];
+  const auto = createSeedanceAutoTrust({ pool, trustService: trust, sleep: async (ms) => { waits.push(ms); }, retryDelaysMs: [10, 20, 30], log: { error() {} } });
+
+  assert.deepEqual(await auto.borrow({ generationId: 'job-1', workspaceId: 'w1', assetIds: ['a1'] }), []);
+  assert.equal(starts, 3);
+  assert.deepEqual(waits, [10, 20]);
+});
+
+test('borrow gives up after its retries, and at once on an error that is not transient', async () => {
+  const unavailable = fakeTrust();
+  unavailable.startTrust = async () => { throw Object.assign(new Error('unavailable'), { retryable: true }); };
+  let waits = 0;
+  const auto = createSeedanceAutoTrust({ pool: fakePool(), trustService: unavailable, sleep: async () => { waits += 1; }, retryDelaysMs: [1, 1], log: { error() {} } });
+  assert.deepEqual(await auto.borrow({ generationId: 'job-1', workspaceId: 'w1', assetIds: ['a1'] }), ['a1']);
+  assert.equal(waits, 2);
+
+  const refused = fakeTrust();
+  refused.startTrust = async () => { throw Object.assign(new Error('bad image'), { retryable: false }); };
+  waits = 0;
+  const strict = createSeedanceAutoTrust({ pool: fakePool(), trustService: refused, sleep: async () => { waits += 1; }, retryDelaysMs: [1, 1], log: { error() {} } });
+  assert.deepEqual(await strict.borrow({ generationId: 'job-2', workspaceId: 'w1', assetIds: ['a1'] }), ['a1']);
+  assert.equal(waits, 0);
+});

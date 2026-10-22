@@ -282,10 +282,14 @@ export function createBytePlusAssetTrustService({
       return projectBytePlusTrustState(link);
     } catch (error) {
       if (inTransaction) await client.query('ROLLBACK');
-      if (!inTransaction && ownsClaim && error instanceof BytePlusAssetsError && !error.retryable) {
+      if (!inTransaction && ownsClaim && error instanceof BytePlusAssetsError) {
+        // A transient failure also gives up the claim, so trying again right away starts a
+        // new attempt instead of waiting out a "processing" row that nothing is working on.
         await repository.updateBytePlusAssetLink(client, {
           workspaceId, localAssetId: assetId, canvasProjectId, status: 'failed',
-          error: { code: 'BYTEPLUS_ASSET_TRUST_FAILED', message: 'BytePlus could not trust this asset.' },
+          error: error.retryable
+            ? { code: 'BYTEPLUS_ASSETS_UNAVAILABLE', message: 'BytePlus was temporarily unavailable. Try again.' }
+            : { code: 'BYTEPLUS_ASSET_TRUST_FAILED', message: 'BytePlus could not trust this asset.' },
           expectedAttemptId: link?.attempt_id,
         });
       }

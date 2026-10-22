@@ -72,12 +72,15 @@ function signedRequest({ accessKeyId, secretAccessKey, region, action, body, dat
   };
 }
 
-function unavailableError(status = 503) {
-  return new BytePlusAssetsError('BytePlus Assets API is temporarily unavailable.', {
+function unavailableError(status = 503, providerCode = null) {
+  const error = new BytePlusAssetsError('BytePlus Assets API is temporarily unavailable.', {
     code: 'BYTEPLUS_ASSETS_UNAVAILABLE',
     status,
     retryable: true,
   });
+  // For server logs only: kept off JSON.stringify so it never reaches a response.
+  Object.defineProperty(error, 'providerCode', { value: providerCode, enumerable: false });
+  return error;
 }
 
 // BytePlus also reports missing resources with a qualified code such as
@@ -177,7 +180,14 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
     }
     if (!response.ok) {
       if (TRANSIENT_STATUSES.has(response.status) || response.status >= 500) {
-        throw Object.assign(unavailableError(response.status), { action });
+        // Server-log context: BytePlus's error code (e.g. a throttling code), never its Message.
+        let providerCode = null;
+        try {
+          providerCode = (await response.json())?.ResponseMetadata?.Error?.Code?.slice(0, 120) || null;
+        } catch {
+          // A gateway error page has no JSON body.
+        }
+        throw Object.assign(unavailableError(response.status, providerCode), { action });
       }
       let providerError;
       try {
@@ -195,7 +205,7 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
     }
     const providerError = responseBody?.ResponseMetadata?.Error;
     if (providerError) {
-      if (TRANSIENT_ERROR_CODES.has(providerError.Code)) throw Object.assign(unavailableError(), { action });
+      if (TRANSIENT_ERROR_CODES.has(providerError.Code)) throw Object.assign(unavailableError(503, String(providerError.Code).slice(0, 120)), { action });
       throw requestError(response.status >= 400 ? response.status : 400, providerError, action);
     }
     if (!responseBody?.Result || typeof responseBody.Result !== 'object') throw invalidResponseError();
