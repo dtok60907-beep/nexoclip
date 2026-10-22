@@ -68,7 +68,7 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
         aria-label="Account menu"
         className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 py-1 pl-1 pr-1.5 transition-colors hover:border-white/20 hover:bg-white/10"
       >
-        <span className="grid h-7 w-7 place-items-center rounded-full border border-white/[0.08] bg-gradient-to-br from-[#22d3ee]/30 to-purple-500/20 text-[11px] font-bold text-[#22d3ee]">
+        <span className="grid h-7 w-7 place-items-center rounded-full border border-white/[0.08] bg-gradient-to-br from-[#d4ff64]/30 to-purple-500/20 text-[11px] font-bold text-[#d4ff64]">
           {initial}
         </span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-white/50 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">

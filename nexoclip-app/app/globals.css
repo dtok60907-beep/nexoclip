@@ -9,10 +9,14 @@ body {
   color: white;
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Plus Jakarta Sans sets words close together; open them up a little (as on nexoclip.com). */
+  word-spacing: .06em;
 }
 
+button, input, textarea, select { word-spacing: inherit; }
+
 :root {
-  --color-primary: #22d3ee;
+  --color-primary: #d4ff64;
   --bg-app: #030303;
   --bg-panel: #0a0a0a;
   --bg-card: #111111;

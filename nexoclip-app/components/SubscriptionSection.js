@@ -90,7 +90,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
     } catch (e) { setMessage({ tone: 'error', text: e.message }); setBuying(null); }
   }
 
-  const tones = { info: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', success: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100', error: 'border-red-400/20 bg-red-400/10 text-red-200' };
+  const tones = { info: 'border-lime-300/20 bg-lime-300/10 text-lime-100', success: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100', error: 'border-red-400/20 bg-red-400/10 text-red-200' };
   return <section className="mb-10">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -116,17 +116,17 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
     <div className="mt-5 grid gap-4 sm:grid-cols-3">
       {plans.map((plan) => {
         const current = active && sub.planCode === plan.code;
-        return <div key={plan.code} className={`relative flex flex-col rounded-2xl border p-5 ${plan.popular ? 'border-cyan-300/50 bg-cyan-300/[.05]' : 'border-white/10 bg-white/[.03]'}`}>
-          {plan.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#22d3ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
+        return <div key={plan.code} className={`relative flex flex-col rounded-2xl border p-5 ${plan.popular ? 'border-lime-300/50 bg-lime-300/[.05]' : 'border-white/10 bg-white/[.03]'}`}>
+          {plan.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#d4ff64] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
           <p className="text-sm font-semibold text-white/80">{plan.name}</p>
           <p className="mt-3 text-3xl font-bold">{number(plan.monthlyCredits)}<span className="ml-1 text-sm font-medium text-white/45">credits / month</span></p>
           {plan.quote?.promoPercent
             ? <p className="mt-1 text-lg font-semibold text-white/90"><s className="mr-1.5 text-sm font-medium text-white/35">{rupiah(plan.quote.listPriceIdr)}</s>{rupiah(plan.quote.amountIdr)}<span className="text-sm font-medium text-white/45"> first month</span> <span className="ml-1 rounded-full bg-amber-300/20 px-2 py-0.5 align-middle text-[10px] font-bold text-amber-100">-{plan.quote.promoPercent}%</span></p>
             : <p className="mt-1 text-lg font-semibold text-white/90">{rupiah(plan.priceIdr)}<span className="text-sm font-medium text-white/45"> / {plan.interval === 'yearly' ? 'year' : 'month'}</span></p>}
           {plan.interval === 'yearly' && <p className="mt-1 text-xs text-white/45">{rupiah(plan.priceIdr / 12)} a month, credits delivered monthly</p>}
-          {quoteNote(plan.quote) && <p className="mt-3 text-xs text-cyan-100/80">{quoteNote(plan.quote)}</p>}
+          {quoteNote(plan.quote) && <p className="mt-3 text-xs text-lime-100/80">{quoteNote(plan.quote)}</p>}
           <div className="flex-1" />
-          <button type="button" disabled={buying !== null || plan.quote?.kind === 'scheduled'} onClick={() => buy(plan.code)} className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#22d3ee] text-black hover:bg-cyan-300' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}>
+          <button type="button" disabled={buying !== null || plan.quote?.kind === 'scheduled'} onClick={() => buy(plan.code)} className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e0ff8c]' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}>
             {buying === plan.code ? 'Opening checkout…' : quoteLabel(plan, current)}
           </button>
         </div>;

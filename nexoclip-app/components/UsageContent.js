@@ -28,7 +28,7 @@ function Breakdown({ rows }) {
       const share = Number(row.credits) / total;
       return <div key={`${row.kind}-${row.source}`} className="text-xs">
         <div className="flex justify-between gap-3"><span className="text-white/80">{KIND_LABELS[row.kind] || row.kind} <span className="text-white/40">· {SOURCE_LABELS[row.source] || row.source} · {row.count}×</span></span><span className="text-white/70">{formatCredits(Math.round(Number(row.credits) * 10) / 10)} credits</span></div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[.06]"><div className="h-full rounded-full bg-[#22d3ee]" style={{ width: `${Math.max(1, Math.round(share * 100))}%` }} /></div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[.06]"><div className="h-full rounded-full bg-[#d4ff64]" style={{ width: `${Math.max(1, Math.round(share * 100))}%` }} /></div>
       </div>;
     })}</div>
   </div>;
@@ -63,7 +63,7 @@ export default function UsageContent({ workspaceId, onBalanceChange, onTopUp }) 
   if (!data) return <div className="p-6 text-white/50">Loading usage…</div>;
   const { summary, permissions, items, pagination } = data;
   return <main className="h-full overflow-auto p-5 md:p-8 text-white">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold">Usage</h1><p className="mt-1 text-sm text-white/45">Monitor your credit usage and generations.</p></div>{onTopUp && <button type="button" onClick={onTopUp} className="rounded-xl bg-[#22d3ee] px-4 py-2 text-sm font-bold text-black transition hover:bg-cyan-300">Top up credits</button>}</div>
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold">Usage</h1><p className="mt-1 text-sm text-white/45">Monitor your credit usage and generations.</p></div>{onTopUp && <button type="button" onClick={onTopUp} className="rounded-xl bg-[#d4ff64] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#e0ff8c]">Top up credits</button>}</div>
     <div className="mt-6 grid gap-3 md:grid-cols-3">
       {[['Balance', `${formatCredits(data.balance)} credits`], ['Used this month', `${formatCredits(summary.creditsUsed)} credits`], ['Images & videos', summary.generationCount]].map(([label, value]) => <div key={label} className="rounded-xl border border-white/10 bg-white/[.03] p-4"><p className="text-xs text-white/45">{label}</p><p className="mt-2 text-xl font-bold">{value}</p></div>)}
     </div>

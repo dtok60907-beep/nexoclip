@@ -1,16 +1,19 @@
 import './globals.css';
 import './suite.css';
-import { Bricolage_Grotesque, Geist_Mono, Poppins } from "next/font/google";
+import './shell.css';
+import localFont from "next/font/local";
+import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import ImpersonationBanner from '../components/ImpersonationBanner';
 import SupportChat from '../components/SupportChat';
 
-// Self-hosted by next/font (the CSP blocks fonts.googleapis.com).
-// Poppins for all UI text, Geist Mono for numbers/timecodes (`font-mono`),
-// Bricolage Grotesque available as `font-display` for big headings.
-const sans = Poppins({
+// Same type as nexoclip.com, self-hosted by next/font (the CSP blocks fonts.googleapis.com):
+// Plus Jakarta Sans for all UI text, Geist Mono for numbers/timecodes (`font-mono`), and
+// Clash Display (Fontshare, ITF Free Font License, free for commercial use) as
+// `font-display` for headings.
+const sans = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700", "800"],
   style: ["normal", "italic"],
   display: "swap",
 });
@@ -21,9 +24,13 @@ const mono = Geist_Mono({
   display: "swap",
 });
 
-const display = Bricolage_Grotesque({
+const display = localFont({
+  src: [
+    { path: "./fonts/ClashDisplay-500.woff2", weight: "500" },
+    { path: "./fonts/ClashDisplay-600.woff2", weight: "600" },
+    { path: "./fonts/ClashDisplay-700.woff2", weight: "700" },
+  ],
   variable: "--font-display",
-  subsets: ["latin"],
   display: "swap",
 });
 

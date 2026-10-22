@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -9,7 +9,7 @@ import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
 import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
 import PricingModal from './PricingModal';
-import { PlanPill, PromoBanner, usePlanStatus } from './PlanStatus';
+import { PromoBanner, usePlanStatus } from './PlanStatus';
 import LowBalanceDialog from './LowBalanceDialog';
 import { lowBalanceLevel, nextLowBalanceDialog } from '../src/lib/lowBalance.js';
 import StudioTour from './tour/StudioTour';
@@ -202,55 +202,8 @@ const TABS = [
   },
 ];
 
-const NAVIGATION_CATEGORIES = [
-  {
-    id: 'images',
-    label: 'Images',
-    tabIds: ['image', 'cinema', 'ai-influencer'],
-    icon: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <circle cx="8.5" cy="8.5" r="1.5"/>
-        <path d="M21 15l-5-5L5 21"/>
-      </svg>
-    )
-  },
-  {
-    id: 'video',
-    label: 'Video',
-    tabIds: ['video', 'vibe-motion', 'lipsync', 'body-swap', 'marketing'],
-    icon: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="4" width="15" height="16" rx="2"/>
-        <path d="M17 9l5-3v12l-5-3"/>
-        <path d="M8 9l4 3-4 3z"/>
-      </svg>
-    )
-  },
-  {
-    id: 'audio',
-    label: 'Audio',
-    tabIds: ['audio'],
-    icon: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 18V5l12-2v13"/>
-        <circle cx="6" cy="18" r="3"/>
-        <circle cx="18" cy="16" r="3"/>
-      </svg>
-    )
-  },
-  {
-    id: 'credits',
-    label: 'Credits',
-    tabIds: ['billing', 'usage'],
-    icon: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M12 7v10M9.5 9.5h3.75a1.75 1.75 0 0 1 0 3.5h-2.5a1.75 1.75 0 0 0 0 3.5H14.5"/>
-      </svg>
-    )
-  }
-];
+// The header's page title for each tab (sidebar labels where they differ from TABS).
+const TAB_TITLES = { home: 'Home', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', billing: 'Top up', usage: 'Usage', canvas: 'Canvas' };
 
 const NOTIFICATIONS_STORAGE_KEY = 'open_gen_notifications_v1';
 const MAX_VISIBLE_NOTIFICATIONS = 3;
@@ -375,7 +328,6 @@ export default function StandaloneShell({ initialTab, children }) {
     return false;
   });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [collapsedNavSections, setCollapsedNavSections] = useState({});
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed(prev => {
@@ -741,14 +693,14 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   if (!hasMounted) return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-      <div className="animate-spin text-[#22d3ee] text-3xl">◌</div>
+    <div className="min-h-screen bg-[#0b0c0a] flex items-center justify-center">
+      <div className="animate-spin text-[#d4ff64] text-3xl">◌</div>
     </div>
   );
 
   return (
-    <div 
-      className="suite-shell suite-shell-split h-screen bg-[#030303] flex flex-col overflow-hidden text-white relative"
+    <div
+      className="nx-shell"
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -756,9 +708,9 @@ export default function StandaloneShell({ initialTab, children }) {
     >
       {/* Drag Overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-[100] bg-[#22d3ee]/10 backdrop-blur-md border-4 border-dashed border-[#22d3ee]/50 flex items-center justify-center pointer-events-none transition-all duration-300">
-          <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 scale-110 animate-pulse">
-            <div className="w-20 h-20 bg-[#22d3ee] rounded-2xl flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] bg-[#d4ff64]/10 backdrop-blur-md border-4 border-dashed border-[#d4ff64]/50 flex items-center justify-center pointer-events-none transition-all duration-300">
+          <div className="bg-[#0b0c0a] p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 scale-110 animate-pulse">
+            <div className="w-20 h-20 bg-[#d4ff64] rounded-2xl flex items-center justify-center">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
@@ -771,196 +723,155 @@ export default function StandaloneShell({ initialTab, children }) {
         </div>
       )}
 
-
       {isHeaderVisible && <PromoBanner status={planStatus} onOpen={() => setPricingOpen(true)} />}
 
-      {/* Header */}
-      {isHeaderVisible && (
-        <header className="suite-topbar flex-shrink-0 h-14 border-b border-white/[0.05] flex items-center justify-between px-4 bg-[#0a0a0b]/80 backdrop-blur-md z-50 gap-4">
-          {/* Left: Mobile menu toggle + Logo + Desktop Sidebar Toggle */}
-          <div className="flex items-center gap-3">
-            {/* The Director is a full-width workspace without the sidebar; this is its way out. */}
-            {isFullWidthTab ? (
-              <button type="button" onClick={() => handleTabChange('home')} aria-label="Kembali ke Studio" title="Kembali ke Studio"
-                className="flex h-9 items-center gap-1.5 rounded-[10px] border border-white/[0.08] bg-white/[0.03] px-2.5 text-[12px] text-white/70 transition-colors hover:border-white/20 hover:text-white">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
-                Studio
-              </button>
-            ) : (
-            /* Mobile drawer toggle */
-            <button
-              onClick={() => setIsMobileOpen(!isMobileOpen)}
-              className="suite-icon-button md:hidden"
-              aria-label="Toggle Navigation Menu"
-              aria-expanded={isMobileOpen}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
-            )}
+      <div className="nx-frame">
+        {isMobileOpen && <div className="nx-scrim md:hidden" onClick={() => setIsMobileOpen(false)} />}
 
-            {/* Logo & Title */}
-            <Link href="/" aria-label="Nexoclip home" className="suite-brand suite-mobile-brand">
-              <span className="suite-brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5h8a4 4 0 0 1 4 4v5m-9 0a4 4 0 0 1 0-8m10 0a4 4 0 0 1 0 8h-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/><path d="m14 4 3 3-3 3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-              <span className="suite-brand-word">nexo<span>clip</span><small>CREATIVE STUDIO</small></span>
-            </Link>
-          </div>
-
-          <div className="suite-header-breadcrumb" aria-live="polite"><span className="suite-header-status-dot" /><strong>Nexo Studio</strong><span className="suite-header-separator">/</span><span>{activeTab === 'home' ? 'Dashboard' : TABS.find(tab => tab.id === activeTab)?.label || 'Dashboard'}</span></div>
-
-          {/* Right: Actions */}
-          <div className="suite-header-actions">
-            {authStatus !== 'authenticated' ? <>
-              <button type="button" className="suite-header-help" aria-label="Studio help" title="Studio help" onClick={() => setTourOpen(true)}>?</button>
-              <button type="button" data-tour="top-up" className="suite-header-link" onClick={() => setPricingOpen(true)}>Pricing</button>
-              <a className="suite-header-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
-              <button onClick={() => openAuth('login')} className="suite-login">Log in</button>
-              <button onClick={() => openAuth('login')} className="suite-primary suite-header-cta"><span>Start creating</span><span aria-hidden="true">↗</span></button>
-            </> : <>
-            <button type="button" className="suite-header-help" aria-label="Studio help" title="Studio help" onClick={() => setTourOpen(true)}>?</button>
-            <button type="button" data-tour="top-up" className="suite-header-link" onClick={() => setPricingOpen(true)}>Pricing</button>
-            <a className="suite-header-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
-            <PlanPill status={planStatus} onClick={() => setPricingOpen(true)} />
-            <button data-tour="credit-balance" onClick={() => (creditLevel ? setPricingOpen(true) : handleTabChange('usage'))}
-              className={`suite-credit-pill${creditLevel ? ` suite-credit-pill--${creditLevel}` : ''}`}
-              aria-label={creditLevel ? 'Credits are running low, top up' : 'View credit usage'}
-              title={creditLevel === 'empty' ? 'You are out of credits. Click to top up.' : creditLevel === 'low' ? 'Your credits are running low. Click to top up.' : undefined}>
-              <span className="suite-credit-gem">✧</span>
-              <span><strong>{balance !== null ? Number(balance).toLocaleString() : '—'}</strong><small>credits</small></span>
-            </button>
-
-            <div data-tour="jobs" className="flex"><JobListPanel /></div>
-            <button
-              type="button"
-              data-tour="tour-button"
-              onClick={() => setTourOpen(true)}
-              className="suite-icon-button suite-help-button"
-              aria-label="Take the Studio tour"
-              title="Take the Studio tour"
-            >
-              ?
-            </button>
-            <AccountMenu showAdminLink />
-            </>}
-          </div>
-        </header>
-      )}
-
-      {/* Main Body Layout: Left Sidebar + Studio Content Area */}
-      <div className="suite-body flex-1 min-h-0 flex relative overflow-hidden">
-        {/* Mobile Backdrop Overlay */}
-        {isMobileOpen && (
-          <div 
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden animate-fade-in"
-            onClick={() => setIsMobileOpen(false)}
-          />
-        )}
-
-        {/* Left Sidebar Navigation */}
-        {isHeaderVisible && !isFullWidthTab && (
-          <aside
-            className={`
-              suite-sidebar fixed top-[68px] bottom-0 left-0 md:static md:h-full z-30 bg-[#0a0a0b]/95 backdrop-blur-md border-r border-white/[0.06] flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 select-none
-              ${isSidebarCollapsed && !isMobileOpen ? 'suite-sidebar-collapsed' : ''}
-              ${isMobileOpen ? 'translate-x-0 w-60 z-50' : '-translate-x-[calc(100%+24px)] md:translate-x-0'}
-              ${isSidebarCollapsed ? 'md:w-16' : 'md:w-52'}
-            `}
-          >
-            <div className="suite-sidebar-top">
-              <Link href="/" aria-label="Nexoclip home" className="suite-brand">
-                <span className="suite-brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5h8a4 4 0 0 1 4 4v5m-9 0a4 4 0 0 1 0-8m10 0a4 4 0 0 1 0 8h-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/><path d="m14 4 3 3-3 3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-                <span className="suite-brand-word">nexo<span>clip</span></span>
-              </Link>
-              <span className="suite-free-badge">Free</span>
-              <button type="button" className="suite-sidebar-collapse" onClick={toggleSidebar} aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m14 9-3 3 3 3"/></svg>
-              </button>
+        {/* Floating sidebar; folds into an icon rail, and is a drawer on phones. */}
+        {isHeaderVisible && !isFullWidthTab && (() => {
+          const isCollapsed = isSidebarCollapsed && !isMobileOpen;
+          const tabFor = (id) => TABS.find((tab) => tab.id === id);
+          const navLink = (id, label, extra = null) => {
+            const tab = tabFor(id);
+            if (!tab) return null;
+            const isActive = activeTab === id;
+            return (
+              <a key={id} href={`/studio/${id}`} onClick={(event) => handleNavigationItemClick(event, id)}
+                aria-current={isActive ? 'page' : undefined} aria-label={label} title={isCollapsed ? label : undefined}
+                className={`nx-link${isActive ? ' is-active' : ''}`}>
+                <span className="nx-icon">{tab.icon}</span>
+                <span className="nx-label">{label}</span>
+                {extra}
+              </a>
+            );
+          };
+          const group = (label, shortLabel, children) => (
+            <div className="nx-group">
+              <span className="nx-group-label">{isCollapsed ? shortLabel : label}</span>
+              {children}
             </div>
-            <button type="button" className="suite-project-switcher" onClick={() => authStatus === 'authenticated' ? router.push('/account') : openAuth('login')} aria-label="Personal project, open workspace">
-              <span className="suite-project-avatar">{authStatus === 'authenticated' ? 'N' : 'P'}</span>
-              <span><strong>Personal project</strong><small>{authStatus === 'authenticated' ? 'Your workspace' : 'Your creative space'}</small></span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>
-            </button>
-            <nav data-tour="studio-nav" aria-label="Studio navigation" className="suite-side-nav flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-3 px-2">
-              {(() => {
-                const isCollapsed = isSidebarCollapsed && !isMobileOpen;
-                const tabFor = (id) => TABS.find((tab) => tab.id === id);
-                const renderStudioItem = (tab, label = tab?.label) => {
-                  if (!tab) return null;
-                  const isActive = activeTab === tab.id;
+          );
+          const sub = planStatus?.subscription;
+          const planActive = sub?.status === 'active';
+          const daysLeft = planActive ? Math.max(0, Math.ceil((new Date(sub.currentPeriodEnd) - Date.now()) / 86_400_000)) : null;
+          return (
+            <aside className={`nx-side${isCollapsed ? ' is-collapsed' : ''}${isMobileOpen ? ' is-open' : ''}`}>
+              <div className="nx-side-head">
+                {isCollapsed
+                  ? <Link href="/" aria-label="Nexo Clip home" className="nx-monogram">n</Link>
+                  : <Link href="/" aria-label="Nexo Clip home" className="nx-wordmark">nexo<span>clip</span><i>.</i></Link>}
+              </div>
+              <button type="button" className="nx-fold" onClick={toggleSidebar} aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={isCollapsed ? 'm9 18 6-6-6-6' : 'm15 18-6-6 6-6'} /></svg>
+              </button>
+
+              <nav data-tour="studio-nav" aria-label="Studio navigation" className="nx-nav">
+                {navLink('home', 'Home')}
+                {group('Agent', 'Agent', (() => {
+                  const isActive = activeTab === 'director';
                   return (
-                    <a
-                      key={tab.id}
-                      href={`/studio/${tab.id}`}
-                      onClick={(event) => handleNavigationItemClick(event, tab.id)}
-                      aria-current={isActive ? 'page' : undefined}
-                      aria-label={label}
-                      title={isCollapsed ? label : undefined}
-                      className={`
-                        group relative flex items-center rounded-lg transition-colors duration-150
-                        ${isCollapsed ? 'suite-nav-link suite-nav-link-collapsed h-10 w-10 justify-center mx-auto' : 'suite-nav-link gap-3 px-2.5 py-2 text-[13px] font-medium'}
-                        ${isActive
-                          ? 'is-active bg-white/[0.07] text-[#22d3ee]'
-                          : 'text-white/55 hover:text-white hover:bg-white/[0.04]'
-                        }
-                      `}
-                    >
-                      {isActive && (
-                        <span className="suite-active-marker absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#22d3ee]" aria-hidden="true" />
-                      )}
-                      <span className={`flex-shrink-0 ${isActive ? 'text-[#22d3ee]' : 'text-white/45 group-hover:text-white/80'}`}>
-                        {tab.icon}
-                      </span>
-                      {!isCollapsed && <><span className="truncate flex-1">{label}</span>{tab.id === 'video' && <span className="suite-nav-badge">HOT</span>}</>}
+                    <a href="/studio/director" onClick={(event) => handleNavigationItemClick(event, 'director')}
+                      aria-current={isActive ? 'page' : undefined} aria-label="AI Director" title={isCollapsed ? 'AI Director' : undefined}
+                      className={`nx-link nx-agent${isActive ? ' is-active' : ''}`}>
+                      <span className="nx-agent-icon">{tabFor('director')?.icon}</span>
+                      <span className="nx-label"><strong>AI Director</strong><small>Brief → script → video</small></span>
                     </a>
                   );
-                };
-                const renderAgentItem = (id, label, description, icon) => {
-                  const tab = tabFor(id);
-                  const isActive = activeTab === id;
-                  return <a key={id} href={`/studio/${id}`} onClick={event => handleNavigationItemClick(event, id)} aria-current={isActive ? 'page' : undefined} aria-label={label} title={isCollapsed ? label : undefined} className={`suite-agent-link ${isActive ? 'is-active' : ''} ${isCollapsed ? 'is-compact' : ''}`}>
-                    <span className={`suite-agent-icon ${icon}`}>{tab?.icon}</span>{!isCollapsed && <span className="suite-agent-copy"><strong>{label}</strong><small>{description}</small></span>}
-                  </a>;
-                };
-                const renderSectionTitle = (label, section) => !isCollapsed && <button type="button" className="suite-reference-nav-title" aria-expanded={!collapsedNavSections[section]} onClick={() => setCollapsedNavSections(current => ({ ...current, [section]: !current[section] }))}><span>{label}</span><svg className={collapsedNavSections[section] ? 'is-collapsed' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg></button>;
-                const toolItems = [
-                  ['video', 'Video'], ['image', 'Image'], ['cinema', 'World'], ['ai-influencer', 'Character'], ['audio', 'Audio'],
-                ];
+                })())}
+                {group('Create', 'Create', <>
+                  {navLink('video', 'Video', <span className="nx-badge">HOT</span>)}
+                  {navLink('image', 'Image')}
+                  {navLink('cinema', 'World')}
+                  {navLink('ai-influencer', 'Character')}
+                  {navLink('audio', 'Audio')}
+                </>)}
+                {group('Workspace', 'Space', <>
+                  {navLink('canvas', 'Canvas')}
+                  {navLink('usage', 'Usage')}
+                </>)}
+              </nav>
 
-                return (
-                  <>
-                    <div className="suite-reference-home">{renderStudioItem(tabFor('home'), 'Home')}</div>
-                    <section className="suite-reference-nav-section">{renderSectionTitle('Agents', 'agents')}
-                      {!collapsedNavSections.agents && <>{renderAgentItem('director', 'Director Mode', 'Brief → script → video', 'suite-agent-director')}</>}
-                    </section>
-                    <section className="suite-reference-nav-section">{renderSectionTitle('Tools', 'tools')}
-                      {!collapsedNavSections.tools && <>
-                      <div className="suite-tool-grid">{toolItems.map(([id, label]) => <Fragment key={id}>{renderStudioItem(tabFor(id), label)}</Fragment>)}
-                        {!isCollapsed && <button type="button" className="suite-tool-shortcut" title="MCP / CLI setup coming soon" disabled aria-disabled="true"><span>↗</span><span>MCP / CLI</span><small>10% Off</small></button>}
-                      </div>
-                      </>}
-                    </section>
-                    <section className="suite-reference-nav-section suite-pinned-section">{renderSectionTitle('Pinned Tools', 'pinned')}
-                      {!collapsedNavSections.pinned && renderStudioItem(tabFor('canvas'), 'Canvas')}
-                    </section>
-                  </>
-                );
-              })()}
-            </nav>
-            {!(isSidebarCollapsed && !isMobileOpen) && <div className="suite-sidebar-account">
-              <button type="button" onClick={() => authStatus === 'authenticated' ? router.push('/account') : openAuth('login')} className="suite-sidebar-user-button">
-                <span className="suite-sidebar-user-avatar">{authStatus === 'authenticated' ? 'N' : 'G'}</span><span><strong>{authStatus === 'authenticated' ? 'Nexoclip Member' : 'Guest Creator'}</strong><small>{authStatus === 'authenticated' ? 'Personal workspace' : 'Free workspace'}</small></span>
-              </button>
-              <button type="button" className="suite-sidebar-settings" onClick={() => authStatus === 'authenticated' ? router.push('/account') : openAuth('login')} aria-label="Settings" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.6-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.6 1.4 2.4-1.4 1.1a7 7 0 0 1 0 1.7Z"/></svg></button>
-            </div>}
-          </aside>
-        )}
+              {isCollapsed ? (
+                <button type="button" className="nx-plus" onClick={() => (authStatus === 'authenticated' ? setPricingOpen(true) : openAuth('login'))}
+                  aria-label={authStatus === 'authenticated' ? 'Top up credits' : 'Sign in'} title={authStatus === 'authenticated' ? 'Top up credits' : 'Sign in'}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                </button>
+              ) : authStatus === 'authenticated' ? (
+                <div className="nx-card">
+                  {planActive ? <>
+                    <span className="nx-card-kicker">Your plan</span>
+                    <strong className="nx-card-title">{sub.name}</strong>
+                    <span className={`nx-card-note${daysLeft <= 7 ? ' is-warn' : ''}`}>{daysLeft === 0 ? 'Ends today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}</span>
+                  </> : planStatus?.enabled ? <>
+                    <span className="nx-card-kicker">No plan yet</span>
+                    <strong className="nx-card-title">Monthly credits</strong>
+                    <span className="nx-card-note">{planStatus.promo ? `${planStatus.promo.promoPercent}% off your first month` : 'Credits every month for every studio'}</span>
+                  </> : <>
+                    <span className="nx-card-kicker">Credits</span>
+                    <strong className="nx-card-title">{balance !== null ? Number(balance).toLocaleString() : '—'}</strong>
+                  </>}
+                  <button type="button" data-tour="top-up" className="nx-card-button" onClick={() => setPricingOpen(true)}>
+                    {planActive || !planStatus?.enabled ? 'Top up credits' : 'See plans'}
+                  </button>
+                  <a className="nx-card-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise ↗</a>
+                </div>
+              ) : (
+                <div className="nx-card">
+                  <span className="nx-card-kicker">Start creating</span>
+                  <strong className="nx-card-title">Sign in to generate</strong>
+                  <span className="nx-card-note">Your images and videos are saved to your workspace.</span>
+                  <button type="button" className="nx-card-button" onClick={() => openAuth('login')}>Sign in</button>
+                  <button type="button" className="nx-card-link w-full" onClick={() => openAuth('register')}>Create an account</button>
+                </div>
+              )}
+            </aside>
+          );
+        })()}
+
+        <div className="nx-main">
+          {isHeaderVisible && (
+            <header className="nx-top">
+              <div className="nx-title">
+                {/* The Director is a full-width workspace without the sidebar; this is its way out. */}
+                {isFullWidthTab ? (
+                  <button type="button" onClick={() => handleTabChange('home')} aria-label="Back to Studio" className="nx-back">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+                    Studio
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setIsMobileOpen(!isMobileOpen)} className="nx-burger" aria-label="Open navigation" aria-expanded={isMobileOpen}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
+                  </button>
+                )}
+                <h1 aria-live="polite">{TAB_TITLES[activeTab] || TABS.find(tab => tab.id === activeTab)?.label || 'Home'}</h1>
+              </div>
+
+              <div className="nx-actions">
+                <button type="button" data-tour="tour-button" className="nx-round nx-hide-sm" aria-label="Take the Studio tour" title="Take the Studio tour" onClick={() => setTourOpen(true)}>?</button>
+                {authStatus !== 'authenticated' ? <>
+                  <button type="button" className="nx-text-link" onClick={() => setPricingOpen(true)}>Pricing</button>
+                  <a className="nx-text-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
+                  <button type="button" className="nx-text-link" onClick={() => openAuth('login')}>Log in</button>
+                  <button type="button" className="nx-cta" onClick={() => openAuth('register')}>Start creating <span aria-hidden="true">↗</span></button>
+                </> : <>
+                  <button type="button" data-tour="credit-balance" onClick={() => (creditLevel ? setPricingOpen(true) : handleTabChange('usage'))}
+                    className={`nx-credits${creditLevel ? ` is-${creditLevel}` : ''}`}
+                    aria-label={creditLevel ? 'Credits are running low, top up' : 'View credit usage'}
+                    title={creditLevel === 'empty' ? 'You are out of credits. Click to top up.' : creditLevel === 'low' ? 'Your credits are running low. Click to top up.' : undefined}>
+                    <i aria-hidden="true">✦</i>
+                    <strong>{balance !== null ? Number(balance).toLocaleString() : '—'}</strong>
+                    <small>credits</small>
+                  </button>
+                  <div data-tour="jobs" className="flex"><JobListPanel /></div>
+                  <AccountMenu showAdminLink />
+                </>}
+              </div>
+            </header>
+          )}
 
         {/* Studio Content */}
-        <div className="suite-content flex-1 min-w-0 min-h-0 h-full relative overflow-hidden bg-[#030303] text-white">
+        <div className="suite-content min-w-0 relative overflow-hidden text-white">
         {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} />}
         {authStatus !== 'loading' && <>
         {['billing', 'usage'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to view your credits and usage.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
@@ -1031,13 +942,14 @@ export default function StandaloneShell({ initialTab, children }) {
         </>}
       </div>
     </div>
+      </div>
 
       {/* Global generation activity and notification stack */}
       {authStatus === 'authenticated' && (activeGenerations.length > 0 || notifications.length > 0) && (
         <div
           aria-live="polite"
           aria-label="Generation activity and notifications"
-          className="fixed top-16 right-5 z-[200] flex max-h-[calc(100vh-80px)] w-[340px] max-w-[calc(100vw-32px)] flex-col gap-2 overflow-x-hidden overflow-y-auto global-notif-stack pointer-events-none"
+          className="fixed top-20 right-5 z-[200] flex max-h-[calc(100vh-80px)] w-[340px] max-w-[calc(100vw-32px)] flex-col gap-2 overflow-x-hidden overflow-y-auto global-notif-stack pointer-events-none"
           data-testid="global-notification-stack"
         >
           {activeGenerations.map((generation) => (
@@ -1045,16 +957,16 @@ export default function StandaloneShell({ initialTab, children }) {
               key={generation.tabId}
               role="status"
               data-generation-tab={generation.tabId}
-              className="pointer-events-auto flex items-center gap-3 rounded-xl border border-cyan-500/40 bg-white px-3.5 py-3 text-[13px] text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
+              className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[#161915] px-3.5 py-3 text-[13px] text-[#f2eee5] shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
               data-testid="generation-activity"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/40 bg-cyan-50">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d4ff64]/15">
                 <span
-                  className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-600/30 border-t-cyan-600"
+                  className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#d4ff64]/30 border-t-[#d4ff64]"
                   aria-hidden="true"
                 />
               </span>
-              <p className="min-w-0 flex-1 font-semibold leading-5 text-zinc-900">
+              <p className="min-w-0 flex-1 font-semibold leading-5">
                 {generation.label} is generating
                 {generation.count > 1 ? ` (${generation.count})` : ''}
               </p>
@@ -1067,17 +979,17 @@ export default function StandaloneShell({ initialTab, children }) {
               role={notif.type === 'error' ? 'alert' : 'status'}
               data-notification-type={notif.type}
               data-notification-tab={notif.tabId}
-              className="pointer-events-auto flex items-start gap-3 rounded-xl border bg-white px-3.5 py-3 text-[13px] text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
+              className="pointer-events-auto flex items-start gap-3 rounded-2xl border bg-[#161915] px-3.5 py-3 text-[13px] text-[#f2eee5] shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
               style={{
-                borderColor: notif.type === 'success' ? 'rgba(6,182,212,0.4)' : 'rgba(239,68,68,0.4)',
+                borderColor: notif.type === 'success' ? 'rgba(212,255,100,0.35)' : 'rgba(239,68,68,0.4)',
                 animation: 'slideInRight 280ms cubic-bezier(0.16,1,0.3,1) forwards',
               }}
             >
               <span
                 className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                   notif.type === 'success'
-                    ? 'border-cyan-400/40 bg-cyan-50 text-cyan-600'
-                    : 'border-red-400/40 bg-red-50 text-red-600'
+                    ? 'border-transparent bg-[#d4ff64] text-[#0b0c0a]'
+                    : 'border-red-400/40 bg-red-500/15 text-red-300'
                 }`}
               >
                 {notif.type === 'success' ? (
@@ -1094,19 +1006,19 @@ export default function StandaloneShell({ initialTab, children }) {
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className="font-semibold leading-5 text-zinc-900">
+                <p className="font-semibold leading-5">
                   {notif.label}
-                  <span className="font-normal text-zinc-500">
+                  <span className="font-normal text-white/50">
                     {notif.type === 'success' ? ' - Generation complete' : ' - Generation failed'}
                   </span>
                 </p>
                 {notif.type === 'error' && notif.message && (
-                  <p className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-4 text-red-600" title={notif.message}>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-4 text-red-300" title={notif.message}>
                     {notif.message}
                   </p>
                 )}
                 {notif.type === 'success' && (
-                  <p className="mt-0.5 text-[12px] leading-4 text-zinc-500">
+                  <p className="mt-0.5 text-[12px] leading-4 text-white/50">
                     Your result is ready.
                   </p>
                 )}
@@ -1114,7 +1026,7 @@ export default function StandaloneShell({ initialTab, children }) {
                   <button
                     type="button"
                     onClick={() => handleOpenNotification(notif)}
-                    className="mt-1.5 text-[11px] font-bold text-cyan-600 transition-colors hover:text-cyan-700"
+                    className="mt-1.5 text-[12px] font-bold text-[#d4ff64] transition-colors hover:text-[#e4ff9a]"
                     aria-label={`Open ${notif.label} result`}
                   >
                     Open →
@@ -1125,7 +1037,7 @@ export default function StandaloneShell({ initialTab, children }) {
               <button
                 type="button"
                 onClick={() => dismissNotification(notif.id)}
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/30"
                 aria-label="Dismiss notification"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">

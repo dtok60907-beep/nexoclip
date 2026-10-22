@@ -237,7 +237,7 @@ export default function StudioTour({ open, onClose, activeTab, onTabChange }) {
           className="pointer-events-none absolute rounded-2xl transition-all duration-300 ease-out"
           // The ring lives in the same box-shadow as the dimmer: a Tailwind ring
           // class would be overridden by this inline shadow.
-          style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height, boxShadow: '0 0 0 2px #22d3ee, 0 0 28px 4px rgba(34,211,238,0.45), 0 0 0 9999px rgba(3,3,8,0.78)' }}
+          style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height, boxShadow: '0 0 0 2px #d4ff64, 0 0 28px 4px rgba(212,255,100,0.45), 0 0 0 9999px rgba(3,3,8,0.78)' }}
         />
       ) : (
         <div className="absolute inset-0 bg-[rgba(3,3,8,0.74)] transition-opacity duration-300" />
@@ -249,10 +249,10 @@ export default function StudioTour({ open, onClose, activeTab, onTabChange }) {
         style={{ top: position.top, left: position.left, width: position.width }}
       >
         <div className="h-1 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-[#22d3ee] transition-[width] duration-300" style={{ width: `${progress}%` }} />
+          <div className="h-full rounded-full bg-[#d4ff64] transition-[width] duration-300" style={{ width: `${progress}%` }} />
         </div>
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#22d3ee]">Tour · {index + 1} / {TOUR_STEPS.length}</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#d4ff64]">Tour · {index + 1} / {TOUR_STEPS.length}</span>
           {!isLast && <button type="button" onClick={finish} className="text-xs font-semibold text-white/45 transition hover:text-white">Skip tour</button>}
         </div>
         <h2 id="studio-tour-title" className="mt-2 text-lg font-bold leading-snug">{step.title}</h2>
@@ -261,7 +261,7 @@ export default function StudioTour({ open, onClose, activeTab, onTabChange }) {
           <ul className="mt-3 space-y-1.5">
             {step.points.map((point) => (
               <li key={point} className="flex gap-2 text-[13px] leading-snug text-white/75">
-                <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#22d3ee]" />{point}
+                <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#d4ff64]" />{point}
               </li>
             ))}
           </ul>
@@ -278,7 +278,7 @@ export default function StudioTour({ open, onClose, activeTab, onTabChange }) {
           <button
             type="button"
             onClick={() => (isLast ? finish() : go(1))}
-            className="rounded-lg bg-[#22d3ee] px-4 py-2 text-sm font-bold text-black transition hover:bg-cyan-300"
+            className="rounded-lg bg-[#d4ff64] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#e0ff8c]"
           >
             {index === 0 ? 'Start tour' : isLast ? 'Start creating' : 'Next'}
           </button>

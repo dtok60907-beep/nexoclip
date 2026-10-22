@@ -40,14 +40,14 @@ const SCROLLBAR_STYLE = `
     border-radius: 10px;
   }
   .custom-scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(34, 211, 238, 0.3);
+    background: rgba(212,255,100, 0.3);
   }
 `;
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
 const CheckSvg = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="4">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d4ff64" strokeWidth="4">
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
@@ -207,7 +207,7 @@ function Dropdown({ isOpen, title, items, selectedId, onSelect, onClose, isVideo
                   e.stopPropagation();
                   onPreview(item);
                 }}
-                className="absolute top-1.5 left-1.5 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-[#22d3ee] hover:text-black transition-all border border-white/10 z-20 text-white"
+                className="absolute top-1.5 left-1.5 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-[#d4ff64] hover:text-black transition-all border border-white/10 z-20 text-white"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <circle cx="11" cy="11" r="8" />
@@ -570,7 +570,7 @@ export default function MarketingStudio({
 
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
               <span className="text-white font-black uppercase text-xl sm:text-3xl tracking-wide mb-1 opacity-90">START CREATING WITH</span>
-              <span className="text-[#22d3ee] font-black uppercase text-2xl sm:text-4xl sm:mt-1 tracking-tight">
+              <span className="text-[#d4ff64] font-black uppercase text-2xl sm:text-4xl sm:mt-1 tracking-tight">
                 MARKETING STUDIO
               </span>
             </h1>
@@ -705,7 +705,7 @@ export default function MarketingStudio({
                     }}
                     className={promptControlClassName({
                       iconOnly: true,
-                      className: "text-white/40 hover:text-[#22d3ee]",
+                      className: "text-white/40 hover:text-[#d4ff64]",
                     })}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -737,7 +737,7 @@ export default function MarketingStudio({
                       active: dropdown === key,
                       className:
                         dropdown === key
-                          ? "text-xs font-semibold text-[#22d3ee]"
+                          ? "text-xs font-semibold text-[#d4ff64]"
                           : "text-xs font-semibold text-white/70",
                     })}
                   >
@@ -941,7 +941,7 @@ export default function MarketingStudio({
                       setPreviewAvatar(null);
                       setDropdown(null);
                     }}
-                    className="bg-[#22d3ee] text-black px-6 py-2.5 rounded-full font-bold text-sm hover:opacity-95 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-[#22d3ee]/20"
+                    className="bg-[#d4ff64] text-black px-6 py-2.5 rounded-full font-bold text-sm hover:opacity-95 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-[#d4ff64]/20"
                   >
                     <CheckSvg />
                     Select Avatar

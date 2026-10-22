@@ -908,7 +908,7 @@ export default function LipSyncStudio({
 
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
               <span className="text-white font-black uppercase text-xl sm:text-3xl tracking-wide mb-1 opacity-90">START CREATING WITH</span>
-              <span className="text-[#22d3ee] font-black uppercase text-2xl sm:text-4xl sm:mt-1 tracking-tight">
+              <span className="text-[#d4ff64] font-black uppercase text-2xl sm:text-4xl sm:mt-1 tracking-tight">
                 LIP SYNC STUDIO
               </span>
             </h1>
@@ -966,7 +966,7 @@ export default function LipSyncStudio({
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2"
-                      className="text-white/40 group-hover:text-[#22d3ee] transition-colors"
+                      className="text-white/40 group-hover:text-[#d4ff64] transition-colors"
                     >
                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                       <circle cx="8.5" cy="8.5" r="1.5" />
@@ -994,7 +994,7 @@ export default function LipSyncStudio({
                   accept="video/*"
                   label="Video"
                   icon={
-                    <VideoIcon className="text-white/40 group-hover:text-[#22d3ee] transition-colors" />
+                    <VideoIcon className="text-white/40 group-hover:text-[#d4ff64] transition-colors" />
                   }
                   onUpload={handleVideoPick}
                   onClear={() => {
@@ -1016,7 +1016,7 @@ export default function LipSyncStudio({
                 accept="audio/*"
                 label="Audio"
                 icon={
-                  <MicIcon className="text-white/40 group-hover:text-[#22d3ee] transition-colors" />
+                  <MicIcon className="text-white/40 group-hover:text-[#d4ff64] transition-colors" />
                 }
                 onUpload={handleAudioPick}
                 onClear={() => {
@@ -1062,7 +1062,7 @@ export default function LipSyncStudio({
                     active: openDropdown === "model",
                   })}
                 >
-                  <div className="w-3.5 h-3.5 bg-[#22d3ee] rounded-sm flex items-center justify-center">
+                  <div className="w-3.5 h-3.5 bg-[#d4ff64] rounded-sm flex items-center justify-center">
                     <span className="text-[9px] font-black text-black">
                       S
                     </span>

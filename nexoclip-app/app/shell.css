@@ -1,0 +1,173 @@
+/* Studio shell: the floating sidebar and the header, in nexoclip.com's look (ink #0b0c0a,
+   paper #f2eee5, lime #d4ff64; Clash Display headings, Plus Jakarta Sans text). The sidebar
+   is a frosted panel that floats off the left edge and folds into an icon rail. */
+.nx-shell { --ink:#0b0c0a; --paper:#f2eee5; --lime:#d4ff64; --line:#ffffff14; --muted:#9ba196; --side:244px; --rail:72px;
+  display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; position:relative; color:var(--paper); background:var(--ink); }
+.nx-frame { flex:1; min-height:0; display:flex; position:relative; }
+.nx-main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+.nx-shell .suite-content { flex:1; min-height:0; background:var(--ink); }
+.nx-shell .suite-private { height:100%; }
+
+/* ---- sidebar ---- */
+.nx-side { position:relative; z-index:30; flex:0 0 auto; width:var(--side); margin:10px 0 10px 10px; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:22px;
+  background:linear-gradient(180deg,#ffffff0d,#ffffff05 40%,#ffffff04); backdrop-filter:blur(18px) saturate(1.2); -webkit-backdrop-filter:blur(18px) saturate(1.2);
+  box-shadow:0 20px 50px -20px #000c, inset 0 1px #ffffff12; transition:width .28s cubic-bezier(.22,1,.36,1); user-select:none; }
+.nx-side.is-collapsed { width:var(--rail); }
+.nx-side-head { display:flex; align-items:center; gap:8px; height:64px; padding:0 14px 0 18px; }
+.nx-side.is-collapsed .nx-side-head { padding:0 0 0 16px; }
+.nx-wordmark { display:inline-flex; align-items:baseline; color:#f4f4ee; font-family:var(--font-display),var(--font-sans),sans-serif; font-size:23px; font-weight:700; letter-spacing:-.02em; line-height:1; white-space:nowrap; text-decoration:none; }
+.nx-wordmark > span { font-weight:500; color:#b2b8b0; }
+.nx-wordmark > i { font-style:normal; color:var(--lime); }
+.nx-monogram { display:grid; width:38px; height:38px; place-items:center; border-radius:12px; background:var(--lime); color:var(--ink); font-family:var(--font-display),sans-serif; font-size:20px; font-weight:700; text-decoration:none; }
+/* The round fold toggle sits on the panel's right edge, like a tab. */
+.nx-fold { position:absolute; top:19px; right:-13px; z-index:2; display:grid; width:26px; height:26px; place-items:center; border:1px solid #ffffff24; border-radius:50%; color:#d8dcd3; background:#1a1d19; box-shadow:0 4px 14px #0008; transition:color .16s,border-color .16s; }
+.nx-fold:hover { color:var(--ink); border-color:var(--lime); background:var(--lime); }
+
+.nx-nav { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:4px 12px 12px; scrollbar-width:none; }
+.nx-nav::-webkit-scrollbar { display:none; }
+.nx-side.is-collapsed .nx-nav { padding:4px 12px 12px; }
+.nx-group { margin-top:18px; }
+.nx-group-label { display:block; margin:0 0 6px 12px; color:#7f867c; font-family:var(--font-mono),monospace; font-size:10.5px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; }
+.nx-side.is-collapsed .nx-group-label { margin:0 0 6px; text-align:center; font-size:8.5px; letter-spacing:.08em; overflow:hidden; text-overflow:clip; }
+.nx-link { position:relative; display:flex; align-items:center; gap:12px; height:42px; margin-bottom:2px; padding:0 12px; border-radius:13px; color:#c9cdc4; font-size:14px; font-weight:500; text-decoration:none; white-space:nowrap; transition:background .16s,color .16s; }
+.nx-link > svg, .nx-link > .nx-icon { flex:0 0 18px; width:18px; height:18px; color:#9ba196; transition:color .16s; }
+.nx-link:hover { color:#fff; background:#ffffff0d; }
+.nx-link:hover > svg, .nx-link:hover > .nx-icon { color:#fff; }
+.nx-link.is-active { color:var(--ink); background:var(--lime); font-weight:650; box-shadow:0 8px 24px -10px #d4ff6499; }
+.nx-link.is-active > svg, .nx-link.is-active > .nx-icon { color:var(--ink); }
+.nx-link .nx-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.nx-badge { padding:2px 7px; border-radius:999px; background:#d4ff641f; color:var(--lime); font-size:10px; font-weight:700; letter-spacing:.04em; }
+.nx-link.is-active .nx-badge { background:#0b0c0a1f; color:var(--ink); }
+.nx-side.is-collapsed .nx-link { justify-content:center; width:46px; padding:0; margin-inline:auto; }
+.nx-side.is-collapsed .nx-link .nx-label, .nx-side.is-collapsed .nx-badge, .nx-side.is-collapsed .nx-agent small { display:none; }
+/* The Director gets a taller row with its line of description. */
+.nx-agent { height:auto; min-height:54px; padding:8px 10px; border:1px solid #ffffff12; background:#ffffff08; }
+.nx-agent .nx-agent-icon { display:grid; flex:0 0 34px; width:34px; height:34px; place-items:center; border-radius:10px; background:#d4ff641a; color:var(--lime); }
+.nx-agent .nx-agent-icon svg { width:18px; height:18px; }
+.nx-agent .nx-label strong { display:block; font-weight:650; }
+.nx-agent .nx-label small { display:block; margin-top:2px; color:#8d9389; font-size:12px; font-weight:400; }
+.nx-agent.is-active { border-color:transparent; }
+.nx-agent.is-active .nx-agent-icon { background:#0b0c0a; color:var(--lime); }
+.nx-agent.is-active .nx-label small { color:#0b0c0aa6; }
+.nx-side.is-collapsed .nx-agent { width:46px; height:46px; min-height:0; padding:0; border-color:transparent; background:transparent; }
+.nx-side.is-collapsed .nx-agent.is-active { background:var(--lime); }
+
+/* Bottom card: the plan and a top up, or an invitation to sign in. */
+.nx-card { margin:0 12px 12px; padding:16px; border-radius:18px; background:var(--paper); color:var(--ink); }
+.nx-card-kicker { display:block; color:#5d6359; font-family:var(--font-mono),monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; }
+.nx-card-title { display:block; margin-top:6px; font-family:var(--font-display),sans-serif; font-size:20px; font-weight:600; line-height:1.1; }
+.nx-card-note { display:block; margin-top:4px; color:#5d6359; font-size:12.5px; line-height:1.45; }
+.nx-card-note.is-warn { color:#a14d00; }
+.nx-card-button { display:flex; width:100%; height:40px; margin-top:12px; align-items:center; justify-content:center; gap:8px; border-radius:999px; background:var(--ink); color:var(--paper); font-size:13.5px; font-weight:650; transition:transform .16s,background .16s; }
+.nx-card-button:hover { background:#20231e; transform:translateY(-1px); }
+.nx-card-link { display:block; margin-top:10px; color:#5d6359; font-size:12.5px; text-align:center; text-decoration:none; }
+.nx-card-link:hover { color:var(--ink); text-decoration:underline; }
+.nx-plus { display:grid; width:46px; height:46px; margin:0 auto 14px; place-items:center; border-radius:50%; background:var(--lime); color:var(--ink); box-shadow:0 8px 24px -8px #d4ff6499; transition:transform .16s; }
+.nx-plus:hover { transform:scale(1.06); }
+
+/* ---- header ---- */
+.nx-top { flex:0 0 auto; display:flex; align-items:center; gap:16px; height:72px; padding:0 22px 0 26px; }
+.nx-title { flex:1; min-width:0; display:flex; align-items:center; gap:12px; }
+.nx-title h1 { overflow:hidden; color:#f4f4ee; font-family:var(--font-display),var(--font-sans),sans-serif; font-size:24px; font-weight:600; letter-spacing:-.01em; line-height:1; text-overflow:ellipsis; white-space:nowrap; }
+.nx-back { display:flex; height:38px; align-items:center; gap:6px; padding:0 14px 0 10px; border:1px solid var(--line); border-radius:999px; color:#d8dcd3; font-size:13.5px; font-weight:600; transition:border-color .16s,color .16s; }
+.nx-back:hover { border-color:var(--lime); color:var(--lime); }
+.nx-burger { display:none; width:40px; height:40px; place-items:center; border:1px solid var(--line); border-radius:12px; color:#e6e9e1; }
+.nx-actions { display:flex; align-items:center; gap:10px; }
+.nx-text-link { padding:8px 10px; color:#c9cdc4; font-size:14px; font-weight:500; white-space:nowrap; transition:color .16s; }
+.nx-text-link:hover { color:var(--lime); }
+.nx-cta { display:inline-flex; height:42px; align-items:center; gap:8px; padding:0 20px; border-radius:999px; background:var(--lime); color:var(--ink); font-size:14px; font-weight:700; white-space:nowrap; transition:transform .16s,background .16s; }
+.nx-cta:hover { background:#e4ff9a; transform:translateY(-1px); }
+.nx-round { display:grid; width:40px; height:40px; place-items:center; border:1px solid var(--line); border-radius:50%; color:#c9cdc4; font-size:15px; font-weight:650; transition:border-color .16s,color .16s; }
+.nx-round:hover { border-color:#ffffff40; color:#fff; }
+.nx-credits { display:flex; height:42px; align-items:center; gap:9px; padding:0 16px 0 12px; border:1px solid var(--line); border-radius:999px; background:#ffffff08; color:#f4f4ee; transition:border-color .16s,background .16s; }
+.nx-credits:hover { border-color:#d4ff6466; background:#ffffff0d; }
+.nx-credits > i { display:grid; width:22px; height:22px; place-items:center; border-radius:50%; background:var(--lime); color:var(--ink); font-size:12px; font-style:normal; font-weight:800; }
+.nx-credits strong { font-family:var(--font-mono),monospace; font-size:14px; font-weight:600; }
+.nx-credits small { color:var(--muted); font-size:12.5px; }
+.nx-credits.is-low { border-color:#fbbf2466; background:#fbbf2412; }
+.nx-credits.is-low strong { color:#fcd34d; }
+.nx-credits.is-empty { border-color:#f8717166; background:#f8717114; }
+.nx-credits.is-empty strong { color:#fca5a5; }
+/* The plan pill from PlanStatus, restyled for this header. */
+.nx-top .suite-plan-pill { height:42px; padding:0 16px; border-radius:999px; border-color:var(--line); background:transparent; }
+.nx-top .suite-plan-pill:hover { border-color:#d4ff6466; }
+.nx-top .suite-plan-pill strong { font-size:13px; }
+.nx-top .suite-plan-pill small { font-size:11.5px; color:var(--muted); }
+.nx-top .suite-plan-pill--soon small, .nx-top .suite-plan-pill--none small { color:#fcd34d; }
+
+/* Promo strip: lime on ink, like the site's top bar. */
+.nx-shell .suite-promo-banner { gap:14px; padding:9px 48px 9px 16px; background:var(--lime); color:var(--ink); font-size:13.5px; }
+.nx-shell .suite-promo-banner b { color:var(--ink); }
+.nx-shell .suite-promo-banner span { color:#0b0c0abf; }
+.nx-shell .suite-promo-cta { padding:5px 14px; border-radius:999px; background:var(--ink); color:var(--lime); font-size:12.5px; }
+.nx-shell .suite-promo-cta:hover { background:#20231e; }
+.nx-shell .suite-promo-close { color:#0b0c0a99; }
+.nx-shell .suite-promo-close:hover { background:#0b0c0a14; color:var(--ink); }
+
+.nx-side :focus-visible, .nx-top :focus-visible { outline:2px solid var(--lime); outline-offset:2px; }
+
+/* ---- phones and small tablets: the sidebar becomes a drawer ---- */
+.nx-scrim { position:fixed; inset:0; z-index:40; background:#000a; backdrop-filter:blur(4px); }
+@media (max-width:767px) {
+  .nx-side { position:fixed; top:10px; bottom:10px; left:10px; z-index:50; margin:0; width:min(280px,calc(100vw - 40px)); background:#141713f2; transform:translateX(calc(-100% - 20px)); transition:transform .28s cubic-bezier(.22,1,.36,1); }
+  .nx-side.is-open { transform:none; }
+  .nx-side.is-collapsed { width:min(280px,calc(100vw - 40px)); }
+  .nx-fold { display:none; }
+  .nx-burger { display:grid; }
+  .nx-top { height:64px; gap:10px; padding:0 14px; }
+  .nx-title h1 { font-size:20px; }
+  .nx-text-link, .nx-top .suite-plan-pill, .nx-credits small, .nx-hide-sm { display:none; }
+  .nx-credits { padding:0 12px 0 10px; }
+  .nx-cta { height:40px; padding:0 16px; font-size:13px; }
+}
+@media (prefers-reduced-motion:reduce) { .nx-side, .nx-fold, .nx-card-button, .nx-cta, .nx-plus { transition:none; } }
+
+/* One ink background behind the shell and every studio. */
+.nx-shell .suite-home, .nx-shell .suite-private { background:var(--ink); }
+
+/* ---- Studio home, in the same type and colors (readable sizes, Clash headings) ---- */
+.nx-shell .suite-home-reference .suite-home-inner { max-width:1440px; padding:0 32px; }
+.nx-shell .suite-composer-hero { padding:36px 0 64px; }
+.nx-shell .suite-composer-hero::before { background:radial-gradient(ellipse,#d4ff6414 0%,#d4ff6405 45%,transparent 72%); }
+.nx-shell .suite-home-reference .suite-hero-kicker { color:#9ba196; font-family:var(--font-mono),monospace; font-size:12px; letter-spacing:.16em; }
+.nx-shell .suite-composer-hero h1 { margin-top:16px; color:#f4f4ee; font-family:var(--font-display),var(--font-sans),sans-serif; font-size:clamp(40px,4.6vw,68px); font-weight:600; letter-spacing:-.01em; line-height:1.02; }
+.nx-shell .suite-mode-switch { margin-top:28px; padding:5px; border-color:var(--line); background:#ffffff08; }
+.nx-shell .suite-mode-switch button { height:40px; min-width:104px; padding:0 18px; color:#b4b9af; font-size:14px; font-weight:600; }
+.nx-shell .suite-mode-switch button.is-selected { color:var(--ink); background:var(--lime); box-shadow:none; }
+.nx-shell .suite-mode-switch button.is-selected > span { color:var(--ink); }
+.nx-shell .suite-prompt-box { width:min(780px,100%); margin-top:24px; padding:20px 20px 14px; border-color:#ffffff1f; border-radius:26px; background:#ffffff08; }
+.nx-shell .suite-prompt-box textarea { min-height:84px; font-size:16px; color:#f4f4ee; }
+.nx-shell .suite-prompt-box textarea::placeholder { color:#7f867c; }
+.nx-shell .suite-prompt-controls { min-height:48px; padding-top:12px; border-color:var(--line); }
+.nx-shell .suite-attach-button span { font-size:13.5px; }
+.nx-shell .suite-prompt-hint { color:#b4b9af; font-size:13.5px; }
+.nx-shell .suite-generate-button { height:44px; padding:0 22px; border-radius:999px; background:var(--lime); color:var(--ink); font-size:14.5px; font-weight:700; }
+.nx-shell .suite-generate-button:hover { background:#e4ff9a; }
+.nx-shell .suite-prompt-ideas { gap:8px; margin-top:16px; }
+.nx-shell .suite-prompt-ideas > span { color:#7f867c; font-size:13px; }
+.nx-shell .suite-prompt-ideas button { padding:9px 15px; border-color:var(--line); background:transparent; color:#c9cdc4; font-size:13px; }
+.nx-shell .suite-prompt-ideas button:hover { border-color:#d4ff6466; color:var(--lime); background:transparent; }
+.nx-shell .suite-video-library-intro { margin-bottom:28px; font-size:13px; }
+.nx-shell .suite-video-library-intro p { color:#f4f4ee; }
+.nx-shell .suite-video-sections { gap:48px; }
+.nx-shell .suite-reference-heading { margin-bottom:18px; }
+.nx-shell .suite-reference-heading h2 { color:#f4f4ee; font-family:var(--font-display),var(--font-sans),sans-serif; font-size:30px; font-weight:600; letter-spacing:0; }
+.nx-shell .suite-video-section-description { margin-top:6px; color:#9ba196; font-size:14px; }
+.nx-shell .suite-video-section-action { padding:9px 16px; border-color:var(--line); border-radius:999px; color:#c9cdc4; font-size:13px; }
+.nx-shell .suite-card { background:#141713; box-shadow:0 14px 34px #0007; }
+.nx-shell .suite-card-title { font-size:15px; }
+.nx-shell .suite-card-kicker { font-size:12.5px; color:#8d9389; }
+.nx-shell .suite-card-caption { min-height:64px; height:64px; flex-basis:64px; padding:8px 14px; }
+.nx-shell .suite-card-caption--overlay, .nx-shell .suite-card-caption--spotlight { background:#141713; }
+.nx-shell .suite-footer { font-size:13px; color:#7f867c; }
+@media (max-width:760px) {
+  .nx-shell .suite-home-reference .suite-home-inner { padding:0 16px; }
+  .nx-shell .suite-composer-hero h1 { font-size:clamp(34px,10vw,44px); }
+  .nx-shell .suite-mode-switch button { min-width:0; padding:0 14px; font-size:13px; }
+  .nx-shell .suite-prompt-box textarea { font-size:15px; }
+  .nx-shell .suite-prompt-ideas button { font-size:12px; }
+  .nx-shell .suite-reference-heading h2 { font-size:24px; }
+}
+.nx-shell .suite-private h2 { color:#f4f4ee; font-family:var(--font-display),var(--font-sans),sans-serif; font-size:34px; font-weight:600; }
+.nx-shell .suite-private p { color:#9ba196; font-size:15px; }
+.nx-shell .suite-private .suite-primary { height:44px; padding:0 24px; border-radius:999px; background:var(--lime); color:var(--ink); font-size:14px; font-weight:700; }

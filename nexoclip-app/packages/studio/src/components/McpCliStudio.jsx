@@ -54,7 +54,7 @@ const EXAMPLES = [
 function CodeBlock({ children, className = '' }) {
   return (
     <pre
-      className={`text-[11.5px] font-mono text-[#22d3ee] bg-black/50 border border-white/5 rounded-md px-3 py-2 overflow-x-auto whitespace-pre ${className}`}
+      className={`text-[11.5px] font-mono text-[#d4ff64] bg-black/50 border border-white/5 rounded-md px-3 py-2 overflow-x-auto whitespace-pre ${className}`}
     >
       {children}
     </pre>
@@ -63,7 +63,7 @@ function CodeBlock({ children, className = '' }) {
 
 export default function McpCliStudio() {
   return (
-    <div className="w-full h-full overflow-y-auto bg-[#050505] text-white">
+    <div className="w-full h-full overflow-y-auto bg-app-bg text-white">
       <div className="max-w-5xl mx-auto px-6 py-12 flex flex-col gap-12">
 
         {/* Hero */}

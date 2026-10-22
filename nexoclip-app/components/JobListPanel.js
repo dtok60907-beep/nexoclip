@@ -122,7 +122,7 @@ export default function JobListPanel() {
       >
         <span aria-hidden>▤</span>
         {activeCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-[#22d3ee] px-1 text-[10px] font-bold text-black">
+          <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-[#d4ff64] px-1 text-[10px] font-bold text-black">
             {activeCount}
           </span>
         )}

@@ -47,7 +47,7 @@ const VolumeMuteIcon = () => (
   </svg>
 );
 
-const MusicIcon = ({ className = "text-[#22d3ee]" }) => (
+const MusicIcon = ({ className = "text-[#d4ff64]" }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M9 18V5l12-2v13" />
     <circle cx="6" cy="18" r="3" />
@@ -137,7 +137,7 @@ function AudioFileUploader({ label, value, onChange, apiKey }) {
         onClick={() => uploadState === UPLOAD_STATE.IDLE && fileInputRef.current?.click()}
         className={`relative border rounded p-4 transition-all duration-300 flex items-center gap-3.5 cursor-pointer ${
           uploadState === UPLOAD_STATE.READY 
-            ? "border-primary/60 bg-primary/10 shadow-[0_0_15px_rgba(34,211,238,0.05)]" 
+            ? "border-primary/60 bg-primary/10 shadow-[0_0_15px_rgba(212,255,100,0.05)]" 
             : "border-zinc-700 bg-zinc-900 hover:bg-zinc-850 hover:border-primary/50"
         }`}
       >
@@ -1048,7 +1048,7 @@ export default function AudioStudio({
                 {/* Glow behind the icon */}
                 <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full opacity-25 group-hover:opacity-40 transition-opacity duration-1000 pointer-events-none" />
                 <div className="w-20 h-20 bg-zinc-900 border border-zinc-705 rounded flex items-center justify-center shadow-inner relative z-10 transition-transform duration-500 group-hover:scale-105">
-                  <MusicIcon className="text-primary w-8 h-8 filter drop-shadow-[0_0_8px_rgba(34,211,238,0.3)]" />
+                  <MusicIcon className="text-primary w-8 h-8 filter drop-shadow-[0_0_8px_rgba(212,255,100,0.3)]" />
                 </div>
                 <div className="relative z-10">
                   <h3 className="text-white font-black text-xl mb-3 tracking-tight">Audio Studio</h3>

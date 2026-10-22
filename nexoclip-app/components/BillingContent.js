@@ -15,7 +15,7 @@ const STATUS_STYLES = {
 };
 
 const NOTICE_STYLES = {
-  info: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-200',
+  info: 'border-lime-400/20 bg-lime-400/10 text-lime-200',
   success: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
   error: 'border-red-400/20 bg-red-400/10 text-red-200',
 };
@@ -156,7 +156,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
         </div>
         <div className="rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-right">
           <p className="text-xs text-white/45">Current balance</p>
-          <p className="mt-1 text-xl font-bold"><span className="text-cyan-300">◈</span> {balance !== null && balance !== undefined ? formatNumber(balance) : '—'} <span className="text-xs font-medium text-white/45">credits</span></p>
+          <p className="mt-1 text-xl font-bold"><span className="text-[#d4ff64]">◈</span> {balance !== null && balance !== undefined ? formatNumber(balance) : '—'} <span className="text-xs font-medium text-white/45">credits</span></p>
         </div>
       </div>
 
@@ -167,9 +167,9 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
         {packages === null && !error && [0, 1, 2, 3].map((key) => <div key={key} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/[.03]" />)}
         {packages?.map((pkg) => <div
           key={pkg.code}
-          className={`relative flex flex-col rounded-2xl border p-5 ${pkg.popular ? 'border-cyan-300/50 bg-cyan-300/[.05] shadow-[0_0_60px_-20px_rgba(34,211,238,0.35)]' : 'border-white/10 bg-white/[.03]'}`}
+          className={`relative flex flex-col rounded-2xl border p-5 ${pkg.popular ? 'border-lime-300/50 bg-lime-300/[.05] shadow-[0_0_60px_-20px_rgba(212,255,100,0.35)]' : 'border-white/10 bg-white/[.03]'}`}
         >
-          {pkg.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#22d3ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
+          {pkg.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#d4ff64] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-semibold text-white/80">{pkg.name}</p>
             {pkg.bonusPercent > 0 && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-200">+{pkg.bonusPercent}% bonus</span>}
@@ -184,7 +184,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
             type="button"
             disabled={buying !== null}
             onClick={() => buy(pkg.code)}
-            className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${pkg.popular ? 'bg-[#22d3ee] text-black hover:bg-cyan-300' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}
+            className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${pkg.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e0ff8c]' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}
           >
             {buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.name}`}
           </button>
@@ -227,7 +227,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
                   <td>{formatRupiah(topup.amountIdr)}</td>
                   <td>{formatNumber(topup.credits)}</td>
                   <td><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{label}{topup.isSandbox ? ' · sandbox' : ''}</span></td>
-                  <td className="pr-3 text-right">{topup.paymentUrl && <a className="font-semibold text-cyan-300 hover:underline" href={topup.paymentUrl}>Pay now</a>}</td>
+                  <td className="pr-3 text-right">{topup.paymentUrl && <a className="font-semibold text-lime-300 hover:underline" href={topup.paymentUrl}>Pay now</a>}</td>
                 </tr>;
               }) : <tr><td colSpan="6" className="p-5 text-center text-white/45">No payments yet.</td></tr>}
             </tbody>
