@@ -577,3 +577,25 @@ test('a reference image large enough for Seedance is sent unchanged', async () =
 
   assert.equal(setup.calls.submitted[0].referenceImages[0], `data:image/png;base64,${large.toString('base64')}`);
 });
+
+test('a refusal that names another image after trusting trusts that one too and sends again', async () => {
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(1), realPersonError(2)] });
+
+  const result = await setup.run({ referenceImages: [assetUrl('asset-1'), assetUrl('asset-2')] });
+
+  assert.equal(result.status, 'succeeded');
+  assert.deepEqual(setup.calls.borrowed, ['asset-1', 'asset-2']);
+  assert.equal(setup.calls.submitted.length, 3);
+  assert.deepEqual(setup.calls.submitted[2].referenceImages, ['asset://provider-asset-1', 'asset://provider-asset-2']);
+});
+
+test('a trusted asset BytePlus lost is trusted again and the video is sent again', async () => {
+  const lost = Object.assign(new Error('asset not found'), { code: 'BYTEPLUS_REQUEST_FAILED', assetNotFound: true });
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(1), lost] });
+
+  const result = await setup.run({ referenceImages: [assetUrl('asset-1')] });
+
+  assert.equal(result.status, 'succeeded');
+  assert.deepEqual(setup.calls.borrowed, ['asset-1', 'asset-1']);
+  assert.equal(setup.calls.submitted.length, 3);
+});

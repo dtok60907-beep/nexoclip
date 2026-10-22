@@ -12,16 +12,16 @@ export async function findBytePlusAssetLink(client, workspaceId, localAssetId, c
   return result.rows[0] || null;
 }
 
-// workspaceId null: the group any workspace already uses for this scope (one shared group for everyone).
+// workspaceId null: the one group every trust shares (any workspace, any Canvas project).
 export async function findBytePlusAssetGroup(client, workspaceId, canvasProjectId, projectName) {
   const result = workspaceId === null
     ? await client.query(
       `SELECT group_id
        FROM byteplus_asset_links
-       WHERE canvas_project_id = $1 AND project_name = $2 AND group_id IS NOT NULL
+       WHERE project_name = $1 AND group_id IS NOT NULL
        ORDER BY updated_at DESC
        LIMIT 1`,
-      [canvasProjectId, projectName],
+      [projectName],
     )
     : await client.query(
       `SELECT group_id

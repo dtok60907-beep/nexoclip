@@ -166,7 +166,7 @@ test('starts image trust in the workspace with a short-lived source URL and safe
   assert.doesNotMatch(JSON.stringify(await service.getTrust('workspace-1', 'asset-1')), /secret|signature|group/i);
 });
 
-test('creates independent provider groups for the same asset in different Canvas projects', async () => {
+test('Canvas projects trust into the one shared group, keeping a trust per project', async () => {
   const projectA = '11111111-1111-4111-8111-111111111111';
   const projectB = '22222222-2222-4222-8222-222222222222';
   const first = fixture({ asset: image, env: { BYTEPLUS_ASSET_GROUP_ID: 'legacy-shared-group' } });
@@ -175,13 +175,20 @@ test('creates independent provider groups for the same asset in different Canvas
   await first.service.startTrust('workspace-1', 'asset-1', projectA);
   await second.service.startTrust('workspace-1', 'asset-1', projectB);
 
-  assert.equal(first.calls.groups.length, 1);
-  assert.equal(second.calls.groups.length, 1);
-  assert.match(first.calls.groups[0].name, /11111111/);
-  assert.match(second.calls.groups[0].name, /22222222/);
-  assert.notEqual(first.calls.groups[0].clientToken, second.calls.groups[0].clientToken);
+  assert.equal(first.calls.groups.length, 0);
+  assert.equal(second.calls.groups.length, 0);
+  assert.equal(first.calls.assets[0].groupId, 'legacy-shared-group');
+  assert.equal(second.calls.assets[0].groupId, 'legacy-shared-group');
   assert.equal(first.getLink().canvas_project_id, projectA);
   assert.equal(second.getLink().canvas_project_id, projectB);
+
+  const fresh = fixture({ asset: image });
+  const workspace = fixture({ asset: image });
+  await fresh.service.startTrust('workspace-1', 'asset-1', projectA);
+  await workspace.service.startTrust('workspace-1', 'asset-1');
+  // Same name and idempotency token as the workspace's shared group.
+  assert.equal(fresh.calls.groups[0].name, workspace.calls.groups[0].name);
+  assert.equal(fresh.calls.groups[0].clientToken, workspace.calls.groups[0].clientToken);
 });
 
 test('removes trust only from the selected Canvas project group', async () => {
@@ -224,7 +231,7 @@ test('reuses an existing project group for new trusted assets', async () => {
 test('workspace trust shares one group across workspaces; a new one is created only once for everyone', async () => {
   const reused = fixture({ asset: { ...image, workspace_id: 'workspace-2' }, existingGroup: 'someone-elses-group' });
   await reused.service.startTrust('workspace-2', 'asset-1');
-  assert.deepEqual(reused.calls.groupLookups, [{ workspaceId: null, canvasProjectId: 'workspace' }]);
+  assert.deepEqual(reused.calls.groupLookups, [{ workspaceId: null, canvasProjectId: null }]);
   assert.deepEqual(reused.calls.groups, []);
   assert.equal(reused.calls.assets[0].groupId, 'someone-elses-group');
 
@@ -235,9 +242,10 @@ test('workspace trust shares one group across workspaces; a new one is created o
   // The same idempotency token from every workspace: BytePlus hands back the one shared group.
   assert.equal(first.calls.groups[0].clientToken, other.calls.groups[0].clientToken);
 
-  const canvas = fixture({ asset: image });
+  const canvas = fixture({ asset: image, existingGroup: 'someone-elses-group' });
   await canvas.service.startTrust('workspace-1', 'asset-1', '11111111-1111-4111-8111-111111111111');
-  assert.equal(canvas.calls.groupLookups[0].workspaceId, 'workspace-1'); // Canvas projects keep their own group
+  assert.equal(canvas.calls.groupLookups[0].workspaceId, null); // Canvas projects use the shared group too
+  assert.deepEqual(canvas.calls.groups, []);
 });
 
 test('failed retry retains the group and rotates only the asset attempt token', async () => {

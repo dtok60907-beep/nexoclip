@@ -12,6 +12,8 @@ import { extraReferenceImages, isFrameTask } from './videoTaskType.js';
 import { createSeedanceAutoTrust, realPersonContentIndexes } from './seedanceAutoTrust.js';
 
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'expired']);
+// How many times one generation trusts what Seedance refused (or lost) and sends again.
+const TRUST_ROUNDS = 3;
 
 function videoRequest(job, { referenceImages, frameImages, referenceVideos, referenceAudios = [] }) {
   const parameters = job.parameters || {};
@@ -161,10 +163,16 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
       built = await buildRequest(job);
       return failed;
     };
+    // Images trusted for this generation (a refusal of one of them is not retried).
+    const trustedHere = new Set();
+    let lostHere = false;
     // Images Seedance refused before are trusted up front instead of failing first.
     if (trust) {
       const known = await trust.flagged(workspaceId, built.imageAssetIds.filter(Boolean));
-      if (known.length) await borrowTrust(known);
+      if (known.length) {
+        const failed = await borrowTrust(known);
+        known.filter((id) => !failed.includes(id)).forEach((id) => trustedHere.add(id));
+      }
     }
     let submitted;
     for (let round = 0; ; round += 1) {
@@ -172,16 +180,34 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
         submitted = await providerRouter.submitVideo(built.request, observe ? { onProviderUsage: observe } : undefined);
         break;
       } catch (error) {
+        // A trusted image goes to Seedance as asset://, which it never refuses as a real
+        // person. So trust whatever it refuses (it may name other images on the next try,
+        // up to TRUST_ROUNDS times) and send again.
+        const canTrust = trust && round < TRUST_ROUNDS;
         const refused = realPersonContentIndexes(error);
-        const assetIds = refused?.map((index) => built.imageAssetIds[index - 1]);
-        if (trust && round === 0 && assetIds?.length && assetIds.every(Boolean)) {
-          console.info('[seedance-trust] trusting refused references', JSON.stringify({ generationId: job.id, assetIds }));
+        const refusedIds = refused?.map((index) => built.imageAssetIds[index - 1]);
+        // Only images this generation has not trusted yet: one refused again after its trust
+        // is not a trust problem, and sending it again would only be refused again.
+        const assetIds = refusedIds?.every(Boolean) ? [...new Set(refusedIds)].filter((id) => !trustedHere.has(id)) : null;
+        if (canTrust && assetIds?.length) {
+          assetIds.forEach((id) => trustedHere.add(id));
+          console.info('[seedance-trust] trusting refused references', JSON.stringify({ generationId: job.id, round: round + 1, assetIds }));
           await trust.markNeedsTrust(workspaceId, assetIds);
           const failed = await borrowTrust(assetIds);
           if (!failed.length) continue;
         }
         if (!error?.assetNotFound || built.trustedMappings.length === 0) throw seedanceRejection(error);
-        await handleMissingAsset(built.trustedMappings);
+        // A trusted asset is gone on BytePlus (its group was deleted, say): forget it and,
+        // with auto trust, trust those images again instead of failing the generation.
+        await markMissingAssets(built.trustedMappings);
+        const missing = [...new Set(built.trustedMappings.map((mapping) => mapping.localAssetId))];
+        if (canTrust && !lostHere) {
+          lostHere = true;
+          console.info('[seedance-trust] re-trusting missing assets', JSON.stringify({ generationId: job.id, round: round + 1, assetIds: missing }));
+          const failed = await borrowTrust(missing);
+          if (!failed.length) continue;
+        }
+        throw staleAssetError();
       }
     }
     const provider = submitted.provider || 'openrouter';
@@ -190,14 +216,12 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     return { provider, providerRequestId, usage: submitted.usage || {} };
   };
 
-  const handleMissingAsset = async (trustedMappings) => {
-    await Promise.all(trustedMappings.map(mapping => markBytePlusAssetLinkStale(pool, {
-      ...mapping, errorCode: 'BYTEPLUS_ASSET_NOT_FOUND',
-    })));
-    throw Object.assign(new Error('Trusted BytePlus asset is missing. Trust this asset again before generating.'), {
-      code: 'BYTEPLUS_ASSET_STALE', status: 422,
-    });
-  };
+  const markMissingAssets = (trustedMappings) => Promise.all(trustedMappings.map(mapping => markBytePlusAssetLinkStale(pool, {
+    ...mapping, errorCode: 'BYTEPLUS_ASSET_NOT_FOUND',
+  })));
+  const staleAssetError = () => Object.assign(new Error('Trusted BytePlus asset is missing. Trust this asset again before generating.'), {
+    code: 'BYTEPLUS_ASSET_STALE', status: 422,
+  });
 
   // The last frame is a bonus output: a failure here is logged and the video
   // still succeeds.
