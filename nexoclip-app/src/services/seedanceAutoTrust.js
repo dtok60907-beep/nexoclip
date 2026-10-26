@@ -17,10 +17,18 @@ const POLL_MS = 3_000;
 const TIMEOUT_MS = 3 * 60_000;
 // A loan outlives its generation only when a worker died mid-run.
 const STALE_LOAN_MS = 3 * 60 * 60_000;
-// BytePlus Assets sometimes answers "temporarily unavailable" (throttling, a 5xx, a dropped
-// connection), e.g. when several generations trust their references at once. Wait and try
-// again before giving up on an image: a refused image fails the whole generation.
+// A borrowed trust stays on BytePlus after its generations end, for the next generation of
+// the same image (a Director's shots reuse their characters): it is removed only once the
+// image has gone unused this long.
+const KEEP_TRUST_MS = 3 * 24 * 60 * 60_000;
+// BytePlus Assets sometimes answers "temporarily unavailable" (a 5xx, a dropped connection).
+// Wait and try again before giving up on an image: a refused image fails the whole generation.
 const RETRY_DELAYS_MS = [2_000, 6_000, 15_000];
+// Its write quota is per minute and small (QuotaWriteQPMExceeded after about 5 writes): when
+// it runs out, wait for the next minute.
+const QUOTA_DELAY_MS = 65_000;
+const REMOVALS_PER_SWEEP = 3;
+const isQuotaError = (error) => error?.status === 429 || String(error?.providerCode || '').startsWith('Quota');
 
 export function createSeedanceAutoTrust({
   pool,
@@ -30,6 +38,8 @@ export function createSeedanceAutoTrust({
   pollMs = POLL_MS,
   timeoutMs = TIMEOUT_MS,
   retryDelaysMs = RETRY_DELAYS_MS,
+  quotaDelayMs = QUOTA_DELAY_MS,
+  keepTrustMs = KEEP_TRUST_MS,
   log = console,
 }) {
   // Built on first use: the trust service needs BytePlus and storage configuration.
@@ -74,10 +84,12 @@ export function createSeedanceAutoTrust({
             [workspaceId, assetId],
           );
           // Active with no loans: someone trusted it on purpose (Studio, Director). Use it, never remove it.
+          // Active with loans (held or released): an earlier generation's trust, borrowed again below.
           if (state?.status === 'active' && !lent.rows.length) break;
           await pool.query(
             `INSERT INTO byteplus_trust_loans (generation_id, workspace_id, local_asset_id)
-             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+             VALUES ($1, $2, $3)
+             ON CONFLICT (generation_id, local_asset_id) DO UPDATE SET released_at = NULL`,
             [generationId, workspaceId, assetId],
           );
           if (state?.status !== 'active' && state?.status !== 'processing') {
@@ -97,47 +109,60 @@ export function createSeedanceAutoTrust({
             failed.push(assetId);
             break;
           }
-          await sleep(retryDelaysMs[attempt]);
+          await sleep(isQuotaError(error) ? quotaDelayMs : retryDelaysMs[attempt]);
         }
       }
     }
     return failed;
   }
 
-  // Gives back this generation's loans; an image is untrusted once no other generation holds it.
+  // Gives back this generation's loans. The trusts stay on BytePlus for the next generation
+  // of the same images; sweep removes those unused for keepTrustMs.
   async function release(generationId) {
     const returned = await pool.query(
-      'DELETE FROM byteplus_trust_loans WHERE generation_id = $1 RETURNING workspace_id, local_asset_id',
+      'UPDATE byteplus_trust_loans SET released_at = now() WHERE generation_id = $1 AND released_at IS NULL RETURNING workspace_id, local_asset_id',
       [generationId],
     );
-    for (const { workspace_id: workspaceId, local_asset_id: assetId } of returned.rows) {
-      const held = await pool.query(
-        'SELECT 1 FROM byteplus_trust_loans WHERE workspace_id = $1 AND local_asset_id = $2 LIMIT 1',
-        [workspaceId, assetId],
-      );
-      if (held.rows.length) continue;
-      try {
-        await trusts().deleteTrust(workspaceId, assetId, TRUST_SCOPE);
-      } catch (error) {
-        // The asset stays trusted until someone removes it; the slot is not leaked forever
-        // because a later generation of the same image borrows and releases it again.
-        log.error('[seedance-trust] could not remove trust', JSON.stringify({ generationId, assetId, message: error?.message }));
-      }
-    }
     return returned.rows.length;
   }
 
-  // Loans whose generation finished or whose worker died.
+  // Gives back loans whose generation finished or whose worker died, then removes the trusts
+  // nothing has borrowed for keepTrustMs.
   async function sweep() {
     const stale = await pool.query(
       `SELECT DISTINCT l.generation_id FROM byteplus_trust_loans l
        LEFT JOIN generation_jobs j ON j.id = l.generation_id
-       WHERE j.id IS NULL OR j.status NOT IN ('queued', 'running', 'processing')
-          OR l.created_at < $1`,
+       WHERE l.released_at IS NULL
+         AND (j.id IS NULL OR j.status NOT IN ('queued', 'running', 'processing') OR l.created_at < $1)`,
       [new Date(now() - STALE_LOAN_MS).toISOString()],
     );
     let released = 0;
     for (const row of stale.rows) released += await release(row.generation_id);
+
+    const unused = await pool.query(
+      `SELECT workspace_id, local_asset_id FROM byteplus_trust_loans
+       GROUP BY workspace_id, local_asset_id
+       HAVING bool_and(released_at IS NOT NULL) AND max(released_at) < $1
+       ORDER BY max(released_at)
+       LIMIT $2`,
+      // A few per sweep: removing is a write too, and generations need the quota more.
+      [new Date(now() - keepTrustMs).toISOString(), REMOVALS_PER_SWEEP],
+    );
+    for (const { workspace_id: workspaceId, local_asset_id: assetId } of unused.rows) {
+      try {
+        await trusts().deleteTrust(workspaceId, assetId, TRUST_SCOPE);
+      } catch (error) {
+        // Left for the next sweep; the quota error clears within a minute.
+        log.error('[seedance-trust] could not remove trust', JSON.stringify({ assetId, code: error?.code, providerCode: error?.providerCode }));
+        continue;
+      }
+      // Forget the loans only for a trust that is gone, and only if none was taken meanwhile.
+      await pool.query(
+        `DELETE FROM byteplus_trust_loans WHERE workspace_id = $1 AND local_asset_id = $2
+           AND NOT EXISTS (SELECT 1 FROM byteplus_trust_loans h WHERE h.workspace_id = $1 AND h.local_asset_id = $2 AND h.released_at IS NULL)`,
+        [workspaceId, assetId],
+      );
+    }
     return released;
   }
 

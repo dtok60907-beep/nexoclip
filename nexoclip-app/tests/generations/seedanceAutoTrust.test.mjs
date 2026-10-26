@@ -4,27 +4,45 @@ import assert from 'node:assert/strict';
 const { createSeedanceAutoTrust, realPersonContentIndexes } = await import('../../src/services/seedanceAutoTrust.js');
 
 // Loans kept in memory; the SQL is matched by what each statement does.
-function fakePool({ jobs = {} } = {}) {
+function fakePool({ jobs = {}, clock = () => Date.now() } = {}) {
   const loans = [];
   return {
     loans,
     async query(sql, values) {
-      if (/^INSERT INTO byteplus_trust_loans/.test(sql.trim())) {
+      const text = sql.trim();
+      if (/^INSERT INTO byteplus_trust_loans/.test(text)) {
         const [generationId, workspaceId, assetId] = values;
-        if (!loans.some((l) => l.generationId === generationId && l.assetId === assetId)) loans.push({ generationId, workspaceId, assetId, createdAt: Date.now() });
+        const held = loans.find((l) => l.generationId === generationId && l.assetId === assetId);
+        if (held) held.releasedAt = null;
+        else loans.push({ generationId, workspaceId, assetId, createdAt: clock(), releasedAt: null });
         return { rows: [] };
       }
-      if (/^DELETE FROM byteplus_trust_loans/.test(sql.trim())) {
-        const gone = loans.filter((l) => l.generationId === values[0]);
-        for (const loan of gone) loans.splice(loans.indexOf(loan), 1);
-        return { rows: gone.map((l) => ({ workspace_id: l.workspaceId, local_asset_id: l.assetId })) };
+      if (/^UPDATE byteplus_trust_loans SET released_at/.test(text)) {
+        const held = loans.filter((l) => l.generationId === values[0] && l.releasedAt === null);
+        for (const loan of held) loan.releasedAt = clock();
+        return { rows: held.map((l) => ({ workspace_id: l.workspaceId, local_asset_id: l.assetId })) };
       }
-      if (/^SELECT 1 FROM byteplus_trust_loans/.test(sql.trim())) {
+      if (/^SELECT 1 FROM byteplus_trust_loans/.test(text)) {
         return { rows: loans.filter((l) => l.workspaceId === values[0] && l.assetId === values[1]).map(() => ({})) };
       }
-      if (/SELECT DISTINCT l.generation_id/.test(sql)) {
-        const ids = [...new Set(loans.filter((l) => !['queued', 'running', 'processing'].includes(jobs[l.generationId])).map((l) => l.generationId))];
+      if (/SELECT DISTINCT l.generation_id/.test(text)) {
+        const ids = [...new Set(loans.filter((l) => l.releasedAt === null && !['queued', 'running', 'processing'].includes(jobs[l.generationId])).map((l) => l.generationId))];
         return { rows: ids.map((id) => ({ generation_id: id })) };
+      }
+      if (/GROUP BY workspace_id, local_asset_id/.test(text)) {
+        const before = new Date(values[0]).getTime();
+        const keys = [...new Set(loans.map((l) => `${l.workspaceId}|${l.assetId}`))];
+        const rows = keys.map((k) => loans.filter((l) => `${l.workspaceId}|${l.assetId}` === k))
+          .filter((group) => group.every((l) => l.releasedAt !== null) && Math.max(...group.map((l) => l.releasedAt)) < before)
+          .slice(0, values[1])
+          .map((group) => ({ workspace_id: group[0].workspaceId, local_asset_id: group[0].assetId }));
+        return { rows };
+      }
+      if (/^DELETE FROM byteplus_trust_loans/.test(text)) {
+        const [workspaceId, assetId] = values;
+        if (loans.some((l) => l.workspaceId === workspaceId && l.assetId === assetId && l.releasedAt === null)) return { rows: [] };
+        for (const loan of loans.filter((l) => l.workspaceId === workspaceId && l.assetId === assetId)) loans.splice(loans.indexOf(loan), 1);
+        return { rows: [] };
       }
       throw new Error(`unexpected query: ${sql}`);
     },
@@ -93,31 +111,82 @@ test('an image someone trusted on purpose is used but never borrowed or removed'
   assert.deepEqual(trust.calls.deleted, []);
 });
 
-test('an image two generations borrowed is removed only after both release it', async () => {
+test('a borrowed trust stays after its generation and the next generation reuses it without a write', async () => {
   const pool = fakePool();
   const trust = fakeTrust();
-  trust.startTrust = async (_w, assetId) => { trust.states[assetId] = 'active'; return { status: 'active' }; };
+  trust.startTrust = async (_w, assetId) => { trust.calls.started.push([assetId]); trust.states[assetId] = 'active'; return { status: 'active' }; };
   const auto = createSeedanceAutoTrust({ pool, trustService: trust, sleep: async () => {} });
 
   await auto.borrow({ generationId: 'job-1', workspaceId: 'w1', assetIds: ['a1'] });
-  await auto.borrow({ generationId: 'job-2', workspaceId: 'w1', assetIds: ['a1'] });
   await auto.release('job-1');
-  assert.deepEqual(trust.calls.deleted, []);
+  await auto.borrow({ generationId: 'job-2', workspaceId: 'w1', assetIds: ['a1'] });
   await auto.release('job-2');
-  assert.deepEqual(trust.calls.deleted, ['a1']);
+
+  assert.equal(trust.calls.started.length, 1);
+  assert.deepEqual(trust.calls.deleted, []);
 });
 
-test('sweep gives back loans of generations that ended and keeps running ones', async () => {
-  const pool = fakePool({ jobs: { done: 'failed', live: 'running' } });
+test('sweep gives back loans of generations that ended, and removes trusts unused for the keep time', async () => {
+  let clock = Date.parse('2026-10-23T00:00:00Z');
+  const pool = fakePool({ jobs: { done: 'failed', live: 'running' }, clock: () => clock });
   const trust = fakeTrust();
   trust.startTrust = async (_w, assetId) => { trust.states[assetId] = 'active'; return { status: 'active' }; };
-  const auto = createSeedanceAutoTrust({ pool, trustService: trust, sleep: async () => {} });
+  const auto = createSeedanceAutoTrust({ pool, trustService: trust, sleep: async () => {}, now: () => clock, keepTrustMs: 1000 });
   await auto.borrow({ generationId: 'done', workspaceId: 'w1', assetIds: ['a1'] });
   await auto.borrow({ generationId: 'live', workspaceId: 'w1', assetIds: ['a2'] });
 
   assert.equal(await auto.sweep(), 1);
+  assert.deepEqual(trust.calls.deleted, []); // a1 was released just now
+  clock += 5000;
+  await auto.sweep();
   assert.deepEqual(trust.calls.deleted, ['a1']);
   assert.deepEqual(pool.loans.map((l) => l.generationId), ['live']);
+});
+
+test('a trust in use is never removed by the sweep', async () => {
+  let clock = Date.parse('2026-10-23T00:00:00Z');
+  const pool = fakePool({ jobs: { old: 'succeeded', live: 'running' }, clock: () => clock });
+  const trust = fakeTrust();
+  trust.startTrust = async (_w, assetId) => { trust.states[assetId] = 'active'; return { status: 'active' }; };
+  const auto = createSeedanceAutoTrust({ pool, trustService: trust, sleep: async () => {}, now: () => clock, keepTrustMs: 1000 });
+  await auto.borrow({ generationId: 'old', workspaceId: 'w1', assetIds: ['a1'] });
+  await auto.release('old');
+  clock += 5000;
+  await auto.borrow({ generationId: 'live', workspaceId: 'w1', assetIds: ['a1'] });
+
+  await auto.sweep();
+  assert.deepEqual(trust.calls.deleted, []);
+});
+
+test('a retried generation holds its released loan again', async () => {
+  let clock = Date.parse('2026-10-23T00:00:00Z');
+  const pool = fakePool({ jobs: { job: 'running' }, clock: () => clock });
+  const trust = fakeTrust();
+  trust.startTrust = async (_w, assetId) => { trust.states[assetId] = 'active'; return { status: 'active' }; };
+  const auto = createSeedanceAutoTrust({ pool, trustService: trust, sleep: async () => {}, now: () => clock, keepTrustMs: 1000 });
+  await auto.borrow({ generationId: 'job', workspaceId: 'w1', assetIds: ['a1'] });
+  await auto.release('job');
+  clock += 5000;
+  await auto.borrow({ generationId: 'job', workspaceId: 'w1', assetIds: ['a1'] });
+
+  await auto.sweep();
+  assert.deepEqual(trust.calls.deleted, []);
+});
+
+test('a quota error waits for the next minute before trying again', async () => {
+  const trust = fakeTrust();
+  let starts = 0;
+  trust.startTrust = async (_w, assetId) => {
+    starts += 1;
+    if (starts === 1) throw Object.assign(new Error('unavailable'), { retryable: true, status: 429, providerCode: 'QuotaWriteQPMExceeded' });
+    trust.states[assetId] = 'active';
+    return { status: 'active' };
+  };
+  const waits = [];
+  const auto = createSeedanceAutoTrust({ pool: fakePool(), trustService: trust, sleep: async (ms) => { waits.push(ms); }, retryDelaysMs: [10, 20], quotaDelayMs: 65_000, log: { error() {} } });
+
+  assert.deepEqual(await auto.borrow({ generationId: 'job-1', workspaceId: 'w1', assetIds: ['a1'] }), []);
+  assert.deepEqual(waits, [65_000]);
 });
 
 test('borrow tries again when BytePlus is briefly unavailable', async () => {
