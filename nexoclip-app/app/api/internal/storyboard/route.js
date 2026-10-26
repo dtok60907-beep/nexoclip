@@ -32,7 +32,7 @@ const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', '
 // with human faces unless they are BytePlus trusted assets. The Director borrows the trust around a video job.
 const TRUST_OPERATIONS = { 'trust-asset': 'start', 'trust-status': 'get', 'untrust-asset': 'delete' };
 // Only the models these tools are configured with may be submitted.
-export const STORYBOARD_MODELS = { image: 'bytedance-seed/seedream-4.5', video: 'byteplus/seedance-2.5-unfiltered' };
+export const STORYBOARD_MODELS = { image: 'seedream-5-0-260128', video: 'byteplus/seedance-2.5-unfiltered' };
 // Bookkeeping label for which internal tool made the request; must be one of these.
 const SOURCES = new Set(['storyboard', 'director']);
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;

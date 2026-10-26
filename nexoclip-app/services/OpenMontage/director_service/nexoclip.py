@@ -25,7 +25,7 @@ import requests
 PROJECT_SCOPE = "storyboard"
 SOURCE = "director"
 # Must match STORYBOARD_MODELS in nexoclip-app/app/api/internal/storyboard/route.js.
-IMAGE_MODEL = "bytedance-seed/seedream-4.5"
+IMAGE_MODEL = "seedream-5-0-260128"
 VIDEO_MODEL = "byteplus/seedance-2.5-unfiltered"
 ACTIVE_STATUSES = {"queued", "running", "processing", "pending"}
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.I)
