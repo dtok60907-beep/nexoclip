@@ -1971,3 +1971,23 @@ def test_no_keyframes_shots_need_no_frame_prompt(client, fake_llm, bridge):
     assert [s["id"] for s in board["shots"]] == ["s1"] and "frame:s1" not in board["media"]
     request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()
     assert request["items"] == ["element:maya", "video:s1"]  # the sheet it needs, then the clip; no frame
+
+
+def test_no_keyframes_place_light_and_weather_come_from_the_scene():
+    from director_service import board as boards
+
+    shot = {"id": "s1", "title": "Shot", "description": "d", "duration_seconds": 5, "scene_id": "dawn",
+            "element_ids": ["kitchen"], "frame_prompt": "", "video_prompt": "[Layout] the kitchen"}
+    prompt = boards.media_specs(_v2_board(shots=[shot]))["video:s1"]["prompt"]
+    assert "take only the spatial layout and architecture of this place" in prompt
+    assert "weather and light are the ones this prompt describes" in prompt
+
+
+def test_no_keyframes_a_clip_without_references_is_text_to_video():
+    from director_service import board as boards
+
+    shots = [{"id": f"t{n}", "title": "Title", "description": "d", "duration_seconds": 4, "scene_id": "dawn",
+              "element_ids": [], "frame_prompt": "", "video_prompt": "Black screen, title fades in"} for n in (1, 2)]
+    specs = boards.media_specs(_v2_board(shots=shots))
+    assert "omniReferenceTaskType" not in specs["scene:t1"]["params"]
+    assert "omniReferenceTaskType" not in specs["video:t1"]["params"]

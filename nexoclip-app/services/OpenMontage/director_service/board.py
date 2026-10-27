@@ -30,7 +30,7 @@ ELEMENT_KINDS = ("character", "location", "prop")
 BRIEF_DETAILS = ("goal", "audience", "platform", "key_message", "product", "tone", "references", "cta", "must_have",
                  "avoid")
 LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
-MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
+MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 30  # 30 s: the longest single Seedance 2.5 generation
 # The prompt templates a project is made with (brief.templates). 2: the layouts BytePlus Dramagic uses (character
 # close-up + three-view, location with a top-down view, references limited to what each kind gives, constraints at the
 # end of every clip). Projects from before stay on 1, so their sheets and clips are not suddenly out of date.
@@ -356,10 +356,16 @@ REFERENCE_USE = {
 }
 
 
-def reference_line(n: int, item: dict[str, Any], version: int) -> str:
+# Clips made from the sheets alone: a place's look is its layout; its time, weather and light are the scene's.
+SHEET_ONLY_LOCATION_USE = ("take only the spatial layout and architecture of this place from it; its time of day, "
+                           "weather and light are the ones this prompt describes; people in that image are not used")
+
+
+def reference_line(n: int, item: dict[str, Any], version: int, sheets_only: bool = False) -> str:
     """How the video prompt names element reference @Image<n>."""
     if version >= 2:
-        use = REFERENCE_USE.get(item["kind"], REFERENCE_USE["prop"])
+        use = SHEET_ONLY_LOCATION_USE if sheets_only and item["kind"] == "location" else \
+            REFERENCE_USE.get(item["kind"], REFERENCE_USE["prop"])
         return (f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one image: "
                 f"{use}. Never show the sheet layout itself.")
     return (f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one image: "
@@ -529,7 +535,7 @@ def _sheet_legend(board: dict[str, Any], element_ids: list[str], user_images: in
     for n, element_id in enumerate(element_ids, start=1):
         item = element(board, element_id)
         names[element_id] = f"{item['name']} (@Image{n})"
-        lines.append(reference_line(n, item, version))
+        lines.append(reference_line(n, item, version, sheets_only=True))
     for n in range(len(element_ids) + 1, len(element_ids) + 1 + user_images):
         lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
     for n, asset_id in enumerate(user_videos, start=1):
@@ -549,8 +555,9 @@ def _sheet_shot_spec(board: dict[str, Any], item: dict[str, Any], ratio: str, au
     prompt = "\n\n".join(p for p in (legend, scene_setting(board, item.get("scene_id")), body, clip_constraints(board)) if p)
     return {
         "kind": "video", "label": f"{item['title']} — video", "prompt": prompt, "deps": [f"element:{e}" for e in ids],
+        # Seedance takes the reference mode only with references; a shot without any is plain text-to-video.
         "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio,
-                   "omniReferenceTaskType": "reference"},
+                   **({"omniReferenceTaskType": "reference"} if ids or images or videos else {})},
         **({"extra_images": images} if images else {}), **({"ref_videos": videos} if videos else {}),
     }
 
@@ -758,7 +765,8 @@ def _sheet_scene_spec(board: dict[str, Any], block: dict[str, Any], shots: list[
     return {
         "kind": "video", "label": f"{title} — video scene ({len(shots)} shot, {cursor}s)",
         "prompt": prompt, "deps": [f"element:{e}" for e in elements_in_order], "shots": list(block["shots"]),
-        "params": {"aspectRatio": ratio, "duration": cursor, **audio, "omniReferenceTaskType": "reference"},
+        "params": {"aspectRatio": ratio, "duration": cursor, **audio,
+                   **({"omniReferenceTaskType": "reference"} if elements_in_order or user_images or user_videos else {})},
         **({"extra_images": user_images} if user_images else {}), **({"ref_videos": user_videos} if user_videos else {}),
     }
 

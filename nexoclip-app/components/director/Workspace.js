@@ -314,7 +314,7 @@ function ShotEditor({ board, shot, onEdit, busy, onDone }) {
     <div className="space-y-2.5">
       <div className="grid grid-cols-[1fr_90px] gap-2">
         <Field label="Judul"><input className={inputClass} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
-        <Field label="Detik"><input type="number" min={4} max={15} className={inputClass} value={draft.duration_seconds} onChange={(e) => setDraft({ ...draft, duration_seconds: e.target.value })} /></Field>
+        <Field label="Detik"><input type="number" min={4} max={30} className={inputClass} value={draft.duration_seconds} onChange={(e) => setDraft({ ...draft, duration_seconds: e.target.value })} /></Field>
       </div>
       {board.scenes?.length > 0 && (
         <Field label="Scene">
