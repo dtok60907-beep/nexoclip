@@ -284,27 +284,51 @@ const REQUEST_STATUS = {
   needs_credits: { label: 'Kredit kurang', tone: 'amber' },
 };
 
+// Voiceover lines and music are never needed to make the video: on a pending card they start unticked.
+const isOptional = (key) => key.startsWith('vo:') || key.startsWith('audio:');
+
 function RequestCard({ request, board, workspaceId, busy, generationRunning, onApprove, onReject }) {
+  const [ticked, setTicked] = useState([]);
   if (!request) return null;
-  const estimate = request.estimate || {};
   const auto = !!request.auto;
   const status = auto && request.status === 'pending' ? { label: 'Antre', tone: 'amber' } : (REQUEST_STATUS[request.status] || REQUEST_STATUS.pending);
   const pending = request.status === 'pending' && !auto;
+  const optional = pending ? request.items.filter(isOptional) : [];
+  const skip = optional.filter((k) => !ticked.includes(k));
+  const required = request.items.filter((k) => !skip.includes(k));
+  const base = request.estimate || {};
+  const left = skip.reduce((sum, k) => sum + Number(request.item_estimates?.[k]?.credits || 0), 0);
+  const estimate = skip.length ? { ...base, audio: Math.max(0, (base.audio || 0) - skip.length), credits: Math.max(0, (base.credits || 0) - left) } : base;
+  const nothing = pending && required.length === 0;
   return (
-    <CardShell icon="✧" title={`Generate ${requestSummary(estimate)}`} accent={auto ? 'otomatis' : null}
-      action={pending ? 'Approve & generate' : null} onAction={onApprove} actionDisabled={busy || generationRunning || !estimate.available}
+    <CardShell icon="✧" title={`Generate ${requestSummary(estimate) || 'audio'}`} accent={auto ? 'otomatis' : null}
+      action={pending ? 'Approve & generate' : null} onAction={() => onApprove(skip, estimate)}
+      actionDisabled={busy || generationRunning || !base.available || nothing}
       secondary={pending ? (
         <button type="button" onClick={onReject} disabled={busy}
           className="rounded-full border border-white/[0.1] px-4 py-2 text-[12px] text-white/60 hover:border-white/25 disabled:opacity-50">Batal</button>
       ) : null}>
       <div className="flex items-start gap-4">
-        <Stack items={request.items.map((k) => ({ src: board.media[k]?.kind === 'audio' ? null : assetUrl(board.media[k]?.asset_id, workspaceId, true), label: (board.media[k]?.label || k).replace(' — reference sheet', '') }))} />
+        <Stack items={required.map((k) => ({ src: board.media[k]?.kind === 'audio' ? null : assetUrl(board.media[k]?.asset_id, workspaceId, true), label: (board.media[k]?.label || k).replace(' — reference sheet', '') }))} />
         <div className="min-w-0 flex-1">
           <div className="mb-1.5"><Badge tone={status.tone}>{status.label}</Badge></div>
           <ul className="space-y-0.5">
-            {request.items.slice(0, 4).map((key) => <li key={key} className="truncate text-[11px] text-white/55">{board.media[key]?.label || key}</li>)}
-            {request.items.length > 4 && <li className="text-[10px] text-white/35">+{request.items.length - 4} lagi</li>}
+            {required.filter((k) => !optional.includes(k)).slice(0, 4).map((key) => <li key={key} className="truncate text-[11px] text-white/55">{board.media[key]?.label || key}</li>)}
+            {required.length - optional.filter((k) => ticked.includes(k)).length > 4 && <li className="text-[10px] text-white/35">+{required.length - optional.filter((k) => ticked.includes(k)).length - 4} lagi</li>}
           </ul>
+          {optional.length > 0 && (
+            <div className="mt-2 border-t border-white/[0.06] pt-1.5">
+              <p className="text-[10px] text-white/35">Opsional, centang kalau mau ikut dibuat:</p>
+              {optional.map((key) => (
+                <label key={key} className="flex cursor-pointer items-center gap-1.5 truncate text-[11px] text-white/55">
+                  <input type="checkbox" className="accent-[#d4ff64]" checked={ticked.includes(key)} disabled={busy}
+                    onChange={(e) => setTicked(e.target.checked ? [...ticked, key] : ticked.filter((k) => k !== key))} />
+                  <span className="truncate">{board.media[key]?.label || key}</span>
+                  {request.item_estimates?.[key] && <span className="flex-none text-[10px] text-white/30">{fmtCredits(request.item_estimates[key].credits)} kr</span>}
+                </label>
+              ))}
+            </div>
+          )}
           <p className="mt-1.5 text-[12px] text-white/75">
             {estimate.available ? <>{auto ? 'Biaya' : 'Estimasi'} <strong className={ACCENT}>{fmtCredits(estimate.credits)} kredit</strong></> : <span className="text-amber-300/80">Estimasi kredit belum tersedia.</span>}
           </p>
@@ -475,7 +499,7 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
       return <FoldedLine text={`Estimasi generate ${requestSummary(request.estimate || {})} — ${REQUEST_STATUS[request.status].label.toLowerCase()}`} />;
     }
     return <RequestCard request={request} board={board} workspaceId={workspaceId} busy={busy} generationRunning={generationRunning}
-      onApprove={() => onApprove(request)} onReject={() => onReject(request)} />;
+      onApprove={(skip, estimate) => onApprove(request, skip, estimate)} onReject={() => onReject(request)} />;
   }
   if (entry.kind === 'edit' || entry.kind === 'approval') {
     return <div className="text-right text-[10.5px] text-white/40">{entry.kind === 'edit' ? '✎ ' : '✓ '}{entry.text}</div>;

@@ -101,10 +101,11 @@ def _turn(project_id: str) -> None:
     billing.require_credits(project_id)
     agent.watch_new_videos(project_id)  # the video analyst watches new attachments first
     agent.run_turn(project_id)
-    # Once per turn (not per edit), so several tweaks to one asset cost one sheet.
-    _kick_auto(project_id)  # e.g. a sheet the agent asked to redo with force
-    auto_generate_assets(project_id)
-    if _auto(project_id):  # "Just make it": what the Director prepared is approved for the user
+    _kick_auto(project_id)  # e.g. a sheet the user asked for while the agent was busy
+    if _auto(project_id):
+        # "Just make it" only: sheets once per turn (not per edit), so several tweaks to one asset cost one sheet. In
+        # "Guide me" nothing is generated without the user: sheets join the approval card with the frames and videos.
+        auto_generate_assets(project_id)  # "Just make it": what the Director prepared is approved for the user
         board = read_board(project_id)
         for request in board["requests"]:
             if request["status"] == "pending" and not request.get("auto"):
@@ -212,8 +213,8 @@ def edit(project_id: str, tool: str, args: dict) -> str:
         label = agent.apply_user_edit(project_id, tool, args)
     except agent.ToolError as exc:
         raise InvalidAction(str(exc)) from exc
-    if tool in ("upsert_element", "update_brief", "set_element_photos"):  # the brief's style is part of every sheet prompt
-        auto_generate_assets(project_id)
+    if tool in ("upsert_element", "update_brief", "set_element_photos") and _auto(project_id):
+        auto_generate_assets(project_id)  # the brief's style is part of every sheet prompt
     return label
 
 
@@ -292,21 +293,37 @@ def _finish(project_id: str, request_id: str) -> None:
     append_chat(project_id, "assistant", _summary(result), kind="generation", meta={"request_id": request_id})
 
 
-def approve_request(project_id: str, request_id: str, *, by_director: bool = False) -> None:
-    """Approve a request; one held at the credit gate is approved again ("Lanjutkan") after a top-up."""
+def approve_request(project_id: str, request_id: str, *, by_director: bool = False, skip: Optional[list[str]] = None) -> None:
+    """Approve a request; one held at the credit gate is approved again ("Lanjutkan") after a top-up.
+    skip: optional items (voiceover lines, music) the user unticked on the card: the rest is priced again and started."""
     board = read_board(project_id)
     request = generation.find_request(board, request_id)
     if request is None:
         raise InvalidAction("request not found")
     if request["status"] not in ("pending", "needs_credits"):
         raise InvalidAction(f"request is {request['status']}, not pending")
+    skip = [k for k in dict.fromkeys(skip or []) if k in request["items"]]
+    if any(not k.startswith(generation.OPTIONAL_PREFIXES) for k in skip):
+        raise InvalidAction("only voiceover and music can be left out")
+    if skip:
+        keys = [k for k in request["items"] if k not in skip]
+        if not keys:
+            raise InvalidAction("nothing left to generate")
+        generation.set_request_status(project_id, request_id, "superseded")
+        try:
+            fresh = generation.create_request(project_id, keys, force=bool(request.get("force")), note=request.get("note") or "",
+                                              sheets_apart=_auto(project_id))
+        except generation.GenerationError as exc:
+            raise InvalidAction(str(exc)) from exc
+        _start(project_id, fresh["id"], log_approval=not by_director)
+        return
     if not generation.request_is_current(board, request):
         # Something it would generate changed after the estimate (a prompt, the ratio, the resolution...): never charge
         # for what the user did not see. Price the same items again and show that estimate to approve instead.
         generation.set_request_status(project_id, request_id, "superseded")
         try:
             fresh = generation.create_request(project_id, request["requested"], force=bool(request.get("force")),
-                                              note=request.get("note") or "")
+                                              note=request.get("note") or "", sheets_apart=_auto(project_id))
         except generation.GenerationError as exc:
             raise InvalidAction(f"isi permintaan berubah setelah estimasi dibuat dan sekarang tidak ada yang perlu dibuat: {exc}") from exc
         if by_director:

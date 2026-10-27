@@ -213,10 +213,17 @@ BUILD_TURN = [
 ]
 
 
-def _built_project(client, fake_llm) -> str:
+def _built_project(client, fake_llm, sheets: bool = True) -> str:
+    """A "Guide me" project with its brief, elements, script and shots; sheets: the user generated the two sheets
+    (their "Generate sheet" buttons), since nothing is generated on its own in this mode."""
     fake_llm.turns.append(BUILD_TURN)
     pid = client.post("/api/director/projects", json={"brief": "bikin trailer rom-com 30 detik"}, headers=HEADERS).json()["project_id"]
     _wait(pid)
+    elements = [f"element:{e['id']}" for e in read_board(pid)["elements"]]  # none when a skill gate refused them
+    if sheets and elements:
+        res = client.post(f"/api/director/projects/{pid}/requests", json={"items": elements}, headers=HEADERS)
+        assert res.status_code == 200, res.text
+        _wait(pid)
     return pid
 
 
@@ -695,43 +702,56 @@ def test_refused_calls_must_be_redone_before_the_reply(client, fake_llm, monkeyp
     assert "Sudah aku ubah!" not in texts and texts[-1] == "Sekarang sudah."
 
 
-def test_asset_sheets_are_generated_without_approval(client, fake_llm, bridge):
-    pid = _built_project(client, fake_llm)
+def test_guide_me_generates_nothing_on_its_own(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm, sheets=False)
+    assert bridge.submits == []
+    # The Director's sheet request waits for the user's approval like frames and videos.
+    fake_llm.turns.append([{"calls": [call("request_generation", items=["element:maya", "element:beach_house"])]}, {"text": "ok"}])
+    request = _say(client, pid, "generate asetnya")["board"]["requests"][-1]
+    assert request["status"] == "pending" and not request["auto"]
+    assert request["items"] == ["element:maya", "element:beach_house"]
+    assert bridge.submits == []
+    # Frames requested before the sheets exist bring the sheets they need into the same card.
+    fake_llm.turns.append([{"calls": [call("request_generation", items=["frame:s2"])]}, {"text": "ok"}])
+    request = _say(client, pid, "frame shot 2")["board"]["requests"][-1]
+    assert request["items"] == ["element:maya", "element:beach_house", "frame:s2"]
+    res = client.post(f"/api/director/projects/{pid}/requests/{request['id']}/approve", headers=HEADERS)
+    assert res.status_code == 200, res.text
+    _wait(pid)
+    assert [x["key"] for x in bridge.submits] == ["element:maya", "element:beach_house", "frame:s2"]
     by_key = {x["key"]: x for x in bridge.submits}
-    assert list(by_key) == ["element:maya", "element:beach_house"]
-    assert by_key["element:maya"]["parameters"] == {"aspectRatio": "16:9"}
     assert by_key["element:maya"]["prompt"].startswith("Character reference sheet")
     assert by_key["element:beach_house"]["prompt"].startswith("Location reference sheet")
-    view = _view(client, pid)
-    auto = view["board"]["requests"][-1]
-    assert auto["auto"] is True and auto["status"] == "done"
-    assert view["chat"][-1]["text"] == "Generate selesai: 2 berhasil."
-    # A turn that tweaks one element several times regenerates that sheet once, at the end of the turn.
-    fake_llm.turns.append([{"calls": [call("upsert_element", **{**MAYA, "description": MAYA["description"] + ", freckles"}),
-                                      call("upsert_element", **{**MAYA, "description": MAYA["description"] + ", freckles, glasses"})]},
+    # Changing an element afterwards does not regenerate its sheet on its own either.
+    fake_llm.turns.append([{"calls": [call("upsert_element", **{**MAYA, "description": MAYA["description"] + ", glasses"})]},
                            {"text": "ok"}])
-    _say(client, pid, "tambah freckles dan kacamata")
-    assert [x["key"] for x in bridge.submits[2:]] == ["element:maya"]
-    assert "glasses" in bridge.submits[-1]["prompt"]
-    # Asking for a sheet explicitly is a no-op for the agent (it happens anyway) ...
-    fake_llm.turns.append([{"calls": [call("request_generation", items=["element:maya"])]}, {"text": "ok"}])
-    _say(client, pid, "generate maya")
+    _say(client, pid, "tambah kacamata")
     assert len(bridge.submits) == 3
-    # ... and the user's "Generate sheet" button redoes it at once.
-    res = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["element:maya"], "force": True}, headers=HEADERS)
+    # The user's "Generate sheet" button makes it at once.
+    res = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["element:maya"]}, headers=HEADERS)
     assert res.status_code == 200
     _wait(pid)
-    assert [x["key"] for x in bridge.submits] == ["element:maya", "element:beach_house", "element:maya", "element:maya"]
+    assert bridge.submits[-1]["key"] == "element:maya" and "glasses" in bridge.submits[-1]["prompt"]
 
 
-def test_failed_sheet_is_retried_on_the_next_turn(client, fake_llm, bridge):
-    bridge.fail_once = {"element:maya"}
+def test_voiceover_and_music_are_optional_on_the_card(client, fake_llm, bridge):
     pid = _built_project(client, fake_llm)
-    assert _view(client, pid)["chat"][-1]["text"] == "Generate selesai: 1 berhasil, 1 gagal (element:maya: moderation)."
-    fake_llm.turns.append([{"text": "Halo"}])
-    _say(client, pid, "lanjut")
-    assert bridge.submits[-1]["key"] == "element:maya" and bridge.submits[-1]["idempotency_key"].endswith(":2")
-    assert _view(client, pid)["board"]["media"]["element:maya"]["status"] == "succeeded"
+    fake_llm.turns.append([{"calls": [call("set_audio", voice_id="JBFqnCBsd6RMkjVDRZzb", lines=[{"shot_id": "s1", "text": "Musim panas itu."}],
+                                           music_prompt="warm acoustic guitar"),
+                                      call("request_generation", items=["video:s1", "vo:s1", "audio:music"])]},
+                           {"text": "ok"}])
+    request = _say(client, pid, "bikin video shot 1 plus audio")["board"]["requests"][-1]
+    assert {"vo:s1", "audio:music"} <= set(request["items"])
+    res = client.post(f"/api/director/projects/{pid}/requests/{request['id']}/approve", json={"skip": ["frame:s1"]}, headers=HEADERS)
+    assert res.status_code == 400  # only voiceover and music can be left out
+    res = client.post(f"/api/director/projects/{pid}/requests/{request['id']}/approve",
+                      json={"skip": ["vo:s1", "audio:music"]}, headers=HEADERS)
+    assert res.status_code == 200, res.text
+    _wait(pid)
+    keys = [x["key"] for x in bridge.submits]
+    assert "video:s1" in keys and "vo:s1" not in keys and "audio:music" not in keys
+    board = _view(client, pid)["board"]
+    assert board["requests"][-2]["status"] == "superseded" and board["requests"][-1]["items"] == ["frame:s1", "video:s1"]
 
 
 def test_frames_and_videos_need_approval_and_use_the_sheets(client, fake_llm, bridge):
@@ -756,8 +776,9 @@ def test_frames_and_videos_need_approval_and_use_the_sheets(client, fake_llm, br
                                                                     "/api/assets/asset-gen1/download", "/api/assets/asset-gen2/download"]}
     prompt = by_key["video:s1"]["prompt"]
     assert "@Image1 is the opening frame" in prompt
-    assert "@Image2 is the reference sheet of Maya (character)" in prompt and "exact same person" in prompt
-    assert "@Image3 is the reference sheet of" in prompt and "exact same location" in prompt
+    # New projects (templates 2) say what to take from each kind of sheet.
+    assert "@Image2 is the reference sheet of Maya (character)" in prompt and "face, hairstyle and clothing" in prompt
+    assert "@Image3 is the reference sheet of" in prompt and "spatial layout, architecture and lighting" in prompt
     view = _view(client, pid)
     assert view["board"]["requests"][-1]["status"] == "done"
     assert view["chat"][-1]["text"] == "Generate selesai: 2 berhasil."
@@ -784,10 +805,10 @@ def test_edits_only_regenerate_what_changed(client, fake_llm, bridge):
     fake_llm.turns.append([{"calls": [call("upsert_element", **{**HOUSE, "description": HOUSE["description"].replace("teal", "blue")})]},
                            {"calls": [call("request_generation", items=["video:s1"])]}, {"text": "ok"}])
     view = _say(client, pid, "rumahnya biru")
-    # The house sheet regenerates by itself; it feeds shot 1 only, so shot 2 keeps its frame.
-    assert bridge.submits[-1]["key"] == "element:beach_house"
+    # The house sheet joins the cart (nothing regenerates by itself); it feeds shot 1 only, so shot 2 keeps its frame.
+    assert bridge.submits[-1]["key"] != "element:beach_house"
     cart = [r for r in view["board"]["requests"] if not r.get("auto")]
-    assert cart[-1]["items"] == ["frame:s1", "video:s1", "video:s2"]  # the unapproved video:s2 is kept
+    assert cart[-1]["items"] == ["element:beach_house", "frame:s1", "video:s1", "video:s2"]  # the unapproved video:s2 is kept
     assert [r["status"] for r in cart][-2:] == ["superseded", "pending"]
     assert view["board"]["media"]["frame:s2"]["stale"] is False
 
@@ -1134,6 +1155,9 @@ def test_the_users_own_photos_make_the_sheet(client, fake_llm, bridge):
     pid = _built_project(client, fake_llm)
     before = len(bridge.submits)
     assert _edit(client, pid, "set_element_photos", id="maya", photos=["photo-1111-aaaa"]).status_code == 200
+    _wait(pid)
+    assert len(bridge.submits) == before  # nothing is generated on its own: the user regenerates the sheet
+    client.post(f"/api/director/projects/{pid}/requests", json={"items": ["element:maya"]}, headers=HEADERS)
     _wait(pid)
     sheet = bridge.submits[-1]
     assert len(bridge.submits) == before + 1 and sheet["key"] == "element:maya"
@@ -1623,7 +1647,7 @@ def test_prompts_name_elements_with_mentions(client, fake_llm, bridge):
     assert frame.startswith("Wide: Maya (reference image 1) waves from the porch of Beach house (reference image 2)")
     assert "image 2 is the reference sheet of Beach house" in frame
     video = media["video:s2"]["prompt"]
-    assert video.startswith("Maya (@Image2) runs down the steps of Beach house (@Image3)") and "@ghost" in video
+    assert "\n\nMaya (@Image2) runs down the steps of Beach house (@Image3)" in video and "@ghost" in video
     # Prompts without mentions keep their old wording, so finished frames do not turn stale.
     assert "reference image" not in media["frame:s1"]["prompt"]
 
@@ -1780,3 +1804,81 @@ def test_track_timings_are_set_on_the_timeline_and_rendered(client, fake_llm, br
         pixels = [image.getpixel((x, y)) for x in range(int(w * 0.3), int(w * 0.7), 8) for y in range(int(h * 0.75), int(h * 0.95), 8)]
         return sum(1 for p in pixels if sum(abs(a - b) for a, b in zip(p, teal)) > 60) / len(pixels)
     assert band(3) < 0.01 and band(5) > 0.05
+
+
+def _v2_board(**extra):
+    from director_service import board as boards
+
+    board = boards.empty_board()
+    board["brief"].update(look="realistic", style="Warm film grain")
+    board["elements"] = [
+        {"id": "ivy", "kind": "character", "name": "Ivy", "description": "Era/country: modern Maine\nFace: heart-shaped"},
+        {"id": "kitchen", "kind": "location", "name": "Castle kitchen", "description": "A rustic castle kitchen, worktable centre"},
+        {"id": "petal", "kind": "prop", "name": "Petal", "description": "A fresh silver-white moonflower petal", "interaction": ""},
+        {"id": "petal_pressed", "kind": "prop", "name": "Petal - Pressed", "variant_of": "petal",
+         "description": "The same petal pressed flat and dried", "interaction": ""},
+    ]
+    board["scenes"] = [{"id": "dawn", "title": "Dawn baking", "description": "Ivy bakes", "time": "dawn",
+                        "lighting": "Pale blue window key light from the left, warm tungsten fill."}]
+    board.update(extra)
+    return board
+
+
+def test_new_projects_use_the_dramagic_templates():
+    from director_service import board as boards
+
+    assert boards.empty_board()["brief"]["templates"] == boards.PROMPT_TEMPLATES == 2
+    specs = boards.media_specs(_v2_board())
+    character, location = specs["element:ivy"]["prompt"], specs["element:kitchen"]["prompt"]
+    assert "chest up" in character and "front view, side view and back view" in character
+    assert "top-down view" in location and "no fisheye" in location
+    # A variant is made from its original's sheet.
+    assert specs["element:petal_pressed"]["deps"] == ["element:petal"]
+    assert "Reference image 1 is the reference sheet of Petal" in specs["element:petal_pressed"]["prompt"]
+    assert specs["element:petal"]["deps"] == []
+
+
+def test_new_projects_say_time_light_reference_use_and_constraints_in_every_clip():
+    from director_service import board as boards
+
+    shots = [{"id": f"s{n}", "title": f"Shot {n}", "description": "d", "duration_seconds": 5, "scene_id": "dawn",
+              "element_ids": ["ivy", "kitchen"], "frame_prompt": "Ivy at the worktable",
+              "video_prompt": "Style: Warm film grain\n[Layout] @ivy at the worktable\n[Action] Medium shot | Static. She kneads."}
+             for n in (1, 2)]
+    board = _v2_board(shots=shots)
+    specs = boards.media_specs(board)
+    scene_video = specs["scene:s1"]["prompt"]
+    assert "Time: dawn\nLighting: Pale blue window key light" in scene_video
+    assert "take only the appearance, face, hairstyle and clothing" in scene_video
+    assert "people in that image are not used" in scene_video
+    assert scene_video.rstrip().endswith("- No subtitles, captions or text overlays.")
+    assert "No background music" not in scene_video
+    board["audio"]["music"]["prompt"] = "soft piano"
+    one = boards.media_specs({**board, "shots": shots[:1]})["video:s1"]["prompt"]
+    assert one.index("References:") < one.index("Time: dawn") < one.index("[Layout]") < one.index("Strict constraints:")
+    assert "No background music: the music is added later." in one
+
+
+def test_projects_made_before_the_dramagic_templates_keep_their_prompts():
+    from director_service import board as boards
+
+    board = _v2_board()
+    del board["brief"]["templates"]
+    shot = {"id": "s1", "title": "Shot", "description": "d", "duration_seconds": 5, "scene_id": "dawn",
+            "element_ids": ["ivy"], "frame_prompt": "f", "video_prompt": "Ivy kneads"}
+    specs = boards.media_specs({**board, "shots": [shot]})
+    assert specs["element:ivy"]["prompt"].startswith(boards.LOOK_SHEET_TEMPLATES["character"].split("{")[0])
+    video = specs["video:s1"]["prompt"]
+    assert "Strict constraints" not in video and "Time: dawn" not in video
+    assert "preserve facial identity" in video
+
+
+def test_music_taken_off_the_timeline_is_left_out_of_the_render():
+    from director_service import board as boards, render
+
+    board = boards.empty_board()
+    board["media"]["audio:music"] = {"status": "succeeded", "asset_id": "music-1"}
+    board["audio"]["music"]["prompt"] = "soft piano"
+    assert render.audio_tracks(board) == {"music": "music-1"}
+    board["audio"]["music"]["prompt"] = ""  # the ✕ on the timeline; the file stays for when it is added back
+    assert render.audio_tracks(board) == {}

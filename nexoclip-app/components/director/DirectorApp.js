@@ -393,10 +393,13 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   // The credit gate's "Lanjutkan": approve the held request again once the balance covers it.
   const continueRequest = (request) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/approve`, { method: 'POST' }));
 
-  const approve = (request) => {
-    const what = requestSummary(request.estimate);
-    if (!window.confirm(`Generate ${what} dan memotong sekitar ${fmtCredits(request.estimate.credits)} kredit. Lanjut?`)) return;
-    runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/approve`, { method: 'POST' }));
+  // skip: the optional items (voiceover, music) left unticked on the card; estimate: the card's total without them.
+  const approve = (request, skip = [], estimate = request.estimate) => {
+    const what = requestSummary(estimate);
+    if (!window.confirm(`Generate ${what} dan memotong sekitar ${fmtCredits(estimate.credits)} kredit. Lanjut?`)) return;
+    runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/approve`, {
+      method: 'POST', body: JSON.stringify({ skip }),
+    }));
   };
   const reject = (request) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/reject`, { method: 'POST' }));
   const retry = () => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/retry`, { method: 'POST' }));

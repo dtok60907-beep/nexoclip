@@ -67,36 +67,59 @@ What you can do (tools):
 - web_research: real web search for references, facts, trends (costs a little; use when it actually helps).
 - write_script: the story/beat script as text.
 - upsert_element / remove_element: every character, location and prop the story needs. Each is generated as ONE
-  reference sheet image (character: front/3-4/side/back + expressions; location: 4 angles; prop: multi-view), and
-  the sheet layout is added automatically, so the description only describes the subject itself: purely visual and
-  specific (age, ethnicity, face, hair, build, wardrobe, palette; architecture, materials, light, time of day; shape,
-  material, branding). Keep every detail the user gave, verbatim where possible.
+  reference sheet image (character: a chest-up close-up plus front/side/back full body; location: front, top-down,
+  reverse and side views; prop: multi-view), and the sheet layout is added automatically, so the description only
+  describes the subject itself, purely visual and specific. Keep every detail the user gave, verbatim where possible.
+  A character's description is one labelled line per attribute, every line filled: "Era/country: ...", "Ethnicity:
+  ..." (an animal: "Species: ..."), "Genre: ...", "Face: shape, eyes, brows, nose, lips, a typical expression",
+  "Hair: length, colour, texture, style, hair accessories" (an animal: its fur), "Earrings/accessories: ...", "Body:
+  height, build, posture", "Proportion: e.g. realistic 7 heads", "Upper body: layers, colours, materials, what they
+  always carry", "Lower body: ...", "Shoes: ...", "Gender: ...", "Age: ...". The story role and personality are not
+  visual: leave them out.
+  A location's description walks through the space in order, naming where each fixed thing stands so every shot
+  agrees: the kind of place, then the centre foreground, the left, the right, the background, doors and windows, and
+  the light source; no people. Its time of day and light per scene go on the scene (set_scenes), not here.
+  A prop's description is one dense paragraph of physical detail: shape, material, texture, colour, wear or age, and
+  how light catches its surface; plus the exact logo, label and branding of a product.
   A prop sheet shows the object alone, without people. Only when the story needs a character physically using it (worn,
   held in a specific way, operated) set interaction, e.g. "worn on the wrist of Dimas"; otherwise leave it empty.
   Elements with "photos" have real photos uploaded by the user (their product, logo, face, place): the sheet is made
   from those photos, so keep the description consistent with them and never invent a different design.
   One element = one subject, never a group: "four friends" are four characters, each with their own sheet. Make a
-  separate location for every distinct place or set (and for a changed state of it, e.g. "studio" and "studio,
-  wrecked"), and a separate prop for the advertised product and for every object that recurs across shots. There is no
-  upper limit: create as many as the brief needs (e.g. 3 characters, 5 locations, 10 props). Every new or changed
-  element's sheet is generated automatically at the end of the turn.
-- set_scenes: group the story into scenes (id, title, description: where + what happens). Every shot belongs to a
-  scene via scene_id; shots are numbered per scene (1.1, 1.2, 2.1 ...). Scenes alone are not a shot list: when you
+  separate location for every distinct place or set, and a separate prop for the advertised product and for every
+  object that recurs across shots. Special clothing that changes hands or is put on later (a ball gown, a mask, a
+  uniform) is a prop too. There is no upper limit: create as many as the brief needs (e.g. 3 characters, 5 locations,
+  10 props). Every new or changed element's sheet is generated automatically at the end of the turn.
+  A changed state of an element is a variant: its own element with variant_of=<original id> (same kind), named
+  "<original> - <state>" (e.g. "Moonflower petal - Pressed", "Studio - Wrecked", "Maya - Ball gown"). Its sheet is made
+  from the original's sheet, so describe its full look in that state. Use the variant in the shots where that state is
+  on screen.
+- set_scenes: group the story into scenes (id, title, description: where + what happens, time: the time of day,
+  lighting: the scene's light in 2-4 sentences: the motivated key source and its direction, the contrast, the colour
+  temperature and the shadows). time and lighting are said once for every clip of the scene, so the shots' prompts
+  only add light that changes within a shot. Every shot belongs to a scene via scene_id; shots are numbered per scene (1.1, 1.2, 2.1 ...). Scenes alone are not a shot list: when you
   plan the visuals (or the user asks for shots / a storyboard), also call set_shots in the same turn. Never say shots
   exist unless set_shots succeeded.
 - set_shots / update_shot / remove_shot: the ordered shot list. Each shot is one generated video clip of 4-15 s with
   a frame_prompt (the first frame as a still image) and a video_prompt (motion, camera, action, sound for that clip).
-  Write video_prompt the way ByteDance's own optimizer does (seedance-official-generation), each label on its own line:
-  "Style: ..." first, word for word the same in every shot of the video (genre/format, look, grade; "No subtitles."
-  when someone speaks, the render adds captions); then "Camera: ..." (shot size, angle, movement, where everyone is
-  relative to stable objects like a door or table); "Action: ..." (subject + one main action with @mentions, then
-  "At the end: <visible state>"); "Light: ..." (motivated source, direction); "Sound: ..." with dialogue as
-  <@name>'s line (<emotion>), <language and accent>: {exact words} (one line per emotion; never repeat the words
-  outside the braces), music in ( ), sound effects in < >. Write emotions as visible face, breath and hand changes,
-  not intense labels. Only add "no music / no ..." when the user or the format wants it; no generic quality or
-  negative packs. Keep counts, ownership of props and who stands where stable across shots. Never write the
-  duration or aspect ratio in a prompt (they are parameters). frame_prompt describes the opening still in the same
-  Style.
+  Write video_prompt in ByteDance's syntax (seedance-official-generation) with the shot laid out the way ByteDance's
+  Dramagic storyboards do, each label on its own line:
+  "Style: ..." first, word for word the same in every shot of the video (genre/format, look, grade);
+  "[Layout] ..." where everyone and everything is in the frame (foreground, midground, background, left, right,
+  relative to stable objects like a door or table), whether they stand, sit or crouch, which way the body faces, where
+  the head turns and where the gaze goes (name the off-screen person someone looks at, so the cuts match), and what
+  each holds;
+  "[Action] <shot size> | <camera movement>. ..." (e.g. "Medium close-up | Static.", "Wide shot | Slow dolly in.",
+  "Extreme long shot | Crane up."), then the subject's one main action in order with @mentions, the expression as
+  visible face, breath and hand changes, then "At the end: <visible state>";
+  "Light: ..." only for light that changes within the shot (the scene's time and lighting are added for you);
+  "Sound: ..." with dialogue as <@name>'s line (<emotion>), <language and accent>: {exact words} (one line per emotion;
+  never repeat the words outside the braces), music in ( ), sound effects in < >. Whoever speaks is on screen and the
+  [Action] says their lips move as they speak, so Seedance lip-syncs the line.
+  No subtitles, no clones and consistency rules are added to every clip for you; add no generic quality or negative
+  packs. Keep counts, ownership of props and who stands where stable across shots. Never write the duration or
+  aspect ratio in a prompt (they are parameters). frame_prompt describes the opening still in the same Style and
+  matches the [Layout].
   List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
   the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
   added automatically), so faces, places and products stay consistent across shots.
@@ -109,8 +132,11 @@ What you can do (tools):
   seamlessly (Seedance extend; same action going on, no new frame). Put it right after its source. To change something in
   an existing clip without regenerating it (colour of a dress, remove an object), set the shot's edit_instruction
   with update_shot and request edit:<shot_id>; the edited clip becomes the shot's new take. Both cost credits.
-- Asset reference sheets (element:<id>) are generated AUTOMATICALLY at the end of every turn in which you create or
-  change elements: no request or approval is needed. Use request_generation with force only to redo an up-to-date sheet.
+- Asset reference sheets (element:<id>): in "Just make it" mode they are generated AUTOMATICALLY at the end of every
+  turn in which you create or change elements (use request_generation with force only to redo an up-to-date sheet).
+  In "Guide me" nothing is generated without the user: after creating or changing elements, request their sheets
+  (request_generation with element:<id> items) so the user approves them on a card; frames and videos you request
+  include the sheets they still need.
 - Scene videos (Seedance keyframes): consecutive shots of one scene (up to 30 s and 30 images) are generated as ONE
   video, scene:<first shot_id>, listed in the board's scene_videos. The shots' frames are its keyframes, so the cuts,
   light, motion and sound flow between shots; the result is cut back into each shot's video. This is the default way
@@ -135,7 +161,9 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   needs a voiceover and music and which option you recommend; the options show as a card the user picks from. Make
   them really different (e.g. warm narrator + acoustic bed / energetic young voice + upbeat pop / music only). When
   the user picks one it is applied for them; the audio is generated after the videos (in one request it always
-  runs last), so request vo:/audio: together with the videos or once they are done.
+  runs last), so request vo:/audio: together with the videos or once they are done. Voiceover and music are always
+  optional: on the approval card they start unticked and the user ticks the ones they want, so never treat them as
+  part of making the video.
 - set_audio / list_voices: optional separate audio laid over the clips in the render (ElevenLabs). A voiceover is a set
   of lines, each on the shot it belongs to (lines: [{shot_id, text, offset}]): the line starts offset seconds into
   that shot (default 0.3) and stays in sync when shots move or get trimmed. Write each line for what is on screen in
@@ -192,7 +220,8 @@ The pipeline roles (idea-director, script-director, scene-director, asset-direct
 THIS project's video type (see VIDEO TYPE below). Before the first shot list of a project also read example-prompt (a
 complete worked prompt for this kind of video; skip if it has none).
 ByteDance's own Seedance 2.5 prompt optimizer (seedance-official-generation; -workflow for many assets, -edit for
-edit/extend) decides the prompt structure and syntax and wins over every other guide. seedance-prompting adds
+edit/extend) decides the prompt syntax and wins over every other guide; the [Layout] / [Action] shot structure above
+is how this studio lays its labels out. seedance-prompting adds
 realistic humans, physics and fixes for failed clips (read it when a clip went wrong or for photoreal people). The
 type's guides and example-prompt give story, shots and camera language only: write their content in the official
 syntax, not in their format.
@@ -259,7 +288,10 @@ SCENE_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
     "title": {"type": "string"},
     "description": {"type": "string", "description": "location + what happens"},
+    "time": {"type": "string", "description": "time of day, e.g. \"dawn\", \"night\""},
+    "lighting": {"type": "string", "description": "the scene's light: key source and direction, contrast, colour temperature, shadows"},
 }
+REQUIRED_SCENE_FIELDS = ["id", "title", "description"]
 
 CONCEPT_FIELDS = {
     "id": {"type": "string", "description": "lowercase snake_case id"},
@@ -317,13 +349,15 @@ TOOLS = [
         "name": {"type": "string"},
         "description": {"type": "string", "description": "visual prompt for its reference image"},
         "interaction": {"type": "string", "description": "props only, and only if needed: how a character uses it"},
+        "variant_of": {"type": "string", "description": "optional: id of the element (same kind) this one is another state "
+                                                       "of; its sheet is made from that element's sheet"},
         "photos": {"type": "array", "items": {"type": "string"},
                    "description": "asset ids of the user's own photos of it (from their attachments); its sheet is made from them"},
     }, ["id", "kind", "name", "description"]),
     _tool("remove_element", "Remove an element.", {"id": {"type": "string"}}, ["id"]),
     _tool("set_scenes", "Replace the ordered scene list (shots keep their scene_id).", {
         "scenes": {"type": "array", "items": {"type": "object", "properties": SCENE_FIELDS,
-                                              "required": list(SCENE_FIELDS), "additionalProperties": False}},
+                                              "required": REQUIRED_SCENE_FIELDS, "additionalProperties": False}},
     }, ["scenes"]),
     _tool("set_shots", "Replace the whole ordered shot list. Media of shots whose id is kept are preserved.", {
         "shots": {"type": "array", "items": {"type": "object", "properties": SHOT_FIELDS,
@@ -629,8 +663,11 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     _require_look(ctx)
     item = {"id": _check_id(args.get("id")), "kind": args.get("kind"), "name": str(args.get("name") or "").strip(),
             "description": str(args.get("description") or "").strip()}
-    if item["kind"] == "prop":
-        item["interaction"] = str(args.get("interaction") or "").strip()
+    # Fields left out keep their value, so an edit of the name or description (the board's edit form) keeps them.
+    if item["kind"] == "prop" and args.get("interaction") is not None:
+        item["interaction"] = str(args["interaction"]).strip()
+    if args.get("variant_of") is not None:
+        item["variant_of"] = str(args["variant_of"]).strip() or None
     if args.get("photos") is not None:
         photos = list(dict.fromkeys(str(p) for p in args["photos"]))
         if len(photos) > boards.MAX_ELEMENT_PHOTOS or not all(_ASSET_ID.match(p) for p in photos):
@@ -644,11 +681,21 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
 
     def change(board: dict[str, Any]) -> bool:
         existing = boards.element(board, item["id"])
+        original_id = item.get("variant_of")
+        if original_id:
+            original = boards.element(board, original_id)
+            if original is None or original_id == item["id"] or original["kind"] != item["kind"]:
+                raise ToolError(f"variant_of must be the id of another {item['kind']}")
+            if original.get("variant_of"):
+                raise ToolError(f"{original_id} is itself a variant; use its original {original['variant_of']}")
+            if any(e.get("variant_of") == item["id"] for e in board["elements"]):
+                raise ToolError(f"{item['id']} has variants of its own, so it cannot be a variant")
         if existing:
             ctx.guard(existing, f"element {item['id']}")
             existing.update(item)
             return False
-        board["elements"].append({**item, "locked": False})
+        board["elements"].append({"interaction": "", **item, "locked": False} if item["kind"] == "prop"
+                                 else {**item, "locked": False})
         return True
 
     created = ctx.update(change, f"{labels[item['kind']].capitalize()}: {item['name']}")
@@ -689,6 +736,9 @@ def _remove_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         if users and ctx.author == "agent":
             raise ToolError(f"element {element_id} is used by locked shots {users}")
         board["elements"].remove(item)
+        for other in board["elements"]:
+            if other.get("variant_of") == element_id:
+                other["variant_of"] = None  # its sheet stays as it is, now a standalone element
         for shot in board["shots"]:
             shot["element_ids"] = [e for e in shot.get("element_ids", []) if e != element_id]
         return item["name"]
@@ -1122,7 +1172,7 @@ def _update_scene(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         item = boards.scene(board, args.get("id"))
         if item is None:
             raise ToolError(f"no scene {args.get('id')!r}")
-        for key, limit in (("title", 120), ("description", 400)):
+        for key, limit in (("title", 120), ("description", 400), ("time", 120), ("lighting", 800)):
             if args.get(key) is not None:
                 item[key] = str(args[key]).strip()[:limit]
         if not item["title"]:
@@ -1209,13 +1259,17 @@ def _request_generation(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     if not keys:
         raise ToolError("items is required")
     force = bool(args.get("force"))
-    if ctx.author == "agent" and generation.is_auto(keys) and not force:
-        # New or changed sheets are generated automatically at the end of the turn.
+    just_make_it = read_director(ctx.project_id).get("run_mode") == "auto"
+    if ctx.author == "agent" and just_make_it and generation.is_auto(keys) and not force:
+        # "Just make it": new or changed sheets are generated automatically at the end of the turn.
         return ({"ok": True, "status": "asset reference sheets are generated automatically after this turn; no approval needed"},
                 "Reference sheet aset akan dibuat otomatis")
-    auto = generation.is_auto(keys)
+    # Sheets start right away only when the user asked for them on the board, or in "Just make it"; the Director's
+    # requests in "Guide me" wait on the approval card like frames and videos.
+    auto = generation.is_auto(keys) and (ctx.author == "user" or just_make_it)
     try:
-        request = generation.create_request(ctx.project_id, keys, force=force, note=str(args.get("note") or ""), auto=auto)
+        request = generation.create_request(ctx.project_id, keys, force=force, note=str(args.get("note") or ""), auto=auto,
+                                            sheets_apart=just_make_it)
     except generation.GenerationError as exc:
         raise ToolError(str(exc)) from exc
     est = request["estimate"]
@@ -1407,7 +1461,8 @@ def _video_type_note(project_id: str) -> str:
 
 RUN_MODE_NOTES = {
     "guide": ("RUN MODE: Guide me. The user reviews each step: offer choices (concepts, audio), wait for their pick, and "
-              "prepare paid generation for them to approve."),
+              "prepare paid generation for them to approve. Nothing is generated on its own, reference sheets included: "
+              "request element:<id> sheets for approval once the elements are ready."),
     "auto": ("RUN MODE: Just make it. Do not stop to ask or wait for picks: decide yourself with sensible defaults "
              "(including the look when the user did not say it; state your choices in one line) and drive straight to a "
              "finished video in this turn: brief, choose a concept yourself, script, elements, scenes, shots, audio "

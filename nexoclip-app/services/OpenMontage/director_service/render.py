@@ -251,9 +251,14 @@ MUSIC_FADE_SECONDS = 2.0
 
 
 def audio_tracks(board: dict[str, Any]) -> dict[str, str]:
-    """Finished voiceover / music assets, by "voiceover" / "music"."""
+    """Finished voiceover / music assets, by "voiceover" / "music". Only what the board still has: a music bed or
+    narration removed from the timeline keeps its file (re-adding it costs nothing) but is left out of the render."""
     tracks = {}
+    audio = board.get("audio") or {}
     for name in ("voiceover", "music"):
+        text = (audio.get(name) or {}).get("text" if name == "voiceover" else "prompt") or ""
+        if not text.strip():
+            continue
         media = board["media"].get(f"audio:{name}") or {}
         if media.get("status") == TERMINAL_OK and media.get("asset_id"):
             tracks[name] = media["asset_id"]

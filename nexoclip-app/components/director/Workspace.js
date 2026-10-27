@@ -454,9 +454,11 @@ function SceneHeader({ group, board, busy, onEdit, onRequest }) {
           onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
           className="min-w-0 flex-1 rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-[12px] text-white outline-none" />
       ) : (
-        <button type="button" disabled={!real || busy} onClick={() => setEditing(true)} title={real ? 'Klik untuk ganti nama' : undefined}
+        <button type="button" disabled={!real || busy} onClick={() => setEditing(true)}
+          title={real ? [group.scene.lighting && `Cahaya: ${group.scene.lighting}`, 'Klik untuk ganti nama'].filter(Boolean).join('\n') : undefined}
           className="min-w-0 truncate text-left text-white/70 hover:text-white disabled:hover:text-white/70">
-          {group.scene.title}{group.scene.description && <span className="text-white/40"> — {group.scene.description}</span>}
+          {group.scene.title}{group.scene.time && <span className="text-white/40"> · {group.scene.time}</span>}
+          {group.scene.description && <span className="text-white/40"> — {group.scene.description}</span>}
         </button>
       )}
       {!editing && <span className="ml-auto" />}
@@ -687,8 +689,8 @@ function useClipDuration(src) {
 }
 
 // A block on a track: drag it to move, drag an edge to cut its start or end. onCommit(mode, deltaSeconds) when let go;
-// a plain click opens it.
-function LaneBlock({ start, length, zoom, tone, title, onClick, onCommit, disabled, children }) {
+// a plain click opens it; ✕ (onRemove) takes it off the timeline.
+function LaneBlock({ start, length, zoom, tone, title, onClick, onCommit, onRemove, disabled, children }) {
   const [drag, setDrag] = useState(null); // {mode, x0, dx}
   const begin = (mode) => (event) => {
     if (disabled || event.button !== 0) return;
@@ -712,10 +714,15 @@ function LaneBlock({ start, length, zoom, tone, title, onClick, onCommit, disabl
     <div title={title} onPointerDown={begin('move')} onPointerMove={move} onPointerUp={end} onPointerCancel={() => setDrag(null)}
       style={{ left, width: Math.max(18, shownLength * zoom), paddingLeft: Math.max(8, LANE_LABEL - left + 6) }}
       className={`absolute top-1 bottom-1 select-none overflow-hidden rounded pr-2 text-left text-[9.5px] leading-[18px] text-white/90 ${disabled ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${drag ? 'z-20 ring-1 ring-white/70' : ''} ${tone}`}>
-      <span className="pointer-events-none block truncate">{children}</span>
+      <span className={`pointer-events-none block truncate ${onRemove && !disabled ? 'pr-3' : ''}`}>{children}</span>
       {!disabled && <>
         <span onPointerDown={begin('left')} className="absolute bottom-0 left-0 top-0 w-1.5 cursor-ew-resize bg-white/0 hover:bg-white/40" />
         <span onPointerDown={begin('right')} className="absolute bottom-0 right-0 top-0 w-1.5 cursor-ew-resize bg-white/0 hover:bg-white/40" />
+        {onRemove && (
+          <button type="button" title="Hapus dari timeline" onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded px-0.5 text-[10px] leading-none text-white/60 hover:bg-black/40 hover:text-white">✕</button>
+        )}
       </>}
     </div>
   );
@@ -747,7 +754,8 @@ function VoBlock({ item, shotStart, zoom, board, workspaceId, busy, onEdit, onOp
     <LaneBlock start={shotStart + offset} length={length} zoom={zoom} disabled={busy || shot.locked}
       tone={ready ? 'bg-violet-500/60 hover:bg-violet-500/80' : 'border border-dashed border-violet-300/50 bg-violet-500/15 hover:bg-violet-500/30'}
       title={`VO shot ${item.label}${ready ? '' : ' (belum di-generate)'}: ${shot.vo_text}. Seret untuk geser, tarik ujungnya untuk memotong.`}
-      onClick={onOpen} onCommit={commit}>{shot.vo_text}</LaneBlock>
+      onClick={onOpen} onCommit={commit}
+      onRemove={() => { if (window.confirm(`Hapus VO shot ${item.label} dari timeline?`)) onEdit('update_shot', { id: shot.id, vo_text: '' }); }}>{shot.vo_text}</LaneBlock>
   );
 }
 
@@ -767,7 +775,8 @@ function CaptionBlock({ item, shotStart, zoom, busy, onEdit, onOpen }) {
   return (
     <LaneBlock start={shotStart + from} length={to - from} zoom={zoom} disabled={busy || shot.locked}
       tone="bg-amber-500/45 hover:bg-amber-500/65" title={`Caption shot ${item.label}: ${shot.caption}. Seret untuk geser, tarik ujungnya untuk atur kapan muncul/hilang.`}
-      onClick={onOpen} onCommit={commit}>{shot.caption}</LaneBlock>
+      onClick={onOpen} onCommit={commit}
+      onRemove={() => { if (window.confirm(`Hapus caption shot ${item.label} dari timeline?`)) onEdit('update_shot', { id: shot.id, caption: '' }); }}>{shot.caption}</LaneBlock>
   );
 }
 
@@ -800,7 +809,8 @@ function MusicBlock({ board, workspaceId, zoom, total, busy, onEdit, onOpen }) {
   return (
     <LaneBlock start={start} length={end - start} zoom={zoom} disabled={busy}
       tone={ready ? 'bg-sky-500/50 hover:bg-sky-500/70' : 'border border-dashed border-sky-300/50 bg-sky-500/15 hover:bg-sky-500/30'}
-      title={`Musik: ${music.prompt}. Seret untuk geser, tarik ujungnya untuk memotong.`} onClick={onOpen} onCommit={commit}>♪ {music.prompt}</LaneBlock>
+      title={`Musik: ${music.prompt}. Seret untuk geser, tarik ujungnya untuk memotong.`} onClick={onOpen} onCommit={commit}
+      onRemove={() => { if (window.confirm('Hapus musik dari timeline?')) onEdit('set_audio', { music_prompt: '' }); }}>♪ {music.prompt}</LaneBlock>
   );
 }
 

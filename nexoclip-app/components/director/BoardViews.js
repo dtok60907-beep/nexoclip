@@ -323,7 +323,7 @@ function ElementPhotos({ item, onEdit, busy, workspaceId }) {
         )}
         <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
       </div>
-      {photos.length > 0 && <p className="mt-1 text-[10px] text-white/35">Sheet dibuat dari foto ini (generate ulang otomatis, pakai kredit).</p>}
+      {photos.length > 0 && <p className="mt-1 text-[10px] text-white/35">Sheet dibuat dari foto ini: klik Generate ulang sheet (pakai kredit).</p>}
       {error && <p className="mt-1 text-[10px] text-red-300/80">{error}</p>}
     </div>
   );
@@ -354,7 +354,8 @@ function ElementCard({ item, board, onEdit, onRequest, busy, workspaceId }) {
               <div className="truncate text-[13px] font-medium text-white/90">{item.name}</div>
               <span className="text-[10px] text-white/35">{mediaStatus(media).label}</span>
             </div>
-            <p className="mt-1 line-clamp-4 text-[11px] leading-snug text-white/45" title={item.description}>{item.description}</p>
+            {item.variant_of && <p className="mt-0.5 text-[10px] text-white/35">Varian dari {(board.elements.find((e) => e.id === item.variant_of) || {}).name || item.variant_of}</p>}
+            <p className="mt-1 line-clamp-4 whitespace-pre-line text-[11px] leading-snug text-white/45" title={item.description}>{item.description}</p>
             <ElementPhotos item={item} onEdit={onEdit} busy={busy} workspaceId={workspaceId} />
             <div className="mt-2 flex flex-wrap gap-1.5">
               <SmallButton onClick={() => onRequest([`element:${item.id}`], !!generated)} disabled={busy}>

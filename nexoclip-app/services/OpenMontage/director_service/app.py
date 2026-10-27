@@ -338,10 +338,16 @@ async def create_request(project_id: str, body: RequestBody, x_nexoclip_user_id:
     return {"request_id": result["request_id"], "items": result["items"], "estimate": result["estimate"]}
 
 
+class ApproveBody(BaseModel):
+    # optional items (vo:<shot_id>, audio:music ...) the user unticked on the card
+    skip: list[str] = Field(default_factory=list, max_length=200)
+
+
 @app.post("/api/director/projects/{project_id}/requests/{request_id}/approve")
-async def approve_request(project_id: str, request_id: str, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+async def approve_request(project_id: str, request_id: str, body: Optional[ApproveBody] = None,
+                          x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
     await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
-    await asyncio.to_thread(_call, session.approve_request, project_id, request_id)
+    await asyncio.to_thread(_call, lambda: session.approve_request(project_id, request_id, skip=body.skip if body else None))
     return {"approved": request_id}
 
 

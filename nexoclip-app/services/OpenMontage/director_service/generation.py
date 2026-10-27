@@ -73,7 +73,12 @@ def open_keys(board: dict[str, Any]) -> set[str]:
     return {k for r in board["requests"] if r["status"] in OPEN_STATUSES for k in r["items"]}
 
 
-def create_request(project_id: str, keys: list[str], *, force: bool = False, note: str = "", auto: bool = False) -> dict[str, Any]:
+# Audio laid over the clips: always optional when generating, the user ticks it on the approval card.
+OPTIONAL_PREFIXES = ("vo:", "audio:")
+
+
+def create_request(project_id: str, keys: list[str], *, force: bool = False, note: str = "", auto: bool = False,
+                   sheets_apart: bool = False) -> dict[str, Any]:
     """Validate, expand and price a generation request.
 
     There is at most one pending request that waits for approval: it works like
@@ -91,11 +96,12 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
         force = force or bool(open_request.get("force"))
         note = "; ".join(n for n in (open_request.get("note"), note) if n)
     items = _closure(board, keys, specs, force)
-    if not auto:
-        # Sheets never wait in the approval cart: they are generated automatically on their own.
+    if not auto and sheets_apart:
+        # "Just make it": sheets are generated automatically on their own, so they never wait in the approval cart.
         items = [k for k in items if not k.startswith(AUTO_PREFIX)]
     if not items:
-        raise GenerationError("nothing to approve: it is up to date, or only asset sheets (those are generated automatically)")
+        raise GenerationError("nothing to approve: it is up to date" + (", or only asset sheets (those are generated automatically)"
+                                                                       if sheets_apart else ""))
 
     bridge = billing.bridge_for(project_id)
     estimate: dict[str, Any] = {

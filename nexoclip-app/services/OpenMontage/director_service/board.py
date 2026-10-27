@@ -31,6 +31,10 @@ BRIEF_DETAILS = ("goal", "audience", "platform", "key_message", "product", "tone
                  "avoid")
 LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 15
+# The prompt templates a project is made with (brief.templates). 2: the layouts BytePlus Dramagic uses (character
+# close-up + three-view, location with a top-down view, references limited to what each kind gives, constraints at the
+# end of every clip). Projects from before stay on 1, so their sheets and clips are not suddenly out of date.
+PROMPT_TEMPLATES = 2
 TERMINAL_OK = "succeeded"
 CONTENT_KEYS = ("brief", "concepts", "research", "elements", "script", "scenes", "shots", "audio")
 RUNTIME_KEYS = ("media", "requests", "renders", "video_notes")
@@ -63,7 +67,8 @@ def video_seconds(board: dict[str, Any]) -> int:
 def empty_board() -> dict[str, Any]:
     return {
         "brief": {"summary": "", "look": "", "video_type": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
-                  "resolution": "720p", "generate_audio": True, **{k: "" for k in BRIEF_DETAILS}},
+                  "resolution": "720p", "generate_audio": True, "templates": PROMPT_TEMPLATES,
+                  **{k: "" for k in BRIEF_DETAILS}},
         "concepts": {"options": [], "recommended": None, "chosen": None, "locked": False},
         "research": [],
         "elements": [],
@@ -226,6 +231,26 @@ LOOK_SHEET_TEMPLATES = {
         "lighting; no text, labels or watermarks.\nObject: {description}"
     ),
 }
+# Sheets of projects on templates 2.
+DRAMAGIC_SHEET_TEMPLATES = {
+    **LOOK_SHEET_TEMPLATES,
+    "character": (
+        "Character reference sheet, one 16:9 image on a plain light-grey studio background, without dividing lines. "
+        "Left, about 40% of the width: an upper-body close-up from the chest up, frontal and at eye level, showing the "
+        "face, hairstyle, expression, eye contact, upper-body clothing and accessories. Right, about 60% of the width: "
+        "the same character full body three times, front view, side view and back view, in a neutral standing pose. "
+        "Identical face, proportions, hairstyle, outfit and colours in every view; even soft lighting; only this one "
+        "character; no text, labels or watermarks.\nCharacter: {description}"
+    ),
+    "location": (
+        "Location reference sheet, one 16:9 image in four panels of the same place: top left the front view, centred "
+        "and complete; top right a top-down view of the whole layout from high above; bottom left the reverse view from "
+        "behind; bottom right a side view. The same place, lighting, colours and time of day in all four panels. Only "
+        "the place and its fixed furniture: no people, no animals, nothing that moves on its own, no effects. Straight "
+        "lines stay straight, the horizon level and verticals vertical: no fisheye, no barrel distortion, no "
+        "curvature. No text, labels or watermarks.\nLocation: {description}"
+    ),
+}
 PROP_IN_USE = (
     "Prop / product reference sheet, one image on a plain light-grey studio background. Left half: the object alone in "
     "front, side and three-quarter views, no people. Right half: the object in use, {interaction}; show only as much of "
@@ -248,12 +273,17 @@ def look_rendering(brief: dict[str, Any]) -> str:
     return LOOK_RENDERING.get(brief.get("look") or "", "")
 
 
-def sheet_prompt(item: dict[str, Any], style: str, look: str = "") -> str:
+def templates(brief: dict[str, Any]) -> int:
+    return int(brief.get("templates") or 1)
+
+
+def sheet_prompt(item: dict[str, Any], style: str, look: str = "", version: int = 1) -> str:
     if not look:  # project from before looks were asked: unchanged prompt
         prompt = SHEET_TEMPLATES[item["kind"]].format(description=item["description"])
         return prompt + (f"\nStyle: {style}" if style else "")
     interaction = (item.get("interaction") or "").strip() if item["kind"] == "prop" else ""
-    template = PROP_IN_USE if interaction else LOOK_SHEET_TEMPLATES[item["kind"]]
+    sheets = DRAMAGIC_SHEET_TEMPLATES if version >= 2 else LOOK_SHEET_TEMPLATES
+    template = PROP_IN_USE if interaction else sheets[item["kind"]]
     prompt = template.format(description=item["description"], interaction=interaction)
     rendering = LOOK_RENDERING.get(look, "")
     return prompt + (f"\nLook: {rendering}" if rendering else "") + (f"\nStyle: {style}" if style else "")
@@ -266,6 +296,20 @@ FROM_PHOTOS = ("Base it on the attached reference photo(s) of this exact {kind}:
 PHOTO_KEEP = {"character": "same face, facial structure, skin tone, hair and build",
               "location": "same layout, architecture, materials and landmarks",
               "prop": "same shape, proportions, materials, colours, logo and markings"}
+
+
+# A variant is another state of an element (a pressed flower, a torn dress, the studio wrecked, another outfit): its
+# sheet is made from the original's sheet, so everything the description does not change stays the same.
+FROM_ORIGINAL = ("Reference image {n} is the reference sheet of {name}: this is the same {kind} in another state. Keep "
+                 "everything the description does not change exactly as in that sheet, and lay this sheet out the same way.")
+
+
+def variant_source(board: dict[str, Any], item: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """The element this one is a variant of: another element of the same kind that is not a variant itself."""
+    original = element(board, item.get("variant_of") or "")
+    if original is None or original["id"] == item["id"] or original["kind"] != item["kind"] or original.get("variant_of"):
+        return None
+    return original
 
 
 def _with_look(prompt: str, brief: dict[str, Any]) -> str:
@@ -283,6 +327,46 @@ KEEP_IDENTITY = {
     "prop": "the exact same object, and preserve its shape, geometry, materials, colors, markings and distinguishing "
             "details without substitution or redesign",
 }
+# Templates 2: what Seedance may take from each kind of reference sheet, so a sheet's poses, layout or extra people
+# are not copied into the clip (Dramagic's wording).
+REFERENCE_USE = {
+    "character": "take only the appearance, face, hairstyle and clothing of this character from it",
+    "location": "take only the spatial layout, architecture and lighting of this place from it; people in that image are "
+                "not used",
+    "prop": "take only the structure, material and colour of this object from it",
+}
+
+
+def reference_line(n: int, item: dict[str, Any], version: int) -> str:
+    """How the video prompt names element reference @Image<n>."""
+    if version >= 2:
+        use = REFERENCE_USE.get(item["kind"], REFERENCE_USE["prop"])
+        return (f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one image: "
+                f"{use}. Never show the sheet layout itself.")
+    return (f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one image: "
+            f"show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
+
+
+def scene_setting(board: dict[str, Any], scene_id: Optional[str]) -> str:
+    """Templates 2: the scene's time of day and lighting, said once before the shots."""
+    item = scene(board, scene_id or "") or {}
+    lines = [f"{label}: {item[key].strip()}" for key, label in (("time", "Time"), ("lighting", "Lighting"))
+             if (item.get(key) or "").strip()]
+    return "\n".join(lines)
+
+
+def clip_constraints(board: dict[str, Any]) -> str:
+    """Templates 2: the fixed rules at the end of every clip prompt."""
+    lines = ["Strict constraints:",
+             "- Keep every character's identity, the number of people, costumes, who holds which prop, where everyone "
+             "is in the space and who speaks consistent.",
+             "- Each character appears only once in a frame: no duplicates, clones or twins.",
+             "- No subtitles, captions or text overlays."]
+    if ((board.get("audio") or {}).get("music") or {}).get("prompt", "").strip():
+        lines.append("- No background music: the music is added later.")
+    return "\n".join(lines)
+
+
 MAX_VIDEO_REFERENCES = 30  # Seedance 2.5 reference_image limit
 
 
@@ -295,9 +379,7 @@ def video_references(board: dict[str, Any], shot: dict[str, Any]) -> list[str]:
 def reference_legend(board: dict[str, Any], deps: list[str], user_images: int = 0, user_videos: int = 0) -> str:
     lines = ["References:", "@Image1 is the opening frame of this shot: start the clip from it."]
     for n, dep in enumerate(deps[1:], start=2):
-        item = element(board, dep.split(":", 1)[1])
-        lines.append(f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one "
-                     f"image: show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
+        lines.append(reference_line(n, element(board, dep.split(":", 1)[1]), templates(board["brief"])))
     for n in range(len(deps) + 1, len(deps) + 1 + user_images):
         lines.append(f"@Image{n} is a reference the user gave for this shot: follow its style, composition and mood.")
     for n in range(1, user_videos + 1):
@@ -341,12 +423,17 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
     look = brief.get("look") or ""
     specs: dict[str, dict[str, Any]] = {}
     for item in board["elements"]:
-        prompt = sheet_prompt(item, style, look)
+        prompt = sheet_prompt(item, style, look, templates(brief))
         photos = item.get("photos") or []
         if photos:
             prompt += "\n" + FROM_PHOTOS.format(kind=item["kind"], keep=PHOTO_KEEP.get(item["kind"], PHOTO_KEEP["prop"]))
+        original = variant_source(board, item)
+        if original is not None:
+            # The original's sheet goes after the user's photos (generation sends photos first, then deps).
+            prompt += "\n" + FROM_ORIGINAL.format(n=len(photos) + 1, name=original["name"], kind=item["kind"])
         specs[f"element:{item['id']}"] = {
-            "kind": "image", "label": f"{item['name']} — reference sheet", "prompt": prompt, "deps": [],
+            "kind": "image", "label": f"{item['name']} — reference sheet", "prompt": prompt,
+            "deps": [f"element:{original['id']}"] if original is not None else [],
             "params": {"aspectRatio": "16:9"},
             **({"photos": list(photos)} if photos else {}),
         }
@@ -445,9 +532,15 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
         el = element(board, dep.split(":", 1)[1])
         video_names[el["id"]] = f"{el['name']} (@Image{n})"
     video_prompt = _with_look(compile_mentions(item["video_prompt"], video_names)[0], brief)
+    if templates(brief) >= 2:
+        # Dramagic's order: references, the scene's time and light, the shot, then the fixed constraints.
+        prompt = "\n\n".join(p for p in (legend, scene_setting(board, item.get("scene_id")), video_prompt,
+                                           clip_constraints(board)) if p)
+    else:
+        prompt = f"{video_prompt}\n{legend}" if legend else video_prompt
     specs[f"video:{item['id']}"] = {
         "kind": "video", "label": f"{item['title']} — video",
-        "prompt": f"{video_prompt}\n{legend}" if legend else video_prompt,
+        "prompt": prompt,
         "deps": deps,
         "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio},
         **({"extra_images": images} if images else {}), **({"ref_videos": videos} if videos else {}),
@@ -544,8 +637,7 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
     for n, element_id in enumerate(elements_in_order, start=count + 1):
         item = element(board, element_id)
         names[element_id] = f"{item['name']} (@Image{n})"
-        lines.append(f"@Image{n} is the reference sheet of {item['name']} ({item['kind']}), several views of it on one image: "
-                     f"show {KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}. Never show the sheet layout itself.")
+        lines.append(reference_line(n, item, templates(brief)))
     for n in range(count + len(elements_in_order) + 1, count + len(elements_in_order) + 1 + len(user_images)):
         lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
     user_videos = _scene_videos(shots)
@@ -557,13 +649,19 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
     parts = ["\n".join(lines)]
     if style:
         parts.append(style)
+    version = templates(brief)
+    if version >= 2 and scene_setting(board, block["scene_id"]):
+        parts.append(scene_setting(board, block["scene_id"]))
     for n, (s, body, start) in enumerate(zip(shots, bodies, starts), start=1):
         end = start + int(s["duration_seconds"])
         parts.append(f"Shot {n} | {start}-{end}s\n{body}" + ("\nHard cut." if n < count else ""))
     title = (scene(board, block["scene_id"]) or {}).get("title") or block["scene_id"]
+    prompt = _with_look("\n\n".join(parts), brief)
+    if version >= 2:
+        prompt += "\n\n" + clip_constraints(board)
     return {
         "kind": "video", "label": f"{title} — video scene ({count} shot, {cursor}s)",
-        "prompt": _with_look("\n\n".join(parts), brief), "deps": deps, "shots": list(block["shots"]),
+        "prompt": prompt, "deps": deps, "shots": list(block["shots"]),
         "params": {"aspectRatio": ratio, "duration": cursor, **audio, "omniReferenceTaskType": "reference"},
         **({"extra_images": user_images} if user_images else {}), **({"ref_videos": user_videos} if user_videos else {}),
     }
