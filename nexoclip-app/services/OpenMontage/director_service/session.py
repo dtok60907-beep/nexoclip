@@ -269,7 +269,8 @@ def _kick_auto(project_id: str) -> None:
     request = queued[0]
     if not generation.request_is_current(board, request):
         generation.set_request_status(project_id, request["id"], "superseded")
-        auto_generate_assets(project_id)
+        if _auto(project_id):  # "Guide me" never generates on its own
+            auto_generate_assets(project_id)
         return
     start_auto(project_id, request["id"])
 

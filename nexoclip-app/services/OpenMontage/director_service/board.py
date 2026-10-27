@@ -281,7 +281,9 @@ def sheet_prompt(item: dict[str, Any], style: str, look: str = "", version: int 
     if not look:  # project from before looks were asked: unchanged prompt
         prompt = SHEET_TEMPLATES[item["kind"]].format(description=item["description"])
         return prompt + (f"\nStyle: {style}" if style else "")
-    interaction = (item.get("interaction") or "").strip() if item["kind"] == "prop" else ""
+    # Templates 2: a prop sheet is always the object alone (Dramagic): people on it are strangers to the character
+    # sheets and get copied into clips. How it is used is told in the shots, with the characters' own sheets.
+    interaction = (item.get("interaction") or "").strip() if item["kind"] == "prop" and version < 2 else ""
     sheets = DRAMAGIC_SHEET_TEMPLATES if version >= 2 else LOOK_SHEET_TEMPLATES
     template = PROP_IN_USE if interaction else sheets[item["kind"]]
     prompt = template.format(description=item["description"], interaction=interaction)
@@ -744,6 +746,8 @@ def summary_for_agent(board: dict[str, Any]) -> dict[str, Any]:
 def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
     specs = media_specs(board)
     memo: dict[str, bool] = {}
+    # In a request that is waiting or running: its Generate buttons are disabled so it is never asked for twice.
+    queued = {k for r in board["requests"] if r["status"] in ("pending", "running", "needs_credits") for k in r["items"]}
     media_view = {}
     for key, spec in specs.items():
         media = board["media"].get(key) or {}
@@ -755,6 +759,7 @@ def view_for_ui(project_id: str, board: dict[str, Any]) -> dict[str, Any]:
             "status": status,
             "stale": status == TERMINAL_OK and needs_generation(board, key, specs, memo),
             "error": media.get("error"),
+            "in_request": key in queued,
             # Generated media are nexoclip assets owned by the user; the browser loads them
             # from nexoclip's own /api/assets/<id>/download with its session.
             "asset_id": media.get("asset_id") if status == TERMINAL_OK else None,

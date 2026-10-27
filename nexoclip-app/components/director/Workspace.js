@@ -71,7 +71,9 @@ export function videoPlan(board, shotIds) {
   const ids = new Set(shotIds);
   const media = (key) => board.media[key];
   const blocks = (board.scene_blocks || []).filter((b) => b.shots.every((id) => ids.has(id)));
-  const running = shotIds.some((id) => media(`video:${id}`)?.status === 'running') || blocks.some((b) => media(b.key)?.status === 'running');
+  // running or already waiting in a request: generating again would make it twice
+  const busy = (m) => m?.status === 'running' || m?.in_request;
+  const running = shotIds.some((id) => busy(media(`video:${id}`))) || blocks.some((b) => busy(media(b.key)));
   const missing = shotIds.filter((id) => media(`video:${id}`) && (!media(`video:${id}`).asset_id || media(`video:${id}`).stale));
   const whole = blocks.filter((b) => b.shots.every((id) => missing.includes(id)));
   const inWhole = new Set(whole.flatMap((b) => b.shots));
@@ -387,11 +389,11 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!continuation && (
-            <SmallButton disabled={busy} onClick={() => onRequest([`frame:${shot.id}`], !!frame?.asset_id && !frame?.stale)}>
+            <SmallButton disabled={busy || frame?.in_request} onClick={() => onRequest([`frame:${shot.id}`], !!frame?.asset_id && !frame?.stale)}>
               {frame?.asset_id ? 'Generate ulang frame' : 'Generate frame'}
             </SmallButton>
           )}
-          <SmallButton tone="accent" disabled={busy} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id && !video?.stale)}>
+          <SmallButton tone="accent" disabled={busy || video?.in_request} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id && !video?.stale)}>
             {video?.asset_id ? 'Generate ulang video' : 'Generate video'}
           </SmallButton>
           <span className="text-[10px] text-white/35">{continuation ? `Lanjutan dari ${continuation.title}` : `Frame: ${mediaStatus(frame).label}`} · Video: {mediaStatus(video).label}</span>

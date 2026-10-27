@@ -1061,8 +1061,9 @@ def test_prop_sheets_have_no_people_unless_the_story_needs_it(client, fake_llm, 
     fake_llm.turns.append([{"calls": [call("upsert_element", **can), call("upsert_element", **watch)]}, {"text": "ok"}])
     media = _say(client, pid, "tambah properti")["board"]["media"]
     assert "No people, no hands" in media["element:can"]["prompt"]
-    assert "No people, no hands" not in media["element:watch"]["prompt"]
-    assert "worn on the left wrist" in media["element:watch"]["prompt"]
+    # New projects (templates 2) never put people on a prop sheet, interaction or not.
+    assert "No people, no hands" in media["element:watch"]["prompt"]
+    assert "worn on the left wrist" not in media["element:watch"]["prompt"]
     # The look reaches frames and clips too.
     assert "Photorealistic" in media["frame:s1"]["prompt"] and "Photorealistic" in media["video:s1"]["prompt"]
 
@@ -1882,3 +1883,27 @@ def test_music_taken_off_the_timeline_is_left_out_of_the_render():
     assert render.audio_tracks(board) == {"music": "music-1"}
     board["audio"]["music"]["prompt"] = ""  # the ✕ on the timeline; the file stays for when it is added back
     assert render.audio_tracks(board) == {}
+
+
+def test_nothing_is_generated_twice(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm, sheets=False)
+    first = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["element:maya"]}, headers=HEADERS)
+    assert first.status_code == 200
+    # A second click while it is queued or running is refused; a request with more in it leaves the busy item out.
+    again = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["element:maya"]}, headers=HEADERS)
+    both = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["element:maya", "element:beach_house"]},
+                       headers=HEADERS)
+    _wait(pid)
+    assert again.status_code in (200, 400)
+    keys = [x["key"] for x in bridge.submits]
+    assert keys.count("element:maya") == 1 and keys.count("element:beach_house") == 1
+    assert both.status_code == 200
+
+
+def test_new_projects_never_put_people_on_a_prop_sheet():
+    from director_service import board as boards
+
+    board = _v2_board()
+    board["elements"][2]["interaction"] = "worn on the shoulders of two people"
+    prompt = boards.media_specs(board)["element:petal"]["prompt"]
+    assert "No people, no hands" in prompt and "worn on the shoulders" not in prompt

@@ -428,7 +428,10 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
     }
   }, [projectId, refresh]);
 
+  const requesting = useRef(false); // a double click sends one request, not two
   const onRequest = useCallback(async (items, force = false) => {
+    if (requesting.current) return;
+    requesting.current = true;
     setActionBusy(true);
     setActionError('');
     try {
@@ -438,6 +441,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
     } catch (err) {
       setActionError(err.message);
     } finally {
+      requesting.current = false;
       setActionBusy(false);
     }
   }, [projectId, refresh]);

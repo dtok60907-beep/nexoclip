@@ -148,7 +148,8 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model, prompt, response_format: 'url',
+          // BytePlus stamps "AI generated" on every image unless told not to.
+          model, prompt, response_format: 'url', watermark: false,
           ...(size ? { size } : {}),
           ...(referenceImages?.length ? { image: referenceImages } : {}),
         }),

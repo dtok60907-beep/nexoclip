@@ -96,6 +96,13 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
         force = force or bool(open_request.get("force"))
         note = "; ".join(n for n in (open_request.get("note"), note) if n)
     items = _closure(board, keys, specs, force)
+    # Never twice: what another request is already making, or waiting to make, stays out (a second click on a
+    # Generate button while it runs, the agent asking again).
+    busy = {k for r in board["requests"] if r["status"] in (*OPEN_STATUSES, "needs_credits") and r is not open_request
+            for k in r["items"]}
+    if busy and set(items) & busy and not set(items) - busy:
+        raise GenerationError("already being generated or waiting for approval: " + ", ".join(k for k in items if k in busy))
+    items = [k for k in items if k not in busy]
     if not auto and sheets_apart:
         # "Just make it": sheets are generated automatically on their own, so they never wait in the approval cart.
         items = [k for k in items if not k.startswith(AUTO_PREFIX)]

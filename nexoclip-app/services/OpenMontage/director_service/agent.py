@@ -81,8 +81,8 @@ What you can do (tools):
   the light source; no people. Its time of day and light per scene go on the scene (set_scenes), not here.
   A prop's description is one dense paragraph of physical detail: shape, material, texture, colour, wear or age, and
   how light catches its surface; plus the exact logo, label and branding of a product.
-  A prop sheet shows the object alone, without people. Only when the story needs a character physically using it (worn,
-  held in a specific way, operated) set interaction, e.g. "worn on the wrist of Dimas"; otherwise leave it empty.
+  A prop sheet shows the object alone, without people. How a character wears, holds or uses it goes into the shots
+  that show it (with that character's @mention), not into the prop. (interaction is only read by older projects.)
   Elements with "photos" have real photos uploaded by the user (their product, logo, face, place): the sheet is made
   from those photos, so keep the description consistent with them and never invent a different design.
   One element = one subject, never a group: "four friends" are four characters, each with their own sheet. Make a

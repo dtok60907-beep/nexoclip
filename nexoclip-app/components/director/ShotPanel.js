@@ -132,8 +132,8 @@ function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy,
         </select>
       </label>
       <div className="flex flex-wrap gap-1.5">
-        {!shot.extends && <SmallButton disabled={busy} onClick={() => onRequest([`frame:${shot.id}`], !!board.media[`frame:${shot.id}`]?.asset_id)}>Recreate gambar</SmallButton>}
-        <SmallButton disabled={busy} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id)}>Recreate video</SmallButton>
+        {!shot.extends && <SmallButton disabled={busy || board.media[`frame:${shot.id}`]?.in_request} onClick={() => onRequest([`frame:${shot.id}`], !!board.media[`frame:${shot.id}`]?.asset_id)}>Recreate gambar</SmallButton>}
+        <SmallButton disabled={busy || video?.in_request} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id)}>Recreate video</SmallButton>
         <SmallButton disabled={busy} onClick={() => onEdit('duplicate_shot', { id: shot.id })}>Duplicate</SmallButton>
         <SmallButton disabled={busy} onClick={() => setAdding(adding === 'before' ? null : 'before')}>+ Sebelum</SmallButton>
         <SmallButton disabled={busy} onClick={() => setAdding(adding === 'after' ? null : 'after')}>+ Sesudah</SmallButton>
@@ -176,7 +176,7 @@ function MusicTab({ board, workspaceId, onEdit, onRequest, busy }) {
       {draft ? (
         <div className="flex gap-1.5"><SmallButton tone="accent" disabled={busy} onClick={save}>Simpan</SmallButton><SmallButton onClick={() => setDraft(null)}>Batal</SmallButton></div>
       ) : music.prompt ? (
-        <SmallButton tone="accent" disabled={busy} onClick={() => onRequest(['audio:music'], !!media?.asset_id && !media.stale)}>
+        <SmallButton tone="accent" disabled={busy || media?.in_request} onClick={() => onRequest(['audio:music'], !!media?.asset_id && !media.stale)}>
           {media?.asset_id ? 'Generate ulang musik' : 'Generate musik'}
         </SmallButton>
       ) : null}
@@ -224,7 +224,7 @@ function VoiceoverTab({ board, shot, workspaceId, onEdit, onRequest, busy }) {
           {value.text.trim() && !value.voice && <span className="text-[10.5px] text-amber-300/80">Pilih suara dulu.</span>}
         </div>
       ) : shot.vo_text && media ? (
-        <SmallButton tone="accent" disabled={busy} onClick={() => onRequest([`vo:${shot.id}`], !!media.asset_id && !media.stale)}>
+        <SmallButton tone="accent" disabled={busy || media.in_request} onClick={() => onRequest([`vo:${shot.id}`], !!media.asset_id && !media.stale)}>
           {media.asset_id ? 'Generate ulang VO' : 'Generate VO'}
         </SmallButton>
       ) : null}

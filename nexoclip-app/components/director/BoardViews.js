@@ -358,7 +358,7 @@ function ElementCard({ item, board, onEdit, onRequest, busy, workspaceId }) {
             <p className="mt-1 line-clamp-4 whitespace-pre-line text-[11px] leading-snug text-white/45" title={item.description}>{item.description}</p>
             <ElementPhotos item={item} onEdit={onEdit} busy={busy} workspaceId={workspaceId} />
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <SmallButton onClick={() => onRequest([`element:${item.id}`], !!generated)} disabled={busy}>
+              <SmallButton onClick={() => onRequest([`element:${item.id}`], !!generated)} disabled={busy || media?.in_request}>
                 {media?.asset_id ? 'Generate ulang sheet' : 'Generate sheet'}
               </SmallButton>
               <SmallButton onClick={() => setEditing(true)} disabled={busy}>Edit</SmallButton>
@@ -373,13 +373,17 @@ function ElementCard({ item, board, onEdit, onRequest, busy, workspaceId }) {
 
 export function AssetsView({ board, onEdit, onRequest, busy, workspaceId }) {
   if (!board.elements.length) return <Empty>Belum ada karakter, lokasi, atau properti untuk cerita ini.</Empty>;
-  const missing = board.elements.filter((e) => { const m = board.media[`element:${e.id}`]; return !m?.asset_id || m.stale; });
+  // Sheets already being made (or waiting in a request) are not offered again.
+  const making = board.elements.filter((e) => { const m = board.media[`element:${e.id}`]; return m?.in_request || m?.status === 'running'; });
+  const missing = board.elements.filter((e) => { const m = board.media[`element:${e.id}`]; return (!m?.asset_id || m.stale) && !making.includes(e); });
   const groups = [['character', 'Karakter'], ['location', 'Lokasi'], ['prop', 'Properti']];
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-white/50">Setiap aset dibuat sebagai satu reference sheet supaya tampilannya konsisten di semua shot.</p>
-        {missing.length > 0 && (
+        {making.length > 0 ? (
+          <SmallButton disabled>Membuat {making.length} sheet…</SmallButton>
+        ) : missing.length > 0 && (
           <SmallButton tone="accent" disabled={busy} onClick={() => onRequest(missing.map((e) => `element:${e.id}`))}>
             Generate {missing.length} sheet
           </SmallButton>
@@ -527,7 +531,7 @@ function AudioTrack({ title, mediaKey, media, workspaceId, onEdit, onRequest, bu
         </div>
       )}
       {media?.error && <p className="text-[11px] text-red-300/80">{media.error}</p>}
-      <SmallButton tone="accent" disabled={busy || !canGenerate} onClick={() => onRequest([mediaKey], fresh)}>
+      <SmallButton tone="accent" disabled={busy || !canGenerate || board.media[mediaKey]?.in_request} onClick={() => onRequest([mediaKey], fresh)}>
         {media?.asset_id ? 'Generate ulang' : 'Generate'} {title.toLowerCase()}
       </SmallButton>
     </div>
