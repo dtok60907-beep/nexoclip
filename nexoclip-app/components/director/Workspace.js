@@ -388,7 +388,7 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
           <FullscreenButton target={previewBox} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!continuation && (
+          {!continuation && frame && (
             <SmallButton disabled={busy || frame?.in_request} onClick={() => onRequest([`frame:${shot.id}`], !!frame?.asset_id && !frame?.stale)}>
               {frame?.asset_id ? 'Generate ulang frame' : 'Generate frame'}
             </SmallButton>
@@ -396,7 +396,7 @@ function ShotMode({ board, numbered, groups, selected, onSelect, workspaceId, on
           <SmallButton tone="accent" disabled={busy || video?.in_request} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id && !video?.stale)}>
             {video?.asset_id ? 'Generate ulang video' : 'Generate video'}
           </SmallButton>
-          <span className="text-[10px] text-white/35">{continuation ? `Lanjutan dari ${continuation.title}` : `Frame: ${mediaStatus(frame).label}`} · Video: {mediaStatus(video).label}</span>
+          <span className="text-[10px] text-white/35">{continuation ? `Lanjutan dari ${continuation.title} · ` : frame ? `Frame: ${mediaStatus(frame).label} · ` : ''}Video: {mediaStatus(video).label}</span>
         </div>
         <TrimControl shot={shot} video={video} onEdit={onEdit} busy={busy} />
         <ClipActions board={board} shot={shot} video={video} onEdit={onEdit} onRequest={onRequest} onSelect={onSelect} busy={busy} />

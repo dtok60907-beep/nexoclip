@@ -150,6 +150,22 @@ def bridge(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def keyframes(monkeypatch, request):
+    """Most tests were written for projects with a keyframe per shot; new projects have none (test_no_keyframes_*)."""
+    if request.node.name.startswith("test_no_keyframes"):
+        return
+    from director_service import board as boards
+    original = boards.empty_board
+
+    def with_keyframes():
+        board = original()
+        board["brief"]["keyframes"] = True
+        return board
+
+    monkeypatch.setattr(boards, "empty_board", with_keyframes)
+
+
+@pytest.fixture(autouse=True)
 def no_skill_gate(monkeypatch):
     """Most scripted turns skip read_skill; tests about the gate opt back in with skill_gate."""
     original = dict(agent_mod.REQUIRED_SKILLS)
@@ -1918,4 +1934,40 @@ def test_new_frames_always_say_which_sheet_is_whom_and_stay_unretouched():
     frame = specs["frame:s1"]["prompt"]
     assert "image 1 is the reference sheet of Ivy (character)" in frame
     assert "image 2 is the reference sheet of Castle kitchen (location)" in frame
-    assert "no beauty filter" in frame and "no beauty filter" in specs["element:ivy"]["prompt"]
+    assert "no beauty filter" in frame and "no beauty filter" not in specs["element:ivy"]["prompt"]
+
+
+
+def test_no_keyframes_clips_are_made_from_the_sheets_alone():
+    from director_service import board as boards
+
+    assert boards.empty_board()["brief"]["keyframes"] is False
+    shots = [{"id": f"s{n}", "title": f"Shot {n}", "description": "d", "duration_seconds": 5, "scene_id": "dawn",
+              "element_ids": ["ivy", "kitchen"], "frame_prompt": "",
+              "video_prompt": f"Style: Warm film grain\n[Layout] @ivy at the worktable\n[Action] Medium shot | Static. Beat {n}."}
+             for n in (1, 2)]
+    specs = boards.media_specs(_v2_board(shots=shots))
+    assert not any(k.startswith("frame:") for k in specs)
+    scene = specs["scene:s1"]
+    assert scene["deps"] == ["element:ivy", "element:kitchen"]
+    assert scene["params"]["omniReferenceTaskType"] == "reference" and scene["params"]["duration"] == 10
+    prompt = scene["prompt"]
+    assert prompt.startswith("References:\n@Image1 is the reference sheet of Ivy (character)")
+    assert "keyframe" not in prompt and "opening frame" not in prompt
+    assert prompt.index("Time: dawn") < prompt.index("One clip of 2 shots") < prompt.index("Shot 1 | 0-5s") < prompt.index("Shot 2 | 5-10s")
+    assert "Ivy (@Image1) at the worktable" in prompt and prompt.rstrip().endswith("text overlays.")
+    one = specs["video:s1"]
+    assert one["deps"] == ["element:ivy", "element:kitchen"] and "opening frame" not in one["prompt"]
+
+
+def test_no_keyframes_shots_need_no_frame_prompt(client, fake_llm, bridge):
+    fake_llm.turns.append([{"calls": [call("update_brief", summary="Trailer", look="realistic"),
+                                      call("upsert_element", **MAYA),
+                                      call("set_shots", shots=[{**{k: v for k, v in SHOTS[0].items() if k != "frame_prompt"}, "element_ids": ["maya"]}])]},
+                           {"text": "ok"}])
+    pid = client.post("/api/director/projects", json={"brief": "trailer"}, headers=HEADERS).json()["project_id"]
+    _wait(pid)
+    board = _view(client, pid)["board"]
+    assert [s["id"] for s in board["shots"]] == ["s1"] and "frame:s1" not in board["media"]
+    request = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()
+    assert request["items"] == ["element:maya", "video:s1"]  # the sheet it needs, then the clip; no frame

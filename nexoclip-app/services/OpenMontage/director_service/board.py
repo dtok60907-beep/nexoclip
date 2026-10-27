@@ -68,6 +68,8 @@ def empty_board() -> dict[str, Any]:
     return {
         "brief": {"summary": "", "look": "", "video_type": "", "aspect_ratio": "16:9", "duration_seconds": None, "style": "",
                   "resolution": "720p", "generate_audio": True, "templates": PROMPT_TEMPLATES,
+                  # Dramagic's method: clips made straight from the element sheets, no keyframe image per shot.
+                  "keyframes": False,
                   **{k: "" for k in BRIEF_DETAILS}},
         "concepts": {"options": [], "recommended": None, "chosen": None, "locked": False},
         "research": [],
@@ -285,6 +287,13 @@ def templates(brief: dict[str, Any]) -> int:
     return int(brief.get("templates") or 1)
 
 
+def keyframes(brief: dict[str, Any]) -> bool:
+    """Whether shots get a first-frame image that their clip starts from (projects from before 27 Oct 2026). New
+    projects make every clip from the sheets alone, like Dramagic: frames made one by one drifted in faces and
+    positions, and the clip jumped between them."""
+    return brief.get("keyframes", True) is not False
+
+
 def sheet_prompt(item: dict[str, Any], style: str, look: str = "", version: int = 1) -> str:
     if not look:  # project from before looks were asked: unchanged prompt
         prompt = SHEET_TEMPLATES[item["kind"]].format(description=item["description"])
@@ -296,8 +305,6 @@ def sheet_prompt(item: dict[str, Any], style: str, look: str = "", version: int 
     template = PROP_IN_USE if interaction else sheets[item["kind"]]
     prompt = template.format(description=item["description"], interaction=interaction)
     rendering = LOOK_RENDERING.get(look, "")
-    if rendering and look == "realistic" and version >= 2:
-        rendering += " " + REALISTIC_SKIN
     return prompt + (f"\nLook: {rendering}" if rendering else "") + (f"\nStyle: {style}" if style else "")
 
 
@@ -514,9 +521,46 @@ def extended_shot(board: dict[str, Any], item: dict[str, Any]) -> Optional[dict[
     return shot(board, item["extends"]) if item.get("extends") else None
 
 
+def _sheet_legend(board: dict[str, Any], element_ids: list[str], user_images: int = 0, user_videos: list[str] = (),
+                  used_by: Optional[Callable[[str], str]] = None) -> tuple[str, dict[str, str]]:
+    """References of a clip made from the sheets alone: @Image1.. are the sheets, then the user's images."""
+    version = templates(board["brief"])
+    lines, names = ["References:"], {}
+    for n, element_id in enumerate(element_ids, start=1):
+        item = element(board, element_id)
+        names[element_id] = f"{item['name']} (@Image{n})"
+        lines.append(reference_line(n, item, version))
+    for n in range(len(element_ids) + 1, len(element_ids) + 1 + user_images):
+        lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
+    for n, asset_id in enumerate(user_videos, start=1):
+        where = f" for {used_by(asset_id)}" if used_by else ""
+        lines.append(f"@Video{n} is a reference video the user gave{where}: use it only for its motion, camera movement "
+                     f"and pacing, not its people or place.")
+    return ("\n".join(lines) if len(lines) > 1 else ""), names
+
+
+def _sheet_shot_spec(board: dict[str, Any], item: dict[str, Any], ratio: str, audio: dict[str, Any]) -> dict[str, Any]:
+    """One shot's clip from the sheets of its elements (no keyframe)."""
+    brief = board["brief"]
+    images, videos = user_references(item)
+    ids = [e for e in item.get("element_ids", []) if element(board, e)][:MAX_VIDEO_REFERENCES - len(images)]
+    legend, names = _sheet_legend(board, ids, len(images), videos)
+    body = _with_look(compile_mentions(item["video_prompt"], names)[0], brief)
+    prompt = "\n\n".join(p for p in (legend, scene_setting(board, item.get("scene_id")), body, clip_constraints(board)) if p)
+    return {
+        "kind": "video", "label": f"{item['title']} — video", "prompt": prompt, "deps": [f"element:{e}" for e in ids],
+        "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio,
+                   "omniReferenceTaskType": "reference"},
+        **({"extra_images": images} if images else {}), **({"ref_videos": videos} if videos else {}),
+    }
+
+
 def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, dict[str, Any]], ratio: str,
                 audio: dict[str, Any]) -> None:
     brief = board["brief"]
+    if not keyframes(brief):
+        specs[f"video:{item['id']}"] = _sheet_shot_spec(board, item, ratio, audio)
+        return
     refs = [f"element:{e}" for e in item.get("element_ids", []) if element(board, e)]
     images, videos = user_references(item)
     # @element mentions name the reference images they point at (Seedream: "reference image N").
@@ -613,7 +657,8 @@ def scene_blocks(board: dict[str, Any]) -> list[dict[str, Any]]:
                 close()
                 continue
             candidate = [*run, item]
-            images = len(candidate) + len(_first_appearance(board, candidate)) + sum(len(user_references(s)[0]) for s in candidate)
+            frames = len(candidate) if keyframes(board["brief"]) else 0
+            images = frames + len(_first_appearance(board, candidate)) + sum(len(user_references(s)[0]) for s in candidate)
             if (sum(int(s["duration_seconds"]) for s in candidate) > MAX_SCENE_SECONDS or images > MAX_VIDEO_REFERENCES
                     or len(_scene_videos(candidate)) > MAX_SCENE_REFERENCE_VIDEOS):
                 close()
@@ -641,6 +686,8 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
     shots = [shot(board, sid) for sid in block["shots"]]
     elements_in_order = _first_appearance(board, shots)
     user_images = [a for s in shots for a in user_references(s)[0]]
+    if not keyframes(brief):
+        return _sheet_scene_spec(board, block, shots, elements_in_order, user_images, ratio, audio)
     frames = [f"frame:{s['id']}" for s in shots]
     deps = [*frames, *(f"element:{e}" for e in elements_in_order)]
     count = len(frames)
@@ -681,6 +728,36 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
     return {
         "kind": "video", "label": f"{title} — video scene ({count} shot, {cursor}s)",
         "prompt": prompt, "deps": deps, "shots": list(block["shots"]),
+        "params": {"aspectRatio": ratio, "duration": cursor, **audio, "omniReferenceTaskType": "reference"},
+        **({"extra_images": user_images} if user_images else {}), **({"ref_videos": user_videos} if user_videos else {}),
+    }
+
+
+def _sheet_scene_spec(board: dict[str, Any], block: dict[str, Any], shots: list[dict[str, Any]], elements_in_order: list[str],
+                      user_images: list[str], ratio: str, audio: dict[str, Any]) -> dict[str, Any]:
+    """One clip for several shots made from the sheets alone, the way Dramagic writes a storyboard: references with
+    what to take from each, the scene's time and light, every shot's [Layout] / [Action] with its timing, constraints."""
+    brief = board["brief"]
+    user_videos = _scene_videos(shots)
+
+    def used_by(asset_id: str) -> str:
+        return "Shot " + ", ".join(str(i) for i, s in enumerate(shots, start=1) if asset_id in user_references(s)[1])
+
+    legend, names = _sheet_legend(board, elements_in_order, len(user_images), user_videos, used_by)
+    style, bodies = _hoisted_style([compile_mentions(s["video_prompt"], names)[0] for s in shots])
+    starts, cursor = [], 0
+    for s in shots:
+        starts.append(cursor)
+        cursor += int(s["duration_seconds"])
+    parts = [legend, style, scene_setting(board, block["scene_id"]),
+             f"One clip of {len(shots)} shots with a hard cut between them, each shot at its time below:"]
+    for n, (s, body, start) in enumerate(zip(shots, bodies, starts), start=1):
+        parts.append(f"Shot {n} | {start}-{start + int(s['duration_seconds'])}s\n{body}")
+    title = (scene(board, block["scene_id"]) or {}).get("title") or block["scene_id"]
+    prompt = _with_look("\n\n".join(p for p in parts if p), brief) + "\n\n" + clip_constraints(board)
+    return {
+        "kind": "video", "label": f"{title} — video scene ({len(shots)} shot, {cursor}s)",
+        "prompt": prompt, "deps": [f"element:{e}" for e in elements_in_order], "shots": list(block["shots"]),
         "params": {"aspectRatio": ratio, "duration": cursor, **audio, "omniReferenceTaskType": "reference"},
         **({"extra_images": user_images} if user_images else {}), **({"ref_videos": user_videos} if user_videos else {}),
     }

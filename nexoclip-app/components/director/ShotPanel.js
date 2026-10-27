@@ -132,7 +132,7 @@ function MediaTab({ board, shot, workspaceId, onEdit, onRequest, onSelect, busy,
         </select>
       </label>
       <div className="flex flex-wrap gap-1.5">
-        {!shot.extends && <SmallButton disabled={busy || board.media[`frame:${shot.id}`]?.in_request} onClick={() => onRequest([`frame:${shot.id}`], !!board.media[`frame:${shot.id}`]?.asset_id)}>Recreate gambar</SmallButton>}
+        {!shot.extends && board.media[`frame:${shot.id}`] && <SmallButton disabled={busy || board.media[`frame:${shot.id}`]?.in_request} onClick={() => onRequest([`frame:${shot.id}`], !!board.media[`frame:${shot.id}`]?.asset_id)}>Recreate gambar</SmallButton>}
         <SmallButton disabled={busy || video?.in_request} onClick={() => onRequest([`video:${shot.id}`], !!video?.asset_id)}>Recreate video</SmallButton>
         <SmallButton disabled={busy} onClick={() => onEdit('duplicate_shot', { id: shot.id })}>Duplicate</SmallButton>
         <SmallButton disabled={busy} onClick={() => setAdding(adding === 'before' ? null : 'before')}>+ Sebelum</SmallButton>

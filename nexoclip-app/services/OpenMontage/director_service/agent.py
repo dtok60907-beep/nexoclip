@@ -100,8 +100,11 @@ What you can do (tools):
   only add light that changes within a shot. Every shot belongs to a scene via scene_id; shots are numbered per scene (1.1, 1.2, 2.1 ...). Scenes alone are not a shot list: when you
   plan the visuals (or the user asks for shots / a storyboard), also call set_shots in the same turn. Never say shots
   exist unless set_shots succeeded.
-- set_shots / update_shot / remove_shot: the ordered shot list. Each shot is one generated video clip of 4-15 s with
-  a frame_prompt (the first frame as a still image) and a video_prompt (motion, camera, action, sound for that clip).
+- set_shots / update_shot / remove_shot: the ordered shot list. Each shot is a part of a video clip, 4-15 s, with a
+  video_prompt (composition, motion, camera, action, sound). New projects (brief.keyframes false) have no frames:
+  the clips are made straight from the element sheets, the way ByteDance's Dramagic does it, so the [Layout] of
+  each shot is what decides its composition. Older projects (keyframes true) also have a frame_prompt per shot: the
+  first frame as a still image that the clip starts from.
   Write video_prompt in ByteDance's syntax (seedance-official-generation) with the shot laid out the way ByteDance's
   Dramagic storyboards do, each label on its own line:
   "Style: ..." first, word for word the same in every shot of the video (genre/format, look, grade);
@@ -119,7 +122,8 @@ What you can do (tools):
   No subtitles, no clones and consistency rules are added to every clip for you; add no generic quality or negative
   packs. Keep counts, ownership of props and who stands where stable across shots. Never write the duration or
   aspect ratio in a prompt (they are parameters).
-  frame_prompt is the opening still, in the same Style, and as precise as a cinematographer's shot note: the shot size
+  The [Layout] (and, in older projects, the frame_prompt: the opening still in the same Style) is as precise as a
+  cinematographer's shot note: the shot size
   and camera angle (eye level, low or high angle, over-the-shoulder, profile, two-shot ...), the camera height and lens
   (e.g. 35mm wide, 85mm tight), where each person stands in the frame (left/right, foreground/background, relative to
   the set), which way each body and head faces and where each gaze goes (an off-screen person by name), and what
@@ -127,9 +131,9 @@ What you can do (tools):
   every shot of that scene, unless a shot shows the camera crossing. Vary the angles across the scene (wide, two-shot,
   over-the-shoulder, close-up, insert) instead of frontal catalogue shots, and choose each angle for what the moment
   needs.
-  List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
-  the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
-  added automatically), so faces, places and products stay consistent across shots.
+  List every element_id that appears in the shot (characters, the location, props): their reference sheets go to the
+  clip (named @Image1, @Image2 ... automatically; in older projects @Image1 is the frame and the sheets follow, and
+  the frame is made from the same sheets), so faces, places and products stay consistent across shots.
   In frame_prompt and video_prompt refer to elements as @<element_id> (e.g. "@maya walks onto the porch of
   @beach_house holding @senja_cup"): each becomes the element's name plus the reference image it points at, and an
   element you mention is added to the shot. Spend the words on action, camera and light rather than re-describing
@@ -144,12 +148,15 @@ What you can do (tools):
   In "Guide me" nothing is generated without the user: after creating or changing elements, request their sheets
   (request_generation with element:<id> items) so the user approves them on a card; frames and videos you request
   include the sheets they still need.
-- Scene videos (Seedance keyframes): consecutive shots of one scene (up to 30 s and 30 images) are generated as ONE
-  video, scene:<first shot_id>, listed in the board's scene_videos. The shots' frames are its keyframes, so the cuts,
-  light, motion and sound flow between shots; the result is cut back into each shot's video. This is the default way
+- Scene videos: consecutive shots of one scene (up to 30 s and 30 images) are generated as ONE video,
+  scene:<first shot_id>, listed in the board's scene_videos: one Seedance clip with every shot's [Layout] / [Action]
+  at its time (in older projects the shots' frames are its keyframes), so faces, cuts, light, motion and sound flow
+  between shots; the result is cut back into each shot's video. Keep a scene's shots short and many (4-5 s
+  each, like Dramagic's storyboards): a 15 s scene of 3 shots reads better than one long static shot. This is the default way
   to make videos. Use video:<shot_id> only for a shot that is not in a scene video, or to redo one shot of a finished
   scene video without paying for the whole scene again.
-- request_generation: prepare paid generation of frames and videos (frame:<shot_id>, scene:<shot_id>, video:<shot_id>). It adds
+- request_generation: prepare paid generation of videos (scene:<shot_id>, video:<shot_id>; frame:<shot_id> only in
+  older projects with keyframes). It adds
   missing dependencies and returns a credit estimate; the user must approve that card in the UI. Never say something
   was generated until the board shows it succeeded.
 
@@ -256,7 +263,8 @@ SHOT_FIELDS = {
     "scene_id": {"type": "string", "description": "id of the scene this shot belongs to"},
     "duration_seconds": {"type": "integer", "minimum": boards.MIN_SHOT_SECONDS, "maximum": boards.MAX_SHOT_SECONDS},
     "element_ids": {"type": "array", "items": {"type": "string"}},
-    "frame_prompt": {"type": "string"},
+    "frame_prompt": {"type": "string", "description": "only in projects with keyframes (brief.keyframes true): the "
+                                                       "first frame as a still image"},
     "video_prompt": {"type": "string"},
     "extends": {"type": "string", "description": "optional: id of the shot this one continues seamlessly (its clip is "
                                                 "extended; no frame of its own). Only for the same action going on"},
@@ -279,7 +287,7 @@ SHOT_FIELDS = {
     "trim_start": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the start of the clip in the final video"},
     "trim_end": {"type": "number", "minimum": 0, "description": "optional: seconds cut from the end of the clip in the final video"},
 }
-OPTIONAL_SHOT_FIELDS = ("scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption", "transition",
+OPTIONAL_SHOT_FIELDS = ("frame_prompt", "scene_id", "extends", "edit_instruction", "trim_start", "trim_end", "vo_text", "vo_offset", "caption", "transition",
                         "vo_trim_start", "vo_trim_end", "caption_start", "caption_end",
                         "reference_assets")
 
@@ -457,10 +465,12 @@ MAX_CAPTION_CHARS = 140
 def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     shot = {k: raw.get(k) for k in SHOT_FIELDS}
     _check_id(shot["id"])
-    for key in ("title", "description", "frame_prompt", "video_prompt"):
+    required = ("title", "description", "video_prompt") + (("frame_prompt",) if boards.keyframes(board["brief"]) else ())
+    for key in required:
         if not str(shot.get(key) or "").strip():
             raise ToolError(f"shot {shot['id']}: {key} is required")
         shot[key] = str(shot[key]).strip()
+    shot["frame_prompt"] = str(shot.get("frame_prompt") or "").strip()
     try:
         duration = int(shot.get("duration_seconds") or 0)
     except (TypeError, ValueError):
