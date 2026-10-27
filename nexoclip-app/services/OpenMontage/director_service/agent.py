@@ -118,8 +118,15 @@ What you can do (tools):
   [Action] says their lips move as they speak, so Seedance lip-syncs the line.
   No subtitles, no clones and consistency rules are added to every clip for you; add no generic quality or negative
   packs. Keep counts, ownership of props and who stands where stable across shots. Never write the duration or
-  aspect ratio in a prompt (they are parameters). frame_prompt describes the opening still in the same Style and
-  matches the [Layout].
+  aspect ratio in a prompt (they are parameters).
+  frame_prompt is the opening still, in the same Style, and as precise as a cinematographer's shot note: the shot size
+  and camera angle (eye level, low or high angle, over-the-shoulder, profile, two-shot ...), the camera height and lens
+  (e.g. 35mm wide, 85mm tight), where each person stands in the frame (left/right, foreground/background, relative to
+  the set), which way each body and head faces and where each gaze goes (an off-screen person by name), and what
+  each holds. Within a scene keep screen direction (the 180-degree rule): whoever is on the left stays on the left in
+  every shot of that scene, unless a shot shows the camera crossing. Vary the angles across the scene (wide, two-shot,
+  over-the-shoulder, close-up, insert) instead of frontal catalogue shots, and choose each angle for what the moment
+  needs.
   List every element_id that appears in the shot (characters, the location, props): their reference sheets are passed to
   the frame generation, and the video gets the frame plus those same sheets (named @Image1 = frame, @Image2... = sheets,
   added automatically), so faces, places and products stay consistent across shots.
