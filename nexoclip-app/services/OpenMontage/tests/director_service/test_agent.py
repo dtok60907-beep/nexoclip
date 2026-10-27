@@ -1991,3 +1991,22 @@ def test_no_keyframes_a_clip_without_references_is_text_to_video():
     specs = boards.media_specs(_v2_board(shots=shots))
     assert "omniReferenceTaskType" not in specs["scene:t1"]["params"]
     assert "omniReferenceTaskType" not in specs["video:t1"]["params"]
+
+
+def test_an_item_up_to_date_by_the_time_it_runs_is_not_paid_again(client, fake_llm, bridge):
+    from director_service import board as boards
+
+    pid = _built_project(client, fake_llm)
+    first = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"]}, headers=HEADERS).json()
+    client.post(f"/api/director/projects/{pid}/requests/{first['request_id']}/approve", headers=HEADERS)
+    _wait(pid)
+    made = len(bridge.submits)
+    # The frame goes stale, a request for it is made, then it is up to date again before that request runs.
+    board = read_board(pid)
+    old_sig = board["media"]["frame:s1"]["done_spec_sig"]
+    boards.update_board(pid, lambda b: b["media"]["frame:s1"].update(done_spec_sig="older"))
+    again = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["frame:s1"]}, headers=HEADERS).json()
+    boards.update_board(pid, lambda b: b["media"]["frame:s1"].update(done_spec_sig=old_sig))
+    client.post(f"/api/director/projects/{pid}/requests/{again['request_id']}/approve", headers=HEADERS)
+    _wait(pid)
+    assert len(bridge.submits) == made
