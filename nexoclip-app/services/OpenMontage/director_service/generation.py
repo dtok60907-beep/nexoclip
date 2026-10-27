@@ -341,21 +341,25 @@ def _fit_reference_video(project_id: str, bridge: nexoclip.Bridge, asset_id: str
     return fitted
 
 
-def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str]) -> None:
+def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str], since: str = "") -> None:
+    """since: when the request was made; a key that finished after it is done (a run resumed after a restart)."""
     submitted: list[str] = []
     submit_error: Optional[Exception] = None
     for key in keys:
         board = read_board(project_id)
         spec = media_specs(board)[key]
         media = board["media"].get(key) or {}
+        if since and media.get("status") == TERMINAL_OK and (media.get("generated_at") or "") >= since:
+            continue  # already made for this request before a restart: never pay twice
         dep_assets = [(board["media"].get(dep) or {}).get("asset_id") for dep in spec["deps"]]
         if any(not a for a in dep_assets):
             _set_media(project_id, key, status="failed", error="a reference it depends on was not generated")
             continue
         sig = spec_sig(spec)
-        if (media.get("status") == "running" and media.get("generation_id")
-                and media.get("pending_spec_sig") == sig and media.get("pending_dep_assets") == dep_assets):
-            submitted.append(key)  # submitted before a restart: poll it instead of paying twice
+        if media.get("status") == "running" and media.get("generation_id"):
+            # Submitted before a restart: poll it instead of paying twice, even when its prompt changed since (the
+            # user approved what was submitted; the new prompt shows as out of date afterwards).
+            submitted.append(key)
             continue
         if spec["kind"] == "audio":
             _run_audio(project_id, bridge, key, spec, media)
@@ -443,7 +447,7 @@ def run_request(project_id: str, request_id: str) -> dict[str, Any]:
     levels = {k: tier(k, specs) for k in request["items"]}
     for level in sorted(set(levels.values())):
         keys = [k for k in request["items"] if levels[k] == level]
-        _run_tier(project_id, bridge, keys)
+        _run_tier(project_id, bridge, keys, since=request.get("created_at") or "")
     board = read_board(project_id)
     succeeded = [k for k in request["items"] if (board["media"].get(k) or {}).get("status") == TERMINAL_OK]
     failed = {k: (board["media"].get(k) or {}).get("error") or "failed" for k in request["items"] if k not in succeeded}
