@@ -93,6 +93,8 @@ def _run(args: list[str]) -> str:
                               timeout=FFMPEG_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired as exc:
         raise RenderError("ffmpeg timed out") from exc
+    if done.returncode < 0:  # killed by a signal, e.g. out of memory: stderr ends without saying why
+        raise RenderError(f"ffmpeg was stopped (signal {-done.returncode}), probably out of memory")
     if done.returncode != 0:
         tail = done.stderr.strip().splitlines()[-3:]
         raise RenderError("ffmpeg failed: " + " | ".join(tail)[:300])
@@ -216,19 +218,31 @@ def join_with_transitions(parts: list[str], lengths: list[float], kinds: list[st
     if not any(overlaps):
         join(parts, out)
         return starts
-    inputs, chains = [], []
-    for part in parts:
-        inputs += ["-i", part]
-    video, audio = "[0:v]", "[0:a]"
-    for index in range(1, len(parts)):
-        v_out, a_out = f"[v{index}]", f"[a{index}]"
-        if overlaps[index]:
-            chains.append(f"{video}[{index}:v]xfade=transition={XFADE[kinds[index]]}:duration={overlaps[index]}:"
-                          f"offset={starts[index]}{v_out}")
-            chains.append(f"{audio}[{index}:a]acrossfade=d={overlaps[index]}{a_out}")
+    # Runs of parts joined by plain cuts are joined losslessly first, so the filter graph only decodes one input per
+    # transition (all 14 parts of a video at 1080p at once ran out of memory).
+    groups: list[list[int]] = []
+    for index in range(len(parts)):
+        if index == 0 or overlaps[index]:
+            groups.append([])
+        groups[-1].append(index)
+    pieces = []
+    for number, group in enumerate(groups):
+        if len(group) == 1:
+            pieces.append(parts[group[0]])
         else:
-            chains.append(f"{video}[{index}:v]concat=n=2:v=1:a=0{v_out}")
-            chains.append(f"{audio}[{index}:a]concat=n=2:v=0:a=1{a_out}")
+            piece = f"{out}.run{number}.mp4"
+            join([parts[i] for i in group], piece)
+            pieces.append(piece)
+    inputs, chains = [], []
+    for piece in pieces:
+        inputs += ["-i", piece]
+    video, audio = "[0:v]", "[0:a]"
+    for number in range(1, len(groups)):
+        first = groups[number][0]
+        v_out, a_out = f"[v{number}]", f"[a{number}]"
+        chains.append(f"{video}[{number}:v]xfade=transition={XFADE[kinds[first]]}:duration={overlaps[first]}:"
+                      f"offset={starts[first]}{v_out}")
+        chains.append(f"{audio}[{number}:a]acrossfade=d={overlaps[first]}{a_out}")
         video, audio = v_out, a_out
     _run(["-y", *inputs, "-filter_complex", ";".join(chains), "-map", video, "-map", audio, *encode_args(fps),
           "-movflags", "+faststart", out])
