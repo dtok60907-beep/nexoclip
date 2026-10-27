@@ -288,7 +288,8 @@ const REQUEST_STATUS = {
 const isOptional = (key) => key.startsWith('vo:') || key.startsWith('audio:');
 
 function RequestCard({ request, board, workspaceId, busy, generationRunning, onApprove, onReject }) {
-  const [ticked, setTicked] = useState([]);
+  // Optional when it comes with frames or videos; a card of audio alone was asked for on purpose, so it starts ticked.
+  const [ticked, setTicked] = useState(() => (request?.items?.length && request.items.every(isOptional) ? request.items : []));
   if (!request) return null;
   const auto = !!request.auto;
   const status = auto && request.status === 'pending' ? { label: 'Antre', tone: 'amber' } : (REQUEST_STATUS[request.status] || REQUEST_STATUS.pending);

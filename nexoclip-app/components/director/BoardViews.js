@@ -531,7 +531,7 @@ function AudioTrack({ title, mediaKey, media, workspaceId, onEdit, onRequest, bu
         </div>
       )}
       {media?.error && <p className="text-[11px] text-red-300/80">{media.error}</p>}
-      <SmallButton tone="accent" disabled={busy || !canGenerate || board.media[mediaKey]?.in_request} onClick={() => onRequest([mediaKey], fresh)}>
+      <SmallButton tone="accent" disabled={busy || !canGenerate || media?.in_request} onClick={() => onRequest([mediaKey], fresh)}>
         {media?.asset_id ? 'Generate ulang' : 'Generate'} {title.toLowerCase()}
       </SmallButton>
     </div>

@@ -269,8 +269,16 @@ LOOK_RENDERING = {
 }
 
 
+# Templates 2: Seedream 5 drifts to airbrushed, idol-like faces unless "realistic" also rules the beauty look out.
+REALISTIC_SKIN = ("Unretouched: natural skin texture with visible pores and small imperfections, ordinary believable "
+                  "faces, no beauty filter, no airbrushed, doll-like or idol-like look.")
+
+
 def look_rendering(brief: dict[str, Any]) -> str:
-    return LOOK_RENDERING.get(brief.get("look") or "", "")
+    rendering = LOOK_RENDERING.get(brief.get("look") or "", "")
+    if rendering and brief.get("look") == "realistic" and templates(brief) >= 2:
+        rendering += " " + REALISTIC_SKIN
+    return rendering
 
 
 def templates(brief: dict[str, Any]) -> int:
@@ -288,6 +296,8 @@ def sheet_prompt(item: dict[str, Any], style: str, look: str = "", version: int 
     template = PROP_IN_USE if interaction else sheets[item["kind"]]
     prompt = template.format(description=item["description"], interaction=interaction)
     rendering = LOOK_RENDERING.get(look, "")
+    if rendering and look == "realistic" and version >= 2:
+        rendering += " " + REALISTIC_SKIN
     return prompt + (f"\nLook: {rendering}" if rendering else "") + (f"\nStyle: {style}" if style else "")
 
 
@@ -516,7 +526,14 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
         frame_names[el["id"]] = f"{el['name']} (reference image {n})"
     frame_text, mentioned = compile_mentions(item["frame_prompt"], frame_names)
     frame_prompt = _with_look(frame_text, brief)
-    if mentioned:
+    if refs and templates(brief) >= 2:
+        # Always, even when the prompt names people without @mentions: Seedream must know which sheet is whom.
+        frame_prompt += "\nReference images: " + "; ".join(
+            f"image {n} is the reference sheet of {el['name']} ({el['kind']}): "
+            f"{REFERENCE_USE.get(el['kind'], REFERENCE_USE['prop'])}"
+            for n, el in ((n, element(board, d.split(':', 1)[1])) for n, d in enumerate(refs, start=1))
+        ) + ". Every person's face, hair and clothes match their own sheet exactly; never copy a sheet's layout."
+    elif mentioned:
         frame_prompt += "\nReference images: " + "; ".join(
             f"image {n} is the reference sheet of {element(board, d.split(':', 1)[1])['name']}, several views on one image: "
             f"keep its identity, never copy the sheet layout" for n, d in enumerate(refs, start=1)) + "."

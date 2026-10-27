@@ -1907,3 +1907,15 @@ def test_new_projects_never_put_people_on_a_prop_sheet():
     board["elements"][2]["interaction"] = "worn on the shoulders of two people"
     prompt = boards.media_specs(board)["element:petal"]["prompt"]
     assert "No people, no hands" in prompt and "worn on the shoulders" not in prompt
+
+
+def test_new_frames_always_say_which_sheet_is_whom_and_stay_unretouched():
+    from director_service import board as boards
+
+    shot = {"id": "s1", "title": "Shot", "description": "d", "duration_seconds": 5, "scene_id": "dawn",
+            "element_ids": ["ivy", "kitchen"], "frame_prompt": "Ivy kneads dough at the worktable", "video_prompt": "v"}
+    specs = boards.media_specs(_v2_board(shots=[shot]))
+    frame = specs["frame:s1"]["prompt"]
+    assert "image 1 is the reference sheet of Ivy (character)" in frame
+    assert "image 2 is the reference sheet of Castle kitchen (location)" in frame
+    assert "no beauty filter" in frame and "no beauty filter" in specs["element:ivy"]["prompt"]
