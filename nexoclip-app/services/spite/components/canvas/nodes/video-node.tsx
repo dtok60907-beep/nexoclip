@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation'
 import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
-import { GeneratorNodeToolbar } from './node-toolbar'
+import { GeneratorNodeToolbar, MediaQuickActions } from './node-toolbar'
 import { GenerationGallery } from '../generation-gallery'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
@@ -1377,11 +1377,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
         {/* Preview area */}
         <div
-          className="relative flex items-center justify-center overflow-hidden bg-black"
+          className="group/media relative flex items-center justify-center overflow-hidden bg-black"
           style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '16:9')) }}
         >
           {outputUrl ? (
             <>
+              <MediaQuickActions url={outputUrl} type="video" name={(data.label as string) || 'video'} selected={selected} onExpand={() => setLightboxOpen(true)} />
               <video
                 ref={videoRef}
                 src={outputUrl}

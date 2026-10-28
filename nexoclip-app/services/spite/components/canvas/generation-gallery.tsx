@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowSquareOut, CheckCircle, CircleNotch, Images, WarningCircle } from '@phosphor-icons/react'
+import { ArrowSquareOut, CheckCircle, CircleNotch, DownloadSimple, Images, WarningCircle } from '@phosphor-icons/react'
 
 import { useCanvasCollaboration } from './canvas-collaboration'
 import { AssetThumb } from './asset-thumb'
+import { downloadAsset } from './nodes/node-toolbar'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getCanvasRuntimeCapabilities } from '@/lib/canvas-runtime-ui'
 import { readGenerationHistory, type GenerationHistoryEntry } from '@/lib/generation-history'
@@ -161,6 +162,15 @@ function GalleryDialog({ nodeId, history, open, focusId, onOpenChange }: {
                         Use this
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      onClick={() => { void downloadAsset(entry.outputUrl!, `${entry.kind}-${entry.id}.${entry.kind === 'video' ? 'mp4' : 'png'}`) }}
+                      className="rounded-md p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+                      aria-label="Download"
+                      title="Download"
+                    >
+                      <DownloadSimple size={12} />
+                    </button>
                     <a href={entry.outputUrl} target="_blank" rel="noreferrer" className="rounded-md p-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Open in a new tab">
                       <ArrowSquareOut size={12} />
                     </a>

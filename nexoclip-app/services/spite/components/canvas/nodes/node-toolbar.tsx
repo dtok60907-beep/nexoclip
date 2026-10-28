@@ -60,7 +60,10 @@ interface NodeActionToolbarProps {
   }
 }
 
-async function downloadAsset(url: string, suggestedName: string) {
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' }
+
+// The file's real type decides the extension (a generated image may be JPEG or WebP).
+export async function downloadAsset(url: string, suggestedName: string) {
   try {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`status ${res.status}`)
@@ -68,7 +71,8 @@ async function downloadAsset(url: string, suggestedName: string) {
     const objectUrl = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = objectUrl
-    a.download = suggestedName
+    const ext = EXTENSIONS[blob.type.split(';')[0]]
+    a.download = ext ? suggestedName.replace(/\.[a-z0-9]+$/i, '') + `.${ext}` : suggestedName
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -79,7 +83,7 @@ async function downloadAsset(url: string, suggestedName: string) {
   }
 }
 
-function sanitizeFilename(s: string): string {
+export function sanitizeFilename(s: string): string {
   return s.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '-').slice(0, 60) || 'asset'
 }
 
@@ -797,5 +801,46 @@ export function GeneratorNodeToolbar({
         )}
       </div>
     </NodeToolbar>
+  )
+}
+
+// Download and Expand over a node's result, shown on hover (and while the node is selected),
+// so a result downloads in one click without opening the preview first. The parent needs
+// the `group/media` class.
+export function MediaQuickActions({ url, type, name, selected, onExpand }: {
+  url: string
+  type: 'image' | 'video'
+  name?: string
+  selected?: boolean
+  onExpand?: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const button = 'nodrag nopan flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-black/85 hover:text-[#d4ff64]'
+  return (
+    <div
+      className={`absolute right-2 top-2 z-30 flex gap-1.5 transition-opacity ${selected ? 'opacity-100' : 'opacity-0 group-hover/media:opacity-100 focus-within:opacity-100'}`}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      {onExpand && (
+        <button type="button" className={button} title="Expand" aria-label="Expand" onClick={(event) => { event.stopPropagation(); onExpand() }}>
+          <ArrowsOutSimple size={15} weight="bold" />
+        </button>
+      )}
+      <button
+        type="button"
+        className={button}
+        title="Download"
+        aria-label="Download"
+        disabled={busy}
+        onClick={async (event) => {
+          event.stopPropagation()
+          setBusy(true)
+          await downloadAsset(url, `${sanitizeFilename(name || type)}.${type === 'video' ? 'mp4' : 'png'}`)
+          setBusy(false)
+        }}
+      >
+        {busy ? <CircleNotch size={15} className="animate-spin" /> : <DownloadSimple size={15} weight="bold" />}
+      </button>
+    </div>
   )
 }

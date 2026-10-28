@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation'
 import { Handle, NodeResizer, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { GeneratorNodeToolbar } from './node-toolbar'
+import { GeneratorNodeToolbar, MediaQuickActions } from './node-toolbar'
 import { GenerationGallery } from '../generation-gallery'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
@@ -1161,10 +1161,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         </div>
         {/* Preview area - image displays at natural aspect ratio */}
         <div
-          className="relative overflow-hidden bg-black"
+          className="group/media relative overflow-hidden bg-black"
           style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '1:1')) }}
           onDoubleClick={() => { if (outputUrl) setLightboxOpen(true) }}
         >
+          {outputUrl && (
+            <MediaQuickActions url={outputUrl} type="image" name={(data.label as string) || 'image'} selected={selected} onExpand={() => setLightboxOpen(true)} />
+          )}
           {outputUrl ? (
             <img
               src={outputUrl}
