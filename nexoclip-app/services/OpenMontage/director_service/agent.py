@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from director_service import billing, board as boards, generation, live, llm, nexoclip, skills
+from director_service import billing, board as boards, frames, generation, live, llm, nexoclip, skills
 from director_service.store import add_llm_cost, append_chat, append_llm_log, now_iso, read_chat, read_director, update_director
 
 MAX_STEPS = 30  # "Langsung jadi" goes from a brief to approved generation in one turn
@@ -630,7 +630,7 @@ def _web_research(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
                                       "factual notes (max ~250 words) with the most useful findings for making the video. "
                                       "Only state what the sources support."},
         {"role": "user", "content": f"Project brief: {brief}\n\nResearch question: {query}"},
-    ], web_search=True, max_tokens=2000)
+    ], web_search=True, max_tokens=2000, model=_model(ctx.project_id))
     _bill(ctx.project_id, "web_research", usage)
     sources = list(dict.fromkeys(usage.get("cited_urls") or []))[:10]
     entry = {"id": f"res_{uuid.uuid4().hex[:6]}", "query": query, "notes": text.strip(), "sources": sources}
@@ -1141,17 +1141,51 @@ def _analyze_video(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
     asset_id, question = str(args.get("asset_id") or ""), str(args.get("question") or "").strip()
     if not _ASSET_ID.match(asset_id) or not question:
         raise ToolError("asset_id (a video the user attached) and a question are required")
-    bridge = billing.bridge_for(ctx.project_id)
-    if bridge is None:
+    if billing.bridge_for(ctx.project_id) is None:
         raise ToolError("video analysis needs the nexoclip connection")
-    if billing.balance_short(ctx.project_id, billing.MIN_ANALYSIS_CREDITS) is not None:
+    if billing.balance_short(ctx.project_id, _analysis_credits(ctx.project_id)) is not None:
         raise ToolError("not enough credits to ask the video analyst; tell the user to top up")
-    key = hashlib.sha256(f"{asset_id}:{question}".encode("utf-8")).hexdigest()[:24]
     try:
-        answer = bridge.analyze_video(asset_id=asset_id, question=question, idempotency_key=f"{ctx.project_id}:{key}")
-    except nexoclip.BridgeError as exc:
+        answer = watch_video(ctx.project_id, asset_id, question)
+    except (nexoclip.BridgeError, llm.LLMError, frames.FramesError) as exc:
         raise ToolError(f"the video analyst failed: {exc}") from exc
-    return {"ok": True, "answer": answer["text"]}, "Menonton ulang video"
+    return {"ok": True, "answer": answer}, "Menonton ulang video"
+
+
+VIDEO_QUESTION = ("Describe this video for a film director, in Indonesian. Give: 1) a timeline of what happens with "
+                  "timestamps (mm:ss), 2) shot types and camera movement, 3) people/subjects and how they look, "
+                  "4) setting, lighting and colour, 5) mood and pacing, 6) any on-screen text or brands. Be concrete "
+                  "and concise (max 250 words). Do not invent sound.")
+
+
+def _model(project_id: str) -> str:
+    """The text model the user picked for this project (the default one, or Grok)."""
+    return llm.project_model(read_director(project_id).get("llm_model"))
+
+
+def _analysis_credits(project_id: str) -> float:
+    # Grok reads up to frames.MAX_FRAMES stills itself, which costs about as much as a Director step.
+    return billing.MIN_STEP_CREDITS if llm.on_openrouter(_model(project_id)) else billing.MIN_ANALYSIS_CREDITS
+
+
+def watch_video(project_id: str, asset_id: str, question: str = "") -> str:
+    """What the video analyst sees in a video the user attached. On Grok, Grok itself looks at stills sampled from the
+    whole video (it reads images, not video); otherwise nexoclip's Seed vision model watches it (nexoclip bills it)."""
+    bridge = billing.bridge_for(project_id)
+    model = _model(project_id)
+    if not llm.on_openrouter(model):
+        key = hashlib.sha256(f"{asset_id}:{question}".encode("utf-8")).hexdigest()[:24] if question else asset_id
+        return bridge.analyze_video(asset_id=asset_id, question=question, idempotency_key=f"{project_id}:{key}")["text"]
+    stills = frames.sample(bridge.download(asset_id).content)
+    parts: list[dict[str, Any]] = [{"type": "input_text", "text": (
+        f"These are {len(stills)} stills sampled evenly from a whole video, from the first to the last frame; "
+        "each is preceded by its time in the video. " + (question or VIDEO_QUESTION))}]
+    for seconds, jpeg in stills:
+        parts.append({"type": "input_text", "text": f"[{int(seconds) // 60:02d}:{seconds % 60:04.1f}]"})
+        parts.append({"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode("ascii")})
+    text, usage = llm.chat([{"role": "user", "content": parts}], max_tokens=4000, model=model)
+    _bill(project_id, "video_analysis", usage)
+    return text.strip()
 
 
 def _set_shot_media(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
@@ -1430,9 +1464,10 @@ def apply_user_edit(project_id: str, tool: str, args: dict[str, Any]) -> str:
 
 
 def _bill(project_id: str, purpose: str, usage: dict[str, Any]) -> None:
-    credits = billing.charge_llm(project_id, llm.model_name(), usage)
+    model = usage.get("model") or llm.model_name()
+    credits = billing.charge_llm(project_id, model, usage)
     add_llm_cost(project_id, float(usage.get("cost") or 0.0), credits)
-    append_llm_log(project_id, {"purpose": purpose, "model": llm.model_name(), "cost_usd": usage.get("cost"),
+    append_llm_log(project_id, {"purpose": purpose, "model": model, "cost_usd": usage.get("cost"),
                                 "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")})
 
 
@@ -1556,7 +1591,7 @@ VIDEO_NOTE_MESSAGES = 6  # recent user messages whose new videos are watched bef
 
 
 def watch_new_videos(project_id: str) -> None:
-    """Have the video analyst (a Seed vision model) watch every video the user attached recently and not yet seen."""
+    """Have the video analyst (Seed on nexoclip, or Grok when picked) watch every video the user attached recently and not yet seen."""
     bridge = billing.bridge_for(project_id)
     if bridge is None:
         return
@@ -1567,12 +1602,12 @@ def watch_new_videos(project_id: str) -> None:
         if video["asset_id"] in notes:
             continue
         name = video.get("name") or "video"
-        if billing.balance_short(project_id, billing.MIN_ANALYSIS_CREDITS) is not None:
+        if billing.balance_short(project_id, _analysis_credits(project_id)) is not None:
             return  # not enough credits to watch it; it is watched on a later turn, after a top-up
         append_chat(project_id, "assistant", f"Menonton video: {name}", kind="activity", meta={"tool": "analyze_video"})
         try:
-            text = bridge.analyze_video(asset_id=video["asset_id"], idempotency_key=f"{project_id}:{video['asset_id']}")["text"]
-        except nexoclip.BridgeError as exc:
+            text = watch_video(project_id, video["asset_id"])
+        except (nexoclip.BridgeError, llm.LLMError, frames.FramesError) as exc:
             text = f"(could not watch this video: {exc})"[:300]
         notes[video["asset_id"]] = text
 
@@ -1710,6 +1745,7 @@ def run_turn(project_id: str) -> str:
     # model's prompt cache then covers everything already sent, which is most of each step's input. Changes made during
     # the turn reach the model through the tool results.
     instructions = _instructions(project_id)
+    model = _model(project_id)
     for _ in range(MAX_STEPS):
         short = billing.balance_short(project_id, billing.MIN_STEP_CREDITS)
         if short is not None:
@@ -1720,7 +1756,7 @@ def run_turn(project_id: str) -> str:
             append_chat(project_id, "assistant", reply, kind="message")
             return reply
         step = llm.respond(input_items, instructions=instructions, tools=TOOLS,
-                           previous_response_id=previous_id, on_text=lambda text: live.draft(project_id, text))
+                           previous_response_id=previous_id, on_text=lambda text: live.draft(project_id, text), model=model)
         # No "clear" event here: the browser keeps the draft on screen until the saved message replaces it, so the
         # reply never blinks out between the two.
         if step["text"]:

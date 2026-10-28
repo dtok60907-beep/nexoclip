@@ -10,8 +10,14 @@ import { legacyR2Key, resolveReferenceImages, resolveReferenceMedia } from './sa
 import { recordGenerationProviderRequest } from '../repositories/generationStateRepository.js';
 import { extraReferenceImages, isFrameTask } from './videoTaskType.js';
 import { createSeedanceAutoTrust, realPersonContentIndexes } from './seedanceAutoTrust.js';
+import { PROVIDER_BILLING_CODE } from '../lib/providerBilling.js';
 
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'expired']);
+// A status check that does not get through (network blip, provider 5xx) says nothing about the task, which keeps
+// running and is paid for: poll again, and give up only after this many failed checks in a row.
+export const MAX_POLL_ERRORS = 10;
+const isTransientPollError = (error) => error?.code === 'BYTEPLUS_UNAVAILABLE' || error?.code === 'PROVIDER_UNAVAILABLE'
+  || (Number(error?.status) >= 500 && error?.code !== PROVIDER_BILLING_CODE);
 // How many times one generation trusts what Seedance refused (or lost) and sends again.
 const TRUST_ROUNDS = 3;
 
@@ -332,8 +338,18 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     let completedAtProvider = false;
     let terminalAtProvider = false;
     try {
+      let pollErrors = 0;
       for (let attempt = 0; attempt < maxPolls; attempt += 1) {
-        status = await providerRouter.pollVideo(provider, providerRequestId);
+        try {
+          status = await providerRouter.pollVideo(provider, providerRequestId);
+          pollErrors = 0;
+        } catch (error) {
+          pollErrors += 1;
+          if (!isTransientPollError(error) || pollErrors >= MAX_POLL_ERRORS || attempt === maxPolls - 1) throw error;
+          console.error('[video] status check failed, polling again', job.id, error?.message);
+          await sleep(pollIntervalMs);
+          continue;
+        }
         if (status?.usage && typeof status.usage === 'object') observedUsage = { ...observedUsage, ...status.usage };
         if (status?.status === 'completed') {
           completedAtProvider = true;

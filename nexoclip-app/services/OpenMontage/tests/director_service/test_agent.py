@@ -52,8 +52,8 @@ class FakeLLM:
         self.research_calls: list[list[dict]] = []
         self._steps: list[dict] = []
 
-    def respond(self, input_items, *, instructions, tools, previous_response_id=None, max_tokens=8000, on_text=None):
-        self.requests.append({"input": input_items, "instructions": instructions, "previous": previous_response_id})
+    def respond(self, input_items, *, instructions, tools, previous_response_id=None, max_tokens=8000, on_text=None, model=None):
+        self.requests.append({"input": input_items, "instructions": instructions, "previous": previous_response_id, "model": model})
         if previous_response_id is None:
             self._steps = list(self.turns.pop(0)) if self.turns else [{"text": "Oke."}]
         step = self._steps.pop(0) if self._steps else {"text": "Selesai."}
@@ -66,8 +66,11 @@ class FakeLLM:
         return {"id": f"resp_{len(self.requests)}", "text": step.get("text", ""), "calls": calls,
                 "usage": {"cost": 0.001, "input_tokens": 100, "output_tokens": 50}}
 
-    def chat(self, messages, *, web_search=False, max_tokens=16000):
+    def chat(self, messages, *, web_search=False, max_tokens=16000, model=None):
         self.research_calls.append(messages)
+        self.chat_models = getattr(self, "chat_models", []) + [model]
+        if not web_search:  # a video analysis on Grok
+            return "00:00 a woman smiles at the camera (grok)", {"cost": 0.02, "input_tokens": 9000, "output_tokens": 200, "model": model}
         return "Golden-hour beach trailers lean on warm grading.", {"cost": 0.03, "cited_urls": ["https://example.com/a", "https://example.com/a"]}
 
 
@@ -1650,6 +1653,95 @@ def test_the_video_analyst_watches_attached_videos(client, fake_llm, bridge):
     fake_llm.turns.append([{"text": "ok"}])
     _say(client, pid, "lanjut")
     assert len(bridge.watched) == 2
+
+
+def test_grok_is_picked_per_project_and_watches_videos_itself(client, fake_llm, bridge, monkeypatch):
+    from director_service import frames
+    fake_llm.turns.append([{"text": "Halo."}])
+    res = client.post("/api/director/projects", headers=HEADERS, json={"brief": "iklan kopi", "llm": "grok"})
+    pid = res.json()["project_id"]
+    _wait(pid)
+    view = _view(client, pid)
+    assert view["llm"] == "grok" and view["llm_model"] == llm.GROK_MODEL
+    assert fake_llm.requests[-1]["model"] == llm.GROK_MODEL
+
+    sampled = []
+    monkeypatch.setattr(frames, "sample", lambda content: sampled.append(content) or [(0.0, b"jpeg0"), (75.5, b"jpeg1")])
+    clip = "cccccccc-1111-4111-8111-000000000009"
+    fake_llm.turns.append([{"text": "Oke."}])
+    client.post(f"/api/director/projects/{pid}/messages", headers=HEADERS, json={
+        "text": "mirip ini", "attachments": [{"asset_id": clip, "kind": "video", "name": "walk.mp4"}]})
+    _wait(pid)
+    assert not getattr(bridge, "watched", []) and sampled == [f"media:{clip}".encode()]  # not nexoclip's Seed analyst
+    parts = fake_llm.research_calls[-1][0]["content"]
+    assert [p["text"] for p in parts if p["type"] == "input_text"][1:] == ["[00:00.0]", "[01:15.5]"]
+    assert sum(p["type"] == "input_image" for p in parts) == 2 and fake_llm.chat_models[-1] == llm.GROK_MODEL
+    assert read_board(pid)["video_notes"][clip].endswith("(grok)")
+    assert any(c["model"] == llm.GROK_MODEL and c["input_tokens"] == 9000 for c in bridge.charges)
+
+    # Back to the default model for the next turns; an unknown pick is refused.
+    assert client.post(f"/api/director/projects/{pid}/settings", headers=HEADERS, json={"llm": "seed"}).status_code == 200
+    assert _view(client, pid)["llm"] == "seed"
+    fake_llm.turns.append([{"text": "ok"}])
+    _say(client, pid, "lanjut")
+    assert fake_llm.requests[-1]["model"] == llm.model_name()
+    assert client.post(f"/api/director/projects/{pid}/settings", headers=HEADERS, json={"llm": "gpt"}).status_code == 422
+
+
+def test_stills_are_sampled_across_the_whole_video(tmp_path, monkeypatch):
+    from director_service import frames
+    clip = _media(tmp_path, "video").content  # 2 s
+    stills = frames.sample(clip)
+    assert [t for t, _ in stills] == [0.0, 1.0] and all(j.startswith(b"\xff\xd8") for _, j in stills)
+    monkeypatch.setattr(frames, "MAX_FRAMES", 4)
+    out = tmp_path / "long.mp4"
+    from director_service import render
+    render._run(["-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10:duration=12", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)])
+    assert [t for t, _ in frames.sample(out.read_bytes())] == [0.0, 3.0, 6.0, 9.0]
+    with pytest.raises(frames.FramesError):
+        frames.sample(b"not a video")
+
+
+def test_projects_from_an_older_default_model_run_on_the_current_one():
+    assert llm.project_model("gpt-4.1-mini") == llm.model_name() and llm.choice_for("gpt-4.1-mini") == "seed"
+    assert llm.project_model(llm.GROK_MODEL) == llm.GROK_MODEL and llm.choice_for(llm.GROK_MODEL) == "grok"
+
+
+def test_openrouter_is_stateless_so_the_turn_is_resent(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or")
+    assert llm._endpoint(llm.GROK_MODEL) == (llm.OPENROUTER_RESPONSES_URL, "or")
+    sent = []
+    replies = [
+        {"id": "gen-1", "status": "completed", "usage": {"input_tokens": 10, "output_tokens": 5, "cost": 0.0042},
+         "output": [{"type": "reasoning", "id": "rs_1", "encrypted_content": "x"},
+                    {"type": "function_call", "id": "fc_1", "call_id": "c1", "name": "get_time", "arguments": "{}"}]},
+        {"id": "gen-2", "status": "completed", "usage": {"input_tokens": 20, "output_tokens": 5},
+         "output": [{"type": "message", "content": [{"type": "output_text", "text": "Jam 10."}]}]},
+    ]
+
+    class Reply:
+        ok = True
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    def post(url, api_key, body, *, stream=False):
+        sent.append(json.loads(json.dumps(body)))
+        return Reply(replies.pop(0))
+
+    monkeypatch.setattr(llm, "_post", post)
+    first = llm.respond([{"role": "user", "content": "jam?"}], instructions="i", tools=[], model=llm.GROK_MODEL)
+    assert first["calls"][0]["call_id"] == "c1" and first["usage"]["cost"] == 0.0042  # OpenRouter's own figure
+    output = {"type": "function_call_output", "call_id": "c1", "output": "{}"}
+    second = llm.respond([output], instructions="i", tools=[], previous_response_id=first["id"], model=llm.GROK_MODEL)
+    assert second["text"] == "Jam 10." and "previous_response_id" not in sent[1]
+    assert [i.get("type") or i["role"] for i in sent[1]["input"]] == ["user", "reasoning", "function_call", "function_call_output"]
+    assert second["usage"]["cost"] == pytest.approx((20 * 2.0 + 5 * 6.0) / 1e6)  # no reported cost: the table's price
+    with pytest.raises(llm.LLMError, match="lost"):
+        llm.respond([output], instructions="i", tools=[], previous_response_id="gen-unknown", model=llm.GROK_MODEL)
 
 
 def test_prompts_name_elements_with_mentions(client, fake_llm, bridge):

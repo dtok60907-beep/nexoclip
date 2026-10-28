@@ -30,7 +30,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from director_service import billing, db, live, nexoclip, session
+from director_service import billing, db, live, llm, nexoclip, session
 from director_service.generation import generation_credits
 from director_service.board import list_versions, read_board, restore_version, version_content, view_for_ui
 from director_service.store import find_project, list_projects, read_chat
@@ -141,6 +141,7 @@ class CreateProjectBody(BaseModel):
     # The user's first chat message.
     brief: str = Field(min_length=1, max_length=20000)
     run_mode: Literal["guide", "auto"] = "guide"
+    llm: Literal["seed", "grok"] = "seed"
     attachments: list[Attachment] = Field(default_factory=list, max_length=10)
     mentions: list[Mention] = Field(default_factory=list, max_length=20)
 
@@ -153,6 +154,7 @@ class MessageBody(BaseModel):
 
 class SettingsBody(BaseModel):
     run_mode: Optional[Literal["guide", "auto"]] = None
+    llm: Optional[Literal["seed", "grok"]] = None
     title: Optional[str] = Field(default=None, max_length=200)
 
 
@@ -190,7 +192,8 @@ def _project_view(project_id: str) -> dict[str, Any]:
         "project_id": project_id,
         "title": project["title"],
         "created_at": project["created_at"],
-        "llm_model": project["llm_model"],
+        "llm_model": llm.project_model(project["llm_model"]),
+        "llm": llm.choice_for(project["llm_model"]),
         "llm_cost_usd": project["llm_cost_usd"],
         "llm_credits": project.get("llm_credits") or 0,
         "run_mode": project.get("run_mode") or "guide",
@@ -229,7 +232,8 @@ async def voices() -> dict:
 @app.post("/api/director/projects", status_code=201)
 async def create_project(body: CreateProjectBody, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
     project_id = await asyncio.to_thread(_call, lambda: session.create_project(
-        _owner(x_nexoclip_user_id), body.brief, run_mode=body.run_mode, meta=_message_meta(body.attachments, body.mentions)))
+        _owner(x_nexoclip_user_id), body.brief, run_mode=body.run_mode, meta=_message_meta(body.attachments, body.mentions),
+        llm_choice=body.llm))
     return {"project_id": project_id}
 
 
@@ -263,6 +267,8 @@ async def settings(project_id: str, body: SettingsBody, x_nexoclip_user_id: Opti
     await asyncio.to_thread(_owned_project, project_id, _owner(x_nexoclip_user_id))
     if body.run_mode is not None:
         await asyncio.to_thread(_call, session.set_run_mode, project_id, body.run_mode)
+    if body.llm is not None:
+        await asyncio.to_thread(_call, session.set_llm, project_id, body.llm)
     if body.title is not None:
         await asyncio.to_thread(_call, session.rename_project, project_id, body.title)
     return {"ok": True}

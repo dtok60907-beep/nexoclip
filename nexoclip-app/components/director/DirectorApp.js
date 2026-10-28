@@ -134,6 +134,7 @@ function NewProject({ initialBrief, onCreated }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [runMode, setRunMode] = useState('guide');
+  const [llm, setLlm] = useState('seed');
   const [workspaceId, setWorkspaceId] = useState(null);
   useEffect(() => { loadWorkspaceId().then(setWorkspaceId); }, []);
 
@@ -143,7 +144,7 @@ function NewProject({ initialBrief, onCreated }) {
     setError('');
     try {
       const { project_id: projectId } = await api('/projects', {
-        method: 'POST', body: JSON.stringify({ brief: text, run_mode: runMode, attachments, mentions }),
+        method: 'POST', body: JSON.stringify({ brief: text, run_mode: runMode, llm, attachments, mentions }),
       });
       onCreated(projectId);
       return true;
@@ -167,7 +168,7 @@ function NewProject({ initialBrief, onCreated }) {
         <div className="mt-6 text-left">
           <Composer value={brief} onChange={setBrief} onSubmit={submit} sending={busy} workspaceId={workspaceId} large rows={4}
             placeholder="Mau bikin video apa? Boleh singkat. Lampirkan foto produk, karakter, atau video referensi kalau ada…"
-            runMode={runMode} onRunMode={setRunMode} />
+            runMode={runMode} onRunMode={setRunMode} llm={llm} onLlm={setLlm} />
           <p className="mt-2 px-1 text-[10px] text-white/35">Chat memakai sedikit kredit untuk AI. Butuh minimal 100 kredit untuk memulai project. Ctrl/⌘ + Enter untuk kirim.</p>
         </div>
         {error && (
@@ -390,6 +391,9 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
   const setRunMode = (runMode) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/settings`, {
     method: 'POST', body: JSON.stringify({ run_mode: runMode }),
   }));
+  const setLlm = (llm) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/settings`, {
+    method: 'POST', body: JSON.stringify({ llm }),
+  }));
   // The credit gate's "Lanjutkan": approve the held request again once the balance covers it.
   const continueRequest = (request) => runAction(() => api(`/projects/${encodeURIComponent(projectId)}/requests/${request.id}/approve`, { method: 'POST' }));
 
@@ -569,6 +573,7 @@ function ProjectWorkspace({ projectId, projects, onSelectProject, onNewProject, 
           {actionError && <p className="text-[11px] text-red-300">{actionError}</p>}
           <Composer value={message} onChange={setMessage} onSubmit={sendMessage} disabled={!canSend} sending={sending}
             workspaceId={workspaceId} board={board} runMode={view.run_mode || 'guide'} onRunMode={setRunMode}
+            llm={view.llm || 'seed'} onLlm={setLlm}
             placeholder={agentRunning ? 'Tunggu Director selesai…' : 'Ngobrol, @sebut shot/aset, lampirkan gambar atau video…'} />
           <div className="flex items-center justify-between px-1 text-[10px] text-white/30">
             <span title={`Biaya model AI: $${Number(view.llm_cost_usd || 0).toFixed(3)}`}>

@@ -127,14 +127,16 @@ def _check_start_credits(owner: str) -> None:
         raise NotEnoughCredits(MIN_START_CREDITS, balance)
 
 
-def create_project(owner: str, first_message: str, *, run_mode: str = "guide", meta: Optional[dict] = None) -> str:
+def create_project(owner: str, first_message: str, *, run_mode: str = "guide", meta: Optional[dict] = None,
+                   llm_choice: str = "seed") -> str:
     if run_mode not in RUN_MODES:
         raise InvalidAction("run_mode must be guide or auto")
+    model = _llm_model(llm_choice)
     _check_start_credits(owner)
     title = first_message.strip().splitlines()[0][:80] or "Project baru"
     project_id = f"{_slug(title)}-{uuid.uuid4().hex[:6]}"
     idle = {"status": "idle", "error": None, "updated_at": now_iso()}
-    insert_project(project_id, {"owner": owner, "title": title, "title_auto": True, "llm_model": llm.model_name(),
+    insert_project(project_id, {"owner": owner, "title": title, "title_auto": True, "llm_model": model,
                                 "agent": idle, "generation": idle, "run_mode": run_mode})
     create_board(project_id)
     append_chat(project_id, "user", first_message, kind="message", meta=meta or None)
@@ -194,6 +196,18 @@ def set_run_mode(project_id: str, run_mode: str) -> None:
     if run_mode not in RUN_MODES:
         raise InvalidAction("run_mode must be guide or auto")
     update_director(project_id, run_mode=run_mode)
+
+
+def _llm_model(choice: str) -> str:
+    try:
+        return llm.model_for_choice(choice)
+    except ValueError as exc:
+        raise InvalidAction(str(exc)) from exc
+
+
+def set_llm(project_id: str, choice: str) -> None:
+    """The text model for the project's next turns (the one running keeps its model)."""
+    update_director(project_id, llm_model=_llm_model(choice))
 
 
 def _auto(project_id: str) -> bool:

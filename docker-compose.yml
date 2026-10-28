@@ -372,6 +372,8 @@ services:
       # The default text model (dola-seed-2-1-turbo) runs on BytePlus ModelArk.
       BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
       BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-https://ark.ap-southeast.bytepluses.com/api/v3}
+      # Grok (x-ai/grok-4.5), when a project picks it, runs on OpenRouter.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       DIRECTOR_PROXY_SECRET: ${DIRECTOR_PROXY_SECRET:?DIRECTOR_PROXY_SECRET is required}
       NEXOCLIP_INTERNAL_URL: http://nexoclip-app:3000
       NEXOCLIP_BRIDGE_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}

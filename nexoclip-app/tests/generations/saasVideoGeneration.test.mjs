@@ -679,3 +679,38 @@ test('a Canvas upload is copied into the workspace once and the copy is reused',
   assert.equal(assets[0].filename, 'canvas-face.webp');
   assert.equal(await adoptCanvasReference({ ...args, reference: '/api/assets/x/download' }), null);
 });
+
+test('a status check that does not get through is retried instead of failing a task that is still being paid for', async () => {
+  const { MAX_POLL_ERRORS } = await import('../../src/services/saasVideoGeneration.js');
+  const unreachable = () => Object.assign(new Error('BytePlus direct request failed'), { provider: 'byteplus', status: 503, code: 'BYTEPLUS_UNAVAILABLE' });
+  const run = async (failures) => {
+    let polls = 0;
+    const handler = createSaasVideoHandler({
+      pool: { async connect() { return { release() {} }; } },
+      storage: { async put() {} },
+      providerRouter: {
+        async pollVideo() { polls += 1; if (polls <= failures) throw unreachable(); return { status: 'completed' }; },
+        async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
+      },
+      createAsset: async () => ({ id: 'output-1' }),
+      sleep: async () => {},
+    });
+    // Resumed: the task already reached BytePlus, so nothing is submitted again.
+    return handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'bytedance/seedance-2.5', prompt: 'p', parameters: {},
+      provider: 'byteplus', provider_request_id: 'cgt-1' });
+  };
+  assert.equal((await run(2)).outputs[0].assetId, 'output-1');
+  await assert.rejects(run(MAX_POLL_ERRORS), /BytePlus direct request failed/);
+});
+
+test('a status check the provider refuses for a real reason still fails at once', async () => {
+  let polls = 0;
+  const handler = createSaasVideoHandler({
+    pool: { async connect() { return { release() {} }; } },
+    storage: { async put() {} },
+    providerRouter: { async pollVideo() { polls += 1; throw Object.assign(new Error('BytePlus direct request failed: not found'), { status: 404, code: 'BYTEPLUS_REQUEST_FAILED' }); } },
+    sleep: async () => {},
+  });
+  await assert.rejects(handler({ id: 'job-1', workspace_id: 'w', model: 'bytedance/seedance-2.5', prompt: 'p', parameters: {}, provider: 'byteplus', provider_request_id: 'cgt-1' }), /not found/);
+  assert.equal(polls, 1);
+});

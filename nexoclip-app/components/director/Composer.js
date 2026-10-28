@@ -1,7 +1,7 @@
 'use client';
 
 // The chat box: text, images/videos attached to the message (uploaded to the user's workspace), @mentions of
-// shots and elements, and the run mode (OpenArt's "Guide me" / "Just make it").
+// shots and elements, the run mode (OpenArt's "Guide me" / "Just make it") and the Director's AI model.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { groupShots } from './Workspace.js';
@@ -11,6 +11,12 @@ const MAX_ATTACHMENTS = 10;
 export const RUN_MODES = [
   ['guide', 'Pandu aku', 'Director berhenti di tiap langkah dan minta persetujuanmu (konsep, audio, kredit).'],
   ['auto', 'Langsung jadi', 'Director memutuskan sendiri dan langsung jalan sampai video final, kredit di-approve otomatis.'],
+];
+
+// The Director's text model; it also looks at the images and videos attached in the chat.
+export const LLM_MODELS = [
+  ['seed', 'Seed 2.1', 'Seed 2.1 Turbo (BytePlus): model bawaan, paling hemat kredit.'],
+  ['grok', 'Grok 4.5', 'Grok 4.5 (xAI, lewat OpenRouter): Director dan analisis gambar/video lampiran memakai Grok. Kredit chat sekitar 3x Seed.'],
 ];
 
 async function upload(file, workspaceId) {
@@ -32,7 +38,7 @@ function mentionOptions(board) {
 }
 
 export default function Composer({
-  value, onChange, onSubmit, disabled, sending, placeholder, workspaceId, board, runMode, onRunMode, rows = 2, large = false,
+  value, onChange, onSubmit, disabled, sending, placeholder, workspaceId, board, runMode, onRunMode, llm, onLlm, rows = 2, large = false,
 }) {
   const [attachments, setAttachments] = useState([]); // {key, file, preview, kind, name, asset_id?, error?}
   const [mentions, setMentions] = useState([]);
@@ -171,6 +177,17 @@ export default function Composer({
                 className={`rounded-md px-2 py-0.5 text-[10.5px] ${runMode === id ? 'bg-white/[0.12] text-white' : 'text-white/45 hover:text-white'}`}>{label}</button>
             ))}
           </div>
+        )}
+        {onLlm && (
+          <label title="Model AI untuk Director dan analisis lampiran" className="relative flex items-center">
+            <span className="sr-only">Model AI Director</span>
+            <select value={llm || 'seed'} onChange={(e) => onLlm(e.target.value)}
+              title={LLM_MODELS.find(([id]) => id === (llm || 'seed'))?.[2]}
+              className="h-[26px] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-white/[0.03] pl-2 pr-6 text-[10.5px] text-white/70 outline-none hover:text-white focus:border-white/20">
+              {LLM_MODELS.map(([id, label]) => <option key={id} value={id} className="bg-[#16181d] text-white">{label}</option>)}
+            </select>
+            <svg className="pointer-events-none absolute right-1.5 text-white/40" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M6 9l6 6 6-6" /></svg>
+          </label>
         )}
         <button type="button" onClick={submit} disabled={!canSubmit} aria-label="Kirim pesan"
           className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-lg bg-[#d4ff64] text-[#10130a] disabled:bg-white/10 disabled:text-white/30">
