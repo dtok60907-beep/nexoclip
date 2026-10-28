@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { createSaasVideoHandler } = await import('../../src/services/saasVideoGeneration.js');
+const { adoptCanvasReference, createSaasVideoHandler } = await import('../../src/services/saasVideoGeneration.js');
 const { isTrustedAssetRequest } = await import('../../src/providers/providerRouter.js');
 
 test('durable video handler submits, polls, downloads, and persists a tenant asset', async () => {
@@ -459,9 +459,9 @@ function realPersonError(...indexes) {
 }
 
 // A Seedance handler whose trust lives in `links`; the fake auto trust activates what it borrows.
-function autoTrustHandler({ submitErrors = [], flagged = [], trustFails = [], images = {} } = {}) {
+function autoTrustHandler({ submitErrors = [], flagged = [], trustFails = [], images = {}, copies = {} } = {}) {
   const links = {};
-  const calls = { submitted: [], borrowed: [], marked: [], released: [] };
+  const calls = { submitted: [], borrowed: [], marked: [], released: [], adopted: [] };
   const autoTrust = {
     async flagged(_workspaceId, assetIds) { return assetIds.filter((id) => flagged.includes(id)); },
     async markNeedsTrust(_workspaceId, assetIds) { calls.marked.push(...assetIds); },
@@ -496,6 +496,12 @@ function autoTrustHandler({ submitErrors = [], flagged = [], trustFails = [], im
     createAsset: async () => ({ id: 'output-1' }),
     sleep: async () => {},
     autoTrust,
+    // Canvas uploads copied into the workspace: `copies` holds the earlier copies.
+    adoptReference: async ({ reference, create }) => {
+      calls.adopted.push({ reference, create });
+      if (!copies[reference] && create) copies[reference] = `copy-${reference.split('/').pop()}`;
+      return copies[reference] || null;
+    },
   });
   const run = (parameters) => handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'bytedance/seedance-2.5', prompt: 'hello', parameters });
   return { run, calls };
@@ -598,4 +604,78 @@ test('a trusted asset BytePlus lost is trusted again and the video is sent again
   assert.equal(result.status, 'succeeded');
   assert.deepEqual(setup.calls.borrowed, ['asset-1', 'asset-1']);
   assert.equal(setup.calls.submitted.length, 3);
+});
+
+const canvasUpload = (name) => `/canvas/api/r2-image/uploads/${name}`;
+
+test('a Canvas upload Seedance refuses as a real person is copied to the workspace, trusted and sent again', async () => {
+  const setup = autoTrustHandler({ submitErrors: [realPersonError(1, 2)] });
+
+  const result = await setup.run({ referenceImages: [assetUrl('asset-1'), canvasUpload('face.webp'), canvasUpload('place.png')] });
+
+  assert.equal(result.status, 'succeeded');
+  assert.deepEqual(setup.calls.adopted.filter((call) => call.create).map((call) => call.reference), [canvasUpload('face.webp')]);
+  assert.deepEqual(setup.calls.borrowed, ['asset-1', 'copy-face.webp']);
+  assert.equal(setup.calls.submitted.length, 2);
+  assert.deepEqual(setup.calls.submitted[1].referenceImages.slice(0, 2), ['asset://provider-asset-1', 'asset://provider-copy-face.webp']);
+  assert.match(setup.calls.submitted[1].referenceImages[2], /^data:/);
+});
+
+test('a Canvas upload refused before goes as its trusted copy on the first submission', async () => {
+  const setup = autoTrustHandler({ copies: { [canvasUpload('face.webp')]: 'copy-face' }, flagged: ['copy-face'] });
+
+  await setup.run({ referenceImages: [canvasUpload('face.webp')] });
+
+  assert.equal(setup.calls.submitted.length, 1);
+  assert.deepEqual(setup.calls.submitted[0].referenceImages, ['asset://provider-copy-face']);
+});
+
+test('a Canvas upload Seedance accepts is not copied', async () => {
+  const setup = autoTrustHandler();
+
+  await setup.run({ referenceImages: [canvasUpload('place.png')] });
+
+  assert.equal(setup.calls.adopted.some((call) => call.create), false);
+  assert.match(setup.calls.submitted[0].referenceImages[0], /^data:/);
+});
+
+test('a Canvas upload is copied into the workspace once and the copy is reused', async () => {
+  const assets = [];
+  const puts = [];
+  const pool = {
+    async query(sql, values) {
+      if (/^SELECT id FROM assets/.test(sql)) return { rows: assets.filter((a) => a.workspace_id === values[0] && a.storage_key === values[1]) };
+      throw new Error(`unexpected query ${sql}`);
+    },
+    async connect() {
+      return {
+        async query(_sql, [workspaceId, storageKey, filename, contentType, sizeBytes]) {
+          const row = { id: `asset-${assets.length + 1}`, workspace_id: workspaceId, storage_key: storageKey, filename, content_type: contentType, size_bytes: sizeBytes };
+          assets.push(row);
+          return { rows: [row] };
+        },
+        release() {},
+      };
+    },
+  };
+  const storage = { async put(key, body, contentType) { puts.push({ key, body, contentType }); } };
+  const referenceStorage = {
+    async createDownloadUrl({ key }) { return { url: `r2:${key}` }; },
+    async get(url) { return { body: Buffer.from(url), contentType: 'image/webp' }; },
+  };
+  const reference = '/canvas/api/r2-image/uploads/face.webp';
+  const args = { pool, storage, referenceStorage, workspaceId: 'ws-1', reference };
+
+  assert.equal(await adoptCanvasReference({ ...args, create: false }), null);
+  const first = await adoptCanvasReference(args);
+  const again = await adoptCanvasReference(args);
+
+  assert.equal(first, 'asset-1');
+  assert.equal(again, 'asset-1');
+  assert.equal(assets.length, 1);
+  assert.equal(puts.length, 1);
+  assert.match(puts[0].key, /^ws-1\/canvas-reference\/[0-9a-f]{32}$/);
+  assert.equal(puts[0].body.toString(), 'r2:uploads/face.webp');
+  assert.equal(assets[0].filename, 'canvas-face.webp');
+  assert.equal(await adoptCanvasReference({ ...args, reference: '/api/assets/x/download' }), null);
 });

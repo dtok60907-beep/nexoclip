@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { saasFetch } from '../src/lib/saas/api.js';
+import { ENTERPRISE_POINTS, ENTERPRISE_WHATSAPP_URL, usualRows, useModelPrices } from './publicPricing';
 
 const rupiah = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
 const number = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -35,11 +36,51 @@ function quoteNote(q) {
   return null;
 }
 
+const PLAN_AUDIENCE = {
+  Starter: 'For creators starting out with AI: try every model and post a few pieces a week.',
+  Creator: 'For creators and small brands posting every day, video and product photos.',
+  Pro: 'For content teams and agencies running several brands at once.',
+};
+
+function planFeatures(modelCount) {
+  return [
+    [modelCount ? `All ${modelCount} AI models` : 'All AI models', 'Video and image, no model locked'],
+    ['Image Studio and Video Studio', 'Text, image and reference to video'],
+    ['Canvas', 'Chain prompts, references and results'],
+    ['AI Director', 'A finished video from a brief'],
+    ['Failed generations refunded', 'Credits come back automatically'],
+    ['Top up anytime', 'Top-up credits never expire'],
+    ['Upgrade anytime', 'Prorated for the rest of your period'],
+    ['QRIS or virtual account', 'No card, no auto-debit'],
+  ];
+}
+
+// What a month of credits buys with each model, or the features, in one card.
+function PlanDetail({ tab, rows, credits, popular, features }) {
+  if (tab === 'features') {
+    return <ul className="divide-y divide-white/[.06]">{features.map(([name, detail]) => <li key={name} className="flex gap-2.5 py-2">
+      <span className={`mt-0.5 grid h-4 w-4 flex-none place-items-center rounded-full text-[10px] font-black ${popular ? 'bg-[#d4ff64] text-black' : 'bg-white/10 text-[#d4ff64]'}`}>✓</span>
+      <span className="min-w-0"><span className="block text-[13px] text-white/85">{name}</span><span className="block text-[11px] text-white/35">{detail}</span></span>
+    </li>)}</ul>;
+  }
+  return <ul className="divide-y divide-white/[.06]">{rows.map((row) => {
+    const n = Math.floor(credits / row.credits);
+    return <li key={row.id} className="flex items-center justify-between gap-3 py-[7px]">
+      <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config} · {number(Math.round(row.credits))} cr</span></span>
+      <span className="flex-none text-right"><b className={`text-[15px] tabular-nums ${popular ? 'text-[#d4ff64]' : 'text-white'}`}>{n ? number(n) : '–'}</b><span className="block text-[10px] text-white/30">/ month</span></span>
+    </li>;
+  })}</ul>;
+}
+
 // Monthly and yearly plans above the top-ups. Renders nothing while subscriptions are
 // off (SUBSCRIPTIONS_ENABLED). Payment is one period at a time; renewing is manual.
 // Signed out, the plans come from the public price list and choosing one asks to log in.
 export default function SubscriptionSection({ workspaceId, onCompleted, onRequireAuth }) {
   const [data, setData] = useState(null), [period, setPeriod] = useState('monthly'), [buying, setBuying] = useState(null), [message, setMessage] = useState(null);
+  const [detailTab, setDetailTab] = useState('video');
+  const rows = usualRows(useModelPrices());
+  const modelCount = rows.video.length + rows.image.length;
+  const smallest = data?.plans?.find((p) => p.interval === 'monthly');
   const headers = workspaceId ? { 'x-workspace-id': workspaceId } : {};
   const load = useCallback(() => (workspaceId
     ? saasFetch('/api/billing/subscription', { headers })
@@ -113,25 +154,65 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
     </div>}
     {sub && !active && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tones.info}`}>Your {sub.name} plan ended on {day(sub.currentPeriodEnd)}. Choose a plan to get monthly credits again.</p>}
     {message && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tones[message.tone]}`}>{message.text}</p>}
-    <div className="mt-5 grid gap-4 sm:grid-cols-3">
+    <div className="mt-5 grid items-start gap-4 md:grid-cols-3">
       {plans.map((plan) => {
         const current = active && sub.planCode === plan.code;
-        return <div key={plan.code} className={`relative flex flex-col rounded-2xl border p-5 ${plan.popular ? 'border-lime-300/50 bg-lime-300/[.05]' : 'border-white/10 bg-white/[.03]'}`}>
-          {plan.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#d4ff64] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
-          <p className="text-sm font-semibold text-white/80">{plan.name}</p>
-          <p className="mt-3 text-3xl font-bold">{number(plan.monthlyCredits)}<span className="ml-1 text-sm font-medium text-white/45">credits / month</span></p>
-          {plan.quote?.promoPercent
-            ? <p className="mt-1 text-lg font-semibold text-white/90"><s className="mr-1.5 text-sm font-medium text-white/35">{rupiah(plan.quote.listPriceIdr)}</s>{rupiah(plan.quote.amountIdr)}<span className="text-sm font-medium text-white/45"> first month</span> <span className="ml-1 rounded-full bg-amber-300/20 px-2 py-0.5 align-middle text-[10px] font-bold text-amber-100">-{plan.quote.promoPercent}%</span></p>
-            : <p className="mt-1 text-lg font-semibold text-white/90">{rupiah(plan.priceIdr)}<span className="text-sm font-medium text-white/45"> / {plan.interval === 'yearly' ? 'year' : 'month'}</span></p>}
-          {plan.interval === 'yearly' && <p className="mt-1 text-xs text-white/45">{rupiah(plan.priceIdr / 12)} a month, credits delivered monthly</p>}
-          {quoteNote(plan.quote) && <p className="mt-3 text-xs text-lime-100/80">{quoteNote(plan.quote)}</p>}
-          <div className="flex-1" />
-          <button type="button" disabled={buying !== null || plan.quote?.kind === 'scheduled'} onClick={() => buy(plan.code)} className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e0ff8c]' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}>
-            {buying === plan.code ? 'Opening checkout…' : quoteLabel(plan, current)}
-          </button>
-        </div>;
+        const perMonth = plan.interval === 'yearly' ? plan.priceIdr / 12 : plan.priceIdr;
+        const perCredit = perMonth / plan.monthlyCredits;
+        const saving = smallest ? Math.round((1 - perCredit / (smallest.priceIdr / smallest.monthlyCredits)) * 100) : 0;
+        const detailTabs = [['video', `Video · ${rows.video.length}`], ['image', `Image · ${rows.image.length}`], ['features', 'Features']];
+        return <article key={plan.code} className={`relative flex flex-col overflow-hidden rounded-[22px] border ${plan.popular ? 'border-[#d4ff64]/60 bg-[linear-gradient(165deg,#26301b_0%,#141812_45%,#0f120e_100%)] shadow-[0_24px_70px_-30px_rgba(212,255,100,.45)]' : 'border-white/10 bg-[linear-gradient(165deg,#1a1d19_0%,#121411_50%,#0f110e_100%)]'}`}>
+          <div className="p-5 pb-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-lg font-bold tracking-tight">{plan.name}</p>
+              {plan.popular ? <span className="rounded-full bg-[#d4ff64] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Most popular</span>
+                : current ? <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-bold uppercase text-white/60">Your plan</span> : null}
+            </div>
+            <p className="mt-1.5 min-h-[34px] text-xs leading-relaxed text-white/45">{PLAN_AUDIENCE[plan.name]}</p>
+
+            {plan.quote?.promoPercent
+              ? <div className="mt-4">
+                <div className="flex items-baseline gap-2"><span className="text-[34px] font-bold leading-none tracking-tight">{rupiah(plan.quote.amountIdr)}</span><span className="rounded-full bg-[#ff5a1f] px-2 py-0.5 text-[11px] font-bold text-white">-{plan.quote.promoPercent}%</span></div>
+                <p className="mt-1.5 text-xs text-white/45">first month · <s>{rupiah(plan.quote.listPriceIdr)}</s> · then {rupiah(plan.quote.listPriceIdr)}/month</p>
+              </div>
+              : <div className="mt-4">
+                <div className="flex items-baseline gap-1"><span className="text-[34px] font-bold leading-none tracking-tight">{rupiah(perMonth)}</span><span className="text-sm text-white/45">/month</span></div>
+                <p className="mt-1.5 text-xs text-white/45">{plan.interval === 'yearly' ? `billed ${rupiah(plan.priceIdr)} a year · 2 months free` : 'billed monthly'}</p>
+              </div>}
+            {quoteNote(plan.quote) && !plan.quote?.promoPercent && <p className="mt-2 text-xs text-lime-100/80">{quoteNote(plan.quote)}</p>}
+
+            <button type="button" disabled={buying !== null || plan.quote?.kind === 'scheduled'} onClick={() => buy(plan.code)} className={`mt-4 w-full rounded-full px-4 py-3 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e2ff91]' : 'border border-white/15 bg-white/[.06] text-white hover:border-[#d4ff64]/60 hover:text-[#d4ff64]'}`}>
+              {buying === plan.code ? 'Opening checkout…' : `${quoteLabel(plan, current)} →`}
+            </button>
+
+            <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-white/[.08] bg-black/20 text-center">
+              <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{number(plan.monthlyCredits)}</p><p className="text-[10px] text-white/40">credits / month</p></div>
+              <div className="border-x border-white/[.08] px-2 py-2.5"><p className="text-[15px] font-bold">{rupiah(perCredit)}</p><p className="text-[10px] text-white/40">per credit</p></div>
+              <div className="px-2 py-2.5"><p className={`text-[15px] font-bold ${saving > 0 ? 'text-[#d4ff64]' : 'text-white/50'}`}>{saving > 0 ? `-${saving}%` : 'Base'}</p><p className="text-[10px] text-white/40">vs Starter</p></div>
+            </div>
+          </div>
+
+          <div className="border-t border-white/[.08] bg-black/15 px-5 pb-5 pt-3">
+            <div className="mb-1 flex gap-1 rounded-full bg-white/[.05] p-1" role="tablist" aria-label="Plan details">
+              {detailTabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={detailTab === id} onClick={() => setDetailTab(id)} className={`flex-1 rounded-full py-1.5 text-[11px] font-bold transition ${detailTab === id ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>{label}</button>)}
+            </div>
+            {detailTab !== 'features' && <p className="mb-1 mt-2 text-[10px] uppercase tracking-[.14em] text-white/30">Per month, any one of</p>}
+            <PlanDetail tab={detailTab} rows={detailTab === 'image' ? rows.image : rows.video} credits={plan.monthlyCredits} popular={plan.popular} features={planFeatures(modelCount)} />
+          </div>
+        </article>;
       })}
     </div>
+
+    <div className="mt-4 grid items-center gap-5 rounded-[22px] border border-white/10 bg-[linear-gradient(120deg,#1a1f17,#10120f_60%)] p-5 md:grid-cols-[1fr_1.3fr_auto]">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#d4ff64]">Enterprise</p>
+        <p className="mt-1 text-xl font-bold tracking-tight">Need volume or a custom price?</p>
+        <p className="mt-1 text-xs text-white/45">For companies, brands and agencies with high volume or special needs.</p>
+      </div>
+      <ul className="grid gap-x-5 gap-y-1.5 text-xs text-white/65 sm:grid-cols-2">{ENTERPRISE_POINTS.map((f) => <li key={f}><span className="mr-1.5 text-[#d4ff64]">✓</span>{f}</li>)}</ul>
+      <a href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap rounded-full bg-[#d4ff64] px-5 py-3 text-center text-sm font-bold text-black transition hover:bg-[#e2ff91]">Chat via WhatsApp →</a>
+    </div>
+    <p className="mt-3 text-xs text-white/35">Counts assume all of a month's credits go to that one model, videos with audio. Other resolutions, durations and mixes: use the Calculator tab.</p>
     <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-white/45">
       <span>🔒 Secure checkout via Pakasir (QRIS, virtual account)</span>
       <span>No auto-debit: you renew when you choose</span>

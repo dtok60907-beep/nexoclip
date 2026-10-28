@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { saasFetch } from '../src/lib/saas/api.js';
 import SubscriptionSection from './SubscriptionSection';
+import { usualRows, useModelPrices } from './publicPricing';
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_LIMIT = 36; // About three minutes after returning from checkout.
@@ -20,40 +21,18 @@ const NOTICE_STYLES = {
   error: 'border-red-400/20 bg-red-400/10 text-red-200',
 };
 
-export const ENTERPRISE_WHATSAPP_URL = `https://wa.me/6285183162659?text=${encodeURIComponent(
-  'Halo, saya tertarik dengan paket Enterprise Nexo Clip.'
-)}`;
+export { ENTERPRISE_WHATSAPP_URL } from './publicPricing';
 
 export function formatRupiah(value) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
 function formatNumber(value) {
-  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(Number(value) || 0);
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(value) || 0);
 }
 
-// What a package buys, priced live by the same rules as the charge.
-const EXAMPLES = [
-  { label: 'Nano Banana images', query: 'kind=image&model=google%2Fgemini-2.5-flash-image' },
-  { label: 'Kling 3 videos (5s)', query: 'kind=video&model=kwaivgi%2Fkling-v3.0-std&duration=5' },
-  { label: 'Seedance 2.5 videos (720p, 5s)', query: 'kind=video&model=bytedance%2Fseedance-2.5&resolution=720p&duration=5' },
-];
-
-function useExamplePrices() {
-  const [prices, setPrices] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all(EXAMPLES.map(async (example) => {
-      try {
-        const response = await fetch(`/api/generations/price?${example.query}`);
-        const { credits } = await response.json();
-        return credits > 0 ? { label: example.label, credits } : null;
-      } catch { return null; }
-    })).then((results) => { if (!cancelled) setPrices(results.filter(Boolean)); });
-    return () => { cancelled = true; };
-  }, []);
-  return prices;
-}
+// The models a pack is shown in, priced by the app's engine (/api/public/model-prices).
+const HIGHLIGHTS = ['seedance-2.5', 'seedance-2.0', 'kling-3.0-pro', 'veo-3.1-fast', 'nano-banana-2'];
 
 export default function BillingContent({ workspaceId, balance, onCompleted, onRequireAuth, embedded = false }) {
   const [packages, setPackages] = useState(null);
@@ -61,7 +40,8 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
   const [buying, setBuying] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const examples = useExamplePrices();
+  const rows = usualRows(useModelPrices());
+  const highlights = HIGHLIGHTS.map((id) => [...rows.video, ...rows.image].find((r) => r.id === id)).filter(Boolean);
 
   const load = useCallback(async () => {
     const data = await saasFetch('/api/billing/topups', { headers: workspaceId ? { 'x-workspace-id': workspaceId } : {} });
@@ -147,67 +127,76 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
   };
 
   return <main className={`${embedded ? 'h-full overflow-auto p-4 text-white sm:p-6' : 'h-full overflow-auto p-5 text-white md:p-8'}`}>
-    <div className="mx-auto max-w-5xl">
+    <div className={`mx-auto ${embedded ? 'max-w-[1280px]' : 'max-w-5xl'}`}>
       <SubscriptionSection workspaceId={workspaceId} onCompleted={onCompleted} onRequireAuth={onRequireAuth} />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Top up credits</h1>
-          <p className="mt-1 text-sm text-white/45">Credits pay for every image and video you generate. They never expire.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#d4ff64]">Add-on</p>
+          <h1 className="mt-1 text-2xl font-bold">Top up credits</h1>
+          <p className="mt-1 text-sm text-white/45">Extra credits for subscribers, on top of your plan. Top-up credits never expire, and bigger packs come with bonus credits.</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-right">
-          <p className="text-xs text-white/45">Current balance</p>
-          <p className="mt-1 text-xl font-bold"><span className="text-[#d4ff64]">◈</span> {balance !== null && balance !== undefined ? formatNumber(balance) : '—'} <span className="text-xs font-medium text-white/45">credits</span></p>
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,#1a1f17,#10120f)] px-4 py-3">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#d4ff64]/15 text-lg text-[#d4ff64]">◈</span>
+          <div>
+            <p className="text-[10px] uppercase tracking-[.14em] text-white/40">Current balance</p>
+            <p className="text-xl font-bold leading-tight">{balance !== null && balance !== undefined ? formatNumber(balance) : '—'} <span className="text-xs font-medium text-white/45">credits</span></p>
+          </div>
         </div>
       </div>
 
       {notice && <p className={`mt-6 rounded-lg border px-4 py-3 text-sm ${NOTICE_STYLES[notice.tone]}`}>{notice.text}</p>}
       {error && <p className="mt-6 rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{error}</p>}
 
-      <div className={`mt-6 grid gap-4 sm:grid-cols-2 ${embedded ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
-        {packages === null && !error && [0, 1, 2, 3].map((key) => <div key={key} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/[.03]" />)}
-        {packages?.map((pkg) => <div
-          key={pkg.code}
-          className={`relative flex flex-col rounded-2xl border p-5 ${pkg.popular ? 'border-lime-300/50 bg-lime-300/[.05] shadow-[0_0_60px_-20px_rgba(212,255,100,0.35)]' : 'border-white/10 bg-white/[.03]'}`}
-        >
-          {pkg.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-[#d4ff64] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">Most popular</span>}
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold text-white/80">{pkg.name}</p>
-            {pkg.bonusPercent > 0 && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-200">+{pkg.bonusPercent}% bonus</span>}
-          </div>
-          <p className="mt-3 text-3xl font-bold">{formatNumber(pkg.credits)}<span className="ml-1 text-sm font-medium text-white/45">credits</span></p>
-          <p className="mt-1 text-lg font-semibold text-white/90">{formatRupiah(pkg.priceIdr)}</p>
-          <p className="mt-3 text-sm text-white/55">{pkg.description}</p>
-          <ul className="mt-3 flex-1 space-y-1 text-xs text-white/45">
-            {examples.map((example) => <li key={example.label}>≈ {formatNumber(Math.floor(pkg.credits / example.credits))} {example.label}</li>)}
-          </ul>
-          <button
-            type="button"
-            disabled={buying !== null}
-            onClick={() => buy(pkg.code)}
-            className={`mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${pkg.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e0ff8c]' : 'bg-white/[.08] text-white hover:bg-white/[.12]'}`}
+      <div className="mt-6 grid items-start gap-4 md:grid-cols-3">
+        {packages === null && !error && [0, 1, 2].map((key) => <div key={key} className="h-80 animate-pulse rounded-[22px] border border-white/10 bg-white/[.03]" />)}
+        {packages?.map((pkg) => {
+          const base = Math.round(pkg.credits / (1 + pkg.bonusPercent / 100));
+          const perCredit = pkg.priceIdr / pkg.credits;
+          const smallest = packages[0];
+          const saving = smallest ? Math.round((1 - perCredit / (smallest.priceIdr / smallest.credits)) * 100) : 0;
+          return <article
+            key={pkg.code}
+            className={`relative flex flex-col overflow-hidden rounded-[22px] border ${pkg.popular ? 'border-[#d4ff64]/60 bg-[linear-gradient(165deg,#26301b_0%,#141812_45%,#0f120e_100%)] shadow-[0_24px_70px_-30px_rgba(212,255,100,.45)]' : 'border-white/10 bg-[linear-gradient(165deg,#1a1d19_0%,#121411_50%,#0f110e_100%)]'}`}
           >
-            {buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.name}`}
-          </button>
-        </div>)}
-        {!embedded && packages !== null && <div className="relative flex flex-col rounded-2xl border border-white/10 bg-white/[.03] p-5">
-          <p className="text-sm font-semibold text-white/80">Enterprise</p>
-          <p className="mt-3 text-3xl font-bold">Custom</p>
-          <p className="mt-1 text-lg font-semibold text-white/90">Contact sales</p>
-          <p className="mt-3 text-sm text-white/55">High volume, custom production, or a clear SLA for your team or agency.</p>
-          <ul className="mt-3 flex-1 space-y-1 text-xs text-white/45">
-            <li>Custom credit quotas</li>
-            <li>Dedicated onboarding &amp; support</li>
-            <li>Monthly contract and invoicing</li>
-          </ul>
-          <a
-            href={ENTERPRISE_WHATSAPP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-5 w-full rounded-xl bg-white/[.08] px-4 py-2.5 text-center text-sm font-bold text-white transition hover:bg-white/[.12]"
-          >
-            Chat via WhatsApp
-          </a>
-        </div>}
+            <div className="p-5 pb-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-lg font-bold tracking-tight">{pkg.name} pack</p>
+                <div className="flex gap-1.5">
+                  {pkg.bonusPercent > 0 && <span className="rounded-full bg-[#d4ff64]/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#d4ff64]">+{pkg.bonusPercent}% bonus</span>}
+                  {pkg.popular && <span className="rounded-full bg-[#d4ff64] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Best value</span>}
+                </div>
+              </div>
+              <p className="mt-1.5 min-h-[34px] text-xs leading-relaxed text-white/45">{pkg.description}</p>
+
+              <div className="mt-4 flex items-baseline gap-1.5"><span className="text-[34px] font-bold leading-none tracking-tight">{formatNumber(pkg.credits)}</span><span className="text-sm text-white/45">credits</span></div>
+              <p className="mt-1.5 text-xs text-white/45">{pkg.bonusPercent > 0 ? <>{formatNumber(base)} + <b className="text-[#d4ff64]">{formatNumber(pkg.credits - base)} bonus</b> · one-time payment</> : 'one-time payment'}</p>
+
+              <button
+                type="button"
+                disabled={buying !== null}
+                onClick={() => buy(pkg.code)}
+                className={`mt-4 flex w-full items-center justify-between rounded-full px-5 py-3 text-sm font-bold transition disabled:opacity-50 ${pkg.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e2ff91]' : 'border border-white/15 bg-white/[.06] text-white hover:border-[#d4ff64]/60 hover:text-[#d4ff64]'}`}
+              >
+                <span>{buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.name}`}</span>
+                <span>{formatRupiah(pkg.priceIdr)} →</span>
+              </button>
+
+              <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-white/[.08] bg-black/20 text-center">
+                <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{formatRupiah(perCredit)}</p><p className="text-[10px] text-white/40">per credit</p></div>
+                <div className="border-x border-white/[.08] px-2 py-2.5"><p className={`text-[15px] font-bold ${saving > 0 ? 'text-[#d4ff64]' : 'text-white/50'}`}>{saving > 0 ? `-${saving}%` : 'Base'}</p><p className="text-[10px] text-white/40">vs Starter pack</p></div>
+                <div className="px-2 py-2.5"><p className="text-[15px] font-bold">∞</p><p className="text-[10px] text-white/40">never expire</p></div>
+              </div>
+            </div>
+
+            {highlights.length > 0 && <div className="border-t border-white/[.08] bg-black/15 px-5 pb-5 pt-3">
+              <p className="mb-1 text-[10px] uppercase tracking-[.14em] text-white/30">Any one of</p>
+              <ul className="divide-y divide-white/[.06]">{highlights.map((row) => <li key={row.id} className="flex items-center justify-between gap-3 py-[7px]">
+                <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config} · {formatNumber(Math.round(row.credits))} cr</span></span>
+                <b className={`text-[15px] tabular-nums ${pkg.popular ? 'text-[#d4ff64]' : 'text-white'}`}>{formatNumber(Math.floor(pkg.credits / row.credits))}</b>
+              </li>)}</ul>
+            </div>}
+          </article>;
+        })}
       </div>
 
       <p className="mt-4 text-xs text-white/40">Pay with QRIS (any e-wallet or mobile banking) or a bank virtual account. Payments are processed by Pakasir; credits arrive within a minute of payment.</p>

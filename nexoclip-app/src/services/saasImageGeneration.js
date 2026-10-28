@@ -6,7 +6,7 @@ function dataUrl(body, contentType) {
   return `data:${contentType};base64,${Buffer.from(body).toString('base64')}`;
 }
 
-function legacyR2Key(reference) {
+export function legacyR2Key(reference) {
   try {
     const path = new URL(reference, 'https://canvas.invalid').pathname;
     const marker = '/api/r2-image/';

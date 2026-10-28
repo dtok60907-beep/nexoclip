@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createProviderRouter, markTrustedAssetRequest } from '../providers/providerRouter.js';
 import { createGeneratedAsset } from '../repositories/assetMetadataRepository.js';
 import {
@@ -6,7 +6,7 @@ import {
   markBytePlusAssetLinkStale as markStoredBytePlusAssetLinkStale,
 } from '../repositories/byteplusAssetRepository.js';
 import { isDirectBytePlusSeedance } from '../providers/providerRegistry.js';
-import { resolveReferenceImages, resolveReferenceMedia } from './saasImageGeneration.js';
+import { legacyR2Key, resolveReferenceImages, resolveReferenceMedia } from './saasImageGeneration.js';
 import { recordGenerationProviderRequest } from '../repositories/generationStateRepository.js';
 import { extraReferenceImages, isFrameTask } from './videoTaskType.js';
 import { createSeedanceAutoTrust, realPersonContentIndexes } from './seedanceAutoTrust.js';
@@ -76,6 +76,35 @@ export async function enlargeSmallReference(body, contentType) {
   }
 }
 
+// A photo uploaded straight onto a Canvas board lives in Canvas storage
+// (/canvas/api/r2-image/<key>), not in the workspace's assets, so it cannot be trusted on
+// BytePlus. When Seedance refuses one as a real person it is copied into the workspace once
+// (as the Director does with uploaded photos) and that asset is trusted instead. The copy is
+// keyed by the Canvas object, so later generations with the same photo reuse it.
+// `create: false` only finds an earlier copy.
+export async function adoptCanvasReference({ pool, storage, referenceStorage = storage, workspaceId, reference, create = true }) {
+  const key = legacyR2Key(reference);
+  if (!key) return null;
+  const storageKey = `${workspaceId}/canvas-reference/${createHash('sha256').update(key).digest('hex').slice(0, 32)}`;
+  const existing = await pool.query('SELECT id FROM assets WHERE workspace_id = $1 AND storage_key = $2 LIMIT 1', [workspaceId, storageKey]);
+  if (existing.rows[0]?.id || !create) return existing.rows[0]?.id || null;
+  const download = await referenceStorage.createDownloadUrl({ key });
+  const object = await referenceStorage.get(download.url || download);
+  const body = Buffer.from(object.body);
+  const contentType = object.contentType || 'image/png';
+  if (typeof storage.createUploadUrl === 'function') {
+    const upload = await storage.createUploadUrl({ key: storageKey, contentType });
+    await storage.put(upload.url || upload, body, contentType);
+  } else {
+    await storage.put(storageKey, body, contentType);
+  }
+  const client = await pool.connect();
+  try {
+    const filename = `canvas-${key.split('/').pop() || 'reference'}`.slice(0, 200);
+    return (await createGeneratedAsset(client, { workspaceId, storageKey, filename, contentType, sizeBytes: body.length })).id;
+  } finally { client.release(); }
+}
+
 const assetIdOf = (url) => (typeof url === 'string' ? url.match(/^\/api\/assets\/([^/]+)\/download(?:\?|$)/)?.[1] : null) || null;
 
 // BytePlus explains a refused request ("... must be greater than or equal to 90000 ..."). Show
@@ -90,7 +119,7 @@ function seedanceRejection(error) {
   return Object.assign(error, { publicMessage });
 }
 
-export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest, onProviderUsage = null, autoTrust = null }) {
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, markBytePlusAssetLinkStale = markStoredBytePlusAssetLinkStale, env = process.env, createAsset = createGeneratedAsset, fetch: fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120, recordProviderRequest = recordGenerationProviderRequest, onProviderUsage = null, autoTrust = null, adoptReference = adoptCanvasReference }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
   const buildRequest = async (job) => {
     let hasTrustedAsset = false;
@@ -150,11 +179,13 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const request = videoRequest(frameJob, { referenceImages, frameImages, referenceVideos, referenceAudios });
     if (frameTask) request.frameTask = true;
     // BytePlus numbers the request content: [0] is the prompt, then reference images, then frames.
-    const imageAssetIds = [...referenceUrls, ...frameUrls].map(assetIdOf);
-    return { request: hasTrustedAsset ? markTrustedAssetRequest(request) : request, trustedMappings, imageAssetIds, seedance };
+    const imageUrls = [...referenceUrls, ...frameUrls];
+    const imageAssetIds = imageUrls.map(assetIdOf);
+    return { request: hasTrustedAsset ? markTrustedAssetRequest(request) : request, trustedMappings, imageUrls, imageAssetIds, seedance };
   };
 
-  const submitToProvider = async (job, observe) => {
+  const submitToProvider = async (originalJob, observe) => {
+    let job = originalJob;
     let built = await buildRequest(job);
     const trust = built.seedance ? autoTrust : null;
     const workspaceId = job.workspace_id;
@@ -163,6 +194,30 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
       built = await buildRequest(job);
       return failed;
     };
+    // Sends Canvas uploads as their workspace copies from now on (see adoptCanvasReference).
+    const adopt = async (urls, create) => {
+      const swaps = new Map();
+      for (const url of new Set(urls)) {
+        if (assetIdOf(url) || !legacyR2Key(url)) continue;
+        try {
+          const assetId = await adoptReference({ pool, storage, referenceStorage, workspaceId, reference: url, create });
+          if (assetId) swaps.set(url, `/api/assets/${assetId}/download`);
+        } catch (error) {
+          console.error('[seedance-trust] could not copy a Canvas reference', job.id, error?.message);
+        }
+      }
+      if (!swaps.size) return;
+      const swap = (url) => swaps.get(url) || url;
+      const parameters = job.parameters || {};
+      job = { ...job, parameters: {
+        ...parameters,
+        ...(parameters.referenceImages ? { referenceImages: parameters.referenceImages.map(swap) } : {}),
+        ...(parameters.frameImages ? { frameImages: parameters.frameImages.map((frame) => ({ ...frame, url: swap(frame.url) })) } : {}),
+      } };
+      built = await buildRequest(job);
+    };
+    // A Canvas upload copied after an earlier refusal goes as that copy, so it is trusted up front.
+    if (trust) await adopt(built.imageUrls, false);
     // Images trusted for this generation (a refusal of one of them is not retried).
     const trustedHere = new Set();
     let lostHere = false;
@@ -185,6 +240,7 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
         // up to TRUST_ROUNDS times) and send again.
         const canTrust = trust && round < TRUST_ROUNDS;
         const refused = realPersonContentIndexes(error);
+        if (canTrust && refused) await adopt(refused.map((index) => built.imageUrls[index - 1]).filter(Boolean), true);
         const refusedIds = refused?.map((index) => built.imageAssetIds[index - 1]);
         // Only images this generation has not trusted yet: one refused again after its trust
         // is not a trust problem, and sending it again would only be refused again.

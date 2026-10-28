@@ -295,6 +295,8 @@ services:
     environment:
       NODE_ENV: production
       CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
+      # Monthly/yearly plans, as on Railway (live since 2026-10-19).
+      SUBSCRIPTIONS_ENABLED: ${SUBSCRIPTIONS_ENABLED:-1}
       NEXOCLIP_OPERATOR_USER_IDS: ${NEXOCLIP_OPERATOR_USER_IDS:-}
       DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
