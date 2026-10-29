@@ -2,6 +2,13 @@
 const nextConfig = {
   output: 'standalone',
   transpilePackages: ['studio', 'workflow-builder'],
+  // @remotion/lottie imports the full lottie-web, whose expression support runs code from the animation file
+  // (eval). Motion plays files users upload or link, so it gets the light SVG build, which has no expressions.
+  turbopack: { resolveAlias: { 'lottie-web': 'lottie-web/build/player/lottie_light.js' } },
+  webpack(config) {
+    config.resolve.alias = { ...config.resolve.alias, 'lottie-web$': 'lottie-web/build/player/lottie_light.js' };
+    return config;
+  },
   async redirects() {
     return [
       { source: '/login', destination: '/studio/home?auth=login', permanent: false },

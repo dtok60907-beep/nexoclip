@@ -19,6 +19,15 @@ const BYTEPLUS_IMAGE_SIZES = {
   '21:9': '3136x1344',
 };
 
+// The Seedream 5.0 Pro deployment caps the area at 4,624,220 pixels, so its 2K ratios
+// stay under that while matching BYTEPLUS_IMAGE_SIZES where those already fit.
+const SEEDREAM_5_PRO_2K_SIZES = {
+  ...BYTEPLUS_IMAGE_SIZES,
+  '1:1': '2048x2048',
+  '9:16': '1536x2752',
+  '16:9': '2752x1536',
+};
+
 function openAIImageSize(aspectRatio, fallback) {
   return OPENAI_IMAGE_SIZES[aspectRatio] || fallback;
 }
@@ -137,11 +146,12 @@ export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai
 export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl = globalThis.fetch } = {}) {
   if (!baseUrl) throw new TypeError('baseUrl is required');
   const root = String(baseUrl).replace(/\/+$/, '');
-  return { async generate({ model, prompt, aspectRatio, resolution, referenceImages }) {
+  return { async generate({ model, prompt, aspectRatio, resolution, referenceImages, imageSizing }) {
     // Deployment endpoints accept resolution presets; base models use explicit dimensions to preserve ratio.
     const providerResolution = model === 'ep-20260907150312-xx7gf' && resolution?.toUpperCase() === '1K' ? '2K' : resolution;
     const presetOnly = model.startsWith('ep-') || model.includes('seedream-5-0-pro');
-    const size = presetOnly ? providerResolution : bytePlusImageSize(aspectRatio, providerResolution);
+    const proRatioSize = imageSizing === 'seedream-5-pro' && providerResolution?.toUpperCase() === '2K' && SEEDREAM_5_PRO_2K_SIZES[aspectRatio];
+    const size = proRatioSize || (presetOnly ? providerResolution : bytePlusImageSize(aspectRatio, providerResolution));
     let response;
     try {
       response = await fetchImpl(`${root}/images/generations`, {

@@ -88,7 +88,7 @@ class FakeBridge:
     def balance(self):
         return self.credits
 
-    def estimate(self, *, kind, prompt, parameters):
+    def estimate(self, *, kind, prompt, parameters, model=None):
         if kind == "audio":
             return {"credits": 2.0, "usd": 0.02}
         credits = 1.0 if kind == "image" else 5.0 * parameters["duration"]
@@ -98,11 +98,11 @@ class FakeBridge:
         self.charges.append(kwargs)
         return 0.01
 
-    def submit(self, *, kind, prompt, parameters, idempotency_key):
+    def submit(self, *, kind, prompt, parameters, idempotency_key, model=None):
         gen_id = f"gen{len(self.submits) + 1}"
         key = idempotency_key.split(":")[1] + ":" + idempotency_key.split(":")[2]
         self.submits.append({"id": gen_id, "key": key, "kind": kind, "prompt": prompt, "parameters": parameters,
-                             "idempotency_key": idempotency_key})
+                             "idempotency_key": idempotency_key, "model": model})
         failed = key in self.fail_once
         self.fail_once.discard(key)
         self._gens[gen_id] = {"id": gen_id, "status": "failed" if failed else "succeeded",
@@ -663,7 +663,7 @@ def test_a_small_reference_video_is_fitted_once_and_rides_in_the_scene_video(cli
 def test_the_view_shows_video_credits_per_second_and_caches_them(client, fake_llm, bridge, monkeypatch):
     from director_service import billing as bill
 
-    monkeypatch.setattr(bill, "_video_prices", {"at": 0.0, "credits": {}})
+    monkeypatch.setattr(bill, "_video_prices", {})
     pid = _built_project(client, fake_llm)
     assert _view(client, pid)["video_credits_per_second"] == {"480p": 5.0, "720p": 5.0, "1080p": 5.0}
     monkeypatch.setattr(bridge, "estimate", lambda **kwargs: (_ for _ in ()).throw(AssertionError("priced again")))
@@ -1189,6 +1189,50 @@ def test_the_users_own_photos_make_the_sheet(client, fake_llm, bridge):
     board = _say(client, pid, "tambah anting")["board"]
     assert next(e for e in board["elements"] if e["id"] == "maya")["photos"] == ["photo-1111-aaaa"]
     assert _edit(client, pid, "set_element_photos", id="maya", photos=["../etc"]).status_code == 400
+
+
+def test_an_attached_image_can_be_the_element_as_it_is(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    photo = "aaaaaaaa-1111-4111-8111-000000000003"
+    before = len(bridge.submits)
+    fake_llm.turns.append([{"calls": [call("upsert_element", **{**MAYA, "description": MAYA["description"] + ", red scarf"},
+                                           use_as_sheet=photo)]}, {"text": "ok"}])
+    _say(client, pid, "ini Maya, pakai gambar ini")
+    _wait(pid)
+    board = read_board(pid)
+    media = board["media"]["element:maya"]
+    assert media["asset_id"] == photo and media["uploaded"]
+    assert not [s for s in bridge.submits[before:] if s["key"] == "element:maya"]  # nothing generated, nothing paid
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    video = next(s for s in bridge.submits if s["key"] == "video:s1")
+    assert f"/api/assets/{photo}/download" in video["parameters"]["referenceImages"]
+    assert "the user's own image of Maya" in video["prompt"]
+    assert not [s for s in bridge.submits[before:] if s["key"] == "element:maya"]
+
+
+def test_the_user_picks_seedance_2_0_and_its_limits_apply(client, fake_llm, bridge):
+    pid = _built_project(client, fake_llm)
+    # The agent cannot change the model; the user can.
+    fake_llm.turns.append([{"calls": [call("update_brief", video_model="seedance-2.0")]}, {"text": "ok"}])
+    _say(client, pid, "ganti model")
+    assert "video_model" not in read_board(pid)["brief"]
+    assert _edit(client, pid, "update_brief", video_model="seedance-9").status_code == 400
+    assert _edit(client, pid, "update_brief", resolution="480p").status_code == 200
+    assert _edit(client, pid, "update_brief", video_model="seedance-2.0").status_code == 200
+    brief = read_board(pid)["brief"]
+    assert brief["video_model"] == "seedance-2.0" and brief["resolution"] == "720p"  # 2.0 makes no 480p
+    assert _edit(client, pid, "update_brief", resolution="480p").status_code == 400
+    assert _edit(client, pid, "update_shot", id="s1", duration_seconds=20).status_code == 400  # 2.0: at most 15 s
+    rid = client.post(f"/api/director/projects/{pid}/requests", json={"items": ["video:s1"]}, headers=HEADERS).json()["request_id"]
+    client.post(f"/api/director/projects/{pid}/requests/{rid}/approve", headers=HEADERS)
+    _wait(pid)
+    assert next(s for s in bridge.submits if s["key"] == "video:s1")["model"] == "byteplus/seedance-2.0-unfiltered"
+    # 2.5 allows longer clips, so going back always works; 2.0 again is refused while a shot is too long for it.
+    assert _edit(client, pid, "update_brief", video_model="seedance-2.5").status_code == 200
+    assert _edit(client, pid, "update_shot", id="s1", duration_seconds=20).status_code == 200
+    assert _edit(client, pid, "update_brief", video_model="seedance-2.0").status_code == 400
 
 
 def test_the_project_shows_what_it_cost_in_credits(client, fake_llm, bridge):

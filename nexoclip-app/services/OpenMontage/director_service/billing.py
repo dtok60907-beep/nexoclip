@@ -71,28 +71,30 @@ def charge_llm(project_id: str, model: str, usage: dict[str, Any]) -> float:
 # user (nexoclip's rate table and markup), so one lookup an hour is enough.
 PRICE_TTL_SECONDS = 3600
 _PROBE_SECONDS = 10
-_video_prices: dict[str, Any] = {"at": 0.0, "credits": {}}
+_video_prices: dict[str, dict[str, Any]] = {}  # per video model: {"at", "credits"}
 
 
 def video_credits_per_second(project_id: str) -> dict[str, float]:
-    """{"480p": credits, "720p": ..., "1080p": ...} for one second of Seedance video; {} when unknown."""
+    """{"480p": credits, "720p": ..., "1080p": ...} for one second of the project's video model; {} when unknown."""
     import time
 
-    from director_service.board import RESOLUTIONS
+    from director_service.board import read_board, video_model
 
-    if _video_prices["credits"] and time.monotonic() - _video_prices["at"] < PRICE_TTL_SECONDS:
-        return dict(_video_prices["credits"])
+    chosen = video_model(read_board(project_id)["brief"])
+    cached = _video_prices.get(chosen["model"]) or {"at": 0.0, "credits": {}}
+    if cached["credits"] and time.monotonic() - cached["at"] < PRICE_TTL_SECONDS:
+        return dict(cached["credits"])
     bridge = bridge_for(project_id)
     if bridge is None:
         return {}
     credits = {}
     try:
-        for resolution in RESOLUTIONS:
-            price = bridge.estimate(kind="video", prompt="price per second", parameters={
+        for resolution in chosen["resolutions"]:
+            price = bridge.estimate(kind="video", prompt="price per second", model=chosen["model"], parameters={
                 "duration": _PROBE_SECONDS, "resolution": resolution, "aspectRatio": "16:9", "generateAudio": True})
             credits[resolution] = round(float(price["credits"]) / _PROBE_SECONDS, 1)
     except (nexoclip.BridgeError, KeyError, TypeError, ValueError):
         log.exception("could not price video seconds")
-        return dict(_video_prices["credits"])
-    _video_prices.update(at=time.monotonic(), credits=credits)
+        return dict(cached["credits"])
+    _video_prices[chosen["model"]] = {"at": time.monotonic(), "credits": credits}
     return dict(credits)

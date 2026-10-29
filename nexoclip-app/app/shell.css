@@ -64,6 +64,30 @@
 .nx-card-link:hover { color:var(--ink); text-decoration:underline; }
 .nx-plus { display:grid; width:46px; height:46px; margin:0 auto 14px; place-items:center; border-radius:50%; background:var(--lime); color:var(--ink); box-shadow:0 8px 24px -8px #d4ff6499; transition:transform .16s; }
 .nx-plus:hover { transform:scale(1.06); }
+/* Sidebar foot: support chat and the policy links. */
+.nx-foot { padding:0 12px 12px; }
+.nx-help { display:flex; width:100%; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:14px; background:#ffffff06; color:var(--paper); text-align:left; text-decoration:none; transition:border-color .16s,background .16s; }
+.nx-help:hover { border-color:#d4ff6466; background:#d4ff640d; }
+.nx-help-icon { display:grid; flex:0 0 30px; width:30px; height:30px; place-items:center; border-radius:10px; background:#25d3661f; color:#25d366; }
+.nx-help .nx-label { display:flex; min-width:0; flex-direction:column; line-height:1.2; }
+.nx-help strong { font-size:12.5px; font-weight:650; white-space:nowrap; }
+.nx-help small { color:var(--muted); font-size:11px; }
+.nx-legal { display:flex; justify-content:center; gap:6px; margin-top:9px; color:#ffffff40; font-size:11px; }
+.nx-legal a { color:var(--muted); text-decoration:none; }
+.nx-legal a:hover { color:var(--paper); text-decoration:underline; }
+.nx-side.is-collapsed .nx-foot { padding:0 0 14px; }
+.nx-side.is-collapsed .nx-help { width:46px; height:46px; margin-inline:auto; padding:0; justify-content:center; border-color:transparent; background:transparent; }
+.nx-side.is-collapsed .nx-help .nx-label, .nx-side.is-collapsed .nx-legal { display:none; }
+/* Short screens: keep room for the menu. */
+@media (max-height:780px) {
+  .nx-card { padding:12px 14px; }
+  .nx-card-title { font-size:17px; }
+  .nx-card-note, .nx-help small { display:none; }
+  .nx-card-button { height:36px; margin-top:10px; }
+  .nx-card-link { margin-top:6px; }
+  .nx-help { padding:6px 10px; }
+  .nx-help-icon { flex-basis:26px; width:26px; height:26px; }
+}
 
 /* ---- header ---- */
 .nx-top { flex:0 0 auto; display:flex; align-items:center; gap:16px; height:72px; padding:0 22px 0 26px; }

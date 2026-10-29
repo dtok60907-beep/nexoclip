@@ -153,6 +153,43 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  nexoclip-motion-worker:
+    mem_limit: 384m
+    build:
+      context: .
+      dockerfile: nexoclip-app/Dockerfile
+      target: worker
+    command: ["node", "src/queue/motionWorker.mjs"]
+    environment:
+      NODE_ENV: production
+      CREDIT_MARKUP_PERCENT: ${CREDIT_MARKUP_PERCENT:-30}
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
+      LOCAL_OBJECT_STORAGE_DIR: /data/assets
+      LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET:?LOCAL_OBJECT_STORAGE_SECRET is required}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET_NAME:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      MOTION_WORKER_CONCURRENCY: ${MOTION_WORKER_CONCURRENCY:-3}
+    volumes:
+      - nexoclip-assets:/data
+    depends_on:
+      nexoclip-asset-storage-init:
+        condition: service_completed_successfully
+      nexoclip-postgres:
+        condition: service_healthy
+      nexoclip-migrate:
+        condition: service_completed_successfully
+      nexoclip-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   nexoclip-video-worker:
     mem_limit: 512m
     networks:

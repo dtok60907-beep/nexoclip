@@ -2,11 +2,12 @@ import http from 'node:http';
 import { waitForMigrations } from '../db/migrate.js';
 import { createImageWorker } from './imageWorker.mjs';
 import { createVideoWorker } from './videoWorker.mjs';
+import { createMotionWorker } from './motionWorker.mjs';
 
 const kind = process.env.GENERATION_WORKER_KIND;
-const createWorker = kind === 'image' ? createImageWorker : kind === 'video' ? createVideoWorker : null;
+const createWorker = kind === 'image' ? createImageWorker : kind === 'video' ? createVideoWorker : kind === 'motion' ? createMotionWorker : null;
 
-if (!createWorker) throw new Error('GENERATION_WORKER_KIND must be image or video');
+if (!createWorker) throw new Error('GENERATION_WORKER_KIND must be image, video or motion');
 
 await waitForMigrations();
 const worker = await createWorker();

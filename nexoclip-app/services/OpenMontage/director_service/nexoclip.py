@@ -24,8 +24,11 @@ import requests
 
 PROJECT_SCOPE = "storyboard"
 SOURCE = "director"
-# Must match STORYBOARD_MODELS in nexoclip-app/app/api/internal/storyboard/route.js.
-IMAGE_MODEL = "seedream-5-0-260128"
+# The defaults; the video model a project picks (board.VIDEO_MODELS) is passed as `model`. Every one of them must be
+# in STORYBOARD_MODELS in nexoclip-app/app/api/internal/storyboard/route.js.
+IMAGE_MODEL = "byteplus/seedream-5.0-pro-unfiltered"
+# The Pro endpoint takes resolution presets and bills 2K at its higher rate, so ask for 2K explicitly.
+IMAGE_RESOLUTION = "2K"
 VIDEO_MODEL = "byteplus/seedance-2.5-unfiltered"
 ACTIVE_STATUSES = {"queued", "running", "processing", "pending"}
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.I)
@@ -119,12 +122,13 @@ class Bridge:
     def balance(self) -> float:
         return float(self._post({"action": "balance"}).json().get("balance") or 0)
 
-    def estimate(self, *, kind: str, prompt: str, parameters: dict[str, Any]) -> dict[str, float]:
+    def estimate(self, *, kind: str, prompt: str, parameters: dict[str, Any], model: Optional[str] = None) -> dict[str, float]:
         request = {"action": "estimate", "kind": kind, "prompt": prompt, "parameters": parameters}
         if kind == "audio":
             request["parameters"] = {**parameters, "text": prompt}
         else:
-            request["model"] = _model(kind)
+            request["model"] = model or _model(kind)
+            request["parameters"] = _parameters(kind, parameters)
         data = self._post(request).json()
         return {"credits": float(data.get("credits") or 0), "usd": float(data.get("usd") or 0)}
 
@@ -190,10 +194,11 @@ class Bridge:
         """Remove an old final video from the user's workspace storage (videos only)."""
         return bool(self._post({"action": "delete-render", "assetId": asset_id}).json().get("deleted"))
 
-    def submit(self, *, kind: str, prompt: str, parameters: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+    def submit(self, *, kind: str, prompt: str, parameters: dict[str, Any], idempotency_key: str,
+               model: Optional[str] = None) -> dict[str, Any]:
         response = self._post({
             "action": "submit", "source": SOURCE,
-            "input": {"kind": kind, "model": _model(kind), "prompt": prompt, "parameters": parameters, "idempotencyKey": idempotency_key},
+            "input": {"kind": kind, "model": model or _model(kind), "prompt": prompt, "parameters": _parameters(kind, parameters), "idempotencyKey": idempotency_key},
         })
         return dict(response.json()["generation"])
 
@@ -211,6 +216,10 @@ def _model(kind: str) -> str:
     if kind == "video":
         return VIDEO_MODEL
     raise ValueError(f"unsupported generation kind {kind!r}")
+
+
+def _parameters(kind: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    return {"resolution": IMAGE_RESOLUTION, **parameters} if kind == "image" else parameters
 
 
 def asset_reference(asset_id: str) -> str:

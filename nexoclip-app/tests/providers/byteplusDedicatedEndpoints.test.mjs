@@ -55,6 +55,19 @@ test('routes dedicated Seedream alias directly to the image endpoint id', async 
   assert.equal(calls[0].body.model, 'ep-image-50');
 });
 
+test('Seedream 5 Pro endpoint keeps the aspect ratio at 2K within its pixel cap', async () => {
+  const bodies = [];
+  const router = createProviderRouter({ env, fetch: async (url, options) => {
+    bodies.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ data: [{ url: 'https://output.example/image.png' }] }), { status: 200 });
+  } });
+
+  await router.generateImage({ model: 'byteplus/seedream-5.0-pro-unfiltered', prompt: 'p', aspectRatio: '9:16', resolution: '2K' });
+  await router.generateImage({ model: 'byteplus/seedream-5.0-pro-unfiltered', prompt: 'p', aspectRatio: '16:9', resolution: '1K' });
+  assert.equal(bodies[0].size, '1536x2752');
+  assert.equal(bodies[1].size, '1K');
+});
+
 test('does not call OpenRouter or a base model when endpoint configuration is absent', async () => {
   let calls = 0;
   const router = createProviderRouter({

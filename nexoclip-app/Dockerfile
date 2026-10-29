@@ -15,11 +15,6 @@ FROM deps AS builder
 # time. Keep it equal to the runtime CREDIT_MARKUP_PERCENT that is charged.
 ARG NEXT_PUBLIC_CREDIT_MARKUP_PERCENT=30
 ENV NEXT_PUBLIC_CREDIT_MARKUP_PERCENT=$NEXT_PUBLIC_CREDIT_MARKUP_PERCENT
-# Support chat (Tawk.to); public ids, an empty property leaves it off.
-ARG NEXT_PUBLIC_TAWK_PROPERTY_ID=6ad583e30cd4ef34cdfa5aab
-ARG NEXT_PUBLIC_TAWK_WIDGET_ID=1k590mcj8
-ENV NEXT_PUBLIC_TAWK_PROPERTY_ID=$NEXT_PUBLIC_TAWK_PROPERTY_ID
-ENV NEXT_PUBLIC_TAWK_WIDGET_ID=$NEXT_PUBLIC_TAWK_WIDGET_ID
 COPY nexoclip-app/ .
 # Next imports database-backed route modules while collecting build metadata.
 # This non-routable URL satisfies configuration checks without exposing a secret.
@@ -33,6 +28,8 @@ COPY --from=deps --chown=1001:1001 /app/node_modules ./node_modules
 COPY --chown=1001:1001 nexoclip-app/package.json ./package.json
 COPY --chown=1001:1001 nexoclip-app/src ./src
 COPY --chown=1001:1001 nexoclip-app/scripts ./scripts
+# The motion worker shares the Motion studio's scene model and style catalogue with the app.
+COPY --chown=1001:1001 nexoclip-app/components/motion ./components/motion
 USER 1001:1001
 
 FROM node-runtime AS worker

@@ -16,7 +16,7 @@ function addSecurityHeaders(response) {
     // and other muapi subdomains that the renderer fetches directly.
     response.headers.set(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://embed.tawk.to https://*.tawk.to; style-src 'self' 'unsafe-inline' https://*.tawk.to https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://muapi.ai https://*.muapi.ai https://*.tawk.to wss://*.tawk.to; frame-src 'self' https://*.tawk.to; font-src 'self' data: https://*.tawk.to https://fonts.gstatic.com;"
+        "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://fonts.gstatic.com https://*.lottiefiles.com https://lottie.host https://muapi.ai https://*.muapi.ai; frame-src 'self'; font-src 'self' data: https://fonts.gstatic.com;"
     );
     return response;
 }

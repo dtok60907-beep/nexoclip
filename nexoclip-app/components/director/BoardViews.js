@@ -127,6 +127,11 @@ function MediaFrame({ media, aspect = 'aspect-video', label, workspaceId }) {
 // ASPECT_RATIOS / RESOLUTIONS in director_service/board.py
 export const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
 export const RESOLUTIONS = ['480p', '720p', '1080p'];
+// VIDEO_MODELS in director_service/board.py: the clip model a project uses, and the resolutions it makes.
+export const VIDEO_MODELS = {
+  'seedance-2.5': { label: 'Seedance 2.5', resolutions: ['480p', '720p', '1080p'], maxSeconds: 30 },
+  'seedance-2.0': { label: 'Seedance 2.0', resolutions: ['720p', '1080p'], maxSeconds: 15 },
+};
 
 export const BRIEF_DETAIL_LABELS = {
   goal: 'Tujuan', audience: 'Target penonton', platform: 'Platform', key_message: 'Pesan utama', product: 'Produk / brand',
@@ -176,7 +181,7 @@ export function BriefView({ board, onEdit, busy }) {
             <Field label="Durasi (detik)"><input type="number" min={4} max={600} className={inputClass} value={draft.duration_seconds || ''} onChange={(e) => setDraft({ ...draft, duration_seconds: e.target.value })} /></Field>
             <Field label="Resolusi">
               <select className={inputClass} value={draft.resolution} onChange={(e) => setDraft({ ...draft, resolution: e.target.value })}>
-                {RESOLUTIONS.map((r) => <option key={r}>{r}</option>)}
+                {(VIDEO_MODELS[draft.video_model] || VIDEO_MODELS['seedance-2.5']).resolutions.map((r) => <option key={r}>{r}</option>)}
               </select>
             </Field>
             <Field label="Audio bawaan">

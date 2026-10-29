@@ -13,7 +13,7 @@ const DIRECT_MODEL_MAP = new Map([
   // Dedicated unfiltered aliases resolved via env-backed endpoint IDs
   ['byteplus/seedance-2.0-unfiltered', { provider: 'byteplus', model: 'byteplus/seedance-2.0-unfiltered', endpointEnv: 'BYTEPLUS_SEEDANCE_2_ENDPOINT' }],
   ['byteplus/seedance-2.5-unfiltered', { provider: 'byteplus', model: 'byteplus/seedance-2.5-unfiltered', endpointEnv: 'BYTEPLUS_SEEDANCE_2_5_ENDPOINT' }],
-  ['byteplus/seedream-5.0-pro-unfiltered', { provider: 'byteplus', model: 'byteplus/seedream-5.0-pro-unfiltered', endpointEnv: 'BYTEPLUS_SEEDREAM_5_ENDPOINT' }],
+  ['byteplus/seedream-5.0-pro-unfiltered', { provider: 'byteplus', model: 'byteplus/seedream-5.0-pro-unfiltered', endpointEnv: 'BYTEPLUS_SEEDREAM_5_ENDPOINT', imageSizing: 'seedream-5-pro' }],
   ['ep-20260907150312-xx7gf', { provider: 'byteplus', model: 'ep-20260907150312-xx7gf' }],
   ['ep-20260907150433-zg8fr', { provider: 'byteplus', model: 'ep-20260907150433-zg8fr' }],
   ['ep-20260904190604-p8pjl', { provider: 'byteplus', model: 'ep-20260904190604-p8pjl' }],

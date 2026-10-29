@@ -9,7 +9,7 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyb
 import { CSS } from '@dnd-kit/utilities';
 import {
   AssetsView, AudioView, Badge, BriefView, ConceptsView, HistoryView, LockButton, ResearchView, ScriptView,
-  assetUrl, inputClass, mediaStatus, SmallButton, Field, RATIOS, RESOLUTIONS, fmtCredits,
+  assetUrl, inputClass, mediaStatus, SmallButton, Field, RATIOS, RESOLUTIONS, VIDEO_MODELS, fmtCredits,
 } from './BoardViews.js';
 import ShotPanel from './ShotPanel.js';
 
@@ -89,7 +89,7 @@ const PORTRAIT = new Set(['aspect-[9/16]', 'aspect-[3/4]']);
 
 /** A header badge that is also a picker (aspect ratio, resolution). Changing it after videos exist asks first. */
 function BriefPicker({ board, field, options, title, warn, onEdit, busy, label = (o) => o }) {
-  const value = board.brief[field];
+  const value = board.brief[field] || options[0];
   const change = (next) => {
     if (next === value) return;
     if (warn(board) && !window.confirm(`${warn(board)} Lanjut?`)) return;
@@ -1240,6 +1240,7 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
   const selected = numbered.find((n) => n.shot.id === selectedId) || numbered[0] || null;
 
   const panelDef = panel && PANELS[panel];
+  const videoModel = VIDEO_MODELS[board.brief.video_model] || VIDEO_MODELS['seedance-2.5'];
   const openAssets = () => onOpenPanel('assets');
   const ready = (key) => board.media[key]?.status === 'succeeded' && board.media[key]?.asset_id;
   const renderable = numbered.some((n) => ready(`video:${n.shot.id}`) || ready(`frame:${n.shot.id}`));
@@ -1279,9 +1280,13 @@ export default function Workspace({ board, workspaceId, onEdit, onRequest, onCho
           <BriefPicker board={board} field="aspect_ratio" options={RATIOS} onEdit={onEdit} busy={busy}
             title="Rasio video. Ganti sebelum generate: gambar shot dan video yang sudah ada harus dibuat ulang."
             warn={(b) => hasMedia(b, ['frame:', 'video:', 'scene:']) && 'Gambar shot dan video yang sudah ada akan ditandai perlu dibuat ulang dengan rasio baru.'} />
-          <BriefPicker board={board} field="resolution" options={RESOLUTIONS} onEdit={onEdit} busy={busy}
+          <BriefPicker board={board} field="video_model" options={Object.keys(VIDEO_MODELS)} onEdit={onEdit} busy={busy}
+            label={(m) => VIDEO_MODELS[m].label}
+            title={`Model video. Seedance 2.5: klip sampai 30 detik, 480p-1080p. Seedance 2.0: sampai 15 detik, 720p/1080p.`}
+            warn={(b) => hasMedia(b, ['video:', 'scene:']) && 'Video yang sudah ada akan ditandai perlu dibuat ulang dengan model baru.'} />
+          <BriefPicker board={board} field="resolution" options={videoModel.resolutions} onEdit={onEdit} busy={busy}
             label={(r) => (prices[r] ? `${r} · ±${fmtCredits(Math.round(prices[r]))} kr/dtk` : r)}
-            title={`Resolusi video, dan perkiraan kredit per detik video${RESOLUTIONS.filter((r) => prices[r]).map((r) => `\n${r}: ±${fmtCredits(prices[r])} kredit/detik`).join('')}`}
+            title={`Resolusi video, dan perkiraan kredit per detik video${videoModel.resolutions.filter((r) => prices[r]).map((r) => `\n${r}: ±${fmtCredits(prices[r])} kredit/detik`).join('')}`}
             warn={(b) => hasMedia(b, ['video:', 'scene:']) && 'Video yang sudah ada akan ditandai perlu dibuat ulang dengan resolusi baru.'} />
           <button type="button" onClick={() => onOpenPanel('history')} title="Riwayat versi" className="rounded-md hover:opacity-80">
             <Badge>v{board.version}</Badge>

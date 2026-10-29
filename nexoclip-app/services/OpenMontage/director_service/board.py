@@ -31,6 +31,21 @@ BRIEF_DETAILS = ("goal", "audience", "platform", "key_message", "product", "tone
                  "avoid")
 LOOKS = ("realistic", "3d_animation", "anime", "illustration", "other")
 MIN_SHOT_SECONDS, MAX_SHOT_SECONDS = 4, 30  # 30 s: the longest single Seedance 2.5 generation
+# The video models a user can pick for a project (brief.video_model), both on our unfiltered BytePlus endpoints.
+# The first is the default; each one's longest clip, reference image limit and output resolutions.
+VIDEO_MODELS = {
+    "seedance-2.5": {"model": "byteplus/seedance-2.5-unfiltered", "max_seconds": 30, "max_images": 30,
+                     "resolutions": ("480p", "720p", "1080p")},
+    "seedance-2.0": {"model": "byteplus/seedance-2.0-unfiltered", "max_seconds": 15, "max_images": 9,
+                     "resolutions": ("720p", "1080p")},
+}
+DEFAULT_VIDEO_MODEL = "seedance-2.5"
+
+
+def video_model(brief: dict[str, Any]) -> dict[str, Any]:
+    """The project's video model and its limits."""
+    return VIDEO_MODELS.get(brief.get("video_model") or "") or VIDEO_MODELS[DEFAULT_VIDEO_MODEL]
+
 # The prompt templates a project is made with (brief.templates). 2: the layouts BytePlus Dramagic uses (character
 # close-up + three-view, location with a top-down view, references limited to what each kind gives, constraints at the
 # end of every clip). Projects from before stay on 1, so their sheets and clips are not suddenly out of date.
@@ -361,8 +376,17 @@ SHEET_ONLY_LOCATION_USE = ("take only the spatial layout and architecture of thi
                            "weather and light are the ones this prompt describes; people in that image are not used")
 
 
-def reference_line(n: int, item: dict[str, Any], version: int, sheets_only: bool = False) -> str:
+def own_image(board: dict[str, Any], element_id: str) -> bool:
+    """Whether the element's reference image is the user's own image, used as it is (not a generated sheet)."""
+    media = board["media"].get(f"element:{element_id}") or {}
+    return bool(media.get("uploaded")) and media.get("status") == TERMINAL_OK
+
+
+def reference_line(n: int, item: dict[str, Any], version: int, sheets_only: bool = False, own: bool = False) -> str:
     """How the video prompt names element reference @Image<n>."""
+    if own:
+        return (f"@Image{n} is the user's own image of {item['name']} ({item['kind']}): show "
+                f"{KEEP_IDENTITY.get(item['kind'], KEEP_IDENTITY['prop'])}.")
     if version >= 2:
         use = SHEET_ONLY_LOCATION_USE if sheets_only and item["kind"] == "location" else \
             REFERENCE_USE.get(item["kind"], REFERENCE_USE["prop"])
@@ -392,19 +416,17 @@ def clip_constraints(board: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-MAX_VIDEO_REFERENCES = 30  # Seedance 2.5 reference_image limit
-
-
 def video_references(board: dict[str, Any], shot: dict[str, Any]) -> list[str]:
     """The shot's frame, then the reference sheet of every element in it."""
     sheets = [f"element:{e}" for e in shot.get("element_ids", []) if element(board, e)]
-    return [f"frame:{shot['id']}", *sheets][:MAX_VIDEO_REFERENCES]
+    return [f"frame:{shot['id']}", *sheets][:video_model(board["brief"])["max_images"]]
 
 
 def reference_legend(board: dict[str, Any], deps: list[str], user_images: int = 0, user_videos: int = 0) -> str:
     lines = ["References:", "@Image1 is the opening frame of this shot: start the clip from it."]
     for n, dep in enumerate(deps[1:], start=2):
-        lines.append(reference_line(n, element(board, dep.split(":", 1)[1]), templates(board["brief"])))
+        element_id = dep.split(":", 1)[1]
+        lines.append(reference_line(n, element(board, element_id), templates(board["brief"]), own=own_image(board, element_id)))
     for n in range(len(deps) + 1, len(deps) + 1 + user_images):
         lines.append(f"@Image{n} is a reference the user gave for this shot: follow its style, composition and mood.")
     for n in range(1, user_videos + 1):
@@ -509,6 +531,12 @@ def media_specs(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "params": {"type": "music", "durationSeconds": max(MIN_MUSIC_SECONDS, min(MAX_MUSIC_SECONDS, seconds)),
                        "instrumental": bool(music.get("instrumental", True))},
         }
+    chosen = video_model(brief)
+    if chosen is not VIDEO_MODELS[DEFAULT_VIDEO_MODEL]:
+        # Only for another model than the default, so the clips of every project made before keep their signature.
+        for spec in specs.values():
+            if spec["kind"] == "video":
+                spec["model"] = chosen["model"]
     return specs
 
 
@@ -535,7 +563,7 @@ def _sheet_legend(board: dict[str, Any], element_ids: list[str], user_images: in
     for n, element_id in enumerate(element_ids, start=1):
         item = element(board, element_id)
         names[element_id] = f"{item['name']} (@Image{n})"
-        lines.append(reference_line(n, item, version, sheets_only=True))
+        lines.append(reference_line(n, item, version, sheets_only=True, own=own_image(board, element_id)))
     for n in range(len(element_ids) + 1, len(element_ids) + 1 + user_images):
         lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
     for n, asset_id in enumerate(user_videos, start=1):
@@ -549,7 +577,7 @@ def _sheet_shot_spec(board: dict[str, Any], item: dict[str, Any], ratio: str, au
     """One shot's clip from the sheets of its elements (no keyframe)."""
     brief = board["brief"]
     images, videos = user_references(item)
-    ids = [e for e in item.get("element_ids", []) if element(board, e)][:MAX_VIDEO_REFERENCES - len(images)]
+    ids = [e for e in item.get("element_ids", []) if element(board, e)][:video_model(brief)["max_images"] - len(images)]
     legend, names = _sheet_legend(board, ids, len(images), videos)
     body = _with_look(compile_mentions(item["video_prompt"], names)[0], brief)
     prompt = "\n\n".join(p for p in (legend, scene_setting(board, item.get("scene_id")), body, clip_constraints(board)) if p)
@@ -580,7 +608,8 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
     if refs and templates(brief) >= 2:
         # Always, even when the prompt names people without @mentions: Seedream must know which sheet is whom.
         frame_prompt += "\nReference images: " + "; ".join(
-            f"image {n} is the reference sheet of {el['name']} ({el['kind']}): "
+            (f"image {n} is the user's own image of {el['name']} ({el['kind']})" if own_image(board, el["id"]) else
+             f"image {n} is the reference sheet of {el['name']} ({el['kind']})") + ": "
             f"{REFERENCE_USE.get(el['kind'], REFERENCE_USE['prop'])}"
             for n, el in ((n, element(board, d.split(':', 1)[1])) for n, d in enumerate(refs, start=1))
         ) + ". Every person's face, hair and clothes match their own sheet exactly; never copy a sheet's layout."
@@ -595,7 +624,7 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
         "params": {"aspectRatio": ratio},
         **({"extra_images": images} if images else {}),
     }
-    deps = video_references(board, item)[:MAX_VIDEO_REFERENCES - len(images)]
+    deps = video_references(board, item)[:video_model(brief)["max_images"] - len(images)]
     legend = reference_legend(board, deps, len(images), len(videos))
     video_names = {}
     for n, dep in enumerate(deps[1:], start=2):
@@ -615,9 +644,6 @@ def _shot_specs(board: dict[str, Any], item: dict[str, Any], specs: dict[str, di
         "params": {"aspectRatio": ratio, "duration": int(item["duration_seconds"]), **audio},
         **({"extra_images": images} if images else {}), **({"ref_videos": videos} if videos else {}),
     }
-
-
-MAX_SCENE_SECONDS = 30  # Seedance 2.5's longest single generation
 
 
 def _first_appearance(board: dict[str, Any], shots: list[dict[str, Any]]) -> list[str]:
@@ -645,9 +671,10 @@ def _scene_videos(shots: list[dict[str, Any]]) -> list[str]:
 
 def scene_blocks(board: dict[str, Any]) -> list[dict[str, Any]]:
     """Runs of consecutive shots of one scene that are generated together as one Seedance video, the shots' frames
-    as keyframes: at most 30 s and 30 reference images each, at least two shots (one shot is just its own video).
+    as keyframes: within the video model's longest clip and reference image limit, at least two shots (one shot is just its own video).
     A block is keyed by its first shot: "scene:<shot_id>"."""
     blocks: list[dict[str, Any]] = []
+    limits = video_model(board["brief"])
     for sc in board["scenes"]:
         run: list[dict[str, Any]] = []
 
@@ -666,7 +693,7 @@ def scene_blocks(board: dict[str, Any]) -> list[dict[str, Any]]:
             candidate = [*run, item]
             frames = len(candidate) if keyframes(board["brief"]) else 0
             images = frames + len(_first_appearance(board, candidate)) + sum(len(user_references(s)[0]) for s in candidate)
-            if (sum(int(s["duration_seconds"]) for s in candidate) > MAX_SCENE_SECONDS or images > MAX_VIDEO_REFERENCES
+            if (sum(int(s["duration_seconds"]) for s in candidate) > limits["max_seconds"] or images > limits["max_images"]
                     or len(_scene_videos(candidate)) > MAX_SCENE_REFERENCE_VIDEOS):
                 close()
             run.append(item)
@@ -710,7 +737,7 @@ def _scene_spec(board: dict[str, Any], block: dict[str, Any], ratio: str, audio:
     for n, element_id in enumerate(elements_in_order, start=count + 1):
         item = element(board, element_id)
         names[element_id] = f"{item['name']} (@Image{n})"
-        lines.append(reference_line(n, item, templates(brief)))
+        lines.append(reference_line(n, item, templates(brief), own=own_image(board, element_id)))
     for n in range(count + len(elements_in_order) + 1, count + len(elements_in_order) + 1 + len(user_images)):
         lines.append(f"@Image{n} is a reference the user gave: use it only for style, composition and mood.")
     user_videos = _scene_videos(shots)
@@ -773,7 +800,7 @@ def _sheet_scene_spec(board: dict[str, Any], block: dict[str, Any], shots: list[
 
 def spec_sig(spec: dict[str, Any]) -> str:
     basis = {k: spec[k] for k in ("kind", "prompt", "params", "deps")}
-    for key in ("photos", "extra_images", "ref_videos"):  # only when present, so older specs keep their signature
+    for key in ("photos", "extra_images", "ref_videos", "model"):  # only when present, so older specs keep their signature
         if spec.get(key):
             basis[key] = spec[key]
     return hashlib.sha256(json.dumps(basis, sort_keys=True).encode("utf-8")).hexdigest()

@@ -27,3 +27,25 @@ test('calls ElevenLabs text to speech and music with the right payload', async (
   const failing = async () => new Response(JSON.stringify({ detail: { message: 'quota exceeded' } }), { status: 401 });
   await assert.rejects(generateElevenLabsAudio({ type: 'voiceover', text: 'Halo', voiceId: 'JBFqnCBsd6RMkjVDRZzb' }, { apiKey: 'k', fetchImpl: failing }), /quota exceeded/);
 });
+
+test('voiceover with timestamps turns the character alignment into words', async () => {
+  const { generateVoiceoverWithTimestamps, wordsFromAlignment } = await import('./elevenlabsAudio.js');
+  const text = 'Halo, dunia ini';
+  const alignment = {
+    characters: [...text],
+    character_start_times_seconds: [...text].map((_, i) => i * 0.1),
+    character_end_times_seconds: [...text].map((_, i) => i * 0.1 + 0.08),
+  };
+  assert.deepEqual(wordsFromAlignment(alignment), [
+    { w: 'Halo,', s: 0, e: 0.48 }, { w: 'dunia', s: 0.6, e: 1.08 }, { w: 'ini', s: 1.2, e: 1.48 },
+  ]);
+  let called = null;
+  const result = await generateVoiceoverWithTimestamps({ type: 'voiceover', text, voiceId: 'JBFqnCBsd6RMkjVDRZzb' }, {
+    apiKey: 'k',
+    fetchImpl: async (url, init) => { called = { url, body: JSON.parse(init.body) }; return { ok: true, json: async () => ({ audio_base64: Buffer.from('mp3').toString('base64'), alignment }) }; },
+  });
+  assert.match(called.url, /\/v1\/text-to-speech\/JBFqnCBsd6RMkjVDRZzb\/with-timestamps\?output_format=mp3_44100_128$/);
+  assert.equal(called.body.model_id, 'eleven_v3');
+  assert.equal(result.body.toString(), 'mp3');
+  assert.equal(result.words.length, 3);
+});

@@ -134,7 +134,7 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       if (!directConfigured(env, 'byteplus')) throw createDirectProviderUnavailableError(params.model, 'byteplus');
       const adapter = directAdapter(env, 'byteplus', operation, fetchImpl);
       const directModel = resolveDirectProviderModel(mapping, env);
-      const directParams = { ...params, model: directModel };
+      const directParams = { ...params, model: directModel, ...(mapping.imageSizing ? { imageSizing: mapping.imageSizing } : {}) };
       return observeDispatch(operation, 'byteplus',
         () => operation === 'image' ? adapter.generate(directParams) : adapter.submit(directParams), options);
     }

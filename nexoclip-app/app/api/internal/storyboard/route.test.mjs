@@ -44,7 +44,7 @@ test('submits a signed storyboard video job through the credit reservation', asy
   });
   const response = await post(signedRequest({
     action: 'submit',
-    input: { kind: 'video', model: STORYBOARD_MODELS.video, prompt: 'a chase', parameters: { duration: 8 }, idempotencyKey: 'task-1' },
+    input: { kind: 'video', model: STORYBOARD_MODELS.video[0], prompt: 'a chase', parameters: { duration: 8 }, idempotencyKey: 'task-1' },
   }));
   assert.equal(response.status, 201);
   assert.deepEqual((await response.json()).generation, { id: 'generation-1', kind: 'video', status: 'queued', error: null, outputs: [] });
@@ -74,14 +74,14 @@ test('tags a submission with the caller-provided source (e.g. a different intern
   await post(sign({
     action: 'submit',
     source: 'director',
-    input: { kind: 'image', model: STORYBOARD_MODELS.image, prompt: 'a cat', idempotencyKey: 'task-1' },
+    input: { kind: 'image', model: STORYBOARD_MODELS.image[0], prompt: 'a cat', idempotencyKey: 'task-1' },
   }));
   assert.equal(reserved.input.parameters.source, 'director');
   assert.equal(reserved.input.idempotencyKey, 'director:task-1');
 
   await post(sign({
     action: 'submit',
-    input: { kind: 'image', model: STORYBOARD_MODELS.image, prompt: 'a cat', idempotencyKey: 'task-2' },
+    input: { kind: 'image', model: STORYBOARD_MODELS.image[0], prompt: 'a cat', idempotencyKey: 'task-2' },
   }));
   assert.equal(reserved.input.parameters.source, 'storyboard');
   assert.equal(reserved.input.idempotencyKey, 'storyboard:task-2');
@@ -89,7 +89,7 @@ test('tags a submission with the caller-provided source (e.g. a different intern
   await post(sign({
     action: 'submit',
     source: 'not-a-real-tool',
-    input: { kind: 'image', model: STORYBOARD_MODELS.image, prompt: 'a cat', idempotencyKey: 'task-3' },
+    input: { kind: 'image', model: STORYBOARD_MODELS.image[0], prompt: 'a cat', idempotencyKey: 'task-3' },
   }));
   assert.equal(reserved.input.parameters.source, 'storyboard');
 });
@@ -138,7 +138,7 @@ test('maps insufficient credits on submit to HTTP 402', async () => {
   const post = handler({ reserve: async () => { throw new Error('Insufficient credits'); } });
   const response = await post(signedRequest({
     action: 'submit',
-    input: { kind: 'image', model: STORYBOARD_MODELS.image, prompt: 'x', idempotencyKey: 'k' },
+    input: { kind: 'image', model: STORYBOARD_MODELS.image[0], prompt: 'x', idempotencyKey: 'k' },
   }));
   assert.equal(response.status, 402);
 });

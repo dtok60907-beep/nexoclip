@@ -79,6 +79,15 @@ export async function audioCredits(input, { env = process.env, loadRate = loadUs
   return { usd, credits: usdToCredits(usd, env, await loadRate({ env })) };
 }
 
+async function providerFailure(response) {
+  const detail = await response.json().catch(() => null);
+  const message = detail?.detail?.message || detail?.detail?.[0]?.msg || `ElevenLabs returned HTTP ${response.status}`;
+  const billing = providerBillingFailure('elevenlabs', `${detail?.detail?.code || detail?.detail?.status || ''} ${message}`);
+  // 424: the request was fine, our ElevenLabs account was not; the caller shows the message as it is.
+  if (billing) return Object.assign(new Error(billing.publicMessage), { status: 424, code: billing.code });
+  return Object.assign(new Error(message), { status: response.status === 422 || response.status === 400 ? 400 : 502, code: 'AUDIO_PROVIDER_FAILED' });
+}
+
 // Returns { body: Buffer, contentType }.
 export async function generateElevenLabsAudio(input, { apiKey = process.env.ELEVENLABS_API_KEY, fetchImpl = fetch } = {}) {
   if (!apiKey) throw Object.assign(new Error('Audio generation is not configured'), { status: 503 });
@@ -94,15 +103,45 @@ export async function generateElevenLabsAudio(input, { apiKey = process.env.ELEV
     headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) {
-    const detail = await response.json().catch(() => null);
-    const message = detail?.detail?.message || detail?.detail?.[0]?.msg || `ElevenLabs returned HTTP ${response.status}`;
-    const billing = providerBillingFailure('elevenlabs', `${detail?.detail?.code || detail?.detail?.status || ''} ${message}`);
-    // 424: the request was fine, our ElevenLabs account was not; the caller shows the message as it is.
-    if (billing) throw Object.assign(new Error(billing.publicMessage), { status: 424, code: billing.code });
-    throw Object.assign(new Error(message), { status: response.status === 422 || response.status === 400 ? 400 : 502, code: 'AUDIO_PROVIDER_FAILED' });
-  }
+  if (!response.ok) throw await providerFailure(response);
   const body = Buffer.from(await response.arrayBuffer());
   if (!body.length) throw Object.assign(new Error('ElevenLabs returned an empty file'), { status: 502, code: 'AUDIO_PROVIDER_FAILED' });
   return { body, contentType: 'audio/mpeg' };
+}
+
+// Words with their start and end (seconds) from ElevenLabs' per-character alignment.
+export function wordsFromAlignment(alignment) {
+  const chars = alignment?.characters || [];
+  const starts = alignment?.character_start_times_seconds || [];
+  const ends = alignment?.character_end_times_seconds || [];
+  const words = [];
+  let current = null;
+  chars.forEach((char, index) => {
+    if (/\s/.test(char)) { current = null; return; }
+    if (!current) {
+      current = { w: '', s: Number(starts[index]) || 0, e: Number(ends[index]) || 0 };
+      words.push(current);
+    }
+    current.w += char;
+    current.e = Number(ends[index]) || current.e;
+  });
+  return words.map((word) => ({ w: word.w, s: Math.round(word.s * 1000) / 1000, e: Math.round(word.e * 1000) / 1000 }));
+}
+
+// A voiceover plus when each word is spoken (for captions). Same price as the plain voiceover.
+// Returns { body: Buffer, contentType, words: [{ w, s, e }] }.
+export async function generateVoiceoverWithTimestamps(input, { apiKey = process.env.ELEVENLABS_API_KEY, fetchImpl = fetch } = {}) {
+  if (!apiKey) throw Object.assign(new Error('Audio generation is not configured'), { status: 503 });
+  const audio = validateAudioInput(input);
+  if (audio.type !== 'voiceover') throw Object.assign(new Error('Timestamps are only for voiceovers'), { status: 400 });
+  const response = await fetchImpl(`${API}/v1/text-to-speech/${encodeURIComponent(audio.voiceId)}/with-timestamps?output_format=${OUTPUT_FORMAT}`, {
+    method: 'POST',
+    headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ text: audio.text, model_id: VOICEOVER_MODEL }),
+  });
+  if (!response.ok) throw await providerFailure(response);
+  const data = await response.json().catch(() => null);
+  const body = Buffer.from(String(data?.audio_base64 || ''), 'base64');
+  if (!body.length) throw Object.assign(new Error('ElevenLabs returned an empty file'), { status: 502, code: 'AUDIO_PROVIDER_FAILED' });
+  return { body, contentType: 'audio/mpeg', words: wordsFromAlignment(data.alignment || data.normalized_alignment) };
 }

@@ -42,6 +42,8 @@ What you can do (tools):
   references (similar films, ads, creators), cta (the ending / call to action), must_have, avoid. Plus look, aspect
   ratio, target duration, visual style, resolution and native audio on/off. Keep resolution 720p unless the user asks
   for another one (1080p costs about 2.5x per second). Aspect ratios: 16:9, 9:16, 1:1, 4:3, 3:4, 21:9 (cinematic wide).
+  brief.video_model (seedance-2.5, the default, or seedance-2.0: clips of at most 15 s,
+  720p or 1080p, up to 9 reference images) are picked by the user in the header; you cannot change them.
   video_type is the kind of video (ugc_ad, product_ad, short_film, micro_drama, trailer, music_video, explainer,
   documentary, animation, presenter): it decides the craft guides, the shot language and how prompts are written.
   Infer it yourself from what the user says and set it with the brief; never ask the user only for this. "UGC",
@@ -88,11 +90,14 @@ What you can do (tools):
   that show it (with that character's @mention), not into the prop. (interaction is only read by older projects.)
   Elements with "photos" have real photos uploaded by the user (their product, logo, face, place): the sheet is made
   from those photos, so keep the description consistent with them and never invent a different design.
+  An element whose reference image is the user's own (use_as_sheet) keeps that image: write its description from
+  what the image shows; it is not regenerated when the description changes.
   One element = one subject, never a group: "four friends" are four characters, each with their own sheet. Make a
   separate location for every distinct place or set, and a separate prop for the advertised product and for every
   object that recurs across shots. Special clothing that changes hands or is put on later (a ball gown, a mask, a
   uniform) is a prop too. There is no upper limit: create as many as the brief needs (e.g. 3 characters, 5 locations,
-  10 props). Every new or changed element's sheet is generated automatically at the end of the turn.
+  10 props). Every new or changed element's sheet is generated automatically at the end of the turn, except
+  the ones using the user's own image.
   A changed state of an element is a variant: its own element with variant_of=<original id> (same kind), named
   "<original> - <state>" (e.g. "Moonflower petal - Pressed", "Studio - Wrecked", "Maya - Ball gown"). Its sheet is made
   from the original's sheet, so describe its full look in that state. Use the variant in the shots where that state is
@@ -103,7 +108,8 @@ What you can do (tools):
   only add light that changes within a shot. Every shot belongs to a scene via scene_id; shots are numbered per scene (1.1, 1.2, 2.1 ...). Scenes alone are not a shot list: when you
   plan the visuals (or the user asks for shots / a storyboard), also call set_shots in the same turn. Never say shots
   exist unless set_shots succeeded.
-- set_shots / update_shot / remove_shot: the ordered shot list. Each shot is a part of a video clip, 4-30 s, with a
+- set_shots / update_shot / remove_shot: the ordered shot list. Each shot is a part of a video clip, 4-30 s (4-15 s
+  when brief.video_model is seedance-2.0), with a
   video_prompt (composition, motion, camera, action, sound). New projects (brief.keyframes false) have no frames:
   the clips are made straight from the element sheets, the way ByteDance's Dramagic does it, so the [Layout] of
   each shot is what decides its composition. Older projects (keyframes true) also have a frame_prompt per shot: the
@@ -197,10 +203,15 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   images (the latest few messages' images are included): describe what you see when it matters and use it (a
   product's exact look goes into its element description). Attached videos are watched for you from start to end by
   a video analyst before you answer ([video analyst, ...] with a timeline, camera, subjects, mood); ask it specifics
-  with analyze_video (costs a little). It sees frames, not sound. Use them: a photo of the user's
-  product, face, logo or place goes on its element (upsert_element photos=[asset_id], its sheet is then made from
-  it); an image or video meant as a style, composition or motion reference for a shot goes on that shot
-  (reference_assets=[{asset_id, kind}], sent to Seedance with the frame and sheets).
+  with analyze_video (costs a little). It sees frames, not sound. Never silently skip an attachment, and
+  never decide on your own how it is used: unless the user already said what it is for, propose a use for each one
+  in your reply and wait for them to agree (in any run mode), then apply it. The uses: (a) as an element's reference
+  image as it is, when it already shows that one character, product, logo, prop or place clearly: upsert_element
+  use_as_sheet=asset_id, nothing is generated or paid for; (b) as photos to make that element's sheet from, when the
+  subject is small, partly hidden or mixed with others, or a new design or more views are wanted:
+  photos=[asset_id], the sheet is then generated (paid); (c) as a style, composition or motion reference for a shot:
+  reference_assets=[{asset_id, kind}] on that shot, sent to Seedance with the frame and sheets; (d) not used.
+  Recommend one per attachment with a short reason, e.g. "Gambar 1 → karakter Maya, dipakai langsung (gratis)".
 - Captions: a shot's caption is on-screen text at the bottom for the whole shot (subtitles of the voiceover, a tagline,
   the CTA with the brand). Optional: add them when the format wants them (TikTok/Reels ads usually do), keep them short
   (max ~8 words), in the video's language; set them with set_shots / update_shot.
@@ -376,6 +387,9 @@ TOOLS = [
                                                        "of; its sheet is made from that element's sheet"},
         "photos": {"type": "array", "items": {"type": "string"},
                    "description": "asset ids of the user's own photos of it (from their attachments); its sheet is made from them"},
+        "use_as_sheet": {"type": "string", "description": "asset id of one image the user attached that already shows it "
+                                                          "clearly: used as its reference image as it is, nothing is "
+                                                          "generated (free)"},
     }, ["id", "kind", "name", "description"]),
     _tool("remove_element", "Remove an element.", {"id": {"type": "string"}}, ["id"]),
     _tool("set_scenes", "Replace the ordered scene list (shots keep their scene_id).", {
@@ -479,8 +493,9 @@ def _clean_shot(raw: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
         duration = int(shot.get("duration_seconds") or 0)
     except (TypeError, ValueError):
         duration = 0
-    if not boards.MIN_SHOT_SECONDS <= duration <= boards.MAX_SHOT_SECONDS:
-        raise ToolError(f"shot {shot['id']}: duration_seconds must be {boards.MIN_SHOT_SECONDS}-{boards.MAX_SHOT_SECONDS}")
+    longest = boards.video_model(board["brief"])["max_seconds"]
+    if not boards.MIN_SHOT_SECONDS <= duration <= longest:
+        raise ToolError(f"shot {shot['id']}: duration_seconds must be {boards.MIN_SHOT_SECONDS}-{longest}")
     shot["duration_seconds"] = duration
     # Elements named with @<id> in the prompts are in the shot (and passed as references) too.
     mentioned = [m for m in boards.MENTION.findall(f"{shot['frame_prompt']} {shot['video_prompt']}") if boards.element(board, m)]
@@ -569,9 +584,26 @@ def _update_brief(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         raise ToolError("aspect_ratio must be one of " + ", ".join(boards.ASPECT_RATIOS))
     if fields.get("resolution") and fields["resolution"] not in boards.RESOLUTIONS:
         raise ToolError("resolution must be one of " + ", ".join(boards.RESOLUTIONS))
+    # The models are the user's choice (they decide what a turn and a clip cost): the agent cannot change them.
+    if ctx.author == "user":
+        for key, choices in (("video_model", boards.VIDEO_MODELS),):
+            if args.get(key) is not None:
+                if args[key] not in choices:
+                    raise ToolError(f"{key} must be one of " + ", ".join(choices))
+                fields[key] = args[key]
 
     def change(board: dict[str, Any]) -> dict:
         ctx.guard(board["brief"], "the brief")
+        chosen = boards.video_model({**board["brief"], **fields})
+        if "video_model" in fields:
+            too_long = [s["title"] for s in board["shots"] if int(s.get("duration_seconds") or 0) > chosen["max_seconds"]]
+            if too_long:
+                raise ToolError(f"this video model makes clips of at most {chosen['max_seconds']} s; shorten first: "
+                                + ", ".join(too_long))
+            if (fields.get("resolution") or board["brief"].get("resolution") or "720p") not in chosen["resolutions"]:
+                fields.setdefault("resolution", "720p")
+        if fields.get("resolution") and fields["resolution"] not in chosen["resolutions"]:
+            raise ToolError("this video model makes " + ", ".join(chosen["resolutions"]))
         board["brief"].update(fields)
         return dict(board["brief"])
 
@@ -698,6 +730,9 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         if len(photos) > boards.MAX_ELEMENT_PHOTOS or not all(_ASSET_ID.match(p) for p in photos):
             raise ToolError(f"photos must be up to {boards.MAX_ELEMENT_PHOTOS} asset ids")
         item["photos"] = photos
+    own = str(args.get("use_as_sheet") or "").strip()
+    if own and not _ASSET_ID.match(own):
+        raise ToolError("use_as_sheet must be the asset id of an image the user attached")
     if item["kind"] not in boards.ELEMENT_KINDS:
         raise ToolError("kind must be character, location or prop")
     if not item["name"] or len(item["description"]) < 20:
@@ -724,6 +759,11 @@ def _upsert_element(ctx: Ctx, args: dict[str, Any]) -> tuple[dict, str]:
         return True
 
     created = ctx.update(change, f"{labels[item['kind']].capitalize()}: {item['name']}")
+    if own:
+        # The user's image stands as the element's reference (like an uploaded frame): it is never regenerated
+        # unless someone explicitly asks for a new sheet.
+        generation._record_take(ctx.project_id, f"element:{item['id']}", asset_id=own, spec_sig=None, dep_assets=[],
+                                generated_at=now_iso(), uploaded=True)
     return {"ok": True, "created": created}, f"{'Menambah' if created else 'Mengubah'} {labels[item['kind']]}: {item['name']}"
 
 

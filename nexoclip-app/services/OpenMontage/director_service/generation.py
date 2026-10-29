@@ -124,7 +124,8 @@ def create_request(project_id: str, keys: list[str], *, force: bool = False, not
     per_item: dict[str, Any] = {}
     if bridge is not None:
         for key in items:
-            price = bridge.estimate(kind=specs[key]["kind"], prompt=specs[key]["prompt"], parameters=specs[key]["params"])
+            price = bridge.estimate(kind=specs[key]["kind"], prompt=specs[key]["prompt"], parameters=specs[key]["params"],
+                                    model=specs[key].get("model"))
             per_item[key] = price
             estimate["credits"] += price["credits"]
             estimate["usd"] += price["usd"]
@@ -387,7 +388,7 @@ def _run_tier(project_id: str, bridge: nexoclip.Bridge, keys: list[str], since: 
         basis = hashlib.sha256(json.dumps([sig, dep_assets]).encode("utf-8")).hexdigest()[:24]
         try:
             generation = bridge.submit(kind=spec["kind"], prompt=spec["prompt"], parameters=params,
-                                       idempotency_key=f"{project_id}:{key}:{basis}:{attempt}")
+                                       idempotency_key=f"{project_id}:{key}:{basis}:{attempt}", model=spec.get("model"))
         except nexoclip.BridgeError as exc:
             submit_error = exc
             break

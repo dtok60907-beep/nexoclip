@@ -31,8 +31,12 @@ const ACTIONS = new Set(['submit', 'status', 'import-asset', 'download-asset', '
 // "Trust for Seedance" of a workspace image (the same workspace-wide trust Canvas uses): Seedance refuses images
 // with human faces unless they are BytePlus trusted assets. The Director borrows the trust around a video job.
 const TRUST_OPERATIONS = { 'trust-asset': 'start', 'trust-status': 'get', 'untrust-asset': 'delete' };
-// Only the models these tools are configured with may be submitted.
-export const STORYBOARD_MODELS = { image: 'seedream-5-0-260128', video: 'byteplus/seedance-2.5-unfiltered' };
+// Only the models these tools are configured with may be submitted (the Director's project picks the video model;
+// the first is the default). Every one runs on our BytePlus endpoints.
+export const STORYBOARD_MODELS = {
+  image: ['byteplus/seedream-5.0-pro-unfiltered'],
+  video: ['byteplus/seedance-2.5-unfiltered', 'byteplus/seedance-2.0-unfiltered'],
+};
 // Bookkeeping label for which internal tool made the request; must be one of these.
 const SOURCES = new Set(['storyboard', 'director']);
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
@@ -112,7 +116,7 @@ export function createInternalStoryboardHandler({
 
       if (action === 'estimate') {
         const kind = payload.kind;
-        if (!STORYBOARD_MODELS[kind] || payload.model !== STORYBOARD_MODELS[kind]) return badRequest('Unsupported storyboard model');
+        if (!STORYBOARD_MODELS[kind]?.includes(payload.model)) return badRequest('Unsupported storyboard model');
         if (typeof payload.prompt !== 'string') return badRequest('A prompt is required');
         const priced = await priceGeneration({ kind, model: payload.model, prompt: payload.prompt, parameters: payload.parameters || {} });
         if (!priced) return Response.json({ credits: 0, usd: 0 });
@@ -283,7 +287,7 @@ export function createInternalStoryboardHandler({
       if (action === 'submit') {
         const input = payload.input;
         const kind = input?.kind;
-        if (!STORYBOARD_MODELS[kind] || input.model !== STORYBOARD_MODELS[kind]) return badRequest('Unsupported storyboard model');
+        if (!STORYBOARD_MODELS[kind]?.includes(input.model)) return badRequest('Unsupported storyboard model');
         if (typeof input.prompt !== 'string' || !input.prompt.trim()) return badRequest('A prompt is required');
         if (typeof input.idempotencyKey !== 'string' || !input.idempotencyKey) return badRequest('idempotencyKey is required');
         const generation = await reserve(pool, workspace.id, {

@@ -8,6 +8,8 @@ import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
 import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
+import { SUPPORT_WHATSAPP_URL } from './publicPricing';
+import { WHATSAPP_PATH } from './SupportChat';
 import PricingModal from './PricingModal';
 import { PromoBanner, usePlanStatus } from './PlanStatus';
 import LowBalanceDialog from './LowBalanceDialog';
@@ -45,8 +47,12 @@ const AudioStudio = studioLazy('AudioStudio');
 const MarketingStudio = studioLazy('MarketingStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
+const MotionStudio = dynamic(() => import('./motion/MotionStudio.js'), { ssr: false, loading: StudioLoading });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
+const LANDING_URL = 'https://www.nexoclip.com';
+
+
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
 const TABS = [
@@ -170,6 +176,16 @@ const TABS = [
     )
   },
   {
+    id: 'motion',
+    label: 'Motion',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 17c3-6 6-6 9 0s6 6 9 0"/>
+        <circle cx="12" cy="7" r="3"/>
+      </svg>
+    )
+  },
+  {
     id: 'billing',
     label: 'Top Up',
     icon: (
@@ -203,7 +219,7 @@ const TABS = [
 ];
 
 // The header's page title for each tab (sidebar labels where they differ from TABS).
-const TAB_TITLES = { home: 'Home', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', billing: 'Top up', usage: 'Usage', canvas: 'Canvas' };
+const TAB_TITLES = { home: 'Home', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', motion: 'Motion', billing: 'Top up', usage: 'Usage', canvas: 'Canvas' };
 
 const NOTIFICATIONS_STORAGE_KEY = 'open_gen_notifications_v1';
 const MAX_VISIBLE_NOTIFICATIONS = 3;
@@ -784,6 +800,7 @@ export default function StandaloneShell({ initialTab, children }) {
                   {navLink('image', 'Image')}
                   {navLink('cinema', 'World')}
                   {navLink('ai-influencer', 'Character')}
+                  {navLink('motion', 'Motion', <span className="nx-badge">NEW</span>)}
                   {navLink('audio', 'Audio')}
                 </>)}
                 {group('Workspace', 'Space', <>
@@ -825,6 +842,20 @@ export default function StandaloneShell({ initialTab, children }) {
                   <button type="button" className="nx-card-link w-full" onClick={() => openAuth('register')}>Create an account</button>
                 </div>
               )}
+
+              <div className="nx-foot">
+                <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="nx-help" aria-label="Chat dengan NexoClip lewat WhatsApp" title={isCollapsed ? 'Chat dengan NexoClip' : undefined}>
+                  <span className="nx-help-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d={WHATSAPP_PATH} /></svg>
+                  </span>
+                  <span className="nx-label"><strong>Chat dengan NexoClip</strong><small>Lewat WhatsApp</small></span>
+                </a>
+                <nav className="nx-legal" aria-label="Kebijakan">
+                  <a href={`${LANDING_URL}/privacy`} target="_blank" rel="noopener noreferrer">Kebijakan Privasi</a>
+                  <span aria-hidden="true">·</span>
+                  <a href={`${LANDING_URL}/terms`} target="_blank" rel="noopener noreferrer">Ketentuan Layanan</a>
+                </nav>
+              </div>
             </aside>
           );
         })()}
@@ -890,6 +921,11 @@ export default function StandaloneShell({ initialTab, children }) {
         {activeTab === 'vibe-motion' && (
           <div className="h-full w-full">
             <VibeMotionStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('vibe-motion')} onGenerationEnd={makeGenerationEndCallback('vibe-motion')} onGenerationComplete={makeSuccessCallback('vibe-motion')} onGenerationError={makeErrorCallback('vibe-motion')} />
+          </div>
+        )}
+        {activeTab === 'motion' && (
+          <div className="h-full w-full">
+            <MotionStudio authenticated={authStatus === 'authenticated'} beforeGenerate={requireAuth} onCreditsUsed={refreshBalance} />
           </div>
         )}
         {activeTab === 'lipsync' && (
