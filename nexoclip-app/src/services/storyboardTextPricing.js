@@ -12,7 +12,8 @@ export const STORYBOARD_TEXT_PRICES = {
   // The AI Director (services/OpenMontage/director_service/llm.py, PRICES_PER_MILLION):
   // Seed 2.1 on BytePlus ModelArk (standard online inference, October 2026), or GPT-5 and newer, never -pro / -sol.
   'dola-seed-2-1-turbo-260628': { input: 0.5 / 1e6, cached: 0.1 / 1e6, output: 2.5 / 1e6 },
-  'ep-20261019153353-45w94': { input: 0.5 / 1e6, cached: 0.1 / 1e6, output: 2.5 / 1e6 }, // Seed 2.1 Turbo endpoint
+  'ep-20261019153359-9pfqc': { input: 0.5 / 1e6, cached: 0.1 / 1e6, output: 2.5 / 1e6 }, // Seed 2.1 Turbo endpoint
+  'ep-20261019153353-45w94': { input: 0.5 / 1e6, cached: 0.1 / 1e6, output: 2.5 / 1e6 }, // earlier Seed 2.1 Turbo endpoint
   // GPT: OpenAI prices for contexts up to 272K tokens; `cached` is the rate for input
   // served from the provider's prompt cache (most of an agent turn, which resends the conversation every step).
   'gpt-5.1': { input: 1.25 / 1e6, cached: 0.125 / 1e6, output: 10 / 1e6 },

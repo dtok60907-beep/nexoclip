@@ -22,8 +22,8 @@ OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 OPENROUTER_RESPONSES_URL = "https://openrouter.ai/api/v1/responses"
 OPENROUTER_KEY_ENV = "OPENROUTER_API_KEY"
 GROK_MODEL = "x-ai/grok-4.5"
-# Our BytePlus inference endpoint for Seed 2.1 Turbo (thinking on, reasoning effort medium in its settings).
-DEFAULT_MODEL = "ep-20261019153353-45w94"
+# Our BytePlus inference endpoint for Seed 2.1 Turbo (reasoning effort is sent with every request).
+DEFAULT_MODEL = "ep-20261019153359-9pfqc"
 KEY_ENV = "DIRECTOR_OPENAI_API_KEY"
 BYTEPLUS_KEY_ENV = "BYTEPLUS_API_KEY"
 BYTEPLUS_URL_ENV = "BYTEPLUS_BASE_URL"
@@ -37,7 +37,8 @@ KEY_FILE = Path(__file__).resolve().parent.parent / "director.env"
 PRICES_PER_MILLION = {
     # BytePlus ModelArk standard online inference (ai.byteplus.com model pricing, October 2026).
     "dola-seed-2-1-turbo-260628": (0.50, 0.10, 2.50),
-    "ep-20261019153353-45w94": (0.50, 0.10, 2.50),  # Seed 2.1 Turbo endpoint
+    "ep-20261019153359-9pfqc": (0.50, 0.10, 2.50),  # Seed 2.1 Turbo endpoint
+    "ep-20261019153353-45w94": (0.50, 0.10, 2.50),  # earlier Seed 2.1 Turbo endpoint
     "gpt-5.6-terra": (2.00, 0.20, 12.00),
     "gpt-5.6-luna": (0.20, 0.02, 1.20),
     "gpt-5.5": (5.00, 0.50, 30.00),

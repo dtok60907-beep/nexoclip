@@ -1104,7 +1104,7 @@ def test_only_seed_and_gpt5_class_models_are_allowed(monkeypatch):
         with pytest.raises(llm.LLMError, match="not allowed"):
             llm._checked_model()
     monkeypatch.delenv("DIRECTOR_LLM_MODEL")
-    assert llm._checked_model() == "ep-20261019153353-45w94"
+    assert llm._checked_model() == "ep-20261019153359-9pfqc"
     assert llm._reasoning() == {"effort": "medium"}
 
 
@@ -1127,7 +1127,7 @@ def test_seed_runs_on_byteplus_and_gpt_on_openai(monkeypatch):
     monkeypatch.setenv("BYTEPLUS_BASE_URL", "https://ark.example/api/v3/")
     monkeypatch.setenv("DIRECTOR_OPENAI_API_KEY", "oa")
     assert llm._endpoint("dola-seed-2-1-turbo-260628") == ("https://ark.example/api/v3/responses", "bp")
-    assert llm._endpoint("ep-20261019153353-45w94") == ("https://ark.example/api/v3/responses", "bp")
+    assert llm._endpoint("ep-20261019153359-9pfqc") == ("https://ark.example/api/v3/responses", "bp")
     assert llm._endpoint("gpt-5.6-terra") == (llm.OPENAI_RESPONSES_URL, "oa")
     monkeypatch.delenv("BYTEPLUS_BASE_URL")
     with pytest.raises(llm.LLMError, match="BYTEPLUS_BASE_URL"):
