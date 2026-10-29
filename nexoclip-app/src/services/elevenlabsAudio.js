@@ -5,10 +5,12 @@ import { providerBillingFailure } from '../lib/providerBilling.js';
 import { loadUsdIdrRate, usdToCredits } from './generationPricing.js';
 
 const API = 'https://api.elevenlabs.io';
-export const VOICEOVER_MODEL = 'eleven_v3';
+// Eleven v4: better voices, delivery and audio tags than v3; like v3 it takes no SSML <break> and no speed setting
+// (pauses come from punctuation and tags, see motionStoryPrompts.js).
+export const VOICEOVER_MODEL = 'eleven_v4';
 export const MUSIC_MODEL = 'music_v1';
 const OUTPUT_FORMAT = 'mp3_44100_128';
-export const MAX_VOICEOVER_CHARS = 5000; // eleven_v3's limit per request
+export const MAX_VOICEOVER_CHARS = 5000; // per request
 export const MIN_MUSIC_SECONDS = 3;
 export const MAX_MUSIC_SECONDS = 300;
 
@@ -54,7 +56,9 @@ export function validateAudioInput(input = {}) {
     const voiceId = String(input.voiceId || '');
     // Any well-formed id is accepted (a user's own voice), the premade list is only the default choice.
     if (!VOICE_IDS.has(voiceId) && !VOICE_ID.test(voiceId)) throw invalid('voiceId is invalid');
-    return { type, text, voiceId };
+    // Stability 0..1: lower is more expressive and varied, higher keeps the delivery steady.
+    const stability = typeof input.stability === 'number' && input.stability >= 0 && input.stability <= 1 ? Math.round(input.stability * 100) / 100 : undefined;
+    return { type, text, voiceId, ...(stability === undefined ? {} : { stability }) };
   }
   if (type === 'music') {
     if (!text) throw invalid('A music prompt is required');
@@ -137,7 +141,7 @@ export async function generateVoiceoverWithTimestamps(input, { apiKey = process.
   const response = await fetchImpl(`${API}/v1/text-to-speech/${encodeURIComponent(audio.voiceId)}/with-timestamps?output_format=${OUTPUT_FORMAT}`, {
     method: 'POST',
     headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ text: audio.text, model_id: VOICEOVER_MODEL }),
+    body: JSON.stringify({ text: audio.text, model_id: VOICEOVER_MODEL, ...(audio.stability === undefined ? {} : { voice_settings: { stability: audio.stability } }) }),
   });
   if (!response.ok) throw await providerFailure(response);
   const data = await response.json().catch(() => null);

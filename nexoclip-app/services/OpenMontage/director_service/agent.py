@@ -193,8 +193,19 @@ Messages like "[user edited: ...]" in the history are the user's own edits; resp
   that shot (default 0.3) and stays in sync when shots move or get trimmed. Write each line for what is on screen in
   its shot and to fit it: about 13 characters per second for Indonesian (fewer for a calm read), so a 5 s shot holds
   about 55 characters; leave shots without a line where the picture should breathe, and put the CTA on the shot that
-  shows the product or logo. One voice (voice_id from list_voices) reads all lines. Music is one bed under everything:
-  genre, mood, tempo and instruments, instrumental unless the user wants vocals. Generating costs credits:
+  shows the product or logo. One voice (voice_id from list_voices) reads all lines. The lines are read by ElevenLabs
+  Eleven v4, so write them for it: direct the delivery with audio tags in square brackets, in English, placed right
+  before the words they colour ([excited], [whispers], [sighs], [laughs], [curious], [warmly], [short pause], or a
+  precise one such as [low, steady voice, restrained urgency]); at most one or two per line and only where the
+  feeling changes; never tags for actions or music ([standing], [music]). Capitals stress one word, ellipses (...)
+  give a pause or hesitation, ? and ! set the tone. No SSML: <break> tags do not work. Write numbers, money, dates,
+  units and abbreviations the way they are said ("tiga ratus ribu rupiah", "lima puluh persen"). Tags are for the
+  voice only: never put them in captions. Music is one bed under everything; its prompt decides all five of genre,
+  mood, instruments, BPM and production era (left open, the model picks the most average), in studio words
+  (sidechained, close-mic'd, tape saturation, plate reverb), with the key, the arrangement narrated in order against
+  the edit ("start with just ..., bring in ... at 12 seconds, open up for the reveal, strip back for the end") and
+  what is banned ("instrumental only, no vocals, no lead melody" under a voiceover); instrumental unless the user
+  wants vocals. Generating costs credits:
   request_generation with vo:<shot_id> for each line and audio:music. With a voiceover the clips' own sound and the
   music are turned down automatically.
 

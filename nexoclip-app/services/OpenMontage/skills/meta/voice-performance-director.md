@@ -22,7 +22,7 @@ Top-level voice performance:
   "provider_notes": {
     "openai": "Use instructions for emotional arc and emphasis.",
     "google_tts": "Use SSML input with break tags when the selected voice supports it.",
-    "elevenlabs": "Use lower stability and moderate style for expressive narration."
+    "elevenlabs": "Eleven v4: lower stability for expressive narration; direct delivery with audio tags, capitals and ellipses, never <break>."
   }
 }
 ```
@@ -37,7 +37,7 @@ Section-level delivery cues:
   "pause_before_seconds": 0.2,
   "pause_after_seconds": 0.7,
   "delivery_note": "Set up the contrast, then slow down on the final phrase.",
-  "provider_text": "This is not just another tool. <break time=\"0.6s\"/> It is a process."
+  "provider_text": "This is NOT just another tool... [short pause] It is a process."
 }
 ```
 
@@ -47,7 +47,7 @@ Section-level delivery cues:
   contractions, and clear punctuation.
 - Use silence as structure. Add a pause before reversals, after surprising
   claims, and before the final takeaway.
-- Keep pause tags purposeful. Too many breaks sound theatrical and slow.
+- Keep pauses purposeful. Too many sound theatrical and slow.
 - Avoid generic directions such as "natural", "engaging", or "expressive"
   unless they are paired with exact pace, emphasis, pause, or energy cues.
 - Prefer one delivery idea per section. If a section needs three emotional
@@ -63,9 +63,24 @@ Section-level delivery cues:
   SSML. The tool maps this to Google `input.ssml` and wraps the utterance in
   `<speak>...</speak>` when needed. Keep `speaking_rate` in Google's supported
   `0.25..2.0` range and pitch in `-20..20`.
-- ElevenLabs: use lower `stability` for more variation, moderate `style` for
-  expressiveness, `speed` in the provider's `0.7..1.2` range, and keep
-  `similarity_boost` high enough to preserve the voice.
+- ElevenLabs (NexoClip uses Eleven v4, `eleven_v4`): it takes only `stability`
+  (lower = more expressive) and `similarity`; there is no `style` or `speed`
+  setting and no SSML, so `<break>` tags do nothing. Direct the delivery in the
+  text itself:
+  - Audio tags in square brackets, in English, right before the words they
+    colour: `[excited]`, `[whispers]`, `[sighs]`, `[laughs]`, `[curious]`,
+    `[sarcastic]`, `[warmly]`, `[short pause]`, `[long pause]`. Specific,
+    voice-describing tags work best (`[low, steady voice, restrained urgency]`,
+    `[voice rising into firm resolve]`); a vague tag may be read as a sound
+    effect. No tags for actions or music (`[standing]`, `[music]`).
+  - One or two tags per line at most, where the feeling changes. Match them to
+    the voice: a calm narrator should not shout.
+  - Capitals stress a word, ellipses (`...`) add a pause or hesitation, `?` and
+    `!` set the tone; short sentences and natural punctuation set the rhythm.
+  - Write numbers, money, dates, times, units and abbreviations as they are
+    spoken ("tiga ratus ribu rupiah", "lima puluh persen", "pukul dua siang").
+  - Tags are for the voice only: keep them out of captions and on-screen text.
+  - In `provider_text` use these instead of `<break>`.
 - Offline/basic voices: rely on punctuation, shorter sentences, and explicit
   segment splitting because provider-level emotion controls may be unavailable.
 

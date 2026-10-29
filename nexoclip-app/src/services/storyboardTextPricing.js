@@ -25,6 +25,9 @@ export const STORYBOARD_TEXT_PRICES = {
   'gpt-5.6-luna': { input: 0.2 / 1e6, cached: 0.02 / 1e6, output: 1.2 / 1e6 },
   // Grok on OpenRouter (list price for prompts up to 200K tokens, October 2026), picked per project in the Director.
   'x-ai/grok-4.5': { input: 2 / 1e6, cached: 0.3 / 1e6, output: 6 / 1e6 },
+  // Claude Sonnet 5.5 on OpenRouter (October 2026): writes the Motion studio's drawn stories (src/services/motionStory.js).
+  // Billed from OpenRouter's reported cost when it comes back; this is the fallback (cache reads at a tenth).
+  'anthropic/claude-sonnet-5.5': { input: 2 / 1e6, cached: 0.2 / 1e6, output: 10 / 1e6 },
   // OpenDirector's configurable OPENAI_MODEL defaults to gpt-4o-mini.
   'gpt-4o': { input: 2.5 / 1e6, output: 10 / 1e6 },
   'gpt-4o-mini': { input: 0.15 / 1e6, output: 0.6 / 1e6 },

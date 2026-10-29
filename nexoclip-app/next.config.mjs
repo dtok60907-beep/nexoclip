@@ -2,12 +2,20 @@
 const nextConfig = {
   output: 'standalone',
   transpilePackages: ['studio', 'workflow-builder'],
+  // native canvas used by the motion worker to look at drawn scenes (src/services/motionFrames.js); never bundled
+  serverExternalPackages: ['@napi-rs/canvas'],
   // @remotion/lottie imports the full lottie-web, whose expression support runs code from the animation file
   // (eval). Motion plays files users upload or link, so it gets the light SVG build, which has no expressions.
   turbopack: { resolveAlias: { 'lottie-web': 'lottie-web/build/player/lottie_light.js' } },
   webpack(config) {
     config.resolve.alias = { ...config.resolve.alias, 'lottie-web$': 'lottie-web/build/player/lottie_light.js' };
     return config;
+  },
+  // The Motion player runs in a sandboxed frame (an opaque origin): its font and sound files load cross-origin.
+  async headers() {
+    return ['/motion-fonts/:path*', '/motion-sfx/:path*'].map((source) => ({
+      source, headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
+    }));
   },
   async redirects() {
     return [

@@ -7,7 +7,7 @@ import { createAssetDownload, createStorage, deleteWorkspaceAsset, importWorkspa
 import { appendCreditEntry } from '../../../../src/services/creditService.js';
 import { findCreditEntryByIdempotencyKey } from '../../../../src/repositories/creditRepository.js';
 import { MAX_INLINE_BYTES, SEED_VIDEO_MODEL, analyzeVideo, videoAnalysisCredits } from '../../../../src/services/videoAnalysis.js';
-import { audioCredits, generateElevenLabsAudio, validateAudioInput } from '../../../../src/services/elevenlabsAudio.js';
+import { MUSIC_MODEL, VOICEOVER_MODEL, audioCredits, generateElevenLabsAudio, validateAudioInput } from '../../../../src/services/elevenlabsAudio.js';
 import { storyboardTextCredits } from '../../../../src/services/storyboardTextPricing.js';
 import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../../src/queue/bullmqGenerationQueue.js';
@@ -168,7 +168,7 @@ export function createInternalStoryboardHandler({
         const assetId = imported.asset.id;
         const entry = {
           workspaceId: workspace.id, reason: `${source}_audio`, idempotencyKey: key,
-          metadata: { type: audio.type, assetId, providerCostUsd: usd, characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds, userId: body.userId },
+          metadata: { type: audio.type, model: `elevenlabs/${audio.type === 'music' ? MUSIC_MODEL : VOICEOVER_MODEL}`, assetId, providerCostUsd: usd, characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds, userId: body.userId },
         };
         let charged = credits;
         try {

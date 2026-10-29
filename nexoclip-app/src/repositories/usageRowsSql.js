@@ -13,7 +13,7 @@ export const ledgerKindSql = (alias) => `CASE WHEN ${alias}.reason LIKE '%\\_tex
 export const ledgerModelSql = (alias) => `COALESCE(${alias}.metadata->>'model',
              CASE WHEN ${alias}.reason LIKE '%\\_video\\_analysis' THEN 'byteplus/seed-2-0-lite'
                   WHEN ${alias}.metadata->>'type' = 'music' THEN 'elevenlabs/music_v1'
-                  ELSE 'elevenlabs/eleven_v3' END)`;
+                  ELSE 'elevenlabs/eleven_v3' END)`; // voiceovers before the model was recorded were eleven_v3
 export const ledgerSourceSql = (alias) => `CASE split_part(${alias}.reason, '_', 1) WHEN 'spite' THEN 'canvas' ELSE split_part(${alias}.reason, '_', 1) END`;
 // Units shown to the user: tokens for text and video analysis, characters for a voiceover, seconds of music.
 export const ledgerUnitsSql = (alias) => `jsonb_strip_nulls(jsonb_build_object(

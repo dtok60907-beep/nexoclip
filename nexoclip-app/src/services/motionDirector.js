@@ -73,7 +73,7 @@ export function parsePlanJson(content) {
 }
 
 // The slips models make in long JSON: raw line breaks and tabs inside strings, trailing commas, // comments,
-// typographic quotes around keys and values.
+// typographic quotes around keys and values, plain quotes left unescaped inside a value.
 export function repairJson(body) {
   let out = '';
   let inString = false;
@@ -85,6 +85,9 @@ export function repairJson(body) {
       if (curly && char === '\u201d') { inString = false; out += '"'; continue; }
       if (char === '"') {
         if (curly) { out += '\\"'; continue; }
+        // a quote that does not end the value (dialogue in a hook: "Kamu: "besok aja"") is part of the text
+        const next = body.slice(i + 1).match(/^\s*(.)/)?.[1];
+        if (next && !',}]:'.includes(next)) { out += '\\"'; continue; }
         inString = false;
       }
       out += char === '\n' ? '\\n' : char === '\r' ? '' : char === '\t' ? '\\t' : char;

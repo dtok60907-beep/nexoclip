@@ -1,6 +1,24 @@
 import { NextResponse } from 'next/server';
 import { IMPERSONATION_COOKIE, allowedWhileReadOnly } from './src/lib/auth/impersonation.js';
 
+// The Motion player page runs AI-written drawing code. It is framed by the studio with sandbox="allow-scripts"
+// (no cookies, no storage, an opaque origin) and may reach nothing beyond this app's own files (the renderer reads
+// the sound files and the blobs the studio hands in).
+function addPlayerHeaders(response, request) {
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+    const proto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '');
+    const origin = `${proto}://${host}`;
+    const dev = process.env.NODE_ENV !== 'production';
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    response.headers.set(
+        'Content-Security-Policy',
+        `default-src 'none'; script-src ${origin} 'unsafe-eval' 'unsafe-inline'; style-src ${origin} 'unsafe-inline'; img-src ${origin} data: blob:; media-src ${origin} https: blob: data:; font-src ${origin} data:; connect-src ${origin} blob: data:${dev ? ' ws: wss:' : ''}; worker-src ${origin} blob:; frame-ancestors 'self'; base-uri 'none'; form-action 'none';`
+    );
+    return response;
+}
+
 function addSecurityHeaders(response) {
     // Prevent MIME type sniffing (CWE-693)
     response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -52,6 +70,8 @@ export function middleware(request) {
             return addSecurityHeaders(rewriteResponse);
         }
     }
+
+    if (url.pathname === '/motion-player') return addPlayerHeaders(NextResponse.next(), request);
 
     // Add security headers to all responses
     return addSecurityHeaders(NextResponse.next());

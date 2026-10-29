@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 export default function ImpersonationBanner() {
   const [state, setState] = useState(null);
   useEffect(() => {
+    if (window.location.pathname === '/motion-player') return; // sandboxed player frame: no cookies to read
     if (!document.cookie.split('; ').some((c) => c.startsWith('nexoclip_impersonation='))) return;
     fetch('/api/admin/impersonate', { credentials: 'same-origin' }).then((r) => r.json()).then(setState).catch(() => {});
   }, []);

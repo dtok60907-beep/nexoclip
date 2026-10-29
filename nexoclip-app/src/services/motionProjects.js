@@ -2,6 +2,7 @@
 // shape the studio plays, so a stored project always opens.
 import { STYLES, CUSTOM_ID, FAMILIES } from '../../components/motion/styles.js';
 import { SCENE_LIMITS, cleanAudio, cleanScene } from '../../components/motion/sceneKinds.js';
+import { cleanStory } from '../../components/motion/draw/story.js';
 
 export const MAX_NAME = 80;
 export const MAX_CHAT = 60;
@@ -21,6 +22,8 @@ export function cleanName(name) {
 
 export function cleanDoc(doc) {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw invalid('Isi project tidak valid.');
+  // A drawn story (the "Gambar" studio) keeps its own document: topic, ideas, script, narration and scene code.
+  if (doc.kind === 'story') { const story = cleanStory(doc.story); return { kind: 'story', format: story.format, story }; }
   const scenes = (Array.isArray(doc.scenes) ? doc.scenes : []).slice(0, SCENE_LIMITS.max).map((scene) => cleanScene(scene, { loose: true }));
   if (!scenes.length) throw invalid('Project butuh minimal satu adegan.');
   const palette = doc.custom?.palette || {};
@@ -51,10 +54,11 @@ export function cleanDoc(doc) {
 const summary = (row) => ({
   id: row.id,
   name: row.name,
+  kind: row.doc?.kind === 'story' ? 'story' : 'motion',
   styleId: row.doc?.styleId || 'auto',
   format: row.doc?.format || '9:16',
-  sceneCount: row.doc?.scenes?.length || 0,
-  firstTitle: row.doc?.scenes?.[0]?.title || '',
+  sceneCount: (row.doc?.kind === 'story' ? row.doc.story?.scenes : row.doc?.scenes)?.length || 0,
+  firstTitle: (row.doc?.kind === 'story' ? row.doc.story?.title : row.doc?.scenes?.[0]?.title) || '',
   updatedAt: row.updated_at,
   createdAt: row.created_at,
 });

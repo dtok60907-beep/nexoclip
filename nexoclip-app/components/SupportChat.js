@@ -9,6 +9,7 @@ export const WHATSAPP_PATH = 'M17.5 14.4c-.3-.2-1.8-.9-2-1s-.5-.2-.7.1-.8 1-.9 1
 export default function SupportChat() {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
+    if (window.location.pathname === '/motion-player') return; // sandboxed player frame: no cookies to read
     if (/^\/admin(\/|$)/.test(window.location.pathname)) return;
     if (document.cookie.split('; ').some((c) => c.startsWith('nexoclip_impersonation='))) return;
     setVisible(true);

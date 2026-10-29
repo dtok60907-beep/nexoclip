@@ -19,6 +19,22 @@ export function createAssetDownloadGetHandler({ resolveContext = resolveTenantCo
       const result = await getDownload(tenant.workspace.id, assetId, storage, DISPLAY_DOWNLOAD_CACHE, { variant, attachment });
       if (!result) return Response.json({ error: 'Asset not found' }, { status: 404 });
       const target = result.download.url;
+      // ?resolve=1: say where the file is instead of redirecting (the Motion player's sandboxed frame has no
+      // session, so it is handed the short-lived storage URL; a local file is fetched by the page and passed in).
+      if (url.searchParams.get('resolve') === '1') {
+        return Response.json(new URL(target).protocol === 'local:' ? { local: true } : { url: target }, { headers: { 'Cache-Control': 'private, no-store' } });
+      }
+      // ?stream=1: the file's bytes through this app (the Motion studio hands them to its sandboxed player, which
+      // may not fetch storage URLs on other origins).
+      if (url.searchParams.get('stream') === '1' && new URL(target).protocol !== 'local:') {
+        const upstream = await fetch(target, { signal: AbortSignal.timeout(60_000) });
+        if (!upstream.ok) return Response.json({ error: 'Asset download unavailable' }, { status: 502 });
+        return new Response(upstream.body, { headers: {
+          'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
+          'Cache-Control': 'private, max-age=600', 'Vary': 'Cookie', 'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': "sandbox; default-src 'none'",
+        } });
+      }
       // local:// is a signed server-side storage capability, not a browser URL.
       // Read only after session, membership and workspace-scoped asset lookup.
       if (new URL(target).protocol === 'local:') {

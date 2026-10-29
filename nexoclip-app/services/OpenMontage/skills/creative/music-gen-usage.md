@@ -43,7 +43,7 @@ KEY RULE:         Music must be 18-20 dB below narration (see sound-design.md)
 ### Structure
 
 ```
-[GENRE/STYLE], [BPM], [KEY/MOOD], [INSTRUMENTS], [ENERGY LEVEL], [PURPOSE]
+[GENRE/STYLE], [BPM], [KEY], [MOOD], [INSTRUMENTS], [PRODUCTION / ERA], [ARRANGEMENT OVER TIME], [EXCLUSIONS], [PURPOSE]
 ```
 
 ### Examples
@@ -73,6 +73,28 @@ bass, contemplative and focused, background music for technical explanation
 3. **Specify BPM explicitly** — don't rely on genre to set tempo
 4. **Avoid "bright hi-hats" or "prominent vocals"** — high-frequency busy elements compete with speech in the 2-4 kHz intelligibility band
 5. **Include energy direction** — "steady energy" for explainers, "building gradually" for reveals
+
+### ElevenLabs Music Best Practices (2026)
+
+A prompt always answers five questions: **genre, mood, instruments, tempo (BPM), production era**. Any question
+left open gets the most average answer, so decide all five.
+
+- Weak: `upbeat electronic track`.
+  Strong: `French house, 122 BPM, filtered disco sample chops, sidechained bass, tight four-on-the-floor kick,
+  rooftop-at-sunset mood, warm analog glue`.
+- **Speak production.** Studio words move real levers: *sidechained*, *close-mic'd*, *bone-dry*, *tape
+  saturation*, *plate reverb*, *vinyl crackle*. No vocabulary? Describe the room ("recorded in a stairwell").
+  An era sets the whole sound ("1990s jungle", "1970s disco").
+- **State BPM and key** ("in A minor"): the model holds them exactly.
+- **Narrate the arrangement in order**, timed to the video's beats: "start with just soft piano, bring in a
+  light kick at 8 seconds, open up for the reveal at 20 seconds, strip back to piano for the last 5 seconds".
+  The small words carry it: *start with*, *just*, *then*, *bring in*. Without "just" the model fills the silence.
+- **Say what is banned**: "instrumental only, no vocals, no lead melody" keeps a bed a bed under a voiceover.
+- Simple evocative keywords can give more creative results than long prompts; detail gives control.
+- Sound design works too (ambience, textures), and an intent alone ("ad for a sneaker brand") already steers it.
+
+Licensing: music we generate through the API is ours to use in the user's video. Tracks from the ElevenLabs
+Music Marketplace are licensed to the buyer and may not be resold or sublicensed, so never hand them to users.
 
 ## Duration Matching
 

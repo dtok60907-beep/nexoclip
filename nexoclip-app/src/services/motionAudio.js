@@ -2,7 +2,7 @@
 // Used by /api/motion/audio (the Audio tab's buttons) and by the motion worker (sound the AI was asked for).
 import { appendCreditEntry } from './creditService.js';
 import { createStorage, importWorkspaceAsset } from './assetService.js';
-import { audioCredits, generateElevenLabsAudio, generateVoiceoverWithTimestamps, validateAudioInput } from './elevenlabsAudio.js';
+import { MUSIC_MODEL, VOICEOVER_MODEL, audioCredits, generateElevenLabsAudio, generateVoiceoverWithTimestamps, validateAudioInput } from './elevenlabsAudio.js';
 
 export async function readCreditBalance(pool, workspaceId) {
   const result = await pool.query('SELECT balance FROM credit_accounts WHERE workspace_id = $1', [workspaceId]);
@@ -40,7 +40,7 @@ export async function makeMotionAudio({
   const entry = {
     workspaceId, reason: 'motion_audio', idempotencyKey,
     metadata: {
-      type: audio.type, assetId: imported.asset.id, providerCostUsd: usd, userId,
+      type: audio.type, model: `elevenlabs/${audio.type === 'music' ? MUSIC_MODEL : VOICEOVER_MODEL}`, assetId: imported.asset.id, providerCostUsd: usd, userId,
       characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds,
     },
   };

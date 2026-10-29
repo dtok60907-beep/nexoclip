@@ -47,7 +47,7 @@ const AudioStudio = studioLazy('AudioStudio');
 const MarketingStudio = studioLazy('MarketingStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
-const MotionStudio = dynamic(() => import('./motion/MotionStudio.js'), { ssr: false, loading: StudioLoading });
+const MotionStudio = dynamic(() => import('./motion/MotionHub.js'), { ssr: false, loading: StudioLoading });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
 const LANDING_URL = 'https://www.nexoclip.com';

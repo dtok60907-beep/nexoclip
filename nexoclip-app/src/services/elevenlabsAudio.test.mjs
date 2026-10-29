@@ -22,7 +22,7 @@ test('calls ElevenLabs text to speech and music with the right payload', async (
   await generateElevenLabsAudio({ type: 'voiceover', text: 'Halo', voiceId: 'JBFqnCBsd6RMkjVDRZzb' }, { apiKey: 'k', fetchImpl });
   await generateElevenLabsAudio({ type: 'music', text: 'lo-fi', durationSeconds: 12, instrumental: false }, { apiKey: 'k', fetchImpl });
   assert.match(calls[0].url, /\/v1\/text-to-speech\/JBFqnCBsd6RMkjVDRZzb\?output_format=mp3_44100_128$/);
-  assert.deepEqual(calls[0].body, { text: 'Halo', model_id: 'eleven_v3' });
+  assert.deepEqual(calls[0].body, { text: 'Halo', model_id: 'eleven_v4' });
   assert.deepEqual(calls[1].body, { prompt: 'lo-fi', music_length_ms: 12000, model_id: 'music_v1', force_instrumental: false });
   const failing = async () => new Response(JSON.stringify({ detail: { message: 'quota exceeded' } }), { status: 401 });
   await assert.rejects(generateElevenLabsAudio({ type: 'voiceover', text: 'Halo', voiceId: 'JBFqnCBsd6RMkjVDRZzb' }, { apiKey: 'k', fetchImpl: failing }), /quota exceeded/);
@@ -45,7 +45,7 @@ test('voiceover with timestamps turns the character alignment into words', async
     fetchImpl: async (url, init) => { called = { url, body: JSON.parse(init.body) }; return { ok: true, json: async () => ({ audio_base64: Buffer.from('mp3').toString('base64'), alignment }) }; },
   });
   assert.match(called.url, /\/v1\/text-to-speech\/JBFqnCBsd6RMkjVDRZzb\/with-timestamps\?output_format=mp3_44100_128$/);
-  assert.equal(called.body.model_id, 'eleven_v3');
+  assert.equal(called.body.model_id, 'eleven_v4');
   assert.equal(result.body.toString(), 'mp3');
   assert.equal(result.words.length, 3);
 });

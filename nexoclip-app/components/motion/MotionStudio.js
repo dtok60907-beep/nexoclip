@@ -586,8 +586,9 @@ export default function MotionStudio({ authenticated = false, beforeGenerate = (
     setSaveState('saved');
     (async () => {
       try {
-        const { projects: list } = await projectApi();
+        const { projects: all } = await projectApi();
         if (cancelled) return;
+        const list = all.filter((project) => project.kind !== 'story'); // drawn stories open in the Gambar studio
         setProjects(list);
         let last = null;
         try { last = window.localStorage.getItem(LAST_PROJECT_KEY); } catch { /* storage unavailable */ }
