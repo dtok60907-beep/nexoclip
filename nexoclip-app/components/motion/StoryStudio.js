@@ -10,6 +10,7 @@ import { STORY_CAMERAS, cleanStory, drawStyleOf, paceOf, storyVideoProps } from 
 import { ELEVENLABS_VOICES } from '../../src/services/elevenlabsAudio';
 import { FORMATS, FORMAT_IDS, layoutOf } from './draw/layout';
 import { lottieUrl, sanitizeLottie } from './lottieLibrary';
+import { codeKey } from './draw/sketch';
 
 const LAST_STORY_KEY = 'nexoclip_motion_story_last';
 const NEW_NAME = 'Video gambar';
@@ -35,23 +36,27 @@ async function api(path, options = {}) {
 
 // The sandboxed player. Audio and pictures are resolved here (the frame has no session or network): a storage
 // URL, or the bytes; Noto emoji are fetched from Google's CDN and cleaned.
-function StoryPreview({ story, onSceneError, renderRef, seekRef, onRender }) {
+function StoryPreview({ story, onSceneError, renderRef, seekRef, toggleRef, onRender, onTime, onPlaying }) {
   const frame = useRef(null);
   const files = useRef(new Map()); // url → { bytes, type }: fetched once, a copy is sent each time
-  if (renderRef) renderRef.current = () => frame.current?.contentWindow?.postMessage({ type: 'nexoclip-render' }, '*');
+  if (renderRef) renderRef.current = (purpose = 'download') => frame.current?.contentWindow?.postMessage(purpose === 'cancel' ? { type: 'nexoclip-render-cancel' } : { type: 'nexoclip-render', purpose }, '*');
   if (seekRef) seekRef.current = (seconds) => frame.current?.contentWindow?.postMessage({ type: 'nexoclip-seek', seconds }, '*');
+  if (toggleRef) toggleRef.current = () => frame.current?.contentWindow?.postMessage({ type: 'nexoclip-toggle' }, '*');
   const [ready, setReady] = useState(false);
   const props = useMemo(() => storyVideoProps(story), [story]);
+  const key = useMemo(() => codeKey(JSON.stringify(props)), [props]);
   useEffect(() => {
     const onMessage = (event) => {
       if (event.source !== frame.current?.contentWindow) return;
       if (event.data?.type === 'nexoclip-player-ready') setReady(true);
       if (event.data?.type === 'nexoclip-player-error') onSceneError?.(event.data.scene, event.data.message);
       if (String(event.data?.type).startsWith('nexoclip-render-')) onRender?.(event.data);
+      if (event.data?.type === 'nexoclip-time') onTime?.(Number(event.data.seconds) || 0);
+      if (event.data?.type === 'nexoclip-playing') onPlaying?.(Boolean(event.data.playing));
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [onSceneError, onRender]);
+  }, [onSceneError, onRender, onTime, onPlaying]);
   useEffect(() => {
     if (!ready || !frame.current) return undefined;
     let live = true;
@@ -87,11 +92,11 @@ function StoryPreview({ story, onSceneError, renderRef, seekRef, onRender }) {
       if (!live) return;
       const assets = Object.fromEntries(resolved.filter(([, a]) => a && (a.data || a.file)));
       const transfer = [voice?.bytes, music?.bytes, ...Object.values(assets).map((a) => a.file?.bytes), ...sounds.map((x) => x.file?.bytes)].filter(Boolean);
-      frame.current?.contentWindow?.postMessage({ type: 'nexoclip-story', props: { ...props, voice: null, music: null, assets: null, sounds: null }, audio: { voice, music }, assets, sounds: sounds.filter((x) => x.file) }, '*', transfer);
+      frame.current?.contentWindow?.postMessage({ type: 'nexoclip-story', key, props: { ...props, voice: null, music: null, assets: null, sounds: null }, audio: { voice, music }, assets, sounds: sounds.filter((x) => x.file) }, '*', transfer);
     })();
     return () => { live = false; };
-  }, [ready, props]);
-  return <iframe ref={frame} src="/motion-player" title="Pratinjau video" sandbox="allow-scripts" className="h-full w-full rounded-2xl border-0 bg-[#0b0b0f]" />;
+  }, [ready, props, key]);
+  return <iframe ref={frame} src="/motion-player" title="Pratinjau video" sandbox="allow-scripts" className="h-full w-full border-0 bg-black" />;
 }
 
 // The AI writes light markdown (**bold**, "- " and "1. " lists, ## headings); show it as text, not as stars.
@@ -140,77 +145,129 @@ function useResizable(key, initial, min, max) {
   return [width, start];
 }
 
-function Handle({ onPointerDown }) {
-  return <div role="separator" aria-orientation="vertical" onPointerDown={onPointerDown} className="hidden w-1.5 flex-none cursor-col-resize rounded-full transition-colors hover:bg-[#d4ff64]/30 lg:block" />;
+function Handle({ onPointerDown, onDoubleClick }) {
+  return <div role="separator" aria-orientation="vertical" title="Seret untuk mengubah lebar" onPointerDown={onPointerDown} onDoubleClick={onDoubleClick}
+    className="hidden w-1.5 flex-none cursor-col-resize border-l border-white/[0.06] transition-colors hover:bg-[#d4ff64]/30 lg:block" />;
 }
 
 function Field({ label, hint, children }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/40">{label}{hint ? <span className="ml-1 font-normal normal-case tracking-normal text-white/25">{hint}</span> : null}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">{label}{hint ? <span className="ml-1 font-normal normal-case tracking-normal text-white/25">{hint}</span> : null}</span>
       {children}
     </label>
   );
 }
-const inputClass = 'w-full rounded-lg border border-white/[0.08] bg-[#121411] px-2.5 py-2 text-[13px] text-[#f2eee5] outline-none transition focus:border-[#d4ff64]/60 disabled:opacity-60';
+const inputClass = 'w-full rounded-lg border border-white/10 bg-[#0b0e13] px-2.5 py-1.5 text-[12px] leading-relaxed text-white/90 outline-none transition focus:border-[#d4ff64]/40 disabled:opacity-60';
 
-function Message({ message, onPick, onOpen, busy }) {
-  const mine = message.role === 'user';
+function Icon({ d, size = 14 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+}
+function Badge({ children, tone = 'default' }) {
+  const tones = { default: 'bg-white/[0.06] text-white/60', accent: 'bg-[#d4ff64]/10 text-[#e4f5bd]', amber: 'bg-amber-400/10 text-amber-300', red: 'bg-red-400/10 text-red-300' };
+  return <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-medium ${tones[tone]}`}>{children}</span>;
+}
+function Spinner() {
+  return <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-[#d4ff64]" aria-hidden="true" />;
+}
+
+// A card in the chat, in the AI Director's look: a titled shell around a short summary, and its buttons.
+function CardShell({ icon, title, accent, children, actions }) {
   return (
-    <div className={`flex flex-col gap-2 ${mine ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[94%] rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed ${mine ? 'whitespace-pre-line rounded-br-md bg-[#d4ff64] text-black' : message.error ? 'bg-red-500/10 text-red-200 ring-1 ring-red-500/20' : 'rounded-bl-md bg-white/[0.045] text-[#f2eee5] ring-1 ring-white/[0.06]'}`}>
+    <div className="w-full max-w-[380px]">
+      <div className="rounded-[18px] border border-white/[0.09] bg-gradient-to-b from-[#1c1f25] to-[#121418] p-1.5 shadow-[0_10px_30px_#0006]">
+        <div className="flex min-w-0 items-center gap-2 px-2.5 pb-2 pt-1.5">
+          <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[#d4ff64]/15 text-[12px] text-[#d4ff64]">{icon}</span>
+          <span className="truncate text-[13px] font-semibold text-white">{title}{accent && <span className="text-[#d4ff64]"> — {accent}</span>}</span>
+        </div>
+        <div className="rounded-[14px] border border-white/[0.06] bg-gradient-to-b from-[#2a2e35] via-[#1d2026] to-[#17191d] p-3">{children}</div>
+      </div>
+      {actions && <div className="mt-2 flex gap-2">{actions}</div>}
+    </div>
+  );
+}
+const pillButton = 'flex-1 rounded-full border border-white/[0.1] bg-gradient-to-b from-[#2b2e34] to-[#1b1d21] py-2 text-[12px] font-semibold text-white/90 hover:border-white/25 disabled:opacity-50';
+const acceptButton = 'flex-1 rounded-full bg-[#d4ff64] py-2 text-[12px] font-semibold text-[#10130a] hover:brightness-110 disabled:opacity-40';
+const CARD_ICON = { brief: '✦', script: '✎', scene: '▦', plan: '▶' };
+
+function Message({ message, story, onPick, onOpen, busy }) {
+  if (message.role === 'user') {
+    return (
+      <div className="flex flex-col items-end gap-1.5">
         {message.attachments?.length > 0 && (
-          <div className="mb-1.5 flex flex-wrap gap-1.5">
-            {message.attachments.map((a) => (a.type === 'image'
-              ? <img key={a.key} src={a.url} alt={a.name || a.key} className="h-16 w-16 rounded-lg object-cover ring-1 ring-black/10" />
-              : <span key={a.key} className="rounded-lg bg-black/10 px-2 py-1 text-[11px]">🎬 {a.name || a.key}</span>))}
+          <div className="flex max-w-[72%] flex-wrap justify-end gap-1.5">
+            {message.attachments.map((a) => (
+              <span key={a.key} title={a.name || a.key} className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                {a.type === 'image'
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={a.url} alt={a.name || a.key} className="h-full w-full object-cover" />
+                  : <video src={`${a.url}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-cover" />}
+                {a.type === 'video' && <span className="absolute bottom-0 left-0 rounded-tr bg-black/70 px-1 text-[9px] text-white">▶</span>}
+              </span>
+            ))}
           </div>
         )}
-        {mine ? message.content : <Rich text={message.content} />}
-        {message.credits > 0 && <span className="mt-1.5 block text-[10.5px] text-white/35">{message.credits} kredit</span>}
+        <div className="max-w-[72%] whitespace-pre-line break-words rounded-lg border border-white/[0.06] bg-[#181b20] px-3 py-1.5 text-[11.5px] leading-[1.6] text-white/90">{message.content}</div>
       </div>
-      {message.cards?.map((card, i) => (
-        <button key={i} type="button" onClick={() => onOpen(card)} className="flex w-[94%] items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 text-left ring-1 ring-white/[0.07] transition hover:bg-white/[0.07]">
-          <span className="min-w-0">
-            <span className="block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[#d4ff64]/70">{{ brief: 'Brief', script: 'Naskah', scene: `Adegan ${Number(card.scene) + 1}`, plan: 'Rencana produksi' }[card.kind]}</span>
-            <span className="block truncate text-[13px] text-[#f2eee5]">{card.title || 'Lihat detail'}</span>
-          </span>
-          <span className="shrink-0 rounded-lg bg-white/[0.07] px-2.5 py-1 text-[11.5px] font-semibold text-white/75">Lihat</span>
-        </button>
-      ))}
+    );
+  }
+  if (message.error) return <p className="text-[11.5px] leading-relaxed text-red-300/90">{message.content}</p>;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Rich text={message.content} /></div>
+      {message.credits > 0 && <span className="-mt-2 text-[10px] text-white/30">{message.credits} kredit</span>}
+      {message.cards?.map((card, i) => {
+        const scene = card.kind === 'scene' ? story.scenes[Number(card.scene)] : null;
+        return (
+          <CardShell key={i} icon={CARD_ICON[card.kind] || '✦'} title={{ brief: 'Brief', script: 'Naskah', scene: `Adegan ${Number(card.scene) + 1}`, plan: 'Rencana produksi' }[card.kind]} accent={card.kind === 'script' ? `${story.scenes.length} adegan` : ''}
+            actions={<button type="button" onClick={() => onOpen(card)} className={pillButton}>Lihat</button>}>
+            <p className="line-clamp-2 text-[12px] font-semibold text-white/85">{card.title || story.title || 'Lihat detail'}</p>
+            {card.kind === 'brief' && story.brief && <p className="mt-1 line-clamp-3 text-[12px] leading-relaxed text-white/60">{story.brief}</p>}
+            {card.kind === 'script' && <p className="mt-1 line-clamp-3 text-[12px] leading-relaxed text-white/60">{story.scenes.map((sc) => sc.text).join(' ')}</p>}
+            {scene && <p className="mt-1 line-clamp-3 text-[12px] leading-relaxed text-white/60">{scene.visual}</p>}
+          </CardShell>
+        );
+      })}
       {message.ideas?.length > 0 && (
-        <div className="flex w-[94%] flex-col gap-1.5">
-          {message.ideas.map((idea, i) => (
-            <button key={i} type="button" disabled={busy} onClick={() => onPick(i, idea)}
-              className="flex flex-col gap-0.5 rounded-xl bg-white/[0.03] p-3 text-left ring-1 ring-white/[0.07] transition hover:bg-white/[0.07] disabled:opacity-50">
-              <span className="text-[13px] font-semibold text-[#f2eee5]">{i + 1}. {idea.title}</span>
-              <span className="text-[12.5px] italic text-white/65">“{idea.hook}”</span>
-              <span className="text-[11.5px] text-white/40">{idea.angle}</span>
-            </button>
-          ))}
-        </div>
+        <CardShell icon="💡" title="Ide" accent={`${message.ideas.length} pilihan`}>
+          <ul className="flex flex-col gap-1.5">
+            {message.ideas.map((idea, i) => (
+              <li key={i}>
+                <button type="button" disabled={busy} onClick={() => onPick(i, idea)}
+                  className="w-full rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2 text-left transition hover:border-[#d4ff64]/40 disabled:opacity-50">
+                  <span className="block text-[12px] font-semibold text-white/90">{i + 1}. {idea.title}</span>
+                  <span className="block text-[11.5px] italic text-white/60">“{idea.hook}”</span>
+                  {idea.angle && <span className="block text-[10.5px] text-white/40">{idea.angle}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </CardShell>
       )}
     </div>
   );
 }
 
-// A compact plan notice in the chat: the full plan opens in the side panel.
+// The plan to approve, as an approval card like the AI Director's: what will be made and its cost.
 function PlanNotice({ story, onOpen, onApprove, disabled }) {
   const p = story.pending;
   if (!p) return null;
-  const parts = [p.what.includes('voice') && 'suara narator', p.what.includes('music') && 'musik', p.what.includes('sounds') && 'suara latar/efek', p.scenes?.length && `${p.scenes.length} adegan`].filter(Boolean).join(' · ');
+  const rows = [
+    p.what.includes('voice') && ['Suara narator', p.breakdown?.voice], p.what.includes('music') && ['Musik', p.breakdown?.music],
+    p.what.includes('sounds') && ['Suara latar/efek', p.breakdown?.sounds], p.scenes?.length && [`Gambar ${p.scenes.length} adegan`, p.breakdown?.draw],
+  ].filter(Boolean);
   return (
-    <div className="flex w-[94%] flex-col gap-2 rounded-xl bg-[#d4ff64]/[0.06] p-3 ring-1 ring-[#d4ff64]/25">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-semibold text-[#f2eee5]">Rencana produksi siap</span>
-        <span className="text-[11.5px] text-white/50">±{p.credits} kredit</span>
-      </div>
-      <span className="text-[12px] text-white/55">{parts}</span>
-      <div className="flex gap-2">
-        <button type="button" onClick={() => onOpen({ kind: 'plan' })} className="flex-1 rounded-lg bg-white/[0.07] py-2 text-[12.5px] font-semibold text-white/80 hover:bg-white/[0.12]">Lihat rencana</button>
-        <button type="button" disabled={disabled} onClick={onApprove} className="flex-1 rounded-lg bg-[#d4ff64] py-2 text-[12.5px] font-bold text-black disabled:opacity-40">Buat</button>
-      </div>
-    </div>
+    <CardShell icon="▶" title="Rencana produksi" accent="perlu persetujuan"
+      actions={<>
+        <button type="button" onClick={() => onOpen({ kind: 'plan' })} className={pillButton}>Lihat rencana</button>
+        <button type="button" disabled={disabled} onClick={onApprove} className={acceptButton}>Buat · {p.credits} kredit</button>
+      </>}>
+      <div className="mb-1.5"><Badge tone="amber">Menunggu approve</Badge></div>
+      <ul className="space-y-0.5">
+        {rows.map(([label, credits]) => <li key={label} className="flex justify-between gap-2 text-[11px] text-white/60"><span className="truncate">{label}</span><span className="flex-none text-white/40">±{credits ?? '?'} kr</span></li>)}
+      </ul>
+      <p className="mt-1.5 text-[12px] text-white/75">Estimasi <strong className="text-[#d4ff64]">{p.credits} kredit</strong></p>
+    </CardShell>
   );
 }
 
@@ -226,10 +283,10 @@ function SceneDetail({ story, index }) {
         <span className="rounded-full bg-white/[0.06] px-2 py-0.5">latar: {scene.theme}</span>
         {scene.emphasis && <span className="rounded-full bg-white/[0.06] px-2 py-0.5">tekanan: {scene.emphasis}</span>}
       </div>
-      <section><h4 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">Teks di layar</h4><p className="text-[14px] text-[#f2eee5]">{scene.text}</p></section>
-      <section><h4 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">Dibacakan narator</h4><p className="text-[13px] text-white/75">{scene.say || scene.text}</p></section>
-      <section><h4 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">Gambar & gerak</h4><p className="text-[13px] leading-relaxed text-white/75">{scene.visual}</p></section>
-      {cast.length > 0 && <section><h4 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">Tokoh</h4>{cast.map((c) => <p key={c.name} className="text-[12.5px] text-white/65"><b className="text-white/80">{c.name}</b>: {c.look}</p>)}</section>}
+      <section><h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">Teks di layar</h4><p className="text-[14px] text-[#f2eee5]">{scene.text}</p></section>
+      <section><h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">Dibacakan narator</h4><p className="text-[13px] text-white/75">{scene.say || scene.text}</p></section>
+      <section><h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">Gambar & gerak</h4><p className="text-[13px] leading-relaxed text-white/75">{scene.visual}</p></section>
+      {cast.length > 0 && <section><h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">Tokoh</h4>{cast.map((c) => <p key={c.name} className="text-[12.5px] text-white/65"><b className="text-white/80">{c.name}</b>: {c.look}</p>)}</section>}
     </div>
   );
 }
@@ -244,12 +301,12 @@ function DetailPanel({ card, story, onClose, onApprove, busy }) {
   const title = { brief: 'Brief', script: `Naskah · ${story.scenes.length} adegan`, scene: `Adegan ${Number(card.scene) + 1}`, plan: 'Rencana produksi' }[card.kind];
   const Row = ({ k, v }) => (v ? <div className="grid grid-cols-[96px_1fr] gap-3 border-b border-white/[0.05] py-2 text-[12.5px]"><span className="text-white/40">{k}</span><span className="text-white/80">{v}</span></div> : null);
   return (
-    <div className="absolute inset-0 z-30 flex flex-col overflow-hidden rounded-2xl bg-[#0f110e] ring-1 ring-white/[0.08]">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-white/[0.07] bg-[#0b0e13]">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
-        <span className="text-[14px] font-semibold text-[#f2eee5]">{title}</span>
-        <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white">Tutup</button>
+        <span className="text-[13px] font-semibold text-white">{title}</span>
+        <button type="button" onClick={onClose} aria-label="Tutup" className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/[0.06] hover:text-white">✕</button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6"><div className="mx-auto max-w-[920px]">
         {(card.kind === 'brief' || card.kind === 'plan') && (
           <div className="mb-3">
             <Row k="Judul" v={story.title} />
@@ -260,11 +317,15 @@ function DetailPanel({ card, story, onClose, onApprove, busy }) {
             <Row k="Durasi" v={story.scenes.length ? `±${seconds} detik · ${story.scenes.length} adegan` : ''} />
             <Row k="Narator" v={`${voiceName(story.voiceId)}`} />
             <Row k="Musik" v={story.music ? (story.musicPrompt || pace.music) : 'tanpa musik'} />
-            <Row k="Tokoh" v={story.cast.map((c) => `${c.name}: ${c.look}`).join(' · ')} />
+            <Row k="Palet" v={story.palette?.colors?.length ? <span className="flex flex-wrap items-center gap-1">{story.palette.colors.map((c) => <span key={c} title={c} className="h-4 w-4 rounded ring-1 ring-white/20" style={{ background: c }} />)}{story.palette.note ? <span className="ml-1 text-white/50">{story.palette.note}</span> : null}</span> : ''} />
+            <Row k="Teks" v={story.caption ? `${{ bottom: 'bawah', top: 'atas', middle: 'tengah', none: 'tanpa teks' }[story.caption.position]} · ${story.caption.font}${story.caption.box ? ' · kotak' : ''}` : ''} />
+            <Row k="Bahasa visual" v={story.artDirection} />
+            <Row k="Tokoh" v={story.cast.filter((c) => c.kind !== 'prop').map((c) => `${c.name}: ${c.look}${c.code ? ' (sudah didesain)' : ''}`).join(' · ')} />
+            <Row k="Properti" v={story.cast.filter((c) => c.kind === 'prop').map((c) => `${c.name}: ${c.look}${c.code ? ' (sudah didesain)' : ''}`).join(' · ')} />
           </div>
         )}
         {card.kind === 'plan' && p && (
-          <div className="mb-3 rounded-xl bg-[#d4ff64]/[0.06] p-3 ring-1 ring-[#d4ff64]/20">
+          <div className="mb-3 rounded-xl border border-[#d4ff64]/20 bg-[#d4ff64]/[0.04] p-3">
             <div className="mb-1 text-[12px] font-semibold text-[#f2eee5]">Yang akan dibuat</div>
             <div className="grid grid-cols-2 gap-1 text-[12px] text-white/70">
               {p.what.includes('voice') && <><span>Suara narator</span><span className="text-right">±{p.breakdown?.voice ?? '?'} kredit</span></>}
@@ -281,7 +342,7 @@ function DetailPanel({ card, story, onClose, onApprove, busy }) {
             {story.scenes.map((scene, i) => {
               const drawn = card.kind === 'plan' && p?.scenes?.includes(i);
               return (
-                <li key={i} className={`rounded-xl px-3 py-2.5 ring-1 ring-white/[0.06] ${card.kind === 'plan' && !drawn ? 'bg-white/[0.015] opacity-60' : 'bg-white/[0.035]'}`}>
+                <li key={i} className={`rounded-xl border border-white/[0.07] px-3 py-2.5 ${card.kind === 'plan' && !drawn ? 'bg-white/[0.01] opacity-60' : 'bg-white/[0.025]'}`}>
                   <div className="mb-1 flex items-center justify-between text-[10.5px] text-white/40"><span className="font-mono">#{i + 1} · {scene.duration.toFixed(1)} dtk</span>{card.kind === 'plan' && <span>{drawn ? 'digambar' : 'tetap'}</span>}</div>
                   <p className="text-[13px] text-[#f2eee5]">🎙 {scene.say || scene.text}</p>
                   <p className="mt-1 text-[12px] leading-relaxed text-white/50">🖼 {scene.visual}</p>
@@ -290,10 +351,10 @@ function DetailPanel({ card, story, onClose, onApprove, busy }) {
             })}
           </ol>
         )}
-      </div>
+      </div></div>
       {card.kind === 'plan' && p && (
-        <div className="border-t border-white/[0.06] p-3">
-          <button type="button" disabled={busy} onClick={onApprove} className="w-full rounded-xl bg-[#d4ff64] py-2.5 text-[14px] font-bold text-black disabled:opacity-40">Buat (±{p.credits} kredit)</button>
+        <div className="flex justify-end border-t border-white/[0.06] p-3">
+          <button type="button" disabled={busy} onClick={onApprove} className="rounded-lg bg-[#d4ff64] px-4 py-2 text-[12px] font-semibold text-[#10130a] hover:brightness-110 disabled:opacity-40">Buat · ±{p.credits} kredit</button>
         </div>
       )}
     </div>
@@ -311,12 +372,12 @@ function ScenesEditor({ story, selected, onSelect, onChange, disabled, sceneErro
   if (!story.scenes.length) return <p className="p-3 text-[12.5px] text-white/40">Belum ada naskah. Minta AI di chat, misalnya "tulis naskahnya".</p>;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ol className="flex max-h-[38%] min-h-[120px] flex-col overflow-y-auto rounded-xl ring-1 ring-white/[0.06]">
+      <ol className="flex max-h-[38%] min-h-[120px] flex-col gap-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
         {story.scenes.map((s, i) => {
           const st = STATUS[sceneStatus(s, busy, sceneErrors[i])];
           return (
             <li key={i}>
-              <button type="button" onClick={() => onSelect(i)} className={`flex w-full items-center gap-2.5 border-b border-white/[0.04] px-3 py-2 text-left text-[12.5px] transition ${i === selected ? 'bg-white/[0.07] text-white' : 'text-white/70 hover:bg-white/[0.03]'}`}>
+              <button type="button" onClick={() => onSelect(i)} className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-1.5 text-left text-[11.5px] transition ${i === selected ? 'border-[#d4ff64]/50 bg-[#d4ff64]/[0.06] text-white' : 'border-white/[0.06] bg-white/[0.02] text-white/70 hover:border-white/15'}`}>
                 <span className="w-5 font-mono text-[11px] text-white/35">{i + 1}</span>
                 <span className={`h-2 w-2 flex-none rounded-full ${st.dot}`} title={st.label} />
                 <span className="min-w-0 flex-1 truncate">{s.text}</span>
@@ -329,25 +390,26 @@ function ScenesEditor({ story, selected, onSelect, onChange, disabled, sceneErro
       {scene && (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-[#f2eee5]">Adegan {selected + 1}</span>
-            <span className="text-[11px] text-white/40">{STATUS[sceneStatus(scene, busy, sceneErrors[selected])].label}</span>
+            <span className="text-[13px] font-semibold text-white">Adegan {selected + 1} <span className="font-normal text-white/40">· {scene.duration.toFixed(1)} dtk</span></span>
+            <Badge tone={{ jadi: 'accent', ulang: 'amber', gagal: 'red' }[sceneStatus(scene, busy, sceneErrors[selected])] || 'default'}>{STATUS[sceneStatus(scene, busy, sceneErrors[selected])].label}</Badge>
           </div>
           {(scene.codeError || sceneErrors[selected]) && <p className="rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-[11.5px] text-amber-200/80">{scene.codeError || sceneErrors[selected]}</p>}
           <Field label="Teks di layar"><textarea rows={2} value={scene.text} disabled={disabled} onChange={(e) => update({ text: e.target.value })} className={inputClass} /></Field>
           <Field label="Dibacakan narator" hint="kata sama; boleh [tag], KAPITAL, ..."><textarea rows={2} value={scene.say} disabled={disabled} onChange={(e) => update({ say: e.target.value }, false)} className={inputClass} /></Field>
-          <Field label="Gambar & gerak"><textarea rows={4} value={scene.visual} disabled={disabled} onChange={(e) => update({ visual: e.target.value })} className={inputClass} /></Field>
+          <Field label="Gambar & gerak" hint={story.canvas === 2 ? "termasuk latarnya" : ""}><textarea rows={5} value={scene.visual} disabled={disabled} onChange={(e) => update({ visual: e.target.value })} className={inputClass} /></Field>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Kamera"><select value={scene.camera} disabled={disabled} onChange={(e) => update({ camera: e.target.value }, false)} className={inputClass}>{STORY_CAMERAS.map((c) => <option key={c} value={c}>{CAMERA_LABELS[c] || c}</option>)}</select></Field>
-            <Field label="Latar"><select value={scene.theme} disabled={disabled} onChange={(e) => update({ theme: e.target.value })} className={inputClass}>{themes.map((t) => <option key={t} value={t}>{t}</option>)}</select></Field>
+            {/* the free canvas has no named backgrounds: the scene's setting is part of "Gambar & gerak" */}
+            {story.canvas !== 2 && <Field label="Latar"><select value={scene.theme} disabled={disabled} onChange={(e) => update({ theme: e.target.value })} className={inputClass}>{themes.map((t) => <option key={t} value={t}>{t}</option>)}</select></Field>}
           </div>
           <Field label="Kata penekanan"><input value={scene.emphasis} disabled={disabled} onChange={(e) => update({ emphasis: e.target.value }, false)} className={inputClass} /></Field>
           <div className="flex flex-wrap gap-1.5 pt-1 text-[11.5px]">
-            <button type="button" disabled={disabled} onClick={() => onAskAI(selected)} className="rounded-lg bg-[#d4ff64]/15 px-2.5 py-1.5 font-semibold text-[#d4ff64]">Minta AI ubah</button>
-            <button type="button" disabled={disabled} onClick={() => update({})} className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-white/70">Gambar ulang</button>
-            <button type="button" disabled={disabled || selected === 0} onClick={() => move(-1)} className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-white/70 disabled:opacity-30">↑</button>
-            <button type="button" disabled={disabled || selected === story.scenes.length - 1} onClick={() => move(1)} className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-white/70 disabled:opacity-30">↓</button>
-            <button type="button" disabled={disabled} onClick={add} className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-white/70">+ Adegan</button>
-            <button type="button" disabled={disabled || story.scenes.length < 3} onClick={remove} className="rounded-lg bg-red-500/10 px-2.5 py-1.5 text-red-300 disabled:opacity-30">Hapus</button>
+            <button type="button" disabled={disabled} onClick={() => onAskAI(selected)} className="rounded-md bg-[#d4ff64] px-2.5 py-1 font-semibold text-[#10130a] disabled:opacity-40">Minta AI ubah</button>
+            <button type="button" disabled={disabled} onClick={() => update({})} className="rounded-md border border-white/[0.1] px-2.5 py-1 text-white/75 hover:border-white/30">Gambar ulang</button>
+            <button type="button" disabled={disabled || selected === 0} onClick={() => move(-1)} className="rounded-md border border-white/[0.1] px-2.5 py-1 text-white/75 hover:border-white/30 disabled:opacity-30">↑</button>
+            <button type="button" disabled={disabled || selected === story.scenes.length - 1} onClick={() => move(1)} className="rounded-md border border-white/[0.1] px-2.5 py-1 text-white/75 hover:border-white/30 disabled:opacity-30">↓</button>
+            <button type="button" disabled={disabled} onClick={add} className="rounded-md border border-white/[0.1] px-2.5 py-1 text-white/75 hover:border-white/30">+ Adegan</button>
+            <button type="button" disabled={disabled || story.scenes.length < 3} onClick={remove} className="rounded-md border border-red-400/20 px-2.5 py-1 text-red-300/90 hover:border-red-400/50 disabled:opacity-30">Hapus</button>
           </div>
         </div>
       )}
@@ -364,7 +426,7 @@ function AudioEditor({ story, onChange, disabled }) {
           {ELEVENLABS_VOICES.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.gender === 'male' ? 'pria' : 'wanita'} · {v.description}</option>)}
         </select>
       </Field>
-      <div className="rounded-xl bg-white/[0.025] ring-1 ring-white/[0.06]">
+      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02]">
         <div className="flex items-center justify-between border-b border-white/[0.05] px-3 py-2 text-[11px]"><span className="font-semibold uppercase tracking-[0.08em] text-white/40">Naskah voiceover</span><span className={recorded ? 'text-[#d4ff64]/70' : 'text-white/40'}>{story.voice ? (recorded ? 'sudah direkam' : 'perlu direkam ulang') : 'belum direkam'}</span></div>
         <ol className="flex flex-col px-3 py-2 text-[12.5px] leading-relaxed text-white/70">
           {story.scenes.length ? story.scenes.map((s, i) => <li key={i} className="flex gap-2 py-0.5"><span className="w-5 font-mono text-[11px] text-white/30">{i + 1}</span><span>{s.say || s.text}</span></li>) : <li className="text-white/40">Belum ada naskah.</li>}
@@ -374,8 +436,8 @@ function AudioEditor({ story, onChange, disabled }) {
       {story.music && <Field label="Prompt musik" hint="genre, suasana, instrumen, BPM, era"><textarea rows={4} value={story.musicPrompt} disabled={disabled} onChange={(e) => onChange({ musicPrompt: e.target.value })} className={inputClass} /></Field>}
       {story.musicTrack && <p className="text-[11px] text-white/40">{story.musicFor === story.musicPrompt ? 'Musik sudah dibuat dari prompt ini.' : 'Prompt berubah: musik akan dibuat ulang.'}</p>}
       {story.sounds?.length > 0 && (
-        <div className="rounded-xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/40">Suara latar & efek khusus</div>
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">Suara latar & efek khusus</div>
           {story.sounds.map((x) => (
             <div key={x.key} className="flex items-start gap-2 border-b border-white/[0.04] py-1.5 text-[12px] last:border-0">
               <span className="flex-1 text-white/70"><b className="text-white/85">{x.key}</b> · {x.kind === 'effect' ? 'efek' : x.scene === null ? 'latar seluruh video' : `latar adegan ${x.scene + 1}`} · {x.seconds}s<br /><span className="text-white/45">{x.prompt}</span></span>
@@ -386,8 +448,8 @@ function AudioEditor({ story, onChange, disabled }) {
         </div>
       )}
       {Object.keys(story.assets || {}).length > 0 && (
-        <div className="rounded-xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/40">Gambar & animasi dari luar</div>
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">Gambar & animasi dari luar</div>
           {Object.entries(story.assets).map(([key, a]) => <p key={key} className="text-[11.5px] text-white/55"><span className="font-mono text-[#d4ff64]/70">{key}</span> {a.credit ? `· ${a.credit}` : ''}</p>)}
         </div>
       )}
@@ -395,23 +457,103 @@ function AudioEditor({ story, onChange, disabled }) {
   );
 }
 
-// Scenes as blocks along time: click to jump there and edit it; the actions act on that scene.
-function Timeline({ story, selected, onSelect, busy, sceneErrors }) {
-  const total = story.scenes.reduce((sum, s) => sum + s.duration, 0) || 1;
-  if (!story.scenes.length) return null;
+const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+function Lane({ label, color, children }) {
   return (
-    <div className="flex h-12 w-full gap-1 overflow-x-auto">
-      {story.scenes.map((s, i) => {
-        const st = STATUS[sceneStatus(s, busy, sceneErrors[i])];
-        return (
-          <button key={i} type="button" onClick={() => onSelect(i)} title={`${i + 1}. ${s.text}`} style={{ flexGrow: s.duration, flexBasis: 0, minWidth: 44 }}
-            className={`relative flex flex-col justify-between overflow-hidden rounded-lg px-2 py-1 text-left ring-1 transition ${i === selected ? 'bg-white/[0.12] ring-[#d4ff64]/60' : 'bg-white/[0.04] ring-white/[0.06] hover:bg-white/[0.08]'}`}>
-            <span className="flex items-center gap-1.5 text-[10.5px] text-white/60"><span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} /><span className="font-mono">{i + 1}</span></span>
-            <span className="truncate text-[10px] text-white/40">{s.text}</span>
-          </button>
-        );
-      })}
-      <span className="sr-only">{Math.round(total)} detik</span>
+    <div className="flex h-7">
+      <span className={`sticky left-0 z-20 inline-flex h-full w-[52px] flex-none items-center rounded-l bg-[#101318] px-1.5 text-[9px] font-semibold uppercase tracking-wide ${color}`}>{label}</span>
+      <div className="relative flex-1 rounded-r bg-white/[0.025]">{children}</div>
+    </div>
+  );
+}
+function Block({ from, length, total, tone, title, onClick, children }) {
+  return (
+    <button type="button" title={title} onClick={onClick} style={{ left: `${(from / total) * 100}%`, width: `${(length / total) * 100}%` }}
+      className={`absolute bottom-1 top-1 overflow-hidden rounded px-1.5 text-left text-[9.5px] leading-[18px] text-white/90 ${tone}`}>
+      <span className="pointer-events-none block truncate">{children}</span>
+    </button>
+  );
+}
+
+// The AI Director's timeline: a time ruler, the scenes as clips, and lanes for the narrator, music and made
+// sounds, with the playhead. Clicking a scene or the ruler jumps there.
+function Timeline({ story, selected, onSelect, onSeek, now, playing, onToggle, busy, sceneErrors, onOpenAudio }) {
+  const [zoom, setZoom] = useState(1);
+  const starts = [];
+  let total = 0;
+  for (const scene of story.scenes) { starts.push(total); total += scene.duration; }
+  if (!story.scenes.length) return null;
+  const step = total > 90 ? 10 : total > 40 ? 5 : total > 15 ? 2 : 1;
+  const ticks = Array.from({ length: Math.floor(total / step) + 1 }, (_, i) => i * step);
+  const voiceReady = story.voice && story.voiceText === narration(story);
+  const musicReady = story.musicTrack && story.musicFor === story.musicPrompt;
+  const seekAt = (event) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    onSeek(Math.max(0, Math.min(total, ((event.clientX - box.left) / box.width) * total)));
+  };
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-[#0f1216] p-2">
+      <div className="mb-1 flex flex-wrap items-center gap-2 px-1">
+        <button type="button" onClick={onToggle} aria-label={playing ? 'Jeda' : 'Putar'} className="grid h-7 w-7 place-items-center rounded-full bg-white text-black">
+          {playing ? <Icon d="M8 5v14 M16 5v14" size={12} /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z" /></svg>}
+        </button>
+        <span className="font-mono text-[11px] text-white/80">{fmtTime(now)}</span>
+        <span className="font-mono text-[11px] text-white/35">/ {fmtTime(total)}</span>
+        <span className="ml-auto text-[10px] text-white/35">Zoom</span>
+        <button type="button" onClick={() => setZoom((z) => Math.max(1, z / 1.5))} disabled={zoom <= 1} className="grid h-5 w-5 place-items-center rounded text-[12px] text-white/60 hover:bg-white/[0.08] disabled:opacity-30">−</button>
+        <input type="range" min={1} max={6} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} aria-label="Zoom timeline" className="w-24 accent-[#d4ff64]" />
+        <button type="button" onClick={() => setZoom((z) => Math.min(6, z * 1.5))} disabled={zoom >= 6} className="grid h-5 w-5 place-items-center rounded text-[12px] text-white/60 hover:bg-white/[0.08] disabled:opacity-30">+</button>
+        <button type="button" onClick={() => setZoom(1)} className="rounded px-1.5 text-[10px] text-white/45 hover:text-white">Pas layar</button>
+      </div>
+      <div className="overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
+        <div className="relative" style={{ width: `${zoom * 100}%`, minWidth: '100%' }}>
+          <div className="flex"><span className="sticky left-0 z-20 w-[52px] flex-none bg-[#0f1216]" />
+          <div className="relative h-4 flex-1 cursor-pointer text-[9px] text-white/30" onClick={seekAt}>
+            {ticks.map((t) => <span key={t} className="absolute bottom-0 border-l border-white/20 pl-1 leading-none" style={{ left: `${(t / total) * 100}%` }}>{fmtTime(t)}</span>)}
+          </div></div>
+          <div className="mt-1 flex"><span className="sticky left-0 z-20 inline-flex h-16 w-[52px] flex-none items-center whitespace-nowrap rounded-l bg-[#101318] px-1.5 text-[8.5px] font-semibold uppercase text-white/50">Adegan</span>
+          <div className="flex h-16 flex-1 overflow-hidden rounded-r">
+            {story.scenes.map((s, i) => {
+              const st = STATUS[sceneStatus(s, busy, sceneErrors[i])];
+              return (
+                <button key={i} type="button" onClick={() => onSelect(i)} title={`${i + 1}. ${s.text}`} style={{ width: `${(s.duration / total) * 100}%` }}
+                  className={`relative flex h-full flex-none flex-col justify-between overflow-hidden border-r border-black bg-gradient-to-b from-[#20242b] to-[#15181d] px-1.5 py-1 text-left hover:from-[#272c34] ${i === selected ? 'ring-2 ring-inset ring-[#d4ff64]' : ''}`}>
+                  <span className="flex items-center gap-1"><span className="rounded bg-black/60 px-1 text-[9px] text-white">{i + 1}</span><span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} title={st.label} /></span>
+                  <span className="line-clamp-2 text-[9.5px] leading-tight text-white/55">{s.text}</span>
+                </button>
+              );
+            })}
+          </div></div>
+          <div className="mt-1 space-y-1">
+            <Lane label="VO" color="text-violet-200">
+              {story.scenes.map((s, i) => (
+                <Block key={i} from={starts[i]} length={s.duration} total={total} onClick={() => onSelect(i)} title={`Narator adegan ${i + 1}: ${s.say || s.text}`}
+                  tone={voiceReady ? 'bg-violet-500/60 hover:bg-violet-500/80' : 'border border-dashed border-violet-300/50 bg-violet-500/15 hover:bg-violet-500/30'}>{s.say || s.text}</Block>
+              ))}
+            </Lane>
+            <Lane label="Musik" color="text-sky-200">
+              {story.music
+                ? <Block from={0} length={total} total={total} onClick={onOpenAudio} title={story.musicPrompt || 'Musik latar'}
+                  tone={musicReady ? 'bg-sky-500/50 hover:bg-sky-500/70' : 'border border-dashed border-sky-300/50 bg-sky-500/15 hover:bg-sky-500/30'}>{story.musicPrompt || 'Musik latar'}</Block>
+                : <button type="button" onClick={onOpenAudio} className="absolute left-1 top-1 rounded px-1.5 py-0.5 text-[10px] text-white/35 hover:bg-white/[0.06] hover:text-white/70">+ Tambah</button>}
+            </Lane>
+            <Lane label="Suara" color="text-amber-200">
+              {(story.sounds || []).filter((x) => x.kind !== 'effect').map((x) => {
+                const whole = x.scene === null || !story.scenes[x.scene];
+                const from = whole ? 0 : starts[x.scene];
+                const length = whole ? total : story.scenes[x.scene].duration;
+                return <Block key={x.key} from={from} length={length} total={total} onClick={onOpenAudio} title={x.prompt}
+                  tone={x.url && x.madeFrom === x.prompt ? 'bg-amber-500/45 hover:bg-amber-500/65' : 'border border-dashed border-amber-300/50 bg-amber-500/15 hover:bg-amber-500/30'}>{x.key}</Block>;
+              })}
+              {!(story.sounds || []).some((x) => x.kind !== 'effect') && <span className="absolute left-2 top-1.5 text-[10px] text-white/25">efek dari pustaka ikut di tiap adegan</span>}
+            </Lane>
+          </div>
+          <div className="pointer-events-none absolute bottom-0 left-[52px] right-0 top-0 z-30">
+            <div className="absolute bottom-0 top-0 w-0.5 bg-[#d4ff64] shadow-[0_0_6px_#d4ff64]" style={{ left: `${(Math.min(now, total) / total) * 100}%` }} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -429,11 +571,21 @@ export default function StoryStudio({ authenticated = false, beforeGenerate = ()
   const [card, setCard] = useState(null);
   const [sceneErrors, setSceneErrors] = useState({});
   const [render, setRender] = useState(null); // { progress } while rendering, { url } when done, { error }
+  // the smooth preview: the video rendered at half size in the background, played as a file
+  const [smooth, setSmooth] = useState(null); // { key, url } when ready
+  const [smoothRun, setSmoothRun] = useState(null); // { progress } while it renders
+  const [smoothTry, setSmoothTry] = useState(0);
+  const videoRef = useRef(null);
+  const seekAt = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
   const [files, setFiles] = useState([]); // [{ id, url, contentType, name, uploading }]
-  const fileRef = useRef(null);
-  const [chatWidth, dragChat] = useResizable('nexoclip_motion_chat_w', 400, 300, 640);
-  const [sideWidth, dragSide] = useResizable('nexoclip_motion_side_w', 380, 300, 560);
+  const [pane, setPane] = useState('chat'); // phones: chat or video
+  const [switcher, setSwitcher] = useState(false);
+  const [now, setNow] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const toggleRef = useRef(null);
+  const [chatWidth, dragChat] = useResizable('nexoclip_motion_chat_w', 420, 320, 640);
+  const [sideWidth, dragSide] = useResizable('nexoclip_motion_side_w', 340, 280, 520);
   const renderRef = useRef(null);
   const seekRef = useRef(null);
   const jobRef = useRef(null);
@@ -574,135 +726,257 @@ export default function StoryStudio({ authenticated = false, beforeGenerate = ()
     setSelected(i);
     setTab('scenes');
     const start = story.scenes.slice(0, i).reduce((sum, s) => sum + s.duration, 0);
-    seekRef.current?.(start + 0.05);
+    seekAt.current?.(start + 0.05);
   };
   const askAI = (i) => { setText(`Adegan ${i + 1}: `); inputRef.current?.focus(); };
+  const storyKey = useMemo(() => codeKey(JSON.stringify(storyVideoProps(story))), [story]);
+  const keyRef = useRef(storyKey);
+  keyRef.current = storyKey;
   const onRender = useCallback((data) => {
+    if (data.purpose === 'preview') {
+      if (data.type === 'nexoclip-render-progress') setSmoothRun({ progress: data.progress });
+      if (data.type === 'nexoclip-render-failed') { setSmoothRun(null); if (!data.aborted && data.key !== keyRef.current) setSmoothTry((n) => n + 1); }
+      if (data.type === 'nexoclip-render-done') {
+        setSmoothRun(null);
+        if (data.key === keyRef.current) setSmooth((old) => { if (old?.url) URL.revokeObjectURL(old.url); return { key: data.key, url: URL.createObjectURL(new Blob([data.bytes], { type: 'video/mp4' })) }; });
+        else setSmoothTry((n) => n + 1); // the video changed while it rendered
+      }
+      return;
+    }
     if (data.type === 'nexoclip-render-progress') setRender({ progress: data.progress });
     if (data.type === 'nexoclip-render-failed') setRender({ error: data.message });
     if (data.type === 'nexoclip-render-done') setRender({ url: URL.createObjectURL(new Blob([data.bytes], { type: 'video/mp4' })) });
   }, []);
-  const startRender = () => { setRender({ progress: 0 }); renderRef.current?.(); };
+  const startRender = () => { setRender({ progress: 0 }); setSmoothRun(null); renderRef.current?.('download'); };
   const onSceneError = useCallback((scene, message) => setSceneErrors((e) => (e[scene] ? e : { ...e, [scene]: message })), []);
 
   const totalSeconds = Math.round(story.scenes.reduce((sum, scene) => sum + scene.duration, 0));
   const hasVideo = story.scenes.some((scene) => scene.code);
+  const smoothReady = smooth?.key === storyKey;
+  // Make the smooth preview a few seconds after the video settles (drawn, saved, nothing running); a change
+  // stops one in progress.
+  const downloading = Boolean(render && !render.url && !render.error);
+  useEffect(() => {
+    if (!hasVideo || busy || dirty || smoothReady || downloading) return undefined;
+    const timer = setTimeout(() => { setSmoothRun({ progress: 0 }); renderRef.current?.('preview'); }, 2500);
+    return () => clearTimeout(timer);
+  }, [storyKey, hasVideo, busy, dirty, smoothReady, downloading, smoothTry]);
+  useEffect(() => () => { renderRef.current?.('cancel'); }, [storyKey]);
+  // While the smooth preview plays, the timeline follows the file (every frame, not every timeupdate).
+  useEffect(() => {
+    if (!smoothReady || !playing) return undefined;
+    let frame;
+    const tick = () => { if (videoRef.current) setNow(videoRef.current.currentTime); frame = requestAnimationFrame(tick); };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [smoothReady, playing]);
+  const seekTo = (t) => {
+    if (smoothReady && videoRef.current) { videoRef.current.currentTime = t; setNow(t); } else seekRef.current?.(t);
+  };
+  seekAt.current = seekTo;
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (smoothReady && v) { if (v.paused) v.play().catch(() => {}); else v.pause(); } else toggleRef.current?.();
+  };
   const progressLine = busy && !streaming ? (job.progress || 'Menunggu giliran…') : '';
+  const style = drawStyleOf(story.styleSpec || story.style);
+  const current = projects.find((p) => p.id === projectId);
+  const rendering = render && !render.url && !render.error;
+  const canSend = !busy && (text.trim() || files.some((f) => f.id)) && !files.some((f) => f.uploading);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3 lg:flex-row lg:gap-1.5 lg:overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col lg:flex-row">
+      <div className="flex border-b border-white/[0.06] lg:hidden">
+        {[['chat', 'Chat'], ['board', 'Video']].map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setPane(id)}
+            className={`flex-1 py-2.5 text-[12px] ${pane === id ? 'border-b-2 border-[#d4ff64] text-white' : 'text-white/45'}`}>{label}</button>
+        ))}
+      </div>
+
       {/* Chat */}
-      <aside className="relative flex shrink-0 flex-col gap-2.5 lg:min-h-0 lg:w-[var(--chat-w)]" style={{ '--chat-w': `${chatWidth}px` }}>
+      <section style={{ '--chat-w': `${chatWidth}px` }}
+        className={`${pane === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col lg:flex lg:w-[var(--chat-w)] lg:flex-none`}>
         {authenticated && (
-          <div className="flex items-center gap-2">
-            <select value={projectId || ''} disabled={busy} onChange={(e) => (e.target.value ? openProject(e.target.value).catch((err) => setError(err.message)) : newStory())}
-              className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-[#161915] px-3 py-2 text-[13px] outline-none">
-              <option value="">+ Video baru</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.firstTitle || p.name}</option>)}
-            </select>
-            <button type="button" onClick={newStory} disabled={busy} className="rounded-xl bg-white/[0.05] px-3 py-2 text-[12px] font-semibold text-white/70 ring-1 ring-white/[0.08] hover:text-white">Baru</button>
+          <div className="relative border-b border-white/[0.06] p-3">
+            <button type="button" disabled={busy} onClick={() => setSwitcher((v) => !v)}
+              className="flex w-full items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-2.5 py-2 text-left hover:border-white/15 disabled:opacity-60">
+              <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[#d4ff64]/10 text-[10px] font-bold text-[#d4ff64]">{(current?.firstTitle || current?.name || story.title || 'M').slice(0, 1).toUpperCase()}</span>
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-[12px] font-semibold text-white/90">{projectId ? (story.title || current?.firstTitle || current?.name || NEW_NAME) : 'Video baru'}</strong>
+                <small className="block text-[10px] text-white/40">{projects.length} project</small>
+              </span>
+              <Icon d="m6 9 6 6 6-6" />
+            </button>
+            {switcher && (
+              <div className="absolute left-3 right-3 top-full z-40 -mt-1 max-h-[50vh] overflow-y-auto rounded-xl border border-white/10 bg-[#0e1117] p-1 shadow-[0_18px_50px_#0009]">
+                <button type="button" onClick={() => { setSwitcher(false); newStory(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] text-[#d4ff64] hover:bg-white/[0.05]">+ Video baru</button>
+                {projects.map((p) => (
+                  <button key={p.id} type="button" onClick={() => { setSwitcher(false); openProject(p.id).catch((err) => setError(err.message)); }}
+                    className={`flex w-full items-center gap-2 truncate rounded-lg px-2.5 py-2 text-left text-[12px] hover:bg-white/[0.05] ${p.id === projectId ? 'text-white' : 'text-white/65'}`}>{p.firstTitle || p.name}</button>
+                ))}
+              </div>
+            )}
           </div>
         )}
-        <div className="relative min-h-[320px] flex-1 lg:min-h-0">
-          <div ref={listRef} onScroll={onScroll} className="absolute inset-0 flex flex-col gap-3 overflow-y-auto overscroll-contain pb-4 pr-1.5 [scrollbar-width:thin]">
+        <div className="relative min-h-0 flex-1">
+          <div ref={listRef} onScroll={onScroll} className="absolute inset-0 space-y-4 overflow-y-auto overscroll-contain px-4 py-5 [scrollbar-width:thin]">
             {!story.chat.length && (
-              <div className="flex flex-col gap-3 rounded-2xl bg-gradient-to-br from-[#d4ff64]/[0.09] to-transparent p-4 ring-1 ring-[#d4ff64]/15">
-                <span className="text-[13px] font-bold text-[#d4ff64]">Motion Director</span>
-                <p className="text-[13px] leading-relaxed text-white/65">Ceritakan video yang kamu mau: topiknya, untuk siapa, nadanya. AI mengusulkan gaya, tempo, suara, dan ide, lalu menulis naskah dan menggambarnya. Semua bisa diubah lewat chat atau langsung di panel kanan.</p>
-                <div className="flex flex-col gap-1.5">
+              <div className="pt-6 text-center">
+                <div className="inline-flex items-center gap-2 text-[10px] font-semibold tracking-[0.18em] text-white/50"><span className="h-[5px] w-[5px] rounded-full bg-[#d4ff64] shadow-[0_0_10px_#d4ff6480]" /> AI MOTION</div>
+                <h2 className="mt-3 font-display text-[20px] font-semibold text-white">Video animasi dari obrolan</h2>
+                <p className="mx-auto mt-2 max-w-[340px] text-[12px] leading-relaxed text-white/50">Ceritakan videonya, kirim foto/video referensi, atau tempel link web. AI mengusulkan gaya, tempo, suara dan ide, lalu menulis naskah dan menggambarnya.</p>
+                <div className="mt-5 flex flex-col gap-1.5 text-left">
                   {EXAMPLES.map((example) => (
                     <button key={example} type="button" onClick={() => send(example)} disabled={busy}
-                      className="rounded-xl bg-white/[0.04] px-3 py-2 text-left text-[12px] text-white/70 ring-1 ring-white/[0.06] hover:bg-white/[0.08] hover:text-white">{example}</button>
+                      className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[11.5px] text-white/70 hover:border-white/15 hover:text-white">{example}</button>
                   ))}
                 </div>
               </div>
             )}
             {story.chat.map((message, i) => (
-              <Message key={i} message={message} busy={busy} onOpen={setCard} onPick={(n, idea) => send(`Pakai ide ${n + 1}: ${idea.title}`)} />
+              <Message key={i} message={message} story={story} busy={busy} onOpen={setCard} onPick={(n, idea) => send(`Pakai ide ${n + 1}: ${idea.title}`)} />
             ))}
-            {streaming && <div className="flex flex-col items-start"><div className="max-w-[94%] rounded-2xl rounded-bl-md bg-white/[0.045] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#f2eee5] ring-1 ring-white/[0.06]"><Rich text={streaming} /><span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[#d4ff64]/70 align-middle" /></div></div>}
+            {streaming && <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Rich text={streaming} /><span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-[#d4ff64]/70 align-middle" /></div>}
             {!busy && !dirty && <PlanNotice story={story} onOpen={setCard} onApprove={produce} disabled={busy} />}
-            {progressLine && <p className="flex items-center gap-2 text-[12.5px] text-white/55"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d4ff64]" />{progressLine}</p>}
-            {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-[12.5px] text-red-300 ring-1 ring-red-500/20">{error}</p>}
+            {progressLine && <div className="flex items-center gap-2 text-[10.5px] text-white/40"><Spinner /> {progressLine}</div>}
+            {error && <p className="text-[11.5px] leading-relaxed text-red-300/90">{error}</p>}
           </div>
-          {!atBottom && <button type="button" onClick={() => { toBottom(); setAtBottom(true); }} className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[#1c1f1a] px-3 py-1.5 text-[11.5px] font-semibold text-white/80 shadow-lg ring-1 ring-white/10">↓ Pesan terbaru</button>}
-          <DetailPanel card={card} story={story} onClose={() => setCard(null)} onApprove={produce} busy={busy} />
+          {!atBottom && <button type="button" onClick={() => { toBottom(); setAtBottom(true); }} className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-[#11151b] px-3 py-1.5 text-[11px] text-white/80 shadow-lg">↓ Pesan terbaru</button>}
         </div>
-        {dirty && <p className="text-[11px] text-amber-200/70">Ada editan (panel kanan atau rasio) yang belum disimpan. Simpan dulu sebelum minta AI.</p>}
-        {files.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {files.map((f) => (
-              <span key={f.temp} className="relative">
-                {f.contentType.startsWith('image/') ? <img src={f.preview} alt={f.name} className={`h-14 w-14 rounded-lg object-cover ring-1 ring-white/10 ${f.uploading ? 'opacity-40' : ''}`} />
-                  : <span className={`flex h-14 items-center rounded-lg bg-white/[0.06] px-2 text-[11px] text-white/70 ring-1 ring-white/10 ${f.uploading ? 'opacity-40' : ''}`}>🎬 {f.name.slice(0, 16)}</span>}
-                <button type="button" onClick={() => setFiles((list) => list.filter((x) => x.temp !== f.temp))} className="absolute -right-1.5 -top-1.5 h-5 w-5 rounded-full bg-black/80 text-[11px] text-white ring-1 ring-white/20">×</button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); attach(e.dataTransfer.files); }}
-          className="flex items-end gap-2 rounded-2xl bg-white/[0.03] p-2 ring-1 ring-white/[0.07] focus-within:ring-[#d4ff64]/40">
-          <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => { attach(e.target.files); e.target.value = ''; }} />
-          <button type="button" title="Kirim gambar/video referensi" disabled={busy} onClick={() => fileRef.current?.click()} className="rounded-xl px-2 py-2 text-[16px] text-white/55 hover:bg-white/[0.06] hover:text-white">📎</button>
-          <textarea ref={inputRef} value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))} rows={2} disabled={busy}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={story.scenes.length ? 'mis. adegan 3 ganti jadi api unggun, narasinya lebih santai' : 'Ceritakan video yang kamu mau, kirim foto/video referensi, atau tempel link web…'}
-            className="min-w-0 flex-1 resize-none bg-transparent px-1.5 py-1 text-[13.5px] outline-none placeholder:text-white/30" />
-          <button type="button" onClick={() => send()} disabled={busy || (!text.trim() && !files.some((f) => f.id)) || files.some((f) => f.uploading)} className="rounded-xl bg-[#d4ff64] px-4 py-2 text-[13px] font-bold text-black disabled:opacity-40">Kirim</button>
-        </div>
-      </aside>
-      <Handle onPointerDown={(e) => dragChat(e, 1)} />
-
-      {/* Preview and timeline */}
-      <section className="flex min-h-[78vh] min-w-0 flex-1 flex-col gap-2.5 lg:min-h-0">
-        <div className="flex items-baseline justify-between gap-2 px-1">
-          <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">Pratinjau · {story.format}{totalSeconds ? ` · ${totalSeconds} dtk` : ''}{story.kind ? ` · ${story.kind}` : ''}</div>
-            <div className="truncate font-display text-[19px] font-semibold tracking-tight">{story.title || 'Video gambar'}</div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <select value={story.format} disabled={busy} title="Rasio video" onChange={(e) => edit({ format: e.target.value, scenes: story.scenes.map((sc) => ({ ...sc, redraw: true })) })}
-              className="rounded-lg border border-white/[0.08] bg-[#161915] px-2 py-1 text-[11.5px] text-white/75 outline-none">
-              {FORMAT_IDS.map((f) => <option key={f} value={f}>{f} · {FORMATS[f].label}</option>)}
-            </select>
-            {story.brief && <button type="button" onClick={() => setCard({ kind: 'brief' })} className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[11.5px] text-white/60 hover:text-white">Brief</button>}
-          </div>
-        </div>
-        <div className="relative mx-auto min-h-[50vh] w-full flex-1 overflow-hidden rounded-3xl bg-[#111310] ring-1 ring-white/[0.05] lg:min-h-0" style={{ maxWidth: { '9:16': 430, '4:5': 520, '1:1': 580, '16:9': 9999 }[story.format] || 430 }}>
-          {hasVideo ? <StoryPreview story={story} onSceneError={onSceneError} renderRef={renderRef} seekRef={seekRef} onRender={onRender} /> : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center text-white/45">
-              <p className="font-display text-[17px] text-white/70">{story.scenes.length ? 'Naskah siap. Cek rencana produksinya di chat.' : 'Mulai dari chat'}</p>
-              <p className="max-w-xs text-[12.5px]">Pratinjau muncul begitu adegan pertama selesai digambar.</p>
+        <div className="space-y-2 border-t border-white/[0.06] p-3">
+          {dirty && <p className="rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2 text-[11px] text-amber-200/80">Ada editan yang belum disimpan. Simpan dulu (panel kanan) sebelum minta AI.</p>}
+          <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); attach(e.dataTransfer.files); }}
+            className="relative rounded-2xl border border-white/10 bg-[#0b0e13] p-2 focus-within:border-[#d4ff64]/40">
+            {files.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+                {files.map((f) => (
+                  <div key={f.temp} title={f.name} className="relative h-12 w-12 overflow-hidden rounded-md border border-white/15">
+                    {f.contentType.startsWith('image/')
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={f.preview} alt={f.name} className="h-full w-full object-cover" />
+                      : <video src={f.preview} muted playsInline className="h-full w-full object-cover" />}
+                    {f.uploading && <span className="absolute inset-0 grid place-items-center bg-black/50 text-[9px] text-white/80">…</span>}
+                    <button type="button" onClick={() => setFiles((list) => list.filter((x) => x.temp !== f.temp))} aria-label="Hapus lampiran"
+                      className="absolute right-0 top-0 grid h-4 w-4 place-items-center rounded-bl bg-black/80 text-[10px] text-white">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <textarea ref={inputRef} value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))} rows={2} disabled={busy}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              onPaste={(e) => { if (e.clipboardData?.files?.length) { e.preventDefault(); attach(e.clipboardData.files); } }}
+              placeholder={busy ? 'Tunggu AI selesai…' : story.scenes.length ? 'mis. adegan 3 ganti jadi api unggun, narasinya lebih santai' : 'Ceritakan videonya, lampirkan gambar/video, atau tempel link…'}
+              className="block max-h-40 min-h-[40px] w-full resize-none bg-transparent px-1.5 py-1 text-[11.5px] text-white outline-none placeholder:text-white/30" />
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <label title="Tambah gambar atau video (bisa juga paste / seret ke sini)"
+                className={`grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-lg text-white/55 hover:bg-white/[0.07] hover:text-white ${busy || files.length >= 6 ? 'pointer-events-none opacity-40' : ''}`}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21.4 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                <input type="file" accept="image/*,video/*" multiple hidden onChange={(e) => { attach(e.target.files); e.target.value = ''; }} />
+              </label>
+              <span className="truncate text-[10px] text-white/30">Gaya: {story.styleSpec ? style.label : 'dipilih AI'} · {story.format}</span>
+              <button type="button" onClick={() => send()} disabled={!canSend} aria-label="Kirim pesan"
+                className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-lg bg-[#d4ff64] text-[#10130a] disabled:bg-white/10 disabled:text-white/30">
+                {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon d="M5 12h14M13 6l6 6-6 6" />}
+              </button>
             </div>
-          )}
-        </div>
-        <Timeline story={story} selected={selected} onSelect={selectScene} busy={busy} sceneErrors={sceneErrors} />
-        <div className="flex items-center gap-2">
-          {render?.url ? (
-            <a href={render.url} download={`${(story.title || 'video-gambar').replace(/[^\w\- ]+/g, '').trim() || 'video-gambar'}.mp4`} className="flex-1 rounded-xl bg-[#d4ff64] py-2.5 text-center text-[13.5px] font-bold text-black">Download MP4</a>
-          ) : (
-            <button type="button" onClick={startRender} disabled={!hasVideo || busy || (render && !render.url && !render.error)} className="flex-1 rounded-xl bg-[#d4ff64] py-2.5 text-[13.5px] font-bold text-black disabled:opacity-40">
-              {render && !render.error ? `Merender… ${Math.round((render.progress || 0) * 100)}%` : 'Render MP4'}
-            </button>
-          )}
-          <span className="max-w-[45%] text-[10.5px] leading-snug text-white/35">{render?.error ? `Render gagal: ${render.error}` : `Dirender di browser ini, gratis, ${layoutOf(story.format).out.join('×')}. Biarkan tab terbuka.`}</span>
+          </div>
+          <div className="px-1 text-[10px] text-white/30">Kredit project ini: {Math.round(story.chat.reduce((sum, m) => sum + (Number(m.credits) || 0), 0) * 10) / 10} · Enter untuk kirim, Shift+Enter baris baru</div>
         </div>
       </section>
-      <Handle onPointerDown={(e) => dragSide(e, -1)} />
+      <Handle onPointerDown={(e) => dragChat(e, 1)} />
 
-      {/* Scenes and audio */}
-      <aside className="flex shrink-0 flex-col gap-2.5 lg:min-h-0 lg:w-[var(--side-w)]" style={{ '--side-w': `${sideWidth}px` }}>
-        <div role="tablist" className="flex rounded-xl bg-white/[0.04] p-1 ring-1 ring-white/[0.06]">
-          {[{ id: 'scenes', label: `Adegan (${story.scenes.length})` }, { id: 'audio', label: 'Audio' }].map((t) => (
-            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold ${tab === t.id ? 'bg-[#f2eee5] text-black' : 'text-white/55 hover:text-white'}`}>{t.label}</button>
-          ))}
+      {/* Workspace */}
+      <section className={`${pane === 'board' ? 'flex' : 'hidden'} min-h-0 min-w-0 flex-1 flex-col lg:flex`}>
+        <div className="flex items-center gap-2 overflow-x-auto border-b border-white/[0.06] px-3 py-2.5">
+          <div className="min-w-0 pl-1">
+            <div className="truncate text-[13px] font-semibold text-white">{story.title || NEW_NAME}</div>
+            <div className="truncate text-[10px] text-white/40">{[story.kind, totalSeconds ? `${totalSeconds} dtk` : '', story.scenes.length ? `${story.scenes.length} adegan` : ''].filter(Boolean).join(' · ') || 'Belum ada naskah'}</div>
+          </div>
+          <div className="ml-auto flex flex-none items-center gap-1.5">
+            {story.brief && <button type="button" onClick={() => setCard({ kind: 'brief' })} className="rounded-md hover:opacity-80"><Badge>Brief</Badge></button>}
+            {story.scenes.length > 0 && <button type="button" onClick={() => setCard({ kind: 'script' })} className="rounded-md hover:opacity-80"><Badge>Naskah</Badge></button>}
+            <span title="Gaya gambar" className="hidden sm:inline"><Badge tone="accent">{story.styleSpec ? style.label : 'Gaya: dipilih AI'}</Badge></span>
+            <label title="Rasio video. Ganti rasio = semua adegan digambar ulang." className="relative flex items-center">
+              <select value={story.format} disabled={busy} onChange={(e) => edit({ format: e.target.value, scenes: story.scenes.map((sc) => ({ ...sc, redraw: true })) })}
+                className="h-[22px] cursor-pointer appearance-none rounded-md bg-white/[0.06] pl-1.5 pr-5 text-[10px] font-medium text-white/70 outline-none hover:text-white">
+                {FORMAT_IDS.map((f) => <option key={f} value={f} className="bg-[#16181d]">{f} · {FORMATS[f].label}</option>)}
+              </select>
+              <svg className="pointer-events-none absolute right-1 text-white/40" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M6 9l6 6 6-6" /></svg>
+            </label>
+            {story.pending && !dirty && (
+              <button type="button" onClick={produce} disabled={busy} title="Lihat rencana di chat dulu; ini sama dengan tombol Buat di kartu rencana."
+                className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#d4ff64] px-3 py-1.5 text-[12px] font-medium text-[#10130a] hover:brightness-110 disabled:opacity-40">
+                <Icon d="M5 3l14 9-14 9V3z" /> Buat · {story.pending.credits} kr
+              </button>
+            )}
+            {render?.url ? (
+              <a href={render.url} download={`${(story.title || 'video-gambar').replace(/[^\w\- ]+/g, '').trim() || 'video-gambar'}.mp4`}
+                className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#d4ff64] px-3 py-1.5 text-[12px] font-medium text-[#10130a]"><Icon d="M12 4v11 M7 10l5 5 5-5 M5 20h14" /> Download MP4</a>
+            ) : (
+              <button type="button" onClick={startRender} disabled={!hasVideo || busy || rendering}
+                title={render?.error ? `Render gagal: ${render.error}` : `Render MP4 ${layoutOf(story.format).out.join('×')} di browser ini (gratis). Biarkan tab terbuka.`}
+                className="ml-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-white/85 hover:border-white/25 disabled:opacity-40">
+                <Icon d="M12 4v11 M7 10l5 5 5-5 M5 20h14" /> {rendering ? `Merender… ${Math.round((render.progress || 0) * 100)}%` : render?.error ? 'Render ulang' : 'Export'}
+              </button>
+            )}
+          </div>
         </div>
-        {tab === 'scenes'
-          ? <ScenesEditor story={story} selected={Math.min(selected, Math.max(0, story.scenes.length - 1))} onSelect={selectScene} onChange={(scenes) => edit({ scenes })} disabled={busy} sceneErrors={sceneErrors} busy={busy} onAskAI={askAI} />
-          : <AudioEditor story={story} onChange={edit} disabled={busy} />}
-        {dirty && <button type="button" disabled={busy} onClick={saveAndPlan} className="rounded-xl bg-[#d4ff64] py-2.5 text-[13.5px] font-bold text-black disabled:opacity-40">Simpan & lihat rencana produksi</button>}
-      </aside>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:p-4 xl:flex-row xl:overflow-hidden">
+          <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col gap-2 xl:min-h-0">
+            {card && <DetailPanel card={card} story={story} onClose={() => setCard(null)} onApprove={produce} busy={busy} />}
+            {/* kept mounted under an open panel, so a render in progress goes on */}
+            <div className={`${card ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col gap-2`}>
+                <div className="relative flex min-h-[260px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-black">
+                  <div className="relative h-full max-h-full" style={{ aspectRatio: { '9:16': '9 / 16', '4:5': '4 / 5', '1:1': '1 / 1', '16:9': '16 / 9' }[story.format] || '9 / 16', maxWidth: '100%' }}>
+                    {hasVideo && smoothReady && (
+                      // eslint-disable-next-line jsx-a11y/media-has-caption
+                      <video ref={videoRef} key={smooth.url} src={smooth.url} controls playsInline className="absolute inset-0 z-10 h-full w-full bg-black object-contain"
+                        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onSeeked={(e) => setNow(e.currentTarget.currentTime)} onTimeUpdate={(e) => { if (!playing) setNow(e.currentTarget.currentTime); }} />
+                    )}
+                    {hasVideo ? <StoryPreview story={story} onSceneError={onSceneError} renderRef={renderRef} seekRef={seekRef} toggleRef={toggleRef} onRender={onRender} onTime={smoothReady ? null : setNow} onPlaying={smoothReady ? null : setPlaying} /> : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+                        <p className="text-[13px] text-white/60">{story.scenes.length ? 'Naskah siap. Cek rencana produksinya di chat.' : 'Mulai dari chat'}</p>
+                        <p className="max-w-xs text-[11px] text-white/35">Pratinjau muncul begitu adegan pertama selesai digambar.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {hasVideo && (
+                  <div className="flex items-center gap-2 px-1 text-[10.5px] text-white/40">
+                    {smoothReady ? <><span className="h-1.5 w-1.5 rounded-full bg-[#d4ff64]" /> Pratinjau mulus (versi video jadi, setengah resolusi)</>
+                      : smoothRun ? <><Spinner /> Menyiapkan pratinjau mulus… {Math.round((smoothRun.progress || 0) * 100)}% · sementara diputar langsung (bisa patah-patah)</>
+                        : <><span className="h-1.5 w-1.5 rounded-full bg-amber-300" /> Diputar langsung dari gambar (bisa patah-patah); versi mulus dibuat otomatis setelah selesai</>}
+                  </div>
+                )}
+                <Timeline story={story} selected={selected} onSelect={selectScene} onSeek={seekTo} now={now} playing={playing} onToggle={togglePlay}
+                  busy={busy} sceneErrors={sceneErrors} onOpenAudio={() => setTab('audio')} />
+            </div>
+          </div>
+
+          {/* Scenes and audio */}
+          <aside style={{ '--side-w': `${sideWidth}px` }} className="relative flex min-h-[60vh] w-full flex-none flex-col rounded-xl border border-white/[0.07] bg-[#0b0e13] xl:min-h-0 xl:w-[var(--side-w)]">
+            <div onPointerDown={(e) => dragSide(e, -1)} title="Seret untuk mengubah lebar" className="absolute -left-2.5 bottom-0 top-0 hidden w-1.5 cursor-col-resize rounded-full hover:bg-[#d4ff64]/30 xl:block" />
+            <div className="flex items-center gap-1 border-b border-white/[0.06] px-2 py-2">
+              {[{ id: 'scenes', label: 'Adegan', count: story.scenes.length }, { id: 'audio', label: 'Audio' }].map((t) => (
+                <button key={t.id} type="button" onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium ${tab === t.id ? 'bg-[#d4ff64] text-[#10130a]' : 'text-white/60 hover:bg-white/[0.05] hover:text-white'}`}>
+                  {t.label}{t.count ? <span className={tab === t.id ? 'text-[#10130a]/60' : 'text-white/35'}>{t.count}</span> : null}
+                </button>
+              ))}
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col p-3">
+              {tab === 'scenes'
+                ? <ScenesEditor story={story} selected={Math.min(selected, Math.max(0, story.scenes.length - 1))} onSelect={selectScene} onChange={(scenes) => edit({ scenes })} disabled={busy} sceneErrors={sceneErrors} busy={busy} onAskAI={askAI} />
+                : <AudioEditor story={story} onChange={edit} disabled={busy} />}
+            </div>
+            {dirty && (
+              <div className="border-t border-white/[0.06] p-3">
+                <button type="button" disabled={busy} onClick={saveAndPlan} className="w-full rounded-lg bg-[#d4ff64] py-2 text-[12px] font-semibold text-[#10130a] hover:brightness-110 disabled:opacity-40">Simpan & lihat rencana produksi</button>
+              </div>
+            )}
+          </aside>
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,0 +1,7 @@
+Caption fonts for Motion drawn videos, from github.com/google/fonts (all SIL Open Font License 1.1):
+sans.ttf      Inter (Copyright The Inter Project Authors)
+rounded.ttf   Nunito (Copyright The Nunito Project Authors)
+display.ttf   Anton (Copyright The Anton Project Authors)
+serif.ttf     Lora (Copyright The Lora Project Authors)
+mono.ttf      JetBrains Mono (Copyright The JetBrains Mono Project Authors)
+License text: https://openfontlicense.org/open-font-license-official-text/ (same as patrickhand-OFL.txt).

@@ -67,9 +67,14 @@ export function paceOf(spec) {
 // Drawing styles: how the kit draws (sketch.js options) and the sentence that tells the animator the look.
 export const DRAW_STYLES = [
   {
-    id: 'krayon', label: 'Krayon', hint: 'Gambar tangan, isian krayon bertekstur',
-    look: 'ilustrasi krayon gambar tangan (outline tinta bergoyang, isian krayon bertekstur)',
-    sketch: { wobble: 1, hatch: true, outline: 1 },
+    id: 'flat', label: 'Flat modern', hint: 'Vektor flat bersih tanpa garis tepi, warna blok, bentuk geometris',
+    look: 'ilustrasi vektor flat modern (tanpa outline, blok warna rata, bentuk geometris membulat, bayangan datar sederhana)',
+    sketch: { wobble: 0, hatch: false, outline: 0 },
+  },
+  {
+    id: 'garis', label: 'Line art bersih', hint: 'Garis tipis rapi dan warna rata, gaya explainer',
+    look: 'ilustrasi explainer bersih (garis tepi tipis rapi tanpa goyang, warna rata, banyak ruang kosong)',
+    sketch: { wobble: 0, hatch: false, outline: 0.7 },
   },
   {
     id: 'spidol', label: 'Spidol', hint: 'Garis tegas dan bersih, warna rata',
@@ -82,8 +87,13 @@ export const DRAW_STYLES = [
     sketch: { wobble: 1.3, hatch: true, outline: 0.9, chalk: true },
     themes: ['night'],
   },
+  {
+    id: 'krayon', label: 'Krayon', hint: 'Gambar tangan, isian krayon bertekstur (hanya kalau diminta)',
+    look: 'ilustrasi krayon gambar tangan (outline tinta bergoyang, isian krayon bertekstur)',
+    sketch: { wobble: 1, hatch: true, outline: 1 },
+  },
 ];
-export const DEFAULT_DRAW_STYLE = 'krayon';
+export const DEFAULT_DRAW_STYLE = 'flat';
 const presetStyle = (id) => DRAW_STYLES.find((style) => style.id === id) || DRAW_STYLES[0];
 // A drawing style by id, or a custom one the AI made ({ preset, look, wobble, hatch, outline, chalk, dark }).
 export function drawStyleOf(spec) {
@@ -96,7 +106,7 @@ export function drawStyleOf(spec) {
     sketch: {
       wobble: num(spec.wobble, 0, 2.5, base.sketch.wobble),
       hatch: typeof spec.hatch === 'boolean' ? spec.hatch : base.sketch.hatch,
-      outline: num(spec.outline, 0.3, 2.5, base.sketch.outline),
+      outline: num(spec.outline, 0, 2.5, base.sketch.outline),
       chalk: typeof spec.chalk === 'boolean' ? spec.chalk : Boolean(base.sketch.chalk),
     },
     themes: spec.chalk === true ? ['night'] : spec.chalk === false ? undefined : base.themes,
@@ -185,7 +195,30 @@ export function cleanStory(story) {
     kind: str(s.kind, 80),
     styleSpec: cleanSpec(s.styleSpec, ['preset', 'label', 'look'], ['wobble', 'outline'], ['hatch', 'chalk']),
     paceSpec: cleanSpec(s.paceSpec, ['preset', 'label', 'tone', 'entrance', 'music', 'voiceTag'], ['transition', 'camera', 'hardCameras', 'stability'], [], ['words']),
-    cast: (Array.isArray(s.cast) ? s.cast : []).slice(0, 8).map((c) => ({ name: str(c?.name, 40), look: str(c?.look, 300) })).filter((c) => c.name),
+    // the characters; on the free canvas each gets drawing code the AI designed for this video (`code`, made
+    // from `look`; `madeFrom` is the look it was drawn from, so a changed look is drawn again)
+    cast: (Array.isArray(s.cast) ? s.cast : []).slice(0, 8).map((c) => ({
+      name: str(c?.name, 40), look: str(c?.look, 600), kind: c?.kind === 'prop' ? 'prop' : 'character',
+      ...(c?.code ? { code: str(c.code, MAX_CODE), madeFrom: str(c.madeFrom, 600) } : {}),
+      ...(c?.moves ? { moves: str(c.moves, 300) } : {}),
+    })).filter((c) => c.name),
+    // the video's own visual language (shapes, textures, light, how settings and props are drawn), set by the AI
+    artDirection: str(s.artDirection, 1200),
+    // 2 = the free canvas: no template backgrounds or caption band; the AI draws each scene's whole frame.
+    // Videos drawn before it keep 1 (their themed backgrounds) until their script is written again.
+    canvas: s.canvas === 2 || s.canvas === 1 ? s.canvas : (Array.isArray(s.scenes) && s.scenes.some((x) => x?.code) ? 1 : 2),
+    palette: s.palette && typeof s.palette === 'object' ? {
+      base: HEX.test(s.palette.base || '') ? s.palette.base : '', ink: HEX.test(s.palette.ink || '') ? s.palette.ink : '',
+      colors: (Array.isArray(s.palette.colors) ? s.palette.colors : []).filter((x) => HEX.test(x)).slice(0, 8),
+      note: str(s.palette.note, 200),
+    } : null,
+    caption: s.caption && typeof s.caption === 'object' ? {
+      position: ['bottom', 'top', 'middle', 'none'].includes(s.caption.position) ? s.caption.position : 'bottom',
+      font: ['hand', 'sans', 'rounded', 'serif', 'display', 'mono'].includes(s.caption.font) ? s.caption.font : 'sans',
+      color: HEX.test(s.caption.color || '') ? s.caption.color : '', accent: HEX.test(s.caption.accent || '') ? s.caption.accent : '',
+      outline: s.caption.outline === 'none' || HEX.test(s.caption.outline || '') ? s.caption.outline : '',
+      box: s.caption.box === true, boxColor: HEX.test(s.caption.boxColor || '') ? s.caption.boxColor : '',
+    } : null,
     assets: cleanAssets(s.assets),
     // made sounds: an ambience under a scene (or the whole video) or an effect the scene code plays (s.sfx('custom:key'))
     sounds: (Array.isArray(s.sounds) ? s.sounds : []).slice(0, 24).map((x) => ({
@@ -254,5 +287,9 @@ export function storyVideoProps(story) {
     assets: story.assets || {},
     sounds: (story.sounds || []).filter((x) => x.url),
     format: story.format || DEFAULT_FORMAT,
+    canvas: story.canvas || 1,
+    palette: story.palette || null,
+    caption: story.caption || null,
+    cast: (story.cast || []).filter((c) => c.code).map((c) => ({ name: c.name, code: c.code, kind: c.kind || 'character' })),
   };
 }

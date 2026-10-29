@@ -53,7 +53,7 @@ export default function MotionPlayerPage() {
         asset?.type === 'lottie' ? [key, { type: 'lottie', data: asset.data }] : [key, { type: 'image', url: audio(asset?.file) }]
       )).filter(([, asset]) => asset.data || asset.url));
       const sounds = (event.data.sounds || []).map((x) => ({ ...x, url: audio(x.file), file: undefined })).filter((x) => x.url);
-      setVideo({ ...event.data.props, voice: audio(event.data.audio?.voice), music: audio(event.data.audio?.music), assets, sounds });
+      setVideo({ ...event.data.props, key: String(event.data.key || ''), voice: audio(event.data.audio?.voice), music: audio(event.data.audio?.music), assets, sounds });
     };
     window.addEventListener('message', onMessage);
     toParent({ type: 'nexoclip-player-ready' });
@@ -66,28 +66,44 @@ export default function MotionPlayerPage() {
   // Rendering: the same composition, encoded frame by frame in this browser.
   const videoRef = useRef(null);
   videoRef.current = video;
+  // { type: 'nexoclip-render', purpose: 'preview' | 'download' }. A preview is half size and plays smoothly in
+  // the studio (drawing live costs more than a frame's time); a download stops a preview in progress.
   useEffect(() => {
-    let rendering = false;
+    let job = null; // { purpose, controller }
     const onMessage = async (event) => {
-      if (event.source !== window.parent || event.data?.type !== 'nexoclip-render' || rendering || !videoRef.current) return;
-      rendering = true;
+      if (event.source !== window.parent) return;
+      if (event.data?.type === 'nexoclip-render-cancel') { if (job?.purpose === 'preview') job.controller.abort(); return; }
+      if (event.data?.type !== 'nexoclip-render') return;
+      if (!videoRef.current) { toParent({ type: 'nexoclip-render-failed', purpose: event.data.purpose, key: '', message: 'not loaded yet' }); return; }
+      const purpose = event.data.purpose === 'preview' ? 'preview' : 'download';
+      if (job) {
+        if (job.purpose === 'download' || purpose === 'preview') return;
+        job.controller.abort();
+      }
+      const controller = new AbortController();
+      const mine = { purpose, controller };
+      job = mine;
+      const key = videoRef.current.key || ''; // the video as it is now (the studio drops a stale result)
       try {
         memoryStorage();
         const { renderMediaOnWeb } = await import('@remotion/web-renderer');
         const props = { ...videoRef.current, onError: null };
+        const [width, height] = layoutOf(props.format).out;
         const result = await renderMediaOnWeb({
-          composition: { component: DrawVideo, id: 'drawn-video', width: layoutOf(props.format).out[0], height: layoutOf(props.format).out[1], fps: DRAW_FPS, durationInFrames: Math.max(1, drawFrames(props.scenes || [], DRAW_FPS)), defaultProps: props },
+          composition: { component: DrawVideo, id: 'drawn-video', width, height, fps: DRAW_FPS, durationInFrames: Math.max(1, drawFrames(props.scenes || [], DRAW_FPS)), defaultProps: props },
           inputProps: props,
           container: 'mp4',
-          videoBitrate: 'high',
-          onProgress: (p) => toParent({ type: 'nexoclip-render-progress', progress: p.progress }),
+          videoBitrate: purpose === 'preview' ? 'medium' : 'high',
+          scale: purpose === 'preview' ? 0.5 : 1,
+          signal: controller.signal,
+          onProgress: (p) => toParent({ type: 'nexoclip-render-progress', purpose, key, progress: p.progress }),
         });
         const bytes = await (await result.getBlob()).arrayBuffer();
-        window.parent.postMessage({ type: 'nexoclip-render-done', bytes }, '*', [bytes]);
+        window.parent.postMessage({ type: 'nexoclip-render-done', purpose, key, bytes }, '*', [bytes]);
       } catch (error) {
-        toParent({ type: 'nexoclip-render-failed', message: String(error?.message || error).slice(0, 300) });
+        toParent({ type: 'nexoclip-render-failed', purpose, key, aborted: controller.signal.aborted, message: String(error?.message || error).slice(0, 300) });
       } finally {
-        rendering = false;
+        if (job === mine) job = null;
       }
     };
     window.addEventListener('message', onMessage);
@@ -104,6 +120,36 @@ export default function MotionPlayerPage() {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  // The playhead for the studio's timeline: the current second (a few times a second) and whether it plays;
+  // { type: 'nexoclip-toggle' } plays or pauses.
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return undefined;
+    let last = 0;
+    const time = (e) => {
+      const now = performance.now();
+      if (now - last < 120) return;
+      last = now;
+      toParent({ type: 'nexoclip-time', seconds: e.detail.frame / DRAW_FPS });
+    };
+    const play = () => toParent({ type: 'nexoclip-playing', playing: true });
+    const pause = () => toParent({ type: 'nexoclip-playing', playing: false });
+    const seeked = (e) => toParent({ type: 'nexoclip-time', seconds: e.detail.frame / DRAW_FPS });
+    player.addEventListener('frameupdate', time);
+    player.addEventListener('seeked', seeked);
+    player.addEventListener('play', play);
+    player.addEventListener('pause', pause);
+    const onMessage = (event) => { if (event.source === window.parent && event.data?.type === 'nexoclip-toggle') player.toggle(); };
+    window.addEventListener('message', onMessage);
+    return () => {
+      player.removeEventListener('frameupdate', time);
+      player.removeEventListener('seeked', seeked);
+      player.removeEventListener('play', play);
+      player.removeEventListener('pause', pause);
+      window.removeEventListener('message', onMessage);
+    };
+  }, [video]);
 
   const onError = useMemo(() => (scene, message) => {
     if (reported.current.has(scene)) return;

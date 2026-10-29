@@ -24,13 +24,13 @@ const SCENE = {
   properties: {
     text: str('narration shown on screen, written the way it is spoken (numbers in words)'),
     say: str("the narrator's version: the SAME words, plus Eleven v4 audio tags in [brackets], CAPITALS for stress, ... for pauses"),
-    visual: str('concrete picture and motion: named objects with their telling parts, which cast members, which assets'),
-    theme: str('a look name from the plan (paper, dusk, night or one you defined)'),
+    visual: str('the whole frame: the setting/background of this scene (place, light, depth, colours), the concrete objects with their telling parts, which cast members and what they do, which assets, and the motion'),
+    theme: str('only for older videos with named looks; leave out'),
     camera: { type: 'string', enum: STORY_CAMERAS },
     emphasis: str('ONE word of text, exactly as written, where the camera hits'),
     duration: num('seconds, roughly 1 + 0.3 per word; the narration sets the final length'),
   },
-  required: ['text', 'visual', 'theme', 'camera', 'emphasis'],
+  required: ['text', 'visual', 'camera', 'emphasis'],
 };
 
 export const AGENT_TOOLS = [
@@ -63,9 +63,13 @@ export const AGENT_TOOLS = [
     voice_id: { type: 'string', enum: ELEVENLABS_VOICES.map((v) => v.id), description: 'narrator voice' },
     music: bool('whether the video gets a music bed'),
     music_prompt: str('ElevenLabs Music prompt (English): genre, mood, instruments, BPM, era/production, key, arrangement over time, exclusions'),
-    cast: { type: 'array', description: 'recurring characters with a fixed look (s.person / s.animal options)', items: { type: 'object', properties: { name: str('name'), look: str('exact options, e.g. person: skin brown, hair black curly, shirt #c0703a ...') }, required: ['name', 'look'], additionalProperties: false } },
+    cast: { type: 'array', description: 'recurring characters; each is designed from scratch for this video (drawing code made in production) from its look', items: { type: 'object', properties: { name: str('name'), look: str('a character design brief: gender, age, species, proportions (chibi, tall, round...), head and hair shape, face, clothes with details and colours (hex), accessories, personality in the pose') }, required: ['name', 'look'], additionalProperties: false } },
+    props: { type: 'array', description: 'recurring objects of this video (a product, a vehicle, a machine, a house, a mascot object), each designed once from its look and reused in every scene', items: { type: 'object', properties: { name: str('name'), look: str('design brief: shape, telling parts, materials, colours (hex), states it can be in') }, required: ['name', 'look'], additionalProperties: false } },
+    art_direction: str('the visual language of THIS video in 3-6 sentences: shape language, line and fill, texture, light and shadow, how skies, buildings, plants, rooms and objects are drawn, background motifs and depth. Different for every video, following the brief, style and references'),
+    palette: { type: 'object', description: 'the colours of the whole video', properties: { base: str('hex: the plain colour under every scene'), ink: str('hex: outline/line colour'), colors: { type: 'array', items: { type: 'string' }, description: '4-7 hex colours' }, note: str('mood of the palette') }, additionalProperties: false },
+    caption: { type: 'object', description: 'how the narration text looks on screen', properties: { position: { type: 'string', enum: ['bottom', 'top', 'middle', 'none'] }, font: { type: 'string', enum: ['sans', 'rounded', 'display', 'serif', 'hand', 'mono'] }, color: str('hex'), accent: str('hex for the stressed word'), outline: str('hex outline, or "none"'), box: bool('a box behind the words'), boxColor: str('hex') }, additionalProperties: false },
     looks: {
-      type: 'object', description: `named backgrounds the scenes use: { name: { top, bottom (hex), pattern (${PATTERNS.join('|')}), sheet (paper sheet above the caption), image (an asset key) } }`,
+      type: 'object', description: `only for older videos (canvas 1): named backgrounds the scenes use: { name: { top, bottom (hex), pattern (${PATTERNS.join('|')}), sheet (paper sheet above the caption), image (an asset key) } }`,
       additionalProperties: { type: 'object', properties: { top: str('hex'), bottom: str('hex'), pattern: str('pattern'), sheet: bool('paper sheet'), image: str('asset key') }, additionalProperties: false },
     },
   }),
@@ -83,9 +87,9 @@ export const AGENT_TOOLS = [
     insert: { type: 'array', items: { type: 'object', properties: { after: num('insert after this scene number (0 = at the start)'), scene: SCENE }, required: ['after', 'scene'], additionalProperties: false } },
     remove: { type: 'array', items: { type: 'number' }, description: 'scene numbers to delete' },
   }),
-  tool('find_assets', 'Find pictures or animated emoji to use in scenes (stock illustrations, photos and vectors from Pixabay, Noto animated emoji). Returns keys for s.image / s.lottie.', {
+  tool('find_assets', 'Find animated emoji (Google Noto, Lottie) to use in scenes. Returns keys for s.lottie. There is no stock photo search: everything else is drawn, or comes from what the user sent.', {
     query: str('what to look for, in English'),
-    kind: { type: 'string', enum: ['illustration', 'photo', 'vector', 'emoji'] },
+    kind: { type: 'string', enum: ['emoji'] },
     count: num('how many (1-3)'),
   }, ['query', 'kind']),
   tool('look_at_reference', 'Look at a picture or video the user sent in the chat (key from the references list): what is in it, its style, colours, composition, and for a video its motion, pacing and scene order. Use it before copying a style or building a video from the user\'s photos.', {
@@ -131,7 +135,7 @@ export function agentSystemPrompt() {
 ## Cara kerja
 1. Pahami kebutuhannya. Kalau brief masih kabur, tanya paling banyak 1-2 hal penting (untuk siapa, tujuan, durasi, nada). Kalau sudah cukup jelas, jangan bertanya: langsung usulkan.
 2. Usulkan sendiri jenis video, bentuk visual, gaya gambar, tempo, durasi, suara, dan musik yang cocok dengan brief (update_plan), lalu 3-5 ide yang benar-benar berbeda (propose_ideas). Jelaskan singkat kenapa usulanmu cocok. User boleh mengubah apa saja.
-3. Setelah user memilih ide (atau bilang "langsung saja"), tulis naskah (write_script), tentukan tokoh (cast) dan latar (looks) di update_plan, cari aset bila perlu (find_assets), lalu siapkan rencana produksi (produce).
+3. Setelah user memilih ide (atau bilang "langsung saja"), tulis naskah (write_script), tentukan bahasa visual (art_direction), palet, tampilan teks (caption), desain tokoh (cast), dan properti berulang (props) di update_plan, lalu siapkan rencana produksi (produce).
 4. Rencana produksi harus bisa direview sebelum apa pun dibuat. Di balasanmu jelaskan dengan jelas dan detail, dalam poin-poin: brief singkat; gaya, tempo, latar, dan tokoh; alur adegan (nomor + intinya); naskah voiceover yang akan dibacakan beserta suara naratornya dan nadanya; musik (suasana, BPM, instrumen) atau tanpa musik; durasi; dan apa yang akan dibuat (suara, musik, adegan mana yang digambar) beserta biayanya. Lalu minta user mereview: mereka bisa mengedit langsung di tab Adegan dan Audio, minta ubah lewat chat, atau menekan tombol Buat. Kartu persetujuan juga menampilkan rencana lengkapnya.
 5. Revisi: ubah hanya yang diminta (edit_scenes), lalu produce lagi dan jelaskan apa yang berubah; hanya adegan yang berubah yang digambar ulang.
 Jangan menuliskan ulang seluruh naskah di chat (user melihatnya lengkap di tab Adegan); cukup ringkas intinya seperti poin 4.
@@ -151,19 +155,23 @@ Motivasi (lembut, keras, lucu), edukasi, sejarah, sains, dongeng, berita, tips, 
 - "say" (Eleven v4): kata yang SAMA persis dengan text; boleh menambah audio tag berbahasa Inggris dalam [kurung siku] sebelum bagian yang diwarnai ([excited], [whispers], [sighs], [curious], [warmly], [short pause], atau yang spesifik seperti [low, steady voice]), HURUF KAPITAL untuk satu kata yang ditekan, ... untuk jeda, ! dan ? untuk nada. Paling banyak 1-2 tag per scene, sesuai suara narator. Tanpa <break>. Tag tidak pernah muncul di layar.
 - "emphasis" satu kata dari text (persis). "camera": push, pull, pan-left, pan-right, tilt-up, tilt-down, roll, orbit, crash, handheld, shake; scene berurutan tidak sama; crash/shake hanya untuk benturan/kaget sesuai tempo.
 - "visual": gambar KONKRET dan geraknya. Sebut benda nyata dengan ciri bentuknya ("motor skuter oranye: dua roda, jok cokelat, lampu bulat"), tokoh dari cast dengan namanya, hewan, ikon, peta, grafik, gelembung chat, harga, tombol, atau key aset yang sudah ditemukan. Satu fokus utama dan paling banyak 2-3 pendukung. Jaga benang merah visual, tapi variasikan benda dan komposisi antar scene supaya tidak satu benda terus.
-- "theme": nama look dari plan. Selingi supaya tidak monoton.
+- Latar tiap adegan ditulis di "visual" dan digambar khusus (tidak ada template latar): tempatnya, cahaya, kedalaman, warna. Variasikan antar adegan (dekat/jauh, dalam/luar ruangan, siang/malam, abstrak) tapi tetap satu palet.
 
 ## Yang bisa digambar mesin animasi
-Bentuk dasar bergaya gambar tangan, manusia (s.person: pose, jalan, lari, lompat, melambai, rambut/kulit/baju, wajah sederhana titik), hewan (anjing, kucing, rubah, kuda, rusa, sapi, domba, beruang, gajah, mammoth, burung, ikan), ±1.700 ikon Lucide, peta dunia/region dengan rute dan label, grafik batang/garis/pie, angka berjalan, gelembung chat, label harga coret, tombol, progress bar, timeline, emoji animasi Noto, dan gambar dari find_assets. Tidak bisa: foto realistis atau wajah realistis yang digambar (pakai find_assets kind photo/illustration untuk itu), teks panjang di dalam gambar.
+Apa pun yang bisa dirakit dari bentuk, garis, gradasi, dan teks di kanvas: latar dan suasana buatan sendiri per adegan, tokoh yang didesain khusus untuk video ini (cast: manusia, hewan, makhluk, maskot), benda dan metafora, ±1.700 ikon Lucide, peta dunia/region dengan rute dan label, grafik batang/garis/pie, angka berjalan, gelembung chat, label harga coret, tombol, progress bar, timeline, emoji animasi Noto, dan gambar/foto yang dikirim user. Tidak ada pencarian foto stok. Tidak bisa: foto realistis yang digambar, teks panjang di dalam gambar.
 
 ## Rasio
 Tentukan rasio di update_plan.format sesuai tujuan: 9:16 untuk Reels/TikTok/Shorts (bawaan), 16:9 untuk YouTube, 1:1 atau 4:5 untuk feed Instagram. Kalau tidak jelas dan penting, tanya sekali. Mengganti rasio setelah adegan digambar berarti semua adegan digambar ulang (sebut biayanya).
 
 ## Gaya, tempo, latar, tokoh
+- Jangan otomatis memilih krayon. Pilih gaya yang paling cocok dengan brief dan target penonton (umumnya flat modern atau line art bersih untuk promo, edukasi, dan explainer); krayon hanya kalau user memintanya atau briefnya jelas anak-anak/dongeng bergaya gambar tangan.
 - Gaya (update_plan.style) bebas diracik dari preset ${DRAW_STYLES.map((d) => `${d.id} (${d.hint})`).join(', ')}: look, wobble, hatch, outline, chalk. Contoh: "kapur di dinding gua, warna tanah" untuk sejarah purba; "spidol bersih, outline tebal" untuk promo modern.
 - Tempo (update_plan.pace) bebas dari preset ${PACES.map((p) => `${p.id} (${p.hint})`).join(', ')}: kata per scene, transisi, kekuatan kamera, stabilitas narator, nada, cara objek masuk.
-- Latar (looks): beberapa latar bernama khusus video ini, warna tidak generik, teks harus terbaca (sheet: true = lembar kertas terang dengan caption di bawah; tanpa sheet = latar penuh, caption putih di pita gelap). Boleh pakai gambar aset sebagai latar (image).
-- Cast: tokoh yang muncul lebih dari sekali, dengan opsi s.person/s.animal yang persis (kulit, rambut, gaya rambut, baju, celana, dress), supaya sama di setiap scene.
+- Palet (palette): 4-7 warna khusus video ini (bukan warna generik), warna dasar, dan warna garis. Selaras dengan brief dan gaya.
+- Teks di layar (caption): posisi (bawah/atas/tengah/tanpa), font (sans, rounded, display, serif, hand, mono), warna, warna kata tekanan, outline atau kotak. Sesuaikan dengan jenis video: promo modern pakai sans/display tebal, dongeng pakai rounded/hand, berita pakai sans dengan kotak.
+- Bahasa visual (art_direction): WAJIB untuk setiap video baru dan berbeda tiap video: bentuk (bulat/tajam/geometris/organik), garis dan isian, tekstur, cahaya-bayangan, cara menggambar langit, bangunan, tanaman, ruangan, dan benda, motif latar. Turunkan dari brief, gaya, dan referensi user. Inilah yang membuat latar, properti, dan gambar pendukung tidak itu-itu saja.
+- Properti (props): benda yang muncul di beberapa adegan (produk, kendaraan, alat, rumah, maskot benda) didesain sekali dengan look yang detail.
+- Cast: setiap tokoh yang muncul lebih dari sekali DIDESAIN dari nol untuk video ini; sebutkan jenis kelamin dan usia, dan bedakan jelas laki-laki dan perempuan (siluet badan, wajah, rambut, pakaian); tulis look sebagai brief desain karakter yang detail dan khas (proporsi, bentuk kepala dan rambut, wajah, pakaian dan warnanya, aksesori). Tiap video dan tiap tokoh harus terlihat berbeda; jangan desain manusia generik yang sama. Mengubah look berarti tokoh didesain ulang.
 - Suara narator: ${voiceList}. Pilih yang cocok dengan nada.
 - Musik (opsional): prompt bahasa Inggris yang memutuskan genre, suasana, instrumen, BPM, dan era/produksi (istilah studio), nada dasar, aransemen berurutan sesuai alur video, dan diakhiri "instrumental only, no vocals, no lead melody, background bed under a voiceover".
 
@@ -190,15 +198,18 @@ export function storySummary(story) {
   const style = drawStyleOf(story.styleSpec || story.style);
   const pace = paceOf(story.paceSpec || story.pace);
   const lines = [
-    `Rasio: ${story.format || '9:16'} | Brief: ${story.brief || '(belum)'} | jenis: ${story.kind || '(belum)'} | gaya: ${style.label} (${style.look}) | tempo: ${pace.label} | suara: ${story.voiceId || '(belum)'} | musik: ${story.music ? 'ya' : 'tidak'}`,
-    story.cast?.length ? `Tokoh: ${story.cast.map((c) => `${c.name} = ${c.look}`).join('; ')}` : 'Tokoh: -',
-    `Latar: ${Object.keys(story.background || {}).filter((k) => story.background[k]?.top).join(', ') || 'paper, dusk, night (bawaan)'}`,
+    `Rasio: ${story.format || '9:16'} | Brief: ${story.brief || '(belum)'} | jenis: ${story.kind || '(belum)'} | gaya: ${story.styleSpec ? `${style.label} (${style.look})` : '(belum dipilih)'} | tempo: ${pace.label} | suara: ${story.voiceId || '(belum)'} | musik: ${story.music ? 'ya' : 'tidak'}`,
+    story.cast?.length ? `Tokoh dan properti: ${story.cast.map((c) => `${c.kind === 'prop' ? '[properti] ' : ''}${c.name} = ${c.look}${c.code ? ' (sudah didesain)' : ''}`).join('; ')}` : 'Tokoh: -',
+    story.artDirection ? `Bahasa visual: ${story.artDirection}` : 'Bahasa visual: (belum)',
+    story.canvas === 2
+      ? `Kanvas bebas (latar digambar per adegan) | palet: ${story.palette?.colors?.join(' ') || '(belum)'}${story.palette?.base ? ` dasar ${story.palette.base}` : ''} | teks: ${story.caption ? `${story.caption.position} ${story.caption.font}${story.caption.box ? ' kotak' : ''}` : '(bawaan: bawah, sans)'}`
+      : `Video lama dengan latar bernama: ${Object.keys(story.background || {}).filter((k) => story.background[k]?.top).join(', ') || 'paper, dusk, night (bawaan)'} (naskah baru lewat write_script pindah ke kanvas bebas)`,
     Object.keys(story.assets || {}).length ? `Aset: ${Object.entries(story.assets).map(([k, a]) => `${k} (${a.type}: ${a.description})`).join('; ')}` : 'Aset: -',
     story.references?.length ? `Kiriman user: ${story.references.map((r) => `${r.key} (${r.type}${r.name ? `, ${r.name}` : ''}${r.type === 'image' ? `, bisa dipakai di adegan: s.image("${r.key}")` : ''})${r.seen ? `: ${r.seen.slice(0, 300)}` : ' — belum dilihat'}`).join('; ')}` : '',
     story.sounds?.length ? `Suara buatan: ${story.sounds.map((x) => `${x.key} (${x.kind}${x.scene === null ? ', seluruh video' : `, adegan ${x.scene + 1}`}${x.url ? '' : ', belum dibuat'}): ${x.prompt}`).join('; ')}` : '',
     story.ideas?.length ? `Ide yang ditawarkan: ${story.ideas.map((i, n) => `${n + 1}. ${i.title}`).join(' | ')}` : '',
     story.scenes?.length
-      ? `Naskah "${story.title}" (${story.scenes.length} scene):\n${story.scenes.map((s, i) => `${i + 1}. [${s.theme}, ${s.camera}${s.code ? '' : ', belum digambar'}${s.redraw ? ', akan digambar ulang' : ''}] ${s.text} || visual: ${s.visual}`).join('\n')}`
+      ? `Naskah "${story.title}" (${story.scenes.length} scene):\n${story.scenes.map((s, i) => `${i + 1}. [${story.canvas === 2 ? '' : `${s.theme}, `}${s.camera}${s.code ? '' : ', belum digambar'}${s.redraw ? ', akan digambar ulang' : ''}] ${s.text} || visual: ${s.visual}`).join('\n')}`
       : 'Naskah: (belum)',
     story.voice ? `Narasi sudah direkam${story.voiceText !== narrationText(story.scenes, story.paceSpec || story.pace) ? ' (teks berubah, perlu rekam ulang)' : ''}.` : 'Narasi: belum direkam.',
   ];
@@ -271,9 +282,19 @@ const TOOL_RUNNERS = {
     if (typeof a.music === 'boolean') story.music = a.music;
     if (typeof a.music_prompt === 'string') story.musicPrompt = a.music_prompt.slice(0, 1000);
     if (Number.isFinite(Number(a.scene_count))) story.sceneCount = Math.min(16, Math.max(3, Math.round(Number(a.scene_count))));
-    if (Array.isArray(a.cast)) story.cast = a.cast.slice(0, 8).map((c) => ({ name: String(c.name || '').slice(0, 40), look: String(c.look || '').slice(0, 300) })).filter((c) => c.name);
+    // a character or prop keeps its design while its look stays the same
+    const designs = (list, kind) => list.slice(0, 8).map((c) => {
+      const name = String(c.name || '').slice(0, 40), look = String(c.look || '').slice(0, 600);
+      const before = (story.cast || []).find((x) => x.name === name && x.look === look && (x.kind || 'character') === kind);
+      return before ? { ...before } : { name, look, kind };
+    }).filter((c) => c.name);
+    if (Array.isArray(a.cast)) story.cast = [...designs(a.cast, 'character'), ...(story.cast || []).filter((c) => c.kind === 'prop')];
+    if (Array.isArray(a.props)) story.cast = [...(story.cast || []).filter((c) => c.kind !== 'prop'), ...designs(a.props, 'prop')];
+    if (typeof a.art_direction === 'string') story.artDirection = a.art_direction.slice(0, 1200);
+    if (a.palette && typeof a.palette === 'object') story.palette = { ...(story.palette || {}), ...a.palette };
+    if (a.caption && typeof a.caption === 'object') story.caption = { ...(story.caption || {}), ...a.caption };
     if (a.looks && typeof a.looks === 'object') story.background = { ...(story.background || {}), ...a.looks };
-    if (a.style || a.cast || a.looks) story.scenes.forEach((s) => { s.redraw = true; });
+    if (a.style || a.cast || a.props || a.looks || a.palette || a.art_direction) story.scenes.forEach((s) => { s.redraw = true; });
     return { ok: true, plan: storySummary(story).split('\n').slice(0, 3).join(' / ') };
   },
   propose_ideas(a, story, { ideasOut }) {
@@ -287,6 +308,7 @@ const TOOL_RUNNERS = {
     const scenes = varyCameras((a.scenes || []).slice(0, 16).map((raw) => ({ ...cleanScene(raw, themes), redraw: true })).filter((s) => s.text.trim()));
     if (scenes.length < 2) return { error: 'a script needs at least 2 scenes' };
     story.scenes = scenes;
+    story.canvas = 2; // a new script is drawn on the free canvas (no template backgrounds)
     story.title = String(a.title || story.title || '').slice(0, 120);
     if (a.seo) story.seo = a.seo;
     if (typeof a.music_prompt === 'string' && a.music_prompt) story.musicPrompt = a.music_prompt.slice(0, 1000);

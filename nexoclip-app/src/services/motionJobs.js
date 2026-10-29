@@ -11,7 +11,7 @@ import { makeMotionAudio, readCreditBalance } from './motionAudio.js';
 import { SCENE_LIMITS } from '../../components/motion/sceneKinds.js';
 import { ELEVENLABS_VOICES, audioCredits } from './elevenlabsAudio.js';
 import { loadUsdIdrRate, usdToCredits } from './generationPricing.js';
-import { STORY_MODEL, animateStory, narrationText, storyIdeas, storyScript, timeScenes } from './motionStory.js';
+import { STORY_MODEL, animateStory, designCast, narrationText, storyIdeas, storyScript, timeScenes } from './motionStory.js';
 import { productionNeeds, runAgentTurn } from './motionAgent.js';
 import { findAssets as findStoryAssets } from './motionAssets.js';
 import { analyzeReference, inspectScene } from './motionInspect.js';
@@ -138,7 +138,9 @@ export async function storyEstimate({ sceneCount, pace, music }, { env = process
 // What producing the pending part of a chat story costs (credits): drawings per scene, the narration, the music.
 export async function produceEstimate({ story, needs }, { env = process.env, loadRate = loadUsdIdrRate, priceAudio = audioCredits } = {}) {
   const rate = await loadRate({ env });
-  const text = usdToCredits(0.075 * Math.max(needs.draw.length, needs.voice ? 1 : 0), env, rate); // drawing measured ≈ $0.062 a scene
+  // drawing measured ≈ $0.062 a scene; designing the free canvas's characters ≈ one more scene each
+  const designs = needs.draw.length && story.canvas === 2 ? (story.cast || []).filter((c) => !c.code || c.madeFrom !== c.look).length : 0;
+  const text = usdToCredits(0.075 * Math.max(needs.draw.length + designs, needs.voice ? 1 : 0), env, rate);
   const chars = needs.voice ? Math.min(5000, Math.max(1, narrationText(story.scenes, story.paceSpec || story.pace).length)) : 0;
   const voice = chars ? (await priceAudio({ type: 'voiceover', text: 'x'.repeat(chars), voiceId: ELEVENLABS_VOICES[0].id })).credits : 0;
   const seconds = Math.min(300, Math.max(3, Math.round(story.scenes.reduce((sum, scene) => sum + scene.duration, 0) + 2)));
@@ -325,7 +327,7 @@ export function applyPlan(doc, plan) {
 export async function runMotionJob(jobId, {
   pool, plan = planMotion, planLong = planLongMotion, priceText = storyboardTextCredits, appendCredit = appendCreditEntry,
   readBalance = readCreditBalance, makeAudio = makeMotionAudio, logError = console.error,
-  story = { storyIdeas, storyScript, animateStory }, agent, findAssets, estimate,
+  story = { storyIdeas, storyScript, animateStory, designCast }, agent, findAssets, estimate,
 }) {
   const claimed = await pool.query(
     "UPDATE motion_jobs SET status = 'running', progress = CASE WHEN input->>'type' = 'audio' THEN 'Menyiapkan audio…' ELSE 'Menyusun adegan…' END, updated_at = now() WHERE id = $1 AND status = 'queued' RETURNING *",
@@ -648,10 +650,23 @@ async function runStoryProduce(job, { pool, priceText, appendCredit, readBalance
       }
     })() : Promise.resolve();
     const only = [...draw].sort((a, b) => a - b);
+    // the free canvas: the video's characters are designed first, then every scene draws them (s.cast)
+    if (only.length && story.canvas === 2 && story.cast.some((c) => !c.code || c.madeFrom !== c.look) && steps.designCast) {
+      await setJob(pool, job.id, { progress: 'Mendesain tokoh dan properti…' });
+      try {
+        const designed = await steps.designCast({ cast: story.cast, style: story.styleSpec || story.style, format: story.format, palette: story.palette, brief: story.brief, artDirection: story.artDirection });
+        for (const [i, usage] of designed.usages.entries()) spent += await chargeText({ pool, job, result: textResult(usage), priceText, appendCredit, readBalance, step: `cast${i}` });
+        story = await changeStory(pool, job.project_id, (s) => ({ ...s, cast: s.cast.map((c) => designed.cast.find((d) => d.name === c.name && d.look === c.look) || c) })).then((d) => d.story);
+      } catch (error) {
+        if (!error.status || error.status >= 500) logError('motion cast design failed', error.cause || error);
+        problems.push(`desain tokoh/properti: ${error.message}`);
+      }
+    }
     if (only.length) {
       await setJob(pool, job.id, { progress: `Menggambar 0/${only.length} adegan…` });
       const drawn = await steps.animateStory({
         scenes: story.scenes, only, pace: story.paceSpec || story.pace, style: story.styleSpec || story.style, cast: story.cast, assets: story.assets, format: story.format, sounds: story.sounds,
+        canvas: story.canvas, palette: story.palette, caption: story.caption, artDirection: story.artDirection,
         onProgress: (done, total) => setJob(pool, job.id, { progress: `Menggambar ${done}/${total} adegan…` }),
         // each group's scenes go into the project as soon as they are checked, so the preview fills in as it draws
         onScenes: (ready) => changeStory(pool, job.project_id, (s) => ({ ...s, scenes: s.scenes.map((scene, i) => (ready[i] ? { ...scene, code: ready[i].code, codeError: ready[i].codeError, redraw: false } : scene)) })),

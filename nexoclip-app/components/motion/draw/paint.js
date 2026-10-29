@@ -2,9 +2,9 @@
 // caption and paintScene() (one frame into a 2D context). Shared by the player (DrawVideo.js) and the server,
 // which draws snapshots of a scene for the AI to look at (src/services/motionFrames.js).
 
-import { createSketch } from './sketch.js';
+import { createSketch, fontOf } from './sketch.js';
 import { drawBackdrop, themeBackground } from './backdrop.js';
-import { layoutOf } from './layout.js';
+import { captionBand, layoutOf } from './layout.js';
 import { drawStyleOf, paceOf } from './story.js';
 
 export const FONT_FAMILY = 'MotionHand';
@@ -90,13 +90,15 @@ function baseCamera(name, t, dur, hit) {
 }
 
 // Typewriter caption: the full text is laid out first, then each word types in where it will sit.
-function drawCaption(ctx, { text, emphasis, sheet, words, t, format }) {
+// `free` (the free canvas): { font, color, outline, accent, box, centerY } of the video's own caption look.
+function drawCaption(ctx, { text, emphasis, sheet, words, t, format, free = null }) {
   const L = layoutOf(format);
-  const { size, line: lineHeight, width: maxWidth } = L.caption;
-  const accent = sheet ? '#e8641c' : '#ff9d4d';
-  const base = sheet ? '#2b2622' : '#ffffff';
+  const scale = free?.font === 'display' ? 0.9 : free?.font && free.font !== 'hand' ? 0.86 : 1;
+  const size = Math.round(L.caption.size * scale), lineHeight = Math.round(L.caption.line * scale), maxWidth = L.caption.width;
+  const accent = free ? free.accent : sheet ? '#e8641c' : '#ff9d4d';
+  const base = free ? free.color : sheet ? '#2b2622' : '#ffffff';
   ctx.save();
-  ctx.font = `${size}px ${FONT_FAMILY}, "Patrick Hand", cursive`;
+  ctx.font = free ? `${free.font === 'sans' || free.font === 'rounded' ? '700 ' : ''}${size}px ${fontOf(free.font)}` : `${size}px ${FONT_FAMILY}, "Patrick Hand", cursive`;
   ctx.textBaseline = 'middle';
   const space = ctx.measureText(' ').width;
   const lines = [[]];
@@ -108,13 +110,25 @@ function drawCaption(ctx, { text, emphasis, sheet, words, t, format }) {
     lines[lines.length - 1].push({ ...word, width: w });
   }
   const band = L.h - (sheet ? L.sheetBottom : L.captionTop);
-  const top = (sheet ? L.sheetBottom : L.captionTop) + band * 0.42 - (lines.length - 1) * lineHeight / 2;
+  const top = free ? free.centerY - (lines.length - 1) * lineHeight / 2 : (sheet ? L.sheetBottom : L.captionTop) + band * 0.42 - (lines.length - 1) * lineHeight / 2;
   const target = bare(emphasis);
   const flat = lines.flat();
   lines.forEach((line, row) => {
     const lineWidth = line.reduce((sum, w, i) => sum + w.width + (i ? space : 0), 0);
     let x = L.w / 2 - lineWidth / 2;
     const y = top + row * lineHeight;
+    // a box behind the words typed so far on this line (free canvas, box: true)
+    if (free?.box && line.some((w) => t >= w.s)) {
+      const shown = line.filter((w) => t >= w.s);
+      const wide = shown.reduce((sum, w, i) => sum + w.width + (i ? space : 0), 0);
+      ctx.save();
+      ctx.fillStyle = free.boxColor;
+      ctx.beginPath();
+      const pad = size * 0.28;
+      if (ctx.roundRect) ctx.roundRect(x - pad, y - lineHeight / 2, wide + pad * 2, lineHeight, size * 0.22); else ctx.rect(x - pad, y - lineHeight / 2, wide + pad * 2, lineHeight);
+      ctx.fill();
+      ctx.restore();
+    }
     for (const word of line) {
       const index = flat.indexOf(word);
       const next = flat[index + 1];
@@ -125,7 +139,16 @@ function drawCaption(ctx, { text, emphasis, sheet, words, t, format }) {
         const strong = target && bare(word.w) === target;
         ctx.fillStyle = strong ? accent : base;
         ctx.globalAlpha = clamp((t - word.s) / 0.08, 0, 1);
-        ctx.fillText(word.w.slice(0, chars), x, y + 6 * (1 - easeOut(clamp((t - word.s) / 0.15, 0, 1))));
+        const lift = y + 6 * (1 - easeOut(clamp((t - word.s) / 0.15, 0, 1)));
+        if (free?.outline && !free.box) {
+          ctx.save();
+          ctx.strokeStyle = free.outline;
+          ctx.lineWidth = size * 0.16;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(word.w.slice(0, chars), x, lift);
+          ctx.restore();
+        }
+        ctx.fillText(word.w.slice(0, chars), x, lift);
         if (strong && typed >= 1) {
           const u = easeOut(clamp((t - word.s - typeFor) / 0.3, 0, 1));
           ctx.strokeStyle = accent;
@@ -158,8 +181,60 @@ function drawCaption(ctx, { text, emphasis, sheet, words, t, format }) {
   ctx.restore();
 }
 
+const HEX = /^#[0-9a-f]{6}$/i;
+// The caption look of a free-canvas video (story.caption), with readable defaults.
+export function captionLook(caption, palette, format) {
+  const position = ['bottom', 'top', 'middle', 'none'].includes(caption?.position) ? caption.position : 'bottom';
+  const band = captionBand(format, position);
+  return {
+    position, band, font: caption?.font || 'sans',
+    color: HEX.test(caption?.color || '') ? caption.color : '#ffffff',
+    outline: caption?.outline === 'none' ? '' : HEX.test(caption?.outline || '') ? caption.outline : 'rgba(10,10,20,0.85)',
+    accent: HEX.test(caption?.accent || '') ? caption.accent : (palette?.colors || []).find((x) => HEX.test(x)) || '#ffd166',
+    box: caption?.box === true, boxColor: HEX.test(caption?.boxColor || '') ? caption.boxColor : 'rgba(10,10,20,0.72)',
+    centerY: (band.top + band.bottom) / 2,
+  };
+}
+
+// The free canvas (story.canvas 2): no template at all. The scene code draws its own background (s.backdrop),
+// over a plain base colour; the caption floats in its band in the video's own look.
+function paintFree(ctx, { scene, run, t, seed, pace, look, format, palette, caption, cast, stillKey }) {
+  const L = layoutOf(format);
+  const dur = scene.dur || Number(scene.duration) || 3;
+  const words = sceneWords(scene, dur);
+  const time = Math.max(0, t);
+  const cap = captionLook(caption, palette, format);
+  ctx.save();
+  ctx.fillStyle = HEX.test(palette?.base || '') ? palette.base : '#f3efe7';
+  ctx.fillRect(0, 0, L.w, L.h);
+  ctx.restore();
+  const screen = ctx.getTransform();
+  const cam = cameraAt(scene.camera, time, dur, hitTime(words, scene.emphasis, dur), paceOf(pace).camera);
+  let error = null;
+  ctx.save();
+  ctx.translate(L.center[0] + cam.x, L.center[1] + cam.y);
+  ctx.rotate(cam.rotate);
+  ctx.scale(cam.scale, cam.scale);
+  ctx.translate(-L.center[0], -L.center[1]);
+  if (run) {
+    try {
+      run(createSketch({ ctx, t: time, dur, theme: 'paper', seed, format, look: look.sketch, palette, cast, screen, stillKey, font: cap.font, safe: cap.band.safe }), ctx);
+    } catch (err) {
+      error = err;
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.shadowBlur = 0;
+  if (cap.position !== 'none') drawCaption(ctx, { text: scene.text, emphasis: scene.emphasis, words, t: time, format, free: cap });
+  return error;
+}
+
 // Draws one frame of a scene into a 2D context already scaled to the format's canvas units (layout.js).
-export function paintScene(ctx, { scene, run, t, background, seed, pace = 'normal', style = 'krayon', format = '9:16' }) {
+// `canvas` 2 is the free canvas (paintFree); older videos keep the themed backgrounds below.
+export function paintScene(ctx, { scene, run, t, background, seed, pace = 'normal', style = 'flat', format = '9:16', canvas = 1, palette = null, caption = null, cast = null, stillKey = '' }) {
+  if (canvas === 2) return paintFree(ctx, { scene, run, t, seed, pace, look: drawStyleOf(style), format, palette, caption, cast, stillKey: stillKey || `${seed}` });
   const L = layoutOf(format);
   const dur = scene.dur || Number(scene.duration) || 3;
   const look = drawStyleOf(style);
@@ -199,13 +274,13 @@ export function paintScene(ctx, { scene, run, t, background, seed, pace = 'norma
 }
 
 // The sound cues a scene's code schedules (s.sfx is called at the top level, so one dry run collects them).
-export function collectSfx(run, { dur, theme, seed }) {
+export function collectSfx(run, { dur, theme, seed, cast = null }) {
   if (!run || typeof document === 'undefined') return [];
   const cues = [];
   const canvas = document.createElement('canvas');
   canvas.width = 8; canvas.height = 8;
   try {
-    run(createSketch({ ctx: canvas.getContext('2d'), t: 0, dur, theme, seed, onSfx: (cue) => cues.push(cue) }), canvas.getContext('2d'));
+    run(createSketch({ ctx: canvas.getContext('2d'), t: 0, dur, theme, seed, cast, onSfx: (cue) => cues.push(cue) }), canvas.getContext('2d'));
   } catch { /* drawing errors show in the frame itself */ }
   return cues.filter((cue) => cue.time >= 0 && cue.time < dur + 0.5).slice(0, 12);
 }

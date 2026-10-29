@@ -24,6 +24,24 @@ const INK = { paper: '#2b2622', dusk: '#2a2438', night: '#f3eee4' };
 
 export const themeColors = (theme) => ({ ...COLORS, ink: INK[theme] || INK.paper });
 
+// Typefaces a video can pick for its captions and lettering (story.caption.font); "hand" is the bundled one.
+export const FONTS = {
+  hand: 'MotionHand, "Patrick Hand", cursive',
+  sans: 'MotionSans, "Helvetica Neue", Arial, sans-serif',
+  rounded: 'MotionRounded, "Trebuchet MS", sans-serif',
+  serif: 'MotionSerif, Georgia, serif',
+  display: 'MotionDisplay, Impact, sans-serif',
+  mono: 'MotionMono, "Courier New", monospace',
+};
+// The bundled font files (public/motion-fonts) behind each family.
+export const FONT_FILES = { MotionHand: 'patrickhand.ttf', MotionSans: 'sans.ttf', MotionRounded: 'rounded.ttf', MotionSerif: 'serif.ttf', MotionDisplay: 'display.ttf', MotionMono: 'mono.ttf' };
+export const fontFamilyOf = (name) => fontOf(name).split(',')[0];
+export const fontOf = (name) => FONTS[name] || FONTS.hand;
+const HEX6 = /^#[0-9a-f]{6}$/i;
+
+// Still backgrounds drawn once per scene (s.backdrop) and stamped every frame.
+const BACKDROPS = new Map();
+
 // The crayon texture as a repeating tile (drawn once), so filling a shape with it costs one fill per frame.
 const TILES = new Map();
 function hatchTile(paleFill) {
@@ -215,10 +233,17 @@ function fillPath(ctx, path, pts) { if (path && ctx.fill.length !== undefined) {
 function strokePath(ctx, path, pts) { if (path) { try { ctx.stroke(path); return; } catch { /* fall back */ } } trace(ctx, pts, false); ctx.stroke(); }
 
 // `look` is the drawing style (story.js DRAW_STYLES): wobble and outline multipliers, crayon texture on or off, chalk.
-export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = null, look = {}, onMissing = null, dark = null, format = '9:16' }) {
+// The free canvas (story.canvas 2) adds: `palette` { ink, colors } of the video, `cast` { name: fn(s, o) } the
+// characters the AI designed for it, `screen` (the context's transform before the camera, for s.backdrop),
+// `stillKey` (names this scene's cached backdrop), `font` (the video's typeface) and `safe` (the area free of
+// the caption).
+export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = null, look = {}, onMissing = null, dark = null, format = '9:16', palette = null, cast = null, screen = null, stillKey = '', font = 'hand', safe = null }) {
   const L = layoutOf(format);
   const c = themeColors(theme);
   if (dark !== null) c.ink = dark ? INK.night : INK.paper; // a custom look: ink follows how dark it is
+  if (HEX6.test(palette?.ink || '')) c.ink = palette.ink;
+  const pal = (palette?.colors || []).filter((x) => HEX6.test(x));
+  const family = fontOf(font);
   const wobbleBy = look.wobble ?? 1, outlineBy = look.outline ?? 1, hatchOn = look.hatch !== false;
   if (look.chalk) c.ink = '#f4f1e8';
   const opt = (o) => o || {};
@@ -263,8 +288,9 @@ export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = n
       ctx.restore();
     }
     const stroke = o.stroke ?? c.ink;
-    if (stroke !== 'none') {
-      const width = (o.width ?? 3) * outlineBy;
+    // outline 0 (the flat style) leaves shape edges off; plain lines (no fill) keep a thin stroke so they still show
+    const width = (o.width ?? 3) * (outlineBy > 0 ? outlineBy : closed && o.fill && o.fill !== 'none' ? 0 : 0.8);
+    if (stroke !== 'none' && width > 0) {
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.strokeStyle = stroke;
@@ -285,7 +311,8 @@ export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = n
 
   const s = {
     t, dur, p: dur > 0 ? clamp(t / dur, 0, 1) : 1, theme, c, ease,
-    W: L.w, H: L.h, art: L.art, groundY: L.ground, cx: L.center[0], cy: L.center[1], format,
+    W: L.w, H: L.h, art: safe || L.art, groundY: L.ground, cx: L.center[0], cy: L.center[1], format, pal,
+    safe: safe || L.art,
     at: (start, len = 0.6) => ease.out(clamp((t - start) / (len || 1e-6), 0, 1)),
     pop: (start, len = 0.5) => { const x = clamp((t - start) / (len || 1e-6), 0, 1); return x <= 0 ? 0 : ease.back(x); },
     lerp: (a, b, k) => a + (b - a) * k,
@@ -306,7 +333,7 @@ export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = n
       const k = opt(o);
       ctx.save();
       ctx.globalAlpha *= k.alpha ?? 1;
-      ctx.font = `${k.size || 32}px MotionHand, "Patrick Hand", cursive`;
+      ctx.font = `${k.weight ? `${k.weight} ` : ''}${k.size || 32}px ${k.font ? fontOf(k.font) : family}`;
       ctx.textAlign = k.align || 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = k.color || c.ink;
@@ -325,7 +352,7 @@ export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = n
       const k = opt(o);
       const size = k.size || 28;
       ctx.save();
-      ctx.font = `${size}px MotionHand, "Patrick Hand", cursive`;
+      ctx.font = `${size}px ${family}`;
       const w = ctx.measureText(String(str)).width + size;
       ctx.restore();
       s.group({ x, y, rotate: k.rotate || 0, scale: k.scale ?? 1, alpha: k.alpha ?? 1 }, () => {
@@ -403,6 +430,58 @@ export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = n
     animal: (kind, x, y, size, o) => drawAnimal(s, kind, x, y, size, opt(o)),
     bird: (x, y, size, o) => drawBird(s, x, y, size, opt(o)),
     fish: (x, y, size, o) => drawFish(s, x, y, size, opt(o)),
+    // The scene's background, drawn over the whole frame and not moved by the camera. Drawn once and reused
+    // unless `animated` (then every frame, from s.t like the rest).
+    backdrop(fn, o) {
+      const k = opt(o);
+      ctx.save();
+      if (screen) ctx.setTransform(screen);
+      try {
+        const key = !k.animated && stillKey ? `${stillKey}|${L.w}x${L.h}` : '';
+        let still = key ? BACKDROPS.get(key) : undefined;
+        if (key && still === undefined) {
+          const scale = 1.5;
+          const canvas = makeCanvas(L.w * scale, L.h * scale);
+          if (canvas) {
+            const g = canvas.getContext('2d');
+            g.scale(scale, scale);
+            const inner = createSketch({ ctx: g, t: 0, dur, theme, seed, look, dark, format, palette, cast, stillKey: '', font, safe });
+            fn?.(inner, g);
+          }
+          still = canvas || null;
+          if (BACKDROPS.size > 60) BACKDROPS.delete(BACKDROPS.keys().next().value);
+          BACKDROPS.set(key, still);
+        }
+        if (still) ctx.drawImage(still, 0, 0, L.w, L.h);
+        else fn?.(s, ctx);
+      } finally { ctx.restore(); }
+    },
+    // A character this video's AI designed (story.cast): drawn about `size` tall standing on (x, y), facing
+    // right (o.facing -1 flips), with its own poses and moves (o.pose / o.action, o.mood, o.t local time).
+    cast(name, x, y, size = 260, o) {
+      const k = opt(o);
+      const draw = cast?.[name];
+      if (!draw) { onMissing?.('cast', name); return s.person(x, y, size, k); }
+      ctx.save();
+      ctx.translate(x, y);
+      if (k.rotate) ctx.rotate(k.rotate);
+      ctx.scale((k.facing === -1 ? -1 : 1) * size / 100, size / 100);
+      ctx.globalAlpha *= clamp(k.alpha ?? 1, 0, 1);
+      try { draw(s, { t, ...k }); } finally { ctx.restore(); }
+    },
+    // A recurring object this video's AI designed (story.cast kind "prop"): drawn about `size` wide centred on
+    // (x, y), with its own states (o.state, o.t).
+    prop(name, x, y, size = 160, o) {
+      const k = opt(o);
+      const draw = cast?.[name];
+      if (!draw) { onMissing?.('prop', name); return; }
+      ctx.save();
+      ctx.translate(x, y);
+      if (k.rotate) ctx.rotate(k.rotate);
+      ctx.scale((k.facing === -1 ? -1 : 1) * size / 100, size / 100);
+      ctx.globalAlpha *= clamp(k.alpha ?? 1, 0, 1);
+      try { draw(s, { t, ...k }); } finally { ctx.restore(); }
+    },
     sfx(name, time = 0, gain = 1, pitch) {
       onSfx?.({ name: String(name), time: Number(time) || 0, gain: Number.isFinite(gain) ? gain : 1, pitch: Number.isFinite(pitch) ? pitch : 1 });
     },
@@ -411,9 +490,35 @@ export function createSketch({ ctx, t, dur, theme = 'paper', seed = 1, onSfx = n
 }
 
 // The scene code as a function (s, ctx). Throws on a syntax error; the caller decides what to show.
+// A short key for a piece of code (names a scene's cached backdrop, so new code draws a new one).
+export function codeKey(code) {
+  let h = 5381;
+  const text = String(code || '');
+  for (let i = 0; i < text.length; i += 1) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+// A cast member's code as a function (s, o): draws the character about 100 units tall standing on (0, 0).
+export function compileCast(code) {
+  // eslint-disable-next-line no-new-func
+  return new Function('s', 'o', String(code || ''));
+}
+
 export function compileScene(code) {
   // eslint-disable-next-line no-new-func
   return new Function('s', 'ctx', String(code || ''));
+}
+
+// Split an answer with characters ("// ===== CAST Name =====" markers) into { Name: code }.
+export function splitCast(answer) {
+  const text = String(answer || '').replace(/^```(?:js|javascript)?\s*$/gim, '');
+  const out = {};
+  const marker = /^\s*\/\/\s*=+\s*(?:CAST|PROP)\s+(.+?)\s*=+\s*$/gim;
+  const found = [...text.matchAll(marker)];
+  found.forEach((m, i) => {
+    out[m[1].trim()] = text.slice(m.index + m[0].length, i + 1 < found.length ? found[i + 1].index : text.length).trim();
+  });
+  return out;
 }
 
 // Split one answer that holds several scenes ("// ===== SCENE 3 =====" markers) into { 3: code, ... }.

@@ -3,8 +3,8 @@
 // (motionJobs.js) runs these steps and charges them; this file only talks to the model and checks its answers.
 import vm from 'node:vm';
 import { parsePlanJson } from './motionDirector.js';
-import { ideaIngredients, ideasPrompt, scriptPrompt, animatePrompt, repairPrompt } from './motionStoryPrompts.js';
-import { createSketch, splitScenes } from '../../components/motion/draw/sketch.js';
+import { ideaIngredients, ideasPrompt, scriptPrompt, animatePrompt, castPrompt, repairPrompt } from './motionStoryPrompts.js';
+import { createSketch, splitCast, splitScenes } from '../../components/motion/draw/sketch.js';
 import { useExtrasData } from '../../components/motion/draw/extras.js';
 import { createRequire } from 'node:module';
 
@@ -263,12 +263,27 @@ function blankContext() {
 // Names the drawing code may not touch: it runs in the viewer's browser (inside a sandboxed frame).
 const FORBIDDEN = /\b(window|document|globalThis|fetch|XMLHttpRequest|WebSocket|EventSource|importScripts|eval|Function|constructor|__proto__|localStorage|sessionStorage|indexedDB|navigator|location|postMessage|require|process|setTimeout|setInterval|Worker)\b|\bimport\s*\(/;
 
+const GLOBALS = { Math, Number, String, Array, Object, JSON, Infinity, NaN, isFinite, parseFloat, parseInt };
+const banned = (source) => String(source || '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').match(FORBIDDEN); // comments may say anything
+
+// The cast's drawing functions, compiled inside a vm context (so the scene's time limit covers them).
+export function castInContext(context, cast) {
+  const out = {};
+  (cast || []).filter((c) => c.code && !banned(c.code)).forEach((c, i) => {
+    try {
+      new vm.Script(`__cast${i} = function (s, o) {\n${c.code}\n};`).runInContext(context, { timeout: 200 });
+      out[c.name] = context[`__cast${i}`];
+    } catch { /* a broken design falls back to a plain figure */ }
+  });
+  return out;
+}
+
 // Runs a scene's code over a few frames with a time limit. Returns null when it works, or what went wrong.
-export function checkSceneCode(code, { dur = 3, theme = 'paper', style = 'krayon', assets = null, format = '9:16' } = {}) {
+export function checkSceneCode(code, { dur = 3, theme = 'paper', style = 'flat', assets = null, format = '9:16', cast = [], palette = null } = {}) {
   const source = String(code || '');
   if (!source.trim()) return 'kode kosong';
-  const banned = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').match(FORBIDDEN); // comments may say anything
-  if (banned) return `memakai "${banned[0]}" yang tidak diizinkan`;
+  const bad = banned(source);
+  if (bad) return `memakai "${bad[0]}" yang tidak diizinkan`;
   let script;
   try {
     script = new vm.Script(`(function (s, ctx) {\n${source}\n})(__s, __ctx);`);
@@ -277,25 +292,86 @@ export function checkSceneCode(code, { dur = 3, theme = 'paper', style = 'krayon
   }
   const look = drawStyleOf(style).sketch;
   const missing = new Set();
+  const names = new Set((cast || []).map((c) => c.name));
   for (const t of [0, dur * 0.3, dur * 0.6, Math.max(0, dur - 0.05)]) {
     const ctx = blankContext();
-    const onMissing = (kind, name) => { if (kind === 'icon' || (kind === 'image' && !assets?.[name]) || (kind === 'lottie' && !assets?.[name])) missing.add(`${kind} "${name}"`); };
-    const context = vm.createContext({ __s: createSketch({ ctx, t, dur, theme, look, onMissing, format }), __ctx: ctx, Math, Number, String, Array, Object, JSON, Infinity, NaN, isFinite, parseFloat, parseInt });
+    const onMissing = (kind, name) => {
+      if (kind === 'icon' || (kind === 'image' && !assets?.[name]) || (kind === 'lottie' && !assets?.[name]) || ((kind === 'cast' || kind === 'prop') && !names.has(name))) missing.add(`${kind} "${name}"`);
+    };
+    const context = vm.createContext({ ...GLOBALS, __ctx: ctx });
+    context.__s = createSketch({ ctx, t, dur, theme, look, onMissing, format, palette, cast: castInContext(context, cast) });
     try {
       script.runInContext(context, { timeout: 400 });
     } catch (error) {
       return `${error?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT' ? 'terlalu lama (loop?)' : String(error?.message || error)} pada detik ${t.toFixed(1)}`;
     }
   }
-  if (missing.size) return `tidak ada: ${[...missing].slice(0, 4).join(', ')} (pakai nama ikon Lucide yang ada, dan hanya aset yang tersedia)`;
+  if (missing.size) return `tidak ada: ${[...missing].slice(0, 4).join(', ')} (pakai nama ikon Lucide yang ada, tokoh dari daftar, dan hanya aset yang tersedia)`;
   return null;
+}
+
+// Runs a character's drawing code in each move it offers and a few moments. Null when it works.
+export function checkCastCode(code, { style = 'flat', format = '9:16', palette = null } = {}) {
+  const source = String(code || '');
+  if (!source.trim()) return 'kode kosong';
+  const bad = banned(source);
+  if (bad) return `memakai "${bad[0]}" yang tidak diizinkan`;
+  let script;
+  try {
+    script = new vm.Script(`(function (s, o) {\n${source}\n})(__s, __o);`);
+  } catch (error) {
+    return `syntax: ${error.message}`;
+  }
+  const look = drawStyleOf(style).sketch;
+  for (const o of [{}, { action: 'walk' }, { action: 'talk' }, { pose: 'wave' }, { pose: 'point' }, { mood: 'sad' }]) {
+    for (const t of [0, 0.7, 1.9]) {
+      const ctx = blankContext();
+      const context = vm.createContext({ ...GLOBALS, __s: createSketch({ ctx, t, dur: 3, look, format, palette }), __o: { t, ...o } });
+      try {
+        script.runInContext(context, { timeout: 200 });
+      } catch (error) {
+        return `${error?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT' ? 'terlalu lama (loop?)' : String(error?.message || error)} (${JSON.stringify(o)}, detik ${t})`;
+      }
+    }
+  }
+  return null;
+}
+
+// The free canvas: the AI designs every character of the video once (drawing code reused by every scene),
+// from the cast's looks and the video's style. Cast members whose look did not change keep their design.
+// Returns { cast, usages }.
+export async function designCast({ cast = [], style, format = '9:16', palette = null, brief = '', artDirection = '', call = callStoryModel }) {
+  const todo = cast.filter((c) => !c.code || c.madeFrom !== c.look);
+  if (!todo.length) return { cast, usages: [] };
+  const usages = [];
+  const prompt = castPrompt({ cast: todo, style, format, palette, brief, artDirection });
+  const { text, usage } = await call({ ...prompt, maxTokens: 24000 });
+  usages.push(usage);
+  let codes = splitCast(text);
+  const check = (name) => checkCastCode(codes[name], { style, format, palette });
+  let broken = todo.filter((c) => check(c.name));
+  if (broken.length) {
+    try {
+      const fix = await call({ system: prompt.system, user: `Kode tokoh berikut gagal dijalankan. Perbaiki tanpa mengubah desainnya.\n\n${broken.map((c) => `// ===== ${c.kind === 'prop' ? 'PROP' : 'CAST'} ${c.name} =====\n// Error: ${check(c.name)}\n${codes[c.name] || '// (tidak ada kode)'}`).join('\n\n')}\n\nJawab dengan SATU blok kode \`\`\`js, tiap tokoh diawali penanda yang sama.`, maxTokens: 24000 });
+      usages.push(fix.usage);
+      codes = { ...codes, ...splitCast(fix.text) };
+    } catch { /* the ones still broken fall back to plain figures */ }
+    broken = broken.filter((c) => check(c.name));
+  }
+  const failed = new Set(broken.map((c) => c.name));
+  return {
+    cast: cast.map((c) => (todo.includes(c) && !failed.has(c.name)
+      ? { ...c, code: codes[c.name], madeFrom: c.look, moves: ((codes[c.name].match(/^\s*\/\/\s*moves:\s*(.+)$/m) || [])[1] || '').slice(0, 300) }
+      : c)),
+    usages,
+  };
 }
 
 // Drawing code for every scene: groups of four in parallel (each told what the scene before it showed), each
 // scene checked, failures sent back once for a fix. Returns { scenes, usages }; a scene that still fails keeps
 // `codeError` (the player shows its background and caption without the picture).
 // `only` (scene indexes) redraws just those scenes and keeps the others' code.
-export async function animateStory({ scenes, pace, style, cast = [], assets = {}, format = '9:16', sounds = [], only = null, call = callStoryModel, onProgress = async () => {}, onScenes = null }) {
+export async function animateStory({ scenes, pace, style, cast = [], assets = {}, format = '9:16', sounds = [], canvas = 1, palette = null, caption = null, artDirection = '', only = null, call = callStoryModel, onProgress = async () => {}, onScenes = null }) {
   const todo = scenes.map((_, i) => i).filter((i) => !only || only.includes(i));
   const groups = [];
   for (let i = 0; i < todo.length; i += BATCH) groups.push(todo.slice(i, i + BATCH));
@@ -307,7 +383,7 @@ export async function animateStory({ scenes, pace, style, cast = [], assets = {}
   await Promise.all(groups.map(async (indexes) => {
     const prompt = animatePrompt({
       scenes: indexes.map((i) => scenes[i]), numbers: indexes.map((i) => i + 1),
-      before: indexes[0] > 0 ? scenes[indexes[0] - 1].visual : '', pace, style, cast, assets, format, sounds,
+      before: indexes[0] > 0 ? scenes[indexes[0] - 1].visual : '', pace, style, cast, assets, format, sounds, canvas, palette, caption, artDirection,
     });
     try {
       const { text, usage } = await call({ ...prompt, maxTokens: 40000 });
@@ -317,7 +393,7 @@ export async function animateStory({ scenes, pace, style, cast = [], assets = {}
       // hand over the scenes of this group that already pass the check (failures wait for the repair pass)
       if (onScenes) {
         const ready = {};
-        for (const i of indexes) if (got[i + 1] && !checkSceneCode(got[i + 1], { dur: scenes[i].duration, theme: scenes[i].theme, style, assets, format })) ready[i] = { code: got[i + 1] };
+        for (const i of indexes) if (got[i + 1] && !checkSceneCode(got[i + 1], { dur: scenes[i].duration, theme: scenes[i].theme, style, assets, format, cast, palette })) ready[i] = { code: got[i + 1] };
         if (Object.keys(ready).length) await onScenes(ready).catch(() => {});
       }
     } catch (error) {
@@ -327,10 +403,10 @@ export async function animateStory({ scenes, pace, style, cast = [], assets = {}
     await onProgress(done, todo.length);
   }));
   if (errors.length === groups.length) throw errors[0];
-  const check = (i) => checkSceneCode(codes[i + 1], { dur: scenes[i].duration, theme: scenes[i].theme, style, assets, format });
+  const check = (i) => checkSceneCode(codes[i + 1], { dur: scenes[i].duration, theme: scenes[i].theme, style, assets, format, cast, palette });
   let broken = todo.map((i) => ({ i, error: check(i) })).filter((item) => item.error);
   if (broken.length) {
-    const system = animatePrompt({ scenes: [], numbers: [], before: '', pace, style, cast, assets, format }).system;
+    const system = animatePrompt({ scenes: [], numbers: [], before: '', pace, style, cast, assets, format, canvas, palette, caption, artDirection }).system;
     try {
       const { text, usage } = await call({
         system, user: repairPrompt({ broken: broken.map(({ i, error }) => ({ number: i + 1, error, code: codes[i + 1] || '// (tidak ada kode)' })) }), maxTokens: 40000,

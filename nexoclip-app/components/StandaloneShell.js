@@ -328,7 +328,7 @@ export default function StandaloneShell({ initialTab, children }) {
   const [imageVisited, setImageVisited] = useState(() => getInitialTab() === 'image');
   const [studioPrompt, setStudioPrompt] = useState('');
   // Tabs that take the whole width: no sidebar, a back button in the header instead.
-  const isFullWidthTab = activeTab === 'director';
+  const isFullWidthTab = activeTab === 'director' || activeTab === 'motion';
 
   const [balance, setBalance] = useState(null);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);

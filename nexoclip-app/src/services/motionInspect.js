@@ -12,7 +12,7 @@ export async function inspectScene({ story, index, question = '', env = process.
   const frames = sceneFrames(story, index, { width: 432 });
   const baseUrl = String(env.BYTEPLUS_BASE_URL || '').replace(/\/+$/, '');
   if (!env.BYTEPLUS_API_KEY || !baseUrl) throw Object.assign(new Error('Vision model is not configured'), { status: 503 });
-  const prompt = `Ini ${frames.length} cuplikan (detik ${frames.map((f) => f.t).join(', ')}) dari satu adegan video animasi gambar tangan 9:16.
+  const prompt = `Ini ${frames.length} cuplikan (detik ${frames.map((f) => f.t).join(', ')}) dari satu adegan video animasi ${story.format || '9:16'}.
 Yang diminta untuk adegan ini:
 - teks narasi: "${scene.text}"
 - gambar & gerak: ${scene.visual}

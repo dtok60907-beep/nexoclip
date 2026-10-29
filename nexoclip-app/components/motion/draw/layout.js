@@ -11,3 +11,16 @@ export const FORMATS = {
 export const FORMAT_IDS = Object.keys(FORMATS);
 export const DEFAULT_FORMAT = '9:16';
 export const layoutOf = (format) => FORMATS[format] || FORMATS[DEFAULT_FORMAT];
+
+// The free canvas (story.canvas 2): the caption sits in a band at the bottom, the top or the middle of the
+// frame (or nowhere), over the picture; `safe` is the part of the frame the main objects keep to.
+export const CAPTION_POSITIONS = ['bottom', 'top', 'middle', 'none'];
+export function captionBand(format, position = 'bottom') {
+  const L = layoutOf(format);
+  const band = Math.round((L.h - L.captionTop) * 0.9);
+  const margin = Math.round(Math.min(L.w, L.h) * 0.05);
+  if (position === 'none') return { top: 0, bottom: 0, safe: [margin, margin, L.w - margin, L.h - margin] };
+  if (position === 'top') return { top: margin, bottom: margin + band, safe: [margin, margin + band, L.w - margin, L.h - margin] };
+  if (position === 'middle') { const top = Math.round(L.h / 2 - band / 2); return { top, bottom: top + band, safe: [margin, margin, L.w - margin, L.h - margin] }; }
+  return { top: L.h - margin - band, bottom: L.h - margin, safe: [margin, margin, L.w - margin, L.h - margin - band] };
+}

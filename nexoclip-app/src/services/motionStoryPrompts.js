@@ -3,7 +3,7 @@
 import { DRAW_STYLES, PACES, drawStyleOf, paceOf } from '../../components/motion/draw/story.js';
 import { PATTERNS } from '../../components/motion/draw/backdrop.js';
 import { SFX_NAMES } from '../../components/motion/draw/sfxLibrary.js';
-import { layoutOf } from '../../components/motion/draw/layout.js';
+import { captionBand, layoutOf } from '../../components/motion/draw/layout.js';
 
 // Ingredients handed to the five ideas so they never look alike: a metaphor lens, a kind of hook, a voice.
 export const METAPHOR_LENSES = [
@@ -141,25 +141,8 @@ function canvasRules(format) {
   return `${L.w} x ${L.h} (${format}, ${shape}), origin kiri atas. Area ilustrasi x ${x0}-${x1}, y ${y0}-${y1}, pusat kira-kira (${L.center[0]}, ${L.center[1]}). Garis tanah standar y = ${L.ground}. JANGAN menggambar di bawah y = ${L.captionTop - 10} (area teks narasi). Nilai ini juga ada di kode: \`s.W\`, \`s.H\`, \`s.art\` [x0, y0, x1, y1], \`s.cx\`, \`s.cy\`, \`s.groundY\`.${shape === 'mendatar' ? ' Kanvas lebar: manfaatkan kiri-kanan (objek utama di satu sisi, pendukung di sisi lain, gerak menyamping).' : ''}`;
 }
 
-export function animatePrompt({ scenes, numbers, before, pace: paceId, style: styleId, cast = [], assets = {}, format = '9:16', sounds = [] }) {
-  const pace = paceOf(paceId);
-  const style = drawStyleOf(styleId);
-  const system = `Kamu animator motion graphics yang menulis kode JavaScript untuk menggambar satu scene animasi di HTML Canvas, gaya ${style.look}.
-
-## Kontrak
-Tulis HANYA isi body fungsi \`function (s, ctx) { ... }\`. Fungsi ini dipanggil setiap frame (30fps) dan tidak boleh menyimpan state antar frame: semua posisi dihitung dari waktu \`s.t\`. Jangan pakai Math.random() (pakai \`s.rand(i)\`), jangan akses window, document, fetch, atau jaringan apa pun, jangan pakai loop tak terbatas, eval, Function, atau import. Latar, teks narasi, transisi, gerakan kamera, dan suara narator sudah diurus engine; jangan digambar.
-
-## Kanvas
-${canvasRules(format)}
-
-## Waktu dan easing
-- \`s.t\` detik sejak scene mulai, \`s.dur\` durasi scene, \`s.p\` progres 0..1.
-- \`s.at(start, len = 0.6)\` 0..1 dengan ease-out, mulai di detik start selama len detik.
-- \`s.pop(start, len = 0.5)\` 0..~1.1..1, membal; cocok untuk scale saat objek muncul.
-- \`s.ease.out(x)\`, \`s.ease.in(x)\`, \`s.ease.inOut(x)\`, \`s.ease.back(x)\`, \`s.ease.elastic(x)\`, \`s.ease.linear(x)\`.
-- \`s.lerp(a, b, k)\`, \`s.clamp(x, a, b)\`, \`s.wave(freq = 1, amp = 1, phase = 0)\` sinus berbasis waktu (freq dalam Hz), \`s.rand(i)\` 0..1 deterministik.
-
-## Menggambar
+// The kit's drawing calls, shared by the scene and the character prompts.
+const DRAWING = `## Menggambar
 Opsi \`o\` (opsional): \`{ fill, stroke, width, alpha, draw, wobble, hatch, pen }\`. fill = warna isian; stroke = warna outline (default tinta, "none" tanpa outline); width default 3; alpha 0..1; draw 0..1 menggambar outline progresif (isian ikut muncul); wobble goyangan garis (default 1); hatch tekstur isian (default sesuai gaya); pen: true = titik cahaya di ujung garis selama draw < 1.
 - \`s.line(x1, y1, x2, y2, o)\`, \`s.polyline([[x, y], ...], o)\`, \`s.shape([[x, y], ...], o)\` (poligon tertutup), \`s.curve([[x, y], ...], o)\` kurva halus (\`o.closed = true\` untuk tertutup)
 - \`s.rect(x, y, w, h, o)\` (\`o.r\` radius sudut), \`s.circle(cx, cy, r, o)\`, \`s.ellipse(cx, cy, rx, ry, o)\`, \`s.arc(cx, cy, r, a0, a1, o)\`
@@ -173,7 +156,51 @@ Opsi \`o\` (opsional): \`{ fill, stroke, width, alpha, draw, wobble, hatch, pen 
 - SEMUA sudut dalam RADIAN: 0.1 ≈ 6°, Math.PI = 180°. Miring kecil \`rotate: -0.08\`, goyang halus \`rotate: s.wave(2, 0.06)\`. Jangan menulis \`rotate: -8\` atau \`* 360\`.
 - Palet \`s.c\`: ink, paper, red, pink, orange, yellow, green, teal, blue, navy, purple, brown, sky, white, gray. Boleh hex. \`s.theme\` = "paper" | "dusk" | "night"; di tema gelap \`s.c.ink\` otomatis terang. \`ctx\` = CanvasRenderingContext2D mentah (untuk gradient atau glow; bungkus dengan ctx.save()/ctx.restore()).
 
-## Efek suara
+`;
+
+// The free canvas (story.canvas 2): the whole frame, where the caption floats, and the safe area.
+function freeCanvasRules(format, caption) {
+  const L = layoutOf(format);
+  const position = caption?.position || 'bottom';
+  const band = captionBand(format, position);
+  const shape = L.w > L.h ? 'mendatar' : L.w === L.h ? 'persegi' : 'tegak';
+  return `${L.w} x ${L.h} (${format}, ${shape}), origin kiri atas. Kamu menggambar SELURUH frame (0,0)-(${L.w},${L.h}). ${position === 'none' ? 'Tanpa teks narasi di layar.' : `Teks narasi tampil di pita y ${band.top}-${band.bottom} (${position === 'bottom' ? 'bawah' : position === 'top' ? 'atas' : 'tengah'}), di atas gambarmu: di situ boleh ada latar, tapi jangan taruh objek penting atau detail ramai.`} Area aman objek utama: \`s.safe\` [x0, y0, x1, y1] = [${band.safe.join(', ')}], pusat kamera (${L.center[0]}, ${L.center[1]}). Nilai lain di kode: \`s.W\`, \`s.H\`, \`s.cx\`, \`s.cy\`, \`s.groundY\` (${L.ground}, garis tanah yang wajar).${shape === 'mendatar' ? ' Kanvas lebar: manfaatkan kiri-kanan.' : ''}`;
+}
+
+export function animatePrompt({ scenes, numbers, before, pace: paceId, style: styleId, cast = [], assets = {}, format = '9:16', sounds = [], canvas = 1, palette = null, caption = null, artDirection = '' }) {
+  const pace = paceOf(paceId);
+  const style = drawStyleOf(styleId);
+  const free = canvas === 2;
+  const system = `Kamu animator motion graphics yang menulis kode JavaScript untuk menggambar satu scene animasi di HTML Canvas, gaya ${style.look}.
+
+## Kontrak
+Tulis HANYA isi body fungsi \`function (s, ctx) { ... }\`. Fungsi ini dipanggil setiap frame (30fps) dan tidak boleh menyimpan state antar frame: semua posisi dihitung dari waktu \`s.t\`. Jangan pakai Math.random() (pakai \`s.rand(i)\`), jangan akses window, document, fetch, atau jaringan apa pun, jangan pakai loop tak terbatas, eval, Function, atau import. ${free ? 'Teks narasi, transisi, gerakan kamera, dan suara narator sudah diurus engine; jangan digambar. TIDAK ADA latar bawaan: kamu menggambar seluruh frame, termasuk latarnya.' : 'Latar, teks narasi, transisi, gerakan kamera, dan suara narator sudah diurus engine; jangan digambar.'}
+
+## Kanvas
+${free ? freeCanvasRules(format, caption) : canvasRules(format)}
+${free ? `
+## Latar (buatan sendiri, wajib)
+- Baris pertama kode: \`s.backdrop((s, ctx) => { ... })\` yang mengisi SELURUH frame s.W x s.H. Ini digambar sekali lalu dipakai ulang tiap frame, tidak ikut gerak kamera; jadi isinya diam (pakai \`s.backdrop(fn, { animated: true })\` hanya kalau latarnya memang harus bergerak, mis. langit berubah warna).
+- Rancang latar khusus adegan ini sesuai ceritanya dan gaya video: tempatnya (ruangan, jalan, langit, hutan, layar HP, meja kerja, peta, abstrak), cahaya, kedalaman (jauh-tengah-dekat), komposisi. Pakai gradasi (\`ctx.createLinearGradient\` / \`createRadialGradient\`), bidang warna, bentuk geometris, tekstur sederhana, cakrawala, siluet bangunan/pohon, cahaya jendela, dsb.
+- Setiap adegan latarnya beda dan tidak generik: jangan lembar kertas krem polos, jangan pola titik/garis seragam, jangan gradasi dua warna saja. Jaga kesinambungan palet video.
+- Detail latar yang bergerak (awan lewat, partikel, lampu berkedip, daun jatuh) digambar di kode utama setelah backdrop, bukan di dalamnya.
+- Pastikan pita teks narasi tetap terbaca: di situ latarnya tenang (warna rata atau gelap/terang yang kontras).
+
+## Bahasa visual video ini (wajib diikuti di latar, benda, dan gambar pendukung)
+${artDirection || 'Turunkan sendiri dari gaya dan palet: bentuk (bulat/tajam/geometris), ketebalan garis, tekstur, cahaya dan bayangan, cara menggambar langit, bangunan, tanaman, dan benda.'}
+- SEMUA benda, properti, latar, dan hiasan digambar dalam bahasa visual ini. Jangan memakai bentuk kebiasaan yang sama di setiap video (matahari bulat dengan garis, awan elips, pohon lolipop, rumah kotak segitiga): rancang versinya sendiri sesuai bahasa visual di atas.
+- Ikon Lucide hanya untuk simbol antarmuka/infografik (centang, panah, lokasi, notifikasi); benda dalam cerita digambar sendiri.` : ''}
+
+## Waktu dan easing
+- \`s.t\` detik sejak scene mulai, \`s.dur\` durasi scene, \`s.p\` progres 0..1.
+- \`s.at(start, len = 0.6)\` 0..1 dengan ease-out, mulai di detik start selama len detik.
+- \`s.pop(start, len = 0.5)\` 0..~1.1..1, membal; cocok untuk scale saat objek muncul.
+- \`s.ease.out(x)\`, \`s.ease.in(x)\`, \`s.ease.inOut(x)\`, \`s.ease.back(x)\`, \`s.ease.elastic(x)\`, \`s.ease.linear(x)\`.
+- \`s.lerp(a, b, k)\`, \`s.clamp(x, a, b)\`, \`s.wave(freq = 1, amp = 1, phase = 0)\` sinus berbasis waktu (freq dalam Hz), \`s.rand(i)\` 0..1 deterministik.
+
+${DRAWING}${free ? `Palet video ini: \`s.pal\` = [${(palette?.colors || []).join(', ') || 'bebas'}]${palette?.ink ? `, tinta \`s.c.ink\` = ${palette.ink}` : ''}${palette?.base ? `, warna dasar ${palette.base}` : ''}. Pakai palet ini supaya semua adegan senada; \`s.theme\` tidak dipakai.
+
+` : ''}## Efek suara
 \`s.sfx(name, time, gain = 1, pitch)\` menjadwalkan suara di detik \`time\` scene ini. WAJIB dipanggil di level atas kode (tidak di dalam if atau kondisi waktu). pitch opsional (0.5 lebih rendah untuk benda berat, 1.5-2 untuk benda kecil).
 Pilih suara yang cocok dengan bendanya (riser dan reverse-cymbal dijadwalkan ±0.9 detik sebelum puncak): ${SFX_NAMES.filter((n) => !['transition', 'scene-boom', 'word-tick'].includes(n)).join(', ')}.
 Whoosh transisi, boom di awal scene, dan tick saat kata muncul sudah otomatis; jangan ditambahkan di detik 0. Pakai 1-4 efek per scene, selaras dengan gerakan.
@@ -185,12 +212,18 @@ Whoosh transisi, boom di awal scene, dan tick saat kata muncul sudah otomatis; j
 - Sebar gerakan di sepanjang durasi, jangan habis di awal. Taruh aksen (pop, burst, centang, perubahan) tepat saat kata pentingnya diucapkan (lihat "Waktu kata diucapkan").
 - Tidak boleh ada momen diam: selalu ada rotasi, bounce, pulsa, atau getar halus. Klimaks di sekitar 55-80% durasi. Semua animasi masuk selesai sebelum \`s.dur - 0.25\`.
 
-## Manusia dan hewan (siap pakai, jangan digambar dari nol)
+${free ? `## Tokoh, manusia, dan hewan
+- Tokoh dari daftar tokoh sudah DIDESAIN khusus video ini: gambar dengan \`s.cast(nama, x, y, size = 260, o)\` ((x, y) titik di antara kaki, size tinggi berdiri). o: \`facing\` 1 / -1, \`pose\`, \`action\`, \`mood\`, \`rotate\`, \`alpha\`, \`t\` (waktu lokal untuk gerakannya, default s.t), dan opsi lain yang disebut di daftar tokoh. Pindahkan tokoh dengan mengubah x/y dari waktu. Jangan menggambar ulang tokoh dari daftar dengan bentuk sendiri.
+- Orang lain dan hewan yang bukan tokoh: gambar sendiri dengan bentuk dasar, sesuai gaya video dan cerita (proporsi, siluet, pakaian, warna yang khas), bukan figur generik. \`s.person\` dan \`s.animal\` hanya untuk figur kecil di kejauhan atau kerumunan.
+- \`s.bird\` dan \`s.fish\` boleh untuk burung/ikan kecil.
+- Properti dari daftar (benda yang muncul berulang, juga sudah didesain): \`s.prop(nama, x, y, size = 160, o)\` digambar selebar size dengan pusat di (x, y); o: \`state\` dan opsi yang disebut di daftar, \`rotate\`, \`alpha\`, \`facing\`, \`t\`.
+
+` : `## Manusia dan hewan (siap pakai, jangan digambar dari nol)
 - \`s.person(x, y, size = 260, o)\`: (x, y) titik di antara kaki, size tinggi berdiri. o: \`pose\` stand|sit|crouch|point|wave|cheer|think|carry|push|fall, atau \`action\` walk|run|jump|wave|clap (bergerak sendiri; \`speed\`, \`phase\`), \`facing\` 1 (kanan) / -1 (kiri), \`skin\` light|tan|brown|dark|deep atau hex, \`hair\` black|brown|blond|red|gray|white atau hex, \`hairStyle\` short|long|bun|curly|bald|cap, \`shirt\`, \`pants\`, \`shoes\`, \`dress: true\`, \`mood\` happy|sad|surprised|neutral, \`face: 'none'\` untuk tanpa wajah, \`holding: () => { ... }\` benda di tangan depan (koordinat lokal di tangan), \`joints\` [hipL, kneeL, hipR, kneeR, shoulderL, elbowL, shoulderR, elbowR, lean] (radian, 0 = lurus ke bawah, positif = ke depan) untuk pose khusus. Pindahkan orang dengan mengubah x/y dari waktu.
 - \`s.animal(kind, x, y, size = 1, o)\`: kind dog|cat|fox|horse|deer|cow|sheep|bear|elephant|mammoth; o: \`action\` walk|run, \`facing\`, \`color\`, \`face: 'none'\`. \`s.bird(x, y, size, o)\` (terbang mengepak, \`perched: true\` hinggap), \`s.fish(x, y, size, o)\`.
 - Wajah HANYA lewat alat ini (mata titik dan mulut sederhana). Jangan menggambar wajah sendiri, wajah realistis, atau emoji wajah. Tokoh yang sama di beberapa scene: pakai opsi yang sama persis (lihat daftar tokoh).
 
-## Bahan siap pakai
+`}## Bahan siap pakai
 - \`s.icon(name, x, y, size = 96, o)\`: ikon Lucide (nama kebab-case, mis. flame, heart, rocket, star, sun, moon, cloud-rain, house, car, bike, plane, phone, laptop, book-open, graduation-cap, brain, lightbulb, clock, calendar, map-pin, globe, wallet, shopping-cart, gift, trophy, medal, target, check, x, thumbs-up, users, user, baby, dog, cat, fish, tree-pine, mountain, leaf, flower, apple, coffee, pizza, music, camera, mic, wifi, battery, lock, key, shield, flag, rocket, zap, sparkles, gem, crown). o: \`fill\`, \`stroke\`, \`width\`, \`draw\`, \`rotate\`, \`alpha\`. Nama yang tidak ada akan ditolak.
 - \`s.image(key, x, y, w, h, o)\` gambar dan \`s.lottie(key, x, y, size, o)\` animasi: HANYA key dari daftar aset tersedia (lihat tugas). o image: \`fit\` cover|contain, \`radius\`, \`rotate\`, \`alpha\`, \`frame: false\`. o lottie: \`start\`, \`speed\`, \`loop: false\`, \`alpha\`.
 - \`s.map(o)\` peta (mengembalikan \`{ at(lon, lat) }\` untuk menaruh benda di atasnya): \`region\` world|africa|europe|asia|southeast-asia|indonesia|americas|north-america|south-america|oceania|middle-east atau [lonBarat, latUtara, lonTimur, latSelatan], \`x, y, w, h\`, \`land\`, \`sea\`, \`highlight\` { kode ISO2: warna }, \`draw\`, \`labels\` [{ at: ISO2 atau [lon, lat], text, dx, dy }], \`route\` [[lon, lat], ...] dengan \`routeDraw\` 0..1, \`dots\` [{ at, r, color }].
@@ -211,8 +244,15 @@ Whoosh transisi, boom di awal scene, dan tick saat kata muncul sudah otomatis; j
 
 ## Contoh (kalender dicentang)
 \`\`\`js
-const cx = s.cx;
-s.ground();
+${free ? `s.backdrop((s, ctx) => {
+  const g = ctx.createLinearGradient(0, 0, 0, s.H);
+  g.addColorStop(0, '#20314f'); g.addColorStop(1, '#41618f');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, s.W, s.H);
+  s.rect(0, s.groundY, s.W, s.H - s.groundY, { fill: '#2a2230', stroke: 'none' }); // meja
+  s.rect(s.W * 0.62, s.safe[1] + 30, 170, 230, { fill: '#f7d774', stroke: 'none', alpha: 0.18, r: 6 }); // cahaya jendela
+});
+` : ''}const cx = s.cx;
+${free ? '' : 's.ground();'}
 const k = s.pop(0, 0.6);
 s.group({ x: cx, y: s.cy, scale: k }, () => {
   s.rect(-190, -170, 380, 330, { fill: s.c.white, r: 10 });
@@ -231,18 +271,17 @@ s.sfx("click", 0.8, 0.6);
 
 ## Format jawaban
 Tulis semua scene dalam SATU blok kode \`\`\`js. Awali kode tiap scene dengan baris penanda persis "// ===== SCENE n =====" memakai nomor scene yang diminta. Tanpa penjelasan di luar blok kode.`;
-  const castLines = (cast || []).map((c) => `- ${c.name}: ${c.look}`).join('\n');
+  const castLines = (cast || []).map((c) => (free && c.code ? `- s.${c.kind === 'prop' ? 'prop' : 'cast'}("${c.name}", ...): ${c.look}${c.moves ? ` | opsi: ${c.moves}` : ''}` : `- ${c.name}: ${c.look}`)).join('\n');
   const assetLines = Object.entries(assets || {}).map(([key, a]) => `- "${key}" (${a.type === 'lottie' ? 's.lottie' : 's.image'}): ${a.description || ''}`).join('\n');
   const effectLines = (sounds || []).filter((x) => x.kind === 'effect').map((x) => `- s.sfx("custom:${x.key}", detik): ${x.prompt}`).join('\n');
-  const user = `${castLines ? `Daftar tokoh (gambar selalu sama di setiap scene):\n${castLines}\n\n` : ''}${effectLines ? `Efek suara khusus video ini (pakai di scene yang cocok):\n${effectLines}\n\n` : ''}Aset tersedia: ${assetLines ? `\n${assetLines}` : 'tidak ada (jangan pakai s.image / s.lottie)'}
+  const user = `${castLines ? `Daftar tokoh dan properti (gambar selalu sama di setiap scene):\n${castLines}\n\n` : ''}${effectLines ? `Efek suara khusus video ini (pakai di scene yang cocok):\n${effectLines}\n\n` : ''}Aset tersedia: ${assetLines ? `\n${assetLines}` : 'tidak ada (jangan pakai s.image / s.lottie)'}
 
 Tulis kode animasi untuk ${numbers.length} scene berikut. Tiap scene berdiri sendiri (kodenya hanya bisa melihat \`s\` dan \`ctx\`). Variasikan gerakan dan komposisi antar scene.${before ? `\nScene sebelum kelompok ini: ${before} (jaga kesinambungan, jangan diulang persis).` : ''}
 
 ${scenes.map((scene, i) => `### SCENE ${numbers[i]}
 - Teks narasi: "${scene.text}"
 - Visual: ${scene.visual}
-- Tema latar: ${scene.theme}
-- Durasi: ${scene.duration} detik (gerakan harus mengisi seluruh durasi ini)
+${free ? '' : `- Tema latar: ${scene.theme}\n`}- Durasi: ${scene.duration} detik (gerakan harus mengisi seluruh durasi ini)
 - Waktu kata diucapkan (detik dari awal scene): ${(scene.words || []).map((w) => `${w.w} ${w.s}`).join(' · ') || '-'}`).join('\n\n')}`;
   return { system, user };
 }
@@ -258,3 +297,45 @@ Jawab dengan SATU blok kode \`\`\`js berisi kode yang sudah diperbaiki, tiap sce
 
 export const STORY_PACES = PACES.map((pace) => pace.id);
 export const STORY_STYLES = DRAW_STYLES.map((style) => style.id);
+
+// The free canvas: the characters of one video, designed once as drawing code that every scene reuses
+// (s.cast). Answer: one ```js block, each character after "// ===== CAST Name =====".
+export function castPrompt({ cast, style: styleId, format = '9:16', palette = null, brief = '', artDirection = '' }) {
+  const style = drawStyleOf(styleId);
+  const system = `Kamu desainer karakter dan properti sekaligus animator. Kamu merancang tokoh dan benda berulang untuk satu video animasi bergaya ${style.look}, lalu menulis kode JavaScript yang menggambarnya di HTML Canvas.
+
+## Kontrak
+Untuk tiap tokoh tulis HANYA isi body fungsi \`function (s, o) { ... }\`. Fungsi ini dipanggil setiap frame di dalam adegan mana pun, dengan sistem koordinat lokal: tokoh berdiri dengan telapak kaki di (0, 0), tinggi berdiri ±100 unit ke ATAS (y negatif, kepala sekitar y = -100), menghadap ke kanan (engine membalik untuk facing -1 dan mengatur skala serta posisi). Tanpa state antar frame, tanpa Math.random() (pakai \`s.rand(i)\`), tanpa window/document/fetch/eval/Function/import, tanpa loop tak terbatas. Paling banyak sekitar 70 bentuk per frame supaya ringan.
+
+## Opsi \`o\`
+- \`o.t\` detik (pakai ini untuk semua gerak, bukan s.t).
+- \`o.action\`: idle (bawaan: napas halus, kedip), walk, run, talk (mulut bergerak), jump. \`o.pose\`: stand (bawaan), wave, point, think, cheer, sit, shrug. \`o.mood\`: happy (bawaan), sad, surprised, angry, neutral.
+- Boleh menambah opsi khusus tokoh ini (mis. \`o.holding\` callback benda di tangan dengan koordinat lokal tangan, \`o.lamp\` untuk lampu senter); sebut di baris "// moves:".
+
+## Menggambar
+${DRAWING}
+Waktu dan bantuan: \`s.lerp(a, b, k)\`, \`s.clamp(x, a, b)\`, \`s.ease.out/in/inOut/back(x)\`, \`Math.sin(o.t * ...)\` untuk ayunan. \`s.group({ x, y, rotate, scale }, () => { ... })\` untuk sendi (lengan dan kaki diputar di bahu/pinggul). Palet video: [${(palette?.colors || []).join(', ') || 'bebas, selaras gaya'}]${palette?.ink ? `, tinta ${palette.ink}` : ''}.
+
+## Properti (benda berulang)
+Properti ditulis dengan penanda "// ===== PROP Nama =====" dan digambar di koordinat lokal dengan PUSAT di (0, 0), lebar ±100 unit (engine mengatur skala dan posisi). \`o.t\` detik dan \`o.state\` (mis. off/on, tertutup/terbuka, penuh/kosong, rusak) plus opsi khususnya; sebut di baris "// moves:". Rancang bentuknya yang khas dan detail (bukan kotak atau bola polos), dengan bagian-bagian yang membuatnya langsung dikenali, dalam bahasa visual video ini, dan beri gerak hidup kecil (lampu berkedip, uap, getar) yang bisa dimatikan dengan \`o.still\`.
+
+## Bahasa visual video ini
+${artDirection || 'Turunkan dari gaya dan palet video.'}
+
+## Desain tokoh
+- Laki-laki dan perempuan HARUS jelas beda, bukan tokoh sama dengan warna lain: siluet dan proporsi badan (bahu, pinggang, pinggul, tinggi), bentuk wajah dan rahang, rambut (panjang, potongan, ikat, poni, jilbab bila disebut), alis, bulu mata, bibir, dan pakaian (potongan, rok/celana, aksesori). Usia juga terlihat: anak (kepala besar, badan pendek), remaja, dewasa, tua (postur, uban, kerutan).
+- Setiap tokoh punya desain sendiri yang khas dan langsung dikenali dari siluetnya: proporsi (chibi kepala besar, tinggi kurus, bulat pendek, dewasa realistis-sederhana), bentuk kepala dan rambut, pakaian dengan detail (kerah, motif, aksesori), warna dari palet. Jangan semua tokoh berbentuk sama, dan jangan stick figure atau manekin polos.
+- Ikuti deskripsi tokoh (look) dengan setia dan gaya video (garis, isian, tekstur).
+- Wajah sederhana tapi ekspresif sesuai gaya: mata, alis, mulut yang berubah menurut mood dan action (talk). Kedip singkat tiap ±3 detik.
+- Hewan atau makhluk juga boleh jadi tokoh: rancang anatominya sendiri dengan cara yang sama.
+- Gerak: idle selalu hidup sedikit (napas, ayun), walk/run dengan ayunan kaki dan lengan berlawanan dan badan naik-turun, jump dengan jongkok-lompat-mendarat dalam siklus ±1 detik.
+
+## Format jawaban
+SATU blok kode \`\`\`js. Tiap tokoh diawali baris penanda persis "// ===== CAST Nama =====" dan tiap properti "// ===== PROP Nama =====" (nama persis seperti di daftar), lalu baris "// moves: ..." berisi opsi yang didukung, lalu kodenya. Tanpa penjelasan lain.`;
+  const L = layoutOf(format);
+  const user = `${brief ? `Video: ${brief}\n` : ''}Rasio ${format} (${L.w} x ${L.h}); tokoh biasanya digambar setinggi ${Math.round(L.h * 0.25)}-${Math.round(L.h * 0.45)} px.
+
+Rancang dan tulis kode berikut:
+${cast.map((c) => `- ${c.kind === 'prop' ? 'PROP' : 'CAST'} ${c.name}: ${c.look}`).join('\n')}`;
+  return { system, user };
+}

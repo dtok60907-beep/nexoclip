@@ -177,7 +177,6 @@ services:
       R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
       MOTION_WORKER_CONCURRENCY: ${MOTION_WORKER_CONCURRENCY:-3}
     volumes:
       - nexoclip-assets:/data
