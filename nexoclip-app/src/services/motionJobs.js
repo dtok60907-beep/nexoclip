@@ -14,7 +14,9 @@ import { loadUsdIdrRate, usdToCredits } from './generationPricing.js';
 import { STORY_MODEL, animateStory, narrationText, storyIdeas, storyScript, timeScenes } from './motionStory.js';
 import { productionNeeds, runAgentTurn } from './motionAgent.js';
 import { findAssets as findStoryAssets } from './motionAssets.js';
-import { inspectScene } from './motionInspect.js';
+import { analyzeReference, inspectScene } from './motionInspect.js';
+import { importWebImage as fetchWebImage, readWebPage } from './motionWeb.js';
+import { createAssetDownload, createStorage, DISPLAY_DOWNLOAD_CACHE, importWorkspaceAsset } from './assetService.js';
 import { DRAW_STYLES, MAX_NOTE, MAX_TOPIC, PACES, STORY_SCENES, cleanStory, paceOf } from '../../components/motion/draw/story.js';
 
 export const MOTION_QUEUE = 'motion-jobs';
@@ -141,7 +143,12 @@ export async function produceEstimate({ story, needs }, { env = process.env, loa
   const voice = chars ? (await priceAudio({ type: 'voiceover', text: 'x'.repeat(chars), voiceId: ELEVENLABS_VOICES[0].id })).credits : 0;
   const seconds = Math.min(300, Math.max(3, Math.round(story.scenes.reduce((sum, scene) => sum + scene.duration, 0) + 2)));
   const song = needs.music ? (await priceAudio({ type: 'music', text: 'music', durationSeconds: seconds })).credits : 0;
-  return { credits: Math.ceil(text + voice + song), breakdown: { draw: Math.ceil(text), voice: Math.ceil(voice), music: Math.ceil(song) } };
+  let sound = 0;
+  for (const key of needs.sounds || []) {
+    const item = (story.sounds || []).find((x) => x.key === key);
+    if (item) sound += (await priceAudio({ type: 'sound', text: 'x', durationSeconds: item.seconds })).credits;
+  }
+  return { credits: Math.ceil(text + voice + song + sound), breakdown: { draw: Math.ceil(text), voice: Math.ceil(voice), music: Math.ceil(song), sounds: Math.ceil(sound) } };
 }
 
 // The production plan of a story, saved as its pending request so the user can review it and press "Buat":
@@ -153,7 +160,7 @@ export async function planProduction({ pool, workspaceId, projectId, estimate = 
   const story = cleanStory(saved?.kind === 'story' ? saved.story : {});
   if (!story.scenes.length) throw fail('Belum ada naskah.', 400);
   const needs = productionNeeds(story);
-  const what = [needs.voice && 'voice', needs.music && 'music', needs.draw.length && 'draw'].filter(Boolean);
+  const what = [needs.voice && 'voice', needs.music && 'music', needs.draw.length && 'draw', needs.sounds.length && 'sounds'].filter(Boolean);
   if (!what.length) {
     await changeStory(pool, projectId, (s) => ({ ...s, pending: null }));
     return null;
@@ -167,7 +174,11 @@ export async function planProduction({ pool, workspaceId, projectId, estimate = 
 export async function enqueueMotionJob({ pool, queue, workspaceId, projectId, userId, input, readBalance = readCreditBalance, newId = randomUUID, estimate = storyEstimate }) {
   if (input?.type === 'story-chat' || input?.type === 'story-produce') {
     const message = String(input.message || '').trim();
-    if (input.type === 'story-chat' && !message) throw fail('Tulis dulu pesannya.', 400);
+    // files sent with the message: workspace assets uploaded through /api/uploads (pictures and videos only)
+    const attachments = (Array.isArray(input.attachments) ? input.attachments : []).slice(0, 6)
+      .map((a) => ({ assetId: String(a?.id || a?.assetId || ''), url: String(a?.url || ''), type: String(a?.contentType || '').startsWith('video/') ? 'video' : 'image', name: String(a?.name || '').slice(0, 120), contentType: String(a?.contentType || '') }))
+      .filter((a) => /^[0-9a-f-]{36}$/.test(a.assetId) && a.url.startsWith('/api/assets/') && /^(image|video)\//.test(a.contentType));
+    if (input.type === 'story-chat' && !message && !attachments.length) throw fail('Tulis dulu pesannya.', 400);
     if (message.length > MAX_BRIEF) throw fail(`Maksimal ${MAX_BRIEF} karakter.`, 400);
     const project = await pool.query('SELECT id FROM motion_projects WHERE workspace_id = $1 AND id = $2', [workspaceId, projectId]);
     if (!project.rows[0]) throw fail('Project tidak ditemukan.', 404);
@@ -183,14 +194,27 @@ export async function enqueueMotionJob({ pool, queue, workspaceId, projectId, us
     try {
       await pool.query(
         'INSERT INTO motion_jobs (id, project_id, workspace_id, user_id, input, progress) VALUES ($1, $2, $3, $4, $5, $6)',
-        [id, projectId, workspaceId, userId, JSON.stringify({ type: input.type, message }), 'Menunggu giliran…'],
+        [id, projectId, workspaceId, userId, JSON.stringify({ type: input.type, message, attachments }), 'Menunggu giliran…'],
       );
     } catch (error) {
       if (error?.code === '23505') throw fail('AI masih mengerjakan permintaan sebelumnya di project ini.', 409);
       throw error;
     }
     if (input.type === 'story-chat') {
-      await changeStory(pool, projectId, (s) => ({ ...s, chat: [...s.chat, { role: 'user', content: message }] }));
+      await changeStory(pool, projectId, (s) => {
+        // each file becomes a reference (ref-1, ref-2, ...); pictures can also be drawn into scenes with s.image
+        const refs = [...s.references];
+        const assets = { ...s.assets };
+        const sent = attachments.map((a) => {
+          let n = refs.length + 1;
+          while (refs.some((r) => r.key === `ref-${n}`)) n += 1;
+          const key = `ref-${n}`;
+          refs.push({ key, type: a.type, url: a.url, assetId: a.assetId, name: a.name, seen: '' });
+          if (a.type === 'image') assets[key] = { type: 'image', source: 'upload', url: a.url, assetId: a.assetId, description: a.name || 'gambar dari user', credit: '' };
+          return { key, type: a.type, url: a.url, name: a.name };
+        });
+        return { ...s, references: refs, assets, chat: [...s.chat, { role: 'user', content: message || '(kirim file)', ...(sent.length ? { attachments: sent } : {}) }] };
+      });
     }
     await queue.add('run', { jobId: id }, { jobId: id, attempts: 1, removeOnComplete: 500, removeOnFail: 500 });
     return getMotionJob(pool, workspaceId, id);
@@ -502,9 +526,24 @@ function throttle(fn, ms) {
   };
 }
 
-const TOOL_PROGRESS = { inspect_scene: 'Melihat adegan…', show_card: 'Menyiapkan…', update_plan: 'Menyusun rencana…', propose_ideas: 'Mencari ide…', write_script: 'Menulis naskah…', edit_scenes: 'Merevisi adegan…', find_assets: 'Mencari gambar…', produce: 'Menghitung biaya…' };
+const TOOL_PROGRESS = { look_at_reference: 'Melihat kiriman…', read_web: 'Membaca halaman web…', use_web_image: 'Mengambil gambar…', add_sound: 'Merencanakan suara…', inspect_scene: 'Melihat adegan…', show_card: 'Menyiapkan…', update_plan: 'Menyusun rencana…', propose_ideas: 'Mencari ide…', write_script: 'Menulis naskah…', edit_scenes: 'Merevisi adegan…', find_assets: 'Mencari gambar…', produce: 'Menghitung biaya…' };
 
 // One chat message to the Motion agent: it edits the story with its tools and answers in the chat.
+// The bytes of a workspace asset (a reference the user sent), from storage.
+async function assetBytes(workspaceId, assetId) {
+  const storage = createStorage();
+  const result = await createAssetDownload(workspaceId, assetId, storage, DISPLAY_DOWNLOAD_CACHE, {});
+  if (!result) throw fail('File tidak ditemukan.', 404);
+  const target = result.download.url;
+  if (new URL(target).protocol === 'local:') {
+    const object = await storage.get(target);
+    return { bytes: Buffer.from(object.body), contentType: object.contentType || result.asset?.content_type || '' };
+  }
+  const response = await fetch(target, { signal: AbortSignal.timeout(60_000) });
+  if (!response.ok) throw fail('File tidak bisa dibaca.', 502);
+  return { bytes: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get('content-type') || result.asset?.content_type || '' };
+}
+
 async function runStoryChat(job, { pool, priceText, appendCredit, readBalance, logError, agent = runAgentTurn, findAssets = findStoryAssets, estimate = produceEstimate, inspect = inspectScene }) {
   let spent = 0;
   try {
@@ -516,6 +555,13 @@ async function runStoryChat(job, { pool, priceText, appendCredit, readBalance, l
       findAssets: (args) => findAssets({ pool, workspaceId: job.workspace_id, ...args }),
       estimate: (args) => estimate(args),
       inspect: (args) => inspect(args),
+      lookReference: async ({ reference, question }) => analyzeReference({ ...(await assetBytes(job.workspace_id, reference.assetId)), question }),
+      readWeb: (args) => readWebPage(args),
+      importWebImage: async ({ url, description }) => {
+        const { body, contentType } = await fetchWebImage({ url });
+        const imported = await importWorkspaceAsset(job.workspace_id, { filename: `web-${Date.now()}.${contentType.split('/')[1]}`, contentType, body }, createStorage(), pool);
+        return { type: 'image', source: 'web', url: imported.url, assetId: imported.asset.id, description, credit: `Gambar dari ${new URL(url).hostname} (diberikan user)` };
+      },
       onStep: (names) => setJob(pool, job.id, { progress: TOOL_PROGRESS[names[names.length - 1]] || 'Berpikir…' }),
       // the reply as it is written: "§" marks a streamed draft in the progress line (StoryStudio shows it live)
       onText: throttle((soFar) => setJob(pool, job.id, { progress: `§${soFar.slice(-3000)}` }), 350),
@@ -584,11 +630,28 @@ async function runStoryProduce(job, { pool, priceText, appendCredit, readBalance
         problems.push(`musik: ${error.message}`);
       }
     })() : Promise.resolve();
+    const effects = (needs.sounds || []).length ? (async () => {
+      for (const key of needs.sounds) {
+        const item = story.sounds.find((x) => x.key === key);
+        if (!item) continue;
+        try {
+          const file = await makeAudio({
+            pool, workspaceId: job.workspace_id, userId: job.user_id, idempotencyKey: `motion-audio:${job.id}:sound:${key}`,
+            input: { type: 'sound', text: item.prompt, durationSeconds: item.seconds, loop: item.kind !== 'effect' },
+          });
+          spent += file.credits;
+          await changeStory(pool, job.project_id, (s) => ({ ...s, sounds: s.sounds.map((x) => (x.key === key ? { ...x, url: file.url, madeFrom: item.prompt } : x)) }));
+        } catch (error) {
+          if (!error.status || error.status >= 500) logError('motion story sound failed', error.cause || error);
+          problems.push(`suara ${key}: ${error.message}`);
+        }
+      }
+    })() : Promise.resolve();
     const only = [...draw].sort((a, b) => a - b);
     if (only.length) {
       await setJob(pool, job.id, { progress: `Menggambar 0/${only.length} adegan…` });
       const drawn = await steps.animateStory({
-        scenes: story.scenes, only, pace: story.paceSpec || story.pace, style: story.styleSpec || story.style, cast: story.cast, assets: story.assets, format: story.format,
+        scenes: story.scenes, only, pace: story.paceSpec || story.pace, style: story.styleSpec || story.style, cast: story.cast, assets: story.assets, format: story.format, sounds: story.sounds,
         onProgress: (done, total) => setJob(pool, job.id, { progress: `Menggambar ${done}/${total} adegan…` }),
         // each group's scenes go into the project as soon as they are checked, so the preview fills in as it draws
         onScenes: (ready) => changeStory(pool, job.project_id, (s) => ({ ...s, scenes: s.scenes.map((scene, i) => (ready[i] ? { ...scene, code: ready[i].code, codeError: ready[i].codeError, redraw: false } : scene)) })),
@@ -599,7 +662,8 @@ async function runStoryProduce(job, { pool, priceText, appendCredit, readBalance
       if (broken) problems.push(`${broken} adegan belum bisa digambar`);
     }
     await song;
-    const made = [needs.voice && 'suara narator', needs.music && 'musik', only.length && `${only.length} adegan`].filter(Boolean).join(', ');
+    await effects;
+    const made = [needs.voice && 'suara narator', needs.music && 'musik', needs.sounds?.length && `${needs.sounds.length} suara`, only.length && `${only.length} adegan`].filter(Boolean).join(', ');
     await changeStory(pool, job.project_id, (s) => ({
       ...s, pending: null,
       chat: [...s.chat, { role: 'assistant', content: `Selesai dibuat: ${made}.${problems.length ? ` Catatan: ${problems.join('; ')}.` : ''} Putar pratinjaunya, lalu bilang kalau ada yang mau diubah.`, credits: round(spent), ...(problems.length ? { error: false } : {}) }],

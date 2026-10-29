@@ -52,7 +52,8 @@ export default function MotionPlayerPage() {
       const assets = Object.fromEntries(Object.entries(event.data.assets || {}).map(([key, asset]) => (
         asset?.type === 'lottie' ? [key, { type: 'lottie', data: asset.data }] : [key, { type: 'image', url: audio(asset?.file) }]
       )).filter(([, asset]) => asset.data || asset.url));
-      setVideo({ ...event.data.props, voice: audio(event.data.audio?.voice), music: audio(event.data.audio?.music), assets });
+      const sounds = (event.data.sounds || []).map((x) => ({ ...x, url: audio(x.file), file: undefined })).filter((x) => x.url);
+      setVideo({ ...event.data.props, voice: audio(event.data.audio?.voice), music: audio(event.data.audio?.music), assets, sounds });
     };
     window.addEventListener('message', onMessage);
     toParent({ type: 'nexoclip-player-ready' });

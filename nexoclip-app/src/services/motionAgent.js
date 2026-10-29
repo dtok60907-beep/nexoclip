@@ -88,6 +88,26 @@ export const AGENT_TOOLS = [
     kind: { type: 'string', enum: ['illustration', 'photo', 'vector', 'emoji'] },
     count: num('how many (1-3)'),
   }, ['query', 'kind']),
+  tool('look_at_reference', 'Look at a picture or video the user sent in the chat (key from the references list): what is in it, its style, colours, composition, and for a video its motion, pacing and scene order. Use it before copying a style or building a video from the user\'s photos.', {
+    key: str('reference key, e.g. ref-1'),
+    question: str('what to pay attention to'),
+  }, ['key']),
+  tool('read_web', 'Read a public web page the user mentions (a brand site, an article, a product page): title, description, main text and picture links.', {
+    url: str('the page address'),
+  }, ['url']),
+  tool('use_web_image', 'Bring a picture from a web page into the video as an asset (key for s.image). Only pictures the user owns or allows (their own site, logo, product photos).', {
+    url: str('the picture address (from read_web)'),
+    description: str('what the picture shows'),
+  }, ['url', 'description']),
+  tool('add_sound', 'Plan a made sound: an ambience under one scene or the whole video (rain, campfire, cave, city; it loops) or a special effect the scene code plays with s.sfx("custom:<key>", time) when the library has nothing fitting. Made during production and charged per second.', {
+    key: str('short name, letters and dashes'),
+    kind: { type: 'string', enum: ['ambience', 'effect'] },
+    prompt: str('English sound description: what, where, how near, how loud; for effects the sequence of events'),
+    scene: num('scene number for an ambience under one scene (omit for the whole video)'),
+    seconds: num('length 0.5-30 (an ambience loops, 10-20 is enough)'),
+    volume: num('0-1 (ambience about 0.3)'),
+  }, ['key', 'kind', 'prompt']),
+  tool('remove_sound', 'Drop a planned or made sound.', { key: str('sound key') }, ['key']),
   tool('inspect_scene', 'Look at a drawn scene: snapshots of it go to a vision model that says what is really visible and what looks wrong. Use it before changing a scene the user complains about, or to check your own work.', {
     scene: num('scene number'),
     question: str('what to check, e.g. "is the mammoth recognisable?"'),
@@ -147,6 +167,12 @@ Tentukan rasio di update_plan.format sesuai tujuan: 9:16 untuk Reels/TikTok/Shor
 - Suara narator: ${voiceList}. Pilih yang cocok dengan nada.
 - Musik (opsional): prompt bahasa Inggris yang memutuskan genre, suasana, instrumen, BPM, dan era/produksi (istilah studio), nada dasar, aransemen berurutan sesuai alur video, dan diakhiri "instrumental only, no vocals, no lead melody, background bed under a voiceover".
 
+## Kiriman user, web, dan suara
+- Gambar dan video yang dikirim user ada di daftar "Kiriman user" (ref-1, ref-2, ...). Lihat dulu dengan look_at_reference sebelum memakainya. Gambar kiriman bisa langsung dipakai di adegan dengan s.image("ref-1", ...) (sebut di visual adegan), misalnya untuk membuat motion graphic dari foto produk atau foto user.
+- Kalau user minta meniru gaya sebuah gambar atau video: lihat referensinya, lalu tiru gaya, palet, komposisi, tempo, dan urutan adegannya di update_plan dan naskah (jangan menyalin merek atau karakter milik orang lain kecuali milik user).
+- Kalau user menyebut alamat web, baca dengan read_web. Gambar dari web hanya dipakai (use_web_image) kalau milik user atau user mengizinkan.
+- Pustaka efek suara sudah ada ±130 jenis. Tambahkan suara latar (add_sound kind ambience: hujan, api unggun, gua, kota) bila suasana adegan butuh, dan efek khusus (kind effect) hanya kalau pustaka tidak punya yang cocok; keduanya dibuat saat produksi dan berbayar per detik.
+
 ## Kartu dan pemeriksaan
 - Pakai show_card untuk menunjukkan detail tanpa memenuhi chat: brief (setelah update_plan), script (setelah write_script), scene (adegan tertentu yang kamu ubah atau bahas), plan (setelah produce). User menekan "Lihat" untuk membuka panel.
 - Kalau user bilang sebuah adegan aneh, jelek, atau tidak sesuai, atau sebelum kamu mengubah gambar adegan yang sudah jadi, panggil inspect_scene dulu untuk melihat apa yang sebenarnya tergambar, lalu ubah visualnya (edit_scenes) berdasarkan temuan itu.
@@ -168,6 +194,8 @@ export function storySummary(story) {
     story.cast?.length ? `Tokoh: ${story.cast.map((c) => `${c.name} = ${c.look}`).join('; ')}` : 'Tokoh: -',
     `Latar: ${Object.keys(story.background || {}).filter((k) => story.background[k]?.top).join(', ') || 'paper, dusk, night (bawaan)'}`,
     Object.keys(story.assets || {}).length ? `Aset: ${Object.entries(story.assets).map(([k, a]) => `${k} (${a.type}: ${a.description})`).join('; ')}` : 'Aset: -',
+    story.references?.length ? `Kiriman user: ${story.references.map((r) => `${r.key} (${r.type}${r.name ? `, ${r.name}` : ''}${r.type === 'image' ? `, bisa dipakai di adegan: s.image("${r.key}")` : ''})${r.seen ? `: ${r.seen.slice(0, 300)}` : ' — belum dilihat'}`).join('; ')}` : '',
+    story.sounds?.length ? `Suara buatan: ${story.sounds.map((x) => `${x.key} (${x.kind}${x.scene === null ? ', seluruh video' : `, adegan ${x.scene + 1}`}${x.url ? '' : ', belum dibuat'}): ${x.prompt}`).join('; ')}` : '',
     story.ideas?.length ? `Ide yang ditawarkan: ${story.ideas.map((i, n) => `${n + 1}. ${i.title}`).join(' | ')}` : '',
     story.scenes?.length
       ? `Naskah "${story.title}" (${story.scenes.length} scene):\n${story.scenes.map((s, i) => `${i + 1}. [${s.theme}, ${s.camera}${s.code ? '' : ', belum digambar'}${s.redraw ? ', akan digambar ulang' : ''}] ${s.text} || visual: ${s.visual}`).join('\n')}`
@@ -209,7 +237,8 @@ export function productionNeeds(story, only = null) {
   const music = Boolean(story.music) && Boolean(story.scenes.length) && (!story.musicTrack || story.musicFor !== (story.musicPrompt || ''));
   // a new narration can also stretch scenes; those are added after the recording (motionJobs.js)
   const draw = story.scenes.map((s, i) => i).filter((i) => (!only || only.includes(i)) && (!story.scenes[i].code || story.scenes[i].redraw));
-  return { voice, music, draw };
+  const sounds = (story.sounds || []).filter((x) => !x.url || x.madeFrom !== x.prompt).map((x) => x.key);
+  return { voice, music, draw, sounds };
 }
 
 // Runs the tools of one model step against a working copy of the story. Returns tool messages and side info.
@@ -293,6 +322,49 @@ const TOOL_RUNNERS = {
     const keys = Object.entries(found).map(([key, x]) => ({ key, type: x.type, description: x.description }));
     return keys.length ? { ok: true, assets: keys } : { ok: false, message: 'nothing found; try other words or draw it' };
   },
+  async look_at_reference(a, story, { lookReference, extra }) {
+    const ref = (story.references || []).find((r) => r.key === a.key);
+    if (!ref) return { error: 'no such reference' };
+    if (!lookReference) return { error: 'looking at references is not available' };
+    const seen = await lookReference({ reference: ref, question: String(a.question || '') });
+    if (seen.usage) extra.push(seen.usage);
+    ref.seen = seen.text.slice(0, 3000);
+    return { key: ref.key, type: ref.type, seen: seen.text };
+  },
+  async read_web(a, story, { readWeb }) {
+    if (!readWeb) return { error: 'reading the web is not available' };
+    const page = await readWeb({ url: a.url });
+    return { url: page.url, title: page.title, description: page.description, text: page.text.slice(0, 5000), images: page.images };
+  },
+  async use_web_image(a, story, { importWebImage }) {
+    if (!importWebImage) return { error: 'not available' };
+    const taken = story.assets || {};
+    let key = 'web-1';
+    for (let n = 2; taken[key]; n += 1) key = `web-${n}`;
+    const asset = await importWebImage({ url: a.url, description: String(a.description || '') });
+    story.assets = { ...taken, [key]: asset };
+    return { ok: true, key };
+  },
+  add_sound(a, story) {
+    const key = String(a.key || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    if (!key || !a.prompt) return { error: 'key and prompt are needed' };
+    const scene = Number.isFinite(Number(a.scene)) ? Math.round(Number(a.scene)) - 1 : null;
+    if (scene !== null && !story.scenes[scene]) return { error: 'no such scene' };
+    const kind = a.kind === 'effect' ? 'effect' : 'ambience';
+    const sound = {
+      key, kind, prompt: String(a.prompt).slice(0, 450), scene,
+      seconds: Math.min(30, Math.max(0.5, Number(a.seconds) || (kind === 'effect' ? 2 : 15))),
+      volume: Math.min(1, Math.max(0, Number.isFinite(Number(a.volume)) ? Number(a.volume) : kind === 'effect' ? 0.8 : 0.3)),
+      loop: kind !== 'effect', url: '', madeFrom: '',
+    };
+    const before = (story.sounds || []).find((x) => x.key === key);
+    story.sounds = [...(story.sounds || []).filter((x) => x.key !== key), before && before.madeFrom === sound.prompt ? { ...sound, url: before.url, madeFrom: before.madeFrom } : sound];
+    return { ok: true, key, kind, plays: kind === 'effect' ? `s.sfx("custom:${key}", time)` : scene === null ? 'under the whole video' : `under scene ${scene + 1}` };
+  },
+  remove_sound(a, story) {
+    story.sounds = (story.sounds || []).filter((x) => x.key !== a.key);
+    return { ok: true };
+  },
   async inspect_scene(a, story, { inspect, extra }) {
     if (!inspect) return { error: 'inspecting is not available' };
     const i = Math.round(Number(a.scene)) - 1;
@@ -316,7 +388,7 @@ const TOOL_RUNNERS = {
     const only = Array.isArray(a.scenes) && a.scenes.length ? a.scenes.map((n) => Math.round(Number(n)) - 1).filter((i) => story.scenes[i]) : null;
     if (only) only.forEach((i) => { story.scenes[i].redraw = true; });
     const needs = productionNeeds(story, null);
-    const what = [needs.voice && 'voice', needs.music && 'music', needs.draw.length && 'draw'].filter(Boolean);
+    const what = [needs.voice && 'voice', needs.music && 'music', needs.draw.length && 'draw', needs.sounds.length && 'sounds'].filter(Boolean);
     if (!what.length) return { ok: true, message: 'everything is already made' };
     const { credits, breakdown } = await estimate({ story, needs });
     story.pending = { what, scenes: needs.draw, credits, breakdown, note: String(a.note || '').slice(0, 300) };
@@ -326,7 +398,7 @@ const TOOL_RUNNERS = {
 
 // One user message: the model works with the tools until it answers. Returns { story, reply, ideas, usages }.
 // `onText(soFar)` streams the reply as it is written; `inspect` is the vision check (motionInspect.js).
-export async function runAgentTurn({ story, message, call = callStoryModel, findAssets = null, inspect = null, estimate = async () => 0, onStep = async () => {}, onText = null }) {
+export async function runAgentTurn({ story, message, call = callStoryModel, findAssets = null, inspect = null, lookReference = null, readWeb = null, importWebImage = null, estimate = async () => 0, onStep = async () => {}, onText = null }) {
   const working = JSON.parse(JSON.stringify(story));
   working.pending = null;
   const history = (story.chat || []).slice(-16).map((m) => ({ role: m.role, content: m.content || '' })).filter((m) => m.content);
@@ -345,7 +417,7 @@ export async function runAgentTurn({ story, message, call = callStoryModel, find
     if (!answer.toolCalls.length) { reply = answer.text.trim(); break; }
     messages.push(answer.message);
     await onStep(answer.toolCalls.map((c) => c.name));
-    messages.push(...await runTools(answer.toolCalls, working, { findAssets, estimate, inspect, ideasOut: ideas, cardsOut: cards, extra }));
+    messages.push(...await runTools(answer.toolCalls, working, { findAssets, estimate, inspect, lookReference, readWeb, importWebImage, ideasOut: ideas, cardsOut: cards, extra }));
     if (step === MAX_STEPS - 1) reply = answer.text.trim() || 'Sudah aku siapkan. Cek panel adegan, lalu bilang kalau mau diubah.';
   }
   return { story: working, reply, ideas, cards, usages, extra };

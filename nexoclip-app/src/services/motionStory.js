@@ -295,7 +295,7 @@ export function checkSceneCode(code, { dur = 3, theme = 'paper', style = 'krayon
 // scene checked, failures sent back once for a fix. Returns { scenes, usages }; a scene that still fails keeps
 // `codeError` (the player shows its background and caption without the picture).
 // `only` (scene indexes) redraws just those scenes and keeps the others' code.
-export async function animateStory({ scenes, pace, style, cast = [], assets = {}, format = '9:16', only = null, call = callStoryModel, onProgress = async () => {}, onScenes = null }) {
+export async function animateStory({ scenes, pace, style, cast = [], assets = {}, format = '9:16', sounds = [], only = null, call = callStoryModel, onProgress = async () => {}, onScenes = null }) {
   const todo = scenes.map((_, i) => i).filter((i) => !only || only.includes(i));
   const groups = [];
   for (let i = 0; i < todo.length; i += BATCH) groups.push(todo.slice(i, i + BATCH));
@@ -307,7 +307,7 @@ export async function animateStory({ scenes, pace, style, cast = [], assets = {}
   await Promise.all(groups.map(async (indexes) => {
     const prompt = animatePrompt({
       scenes: indexes.map((i) => scenes[i]), numbers: indexes.map((i) => i + 1),
-      before: indexes[0] > 0 ? scenes[indexes[0] - 1].visual : '', pace, style, cast, assets, format,
+      before: indexes[0] > 0 ? scenes[indexes[0] - 1].visual : '', pace, style, cast, assets, format, sounds,
     });
     try {
       const { text, usage } = await call({ ...prompt, maxTokens: 40000 });

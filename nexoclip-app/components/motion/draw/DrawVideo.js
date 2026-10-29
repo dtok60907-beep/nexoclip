@@ -22,7 +22,7 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const easeOut = (x) => 1 - (1 - x) ** 3;
 
 // A cue name's file in the sound library (sfxLibrary.js); `k` picks the variation, unknown names get a pop.
-const sfxFile = (name, k) => staticFile(sfxPath(name, k) || sfxPath('pop', k));
+const sfxFile = (name, k, custom) => (String(name).startsWith('custom:') && custom?.[name.slice(7)]) || staticFile(sfxPath(name, k) || sfxPath('pop', k));
 
 // The handwriting font, icons, map and the video's pictures/Lottie files, before the first frame is drawn.
 function useHandFont(assets) {
@@ -73,7 +73,9 @@ function SceneCanvas({ scene, run, lead, background, seed, ready, debug, pace, s
 
 // `voice` is one narration for the whole video (scene words are timed against it); `music` plays under it.
 // `soundtrack` replaces both (used to compare against a finished video's audio).
-export default function DrawVideo({ scenes = [], background = null, voice = null, music = null, soundtrack = null, sfx = true, debug = false, pace = 'normal', style = 'krayon', format = '9:16', assets = null, onError = null }) {
+export default function DrawVideo({ scenes = [], background = null, voice = null, music = null, soundtrack = null, sfx = true, debug = false, pace = 'normal', style = 'krayon', format = '9:16', assets = null, sounds = [], onError = null }) {
+  // made sounds: effects by key (s.sfx('custom:key')), ambiences under one scene or the whole video
+  const custom = Object.fromEntries((sounds || []).filter((x) => x.kind === 'effect' && x.url).map((x) => [x.key, x.url]));
   const { fps } = useVideoConfig();
   const ready = useHandFont(assets);
   const timeline = useMemo(() => drawTimeline(scenes, fps), [scenes, fps]);
@@ -96,6 +98,14 @@ export default function DrawVideo({ scenes = [], background = null, voice = null
       {soundtrack ? <Audio src={soundtrack} /> : null}
       {!soundtrack && voice ? <Audio src={voice} /> : null}
       {!soundtrack && music ? <Audio src={music} volume={voice ? 0.18 : 0.5} loop /> : null}
+      {!soundtrack ? (sounds || []).filter((x) => x.kind !== 'effect' && x.url).map((x) => {
+        const scene = x.scene === null || x.scene === undefined ? null : timeline[x.scene];
+        if (x.scene !== null && x.scene !== undefined && !scene) return null;
+        const audio = <Audio src={x.url} volume={Math.min(1, Math.max(0, x.volume ?? 0.3))} loop />;
+        return scene
+          ? <Sequence key={`amb-${x.key}`} from={scene.from} durationInFrames={scene.frames} layout="none">{audio}</Sequence>
+          : <Sequence key={`amb-${x.key}`} from={0} layout="none">{audio}</Sequence>;
+      }) : null}
       {sfx ? (() => {
         const uses = new Map(); // how often each cue has played, so repeats rotate through the variations
         return timeline.flatMap((scene, i) => {
@@ -111,7 +121,7 @@ export default function DrawVideo({ scenes = [], background = null, voice = null
           uses.set(cue.name, n + 1);
           return (
             <Sequence key={`${i}-${k}`} from={Math.max(0, at(cue.time))} durationInFrames={Math.round(2.5 * fps)} layout="none">
-              <Audio src={sfxFile(cue.name, n)} volume={clamp(cue.gain, 0, 1.5) * 0.7} playbackRate={clamp(cue.pitch, 0.5, 2)} />
+              <Audio src={sfxFile(cue.name, n, custom)} volume={clamp(cue.gain, 0, 1.5) * 0.7} playbackRate={clamp(cue.pitch, 0.5, 2)} />
             </Sequence>
           );
         });

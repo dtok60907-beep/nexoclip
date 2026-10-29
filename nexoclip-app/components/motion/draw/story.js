@@ -187,12 +187,23 @@ export function cleanStory(story) {
     paceSpec: cleanSpec(s.paceSpec, ['preset', 'label', 'tone', 'entrance', 'music', 'voiceTag'], ['transition', 'camera', 'hardCameras', 'stability'], [], ['words']),
     cast: (Array.isArray(s.cast) ? s.cast : []).slice(0, 8).map((c) => ({ name: str(c?.name, 40), look: str(c?.look, 300) })).filter((c) => c.name),
     assets: cleanAssets(s.assets),
+    // made sounds: an ambience under a scene (or the whole video) or an effect the scene code plays (s.sfx('custom:key'))
+    sounds: (Array.isArray(s.sounds) ? s.sounds : []).slice(0, 24).map((x) => ({
+      key: str(x?.key, 40).replace(/[^\w-]/g, ''), kind: x?.kind === 'effect' ? 'effect' : 'ambience', prompt: str(x?.prompt, 450),
+      scene: Number.isInteger(x?.scene) ? x.scene : null, seconds: num(x?.seconds, 0.5, 30, 10), volume: num(x?.volume, 0, 1, x?.kind === 'effect' ? 0.8 : 0.35),
+      loop: x?.kind !== 'effect', url: str(x?.url, 1000), madeFrom: str(x?.madeFrom, 450),
+    })).filter((x) => x.key && x.prompt),
+    // what the user sent in the chat: pictures (also usable in scenes) and videos, with what the AI saw in them
+    references: (Array.isArray(s.references) ? s.references : []).slice(0, 20).map((r) => ({
+      key: str(r?.key, 40), type: r?.type === 'video' ? 'video' : 'image', url: str(r?.url, 1000), assetId: str(r?.assetId, 40),
+      name: str(r?.name, 120), seen: str(r?.seen, 3000),
+    })).filter((r) => r.key && r.url),
     chat: (Array.isArray(s.chat) ? s.chat : []).slice(-60).map(cleanMessage).filter(Boolean),
     pending: s.pending && typeof s.pending === 'object' ? {
-      what: (Array.isArray(s.pending.what) ? s.pending.what : []).filter((w) => ['voice', 'music', 'draw'].includes(w)),
+      what: (Array.isArray(s.pending.what) ? s.pending.what : []).filter((w) => ['voice', 'music', 'draw', 'sounds'].includes(w)),
       scenes: Array.isArray(s.pending.scenes) ? s.pending.scenes.filter(Number.isInteger).slice(0, 16) : null,
       credits: num(s.pending.credits, 0, 100000, 0),
-      breakdown: s.pending.breakdown ? { draw: num(s.pending.breakdown.draw, 0, 100000, 0), voice: num(s.pending.breakdown.voice, 0, 100000, 0), music: num(s.pending.breakdown.music, 0, 100000, 0) } : null,
+      breakdown: s.pending.breakdown ? { draw: num(s.pending.breakdown.draw, 0, 100000, 0), voice: num(s.pending.breakdown.voice, 0, 100000, 0), music: num(s.pending.breakdown.music, 0, 100000, 0), sounds: num(s.pending.breakdown.sounds, 0, 100000, 0) } : null,
       note: str(s.pending.note, 300),
     } : null,
   };
@@ -222,6 +233,7 @@ function cleanMessage(m) {
   return {
     role: m.role, content: str(m.content, 4000),
     ...(Array.isArray(m.ideas) && m.ideas.length ? { ideas: m.ideas.slice(0, 6).map(cleanIdea) } : {}),
+    ...(Array.isArray(m.attachments) && m.attachments.length ? { attachments: m.attachments.slice(0, 6).map((a) => ({ key: str(a?.key, 40), type: a?.type === 'video' ? 'video' : 'image', url: str(a?.url, 1000), name: str(a?.name, 120) })).filter((a) => a.url) } : {}),
     ...(Array.isArray(m.cards) && m.cards.length ? { cards: m.cards.slice(0, 6).filter((c) => ['brief', 'script', 'scene', 'plan'].includes(c?.kind)).map((c) => ({ kind: c.kind, title: str(c.title, 80), ...(Number.isInteger(c.scene) ? { scene: c.scene } : {}) })) } : {}),
     ...(m.error ? { error: true } : {}),
     ...(Number(m.credits) > 0 ? { credits: Number(m.credits) } : {}),
@@ -240,6 +252,7 @@ export function storyVideoProps(story) {
     pace: story.paceSpec || pace.id,
     style: story.styleSpec || style.id,
     assets: story.assets || {},
+    sounds: (story.sounds || []).filter((x) => x.url),
     format: story.format || DEFAULT_FORMAT,
   };
 }

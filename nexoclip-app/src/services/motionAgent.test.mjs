@@ -53,3 +53,21 @@ test('script, edits and the production request: only changed scenes are drawn ag
   assert.equal(next.story.scenes[1].visual, 'api unggun');
   assert.deepEqual(productionNeeds(next.story).draw, [1]);
 });
+
+test('references, web pages and made sounds go through the tools', async () => {
+  const story = cleanStory({ references: [{ key: 'ref-1', type: 'image', url: '/api/assets/x/download', assetId: '11111111-1111-4111-8111-111111111111', name: 'produk.jpg' }], scenes: [{ text: 'Satu.', visual: 'a', theme: 'paper', camera: 'push', code: 's.ground();' }, { text: 'Dua.', visual: 'b', theme: 'paper', camera: 'pull', code: 's.ground();' }] });
+  const { call } = callOf([[
+    ['look_at_reference', { key: 'ref-1' }],
+    ['read_web', { url: 'https://kopi.example' }],
+    ['add_sound', { key: 'Api Unggun', kind: 'ambience', prompt: 'campfire crackling at night', scene: 2, seconds: 12 }],
+  ]]);
+  const turn = await runAgentTurn({
+    story, message: 'tiru gaya fotonya', call,
+    lookReference: async () => ({ text: 'botol kopi cokelat, gaya flat', usage: { model: 'seed' } }),
+    readWeb: async () => ({ url: 'https://kopi.example/', title: 'Kopi', description: '', text: 'menu', images: [] }),
+  });
+  assert.equal(turn.story.references[0].seen, 'botol kopi cokelat, gaya flat');
+  assert.equal(turn.extra.length, 1);
+  assert.deepEqual(turn.story.sounds.map((x) => [x.key, x.scene, x.loop]), [['api-unggun', 1, true]]);
+  assert.deepEqual(productionNeeds(turn.story).sounds, ['api-unggun']);
+});

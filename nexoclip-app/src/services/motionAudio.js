@@ -25,7 +25,7 @@ export async function makeMotionAudio({
   const audio = validateAudioInput(input);
   const { usd, credits } = await priceAudio(audio);
   if (await readBalance(pool, workspaceId) < credits) {
-    throw fail(`Kredit kurang. Butuh ${credits} kredit untuk ${audio.type === 'music' ? 'musik' : 'voiceover'} ini.`, 402);
+    throw fail(`Kredit kurang. Butuh ${credits} kredit untuk ${audio.type === 'music' ? 'musik' : audio.type === 'sound' ? 'efek suara' : 'voiceover'} ini.`, 402);
   }
   let file;
   try {
@@ -40,7 +40,7 @@ export async function makeMotionAudio({
   const entry = {
     workspaceId, reason: 'motion_audio', idempotencyKey,
     metadata: {
-      type: audio.type, model: `elevenlabs/${audio.type === 'music' ? MUSIC_MODEL : VOICEOVER_MODEL}`, assetId: imported.asset.id, providerCostUsd: usd, userId,
+      type: audio.type, model: `elevenlabs/${audio.type === 'music' ? MUSIC_MODEL : audio.type === 'sound' ? 'sound_generation' : VOICEOVER_MODEL}`, assetId: imported.asset.id, providerCostUsd: usd, userId,
       characters: audio.type === 'voiceover' ? audio.text.length : undefined, durationSeconds: audio.durationSeconds,
     },
   };

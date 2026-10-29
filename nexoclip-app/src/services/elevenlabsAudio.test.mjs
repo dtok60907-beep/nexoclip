@@ -12,7 +12,7 @@ test('validates audio input', () => {
   assert.throws(() => validateAudioInput({ type: 'voiceover', text: '', voiceId: 'JBFqnCBsd6RMkjVDRZzb' }), /text is required/);
   assert.throws(() => validateAudioInput({ type: 'voiceover', text: 'hi', voiceId: '../x' }), /voiceId/);
   assert.throws(() => validateAudioInput({ type: 'music', text: 'lo-fi', durationSeconds: 1 }), /3-300/);
-  assert.throws(() => validateAudioInput({ type: 'sfx', text: 'boom' }), /voiceover or music/);
+  assert.throws(() => validateAudioInput({ type: 'sfx', text: 'boom' }), /voiceover, music or sound/);
   assert.equal(validateAudioInput({ type: 'music', text: 'lo-fi', durationSeconds: 20 }).instrumental, true);
 });
 
@@ -48,4 +48,14 @@ test('voiceover with timestamps turns the character alignment into words', async
   assert.equal(called.body.model_id, 'eleven_v4');
   assert.equal(result.body.toString(), 'mp3');
   assert.equal(result.words.length, 3);
+});
+
+test('a sound effect or ambience is priced per second and asks ElevenLabs for a loop when wanted', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return new Response(new Uint8Array([1, 2, 3]), { status: 200 }); };
+  await generateElevenLabsAudio({ type: 'sound', text: 'campfire crackling', durationSeconds: 12, loop: true }, { apiKey: 'k', fetchImpl });
+  assert.match(calls[0].url, /\/v1\/sound-generation/);
+  assert.deepEqual(calls[0].body, { text: 'campfire crackling', duration_seconds: 12, loop: true, prompt_influence: 0.5 });
+  assert.ok(Math.abs(audioCostUsd({ type: 'sound', text: 'x', durationSeconds: 10 }) - 0.065) < 1e-9);
+  assert.throws(() => validateAudioInput({ type: 'sound', text: 'x', durationSeconds: 40 }), /0.5-30 seconds/);
 });

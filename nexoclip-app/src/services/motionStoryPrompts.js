@@ -141,7 +141,7 @@ function canvasRules(format) {
   return `${L.w} x ${L.h} (${format}, ${shape}), origin kiri atas. Area ilustrasi x ${x0}-${x1}, y ${y0}-${y1}, pusat kira-kira (${L.center[0]}, ${L.center[1]}). Garis tanah standar y = ${L.ground}. JANGAN menggambar di bawah y = ${L.captionTop - 10} (area teks narasi). Nilai ini juga ada di kode: \`s.W\`, \`s.H\`, \`s.art\` [x0, y0, x1, y1], \`s.cx\`, \`s.cy\`, \`s.groundY\`.${shape === 'mendatar' ? ' Kanvas lebar: manfaatkan kiri-kanan (objek utama di satu sisi, pendukung di sisi lain, gerak menyamping).' : ''}`;
 }
 
-export function animatePrompt({ scenes, numbers, before, pace: paceId, style: styleId, cast = [], assets = {}, format = '9:16' }) {
+export function animatePrompt({ scenes, numbers, before, pace: paceId, style: styleId, cast = [], assets = {}, format = '9:16', sounds = [] }) {
   const pace = paceOf(paceId);
   const style = drawStyleOf(styleId);
   const system = `Kamu animator motion graphics yang menulis kode JavaScript untuk menggambar satu scene animasi di HTML Canvas, gaya ${style.look}.
@@ -233,7 +233,8 @@ s.sfx("click", 0.8, 0.6);
 Tulis semua scene dalam SATU blok kode \`\`\`js. Awali kode tiap scene dengan baris penanda persis "// ===== SCENE n =====" memakai nomor scene yang diminta. Tanpa penjelasan di luar blok kode.`;
   const castLines = (cast || []).map((c) => `- ${c.name}: ${c.look}`).join('\n');
   const assetLines = Object.entries(assets || {}).map(([key, a]) => `- "${key}" (${a.type === 'lottie' ? 's.lottie' : 's.image'}): ${a.description || ''}`).join('\n');
-  const user = `${castLines ? `Daftar tokoh (gambar selalu sama di setiap scene):\n${castLines}\n\n` : ''}Aset tersedia: ${assetLines ? `\n${assetLines}` : 'tidak ada (jangan pakai s.image / s.lottie)'}
+  const effectLines = (sounds || []).filter((x) => x.kind === 'effect').map((x) => `- s.sfx("custom:${x.key}", detik): ${x.prompt}`).join('\n');
+  const user = `${castLines ? `Daftar tokoh (gambar selalu sama di setiap scene):\n${castLines}\n\n` : ''}${effectLines ? `Efek suara khusus video ini (pakai di scene yang cocok):\n${effectLines}\n\n` : ''}Aset tersedia: ${assetLines ? `\n${assetLines}` : 'tidak ada (jangan pakai s.image / s.lottie)'}
 
 Tulis kode animasi untuk ${numbers.length} scene berikut. Tiap scene berdiri sendiri (kodenya hanya bisa melihat \`s\` dan \`ctx\`). Variasikan gerakan dan komposisi antar scene.${before ? `\nScene sebelum kelompok ini: ${before} (jaga kesinambungan, jangan diulang persis).` : ''}
 

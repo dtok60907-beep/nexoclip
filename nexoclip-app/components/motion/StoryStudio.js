@@ -83,10 +83,11 @@ function StoryPreview({ story, onSceneError, renderRef, seekRef, onRender }) {
           return [key, null];
         }),
       ]);
+      const sounds = await Promise.all((props.sounds || []).map(async (x) => ({ key: x.key, kind: x.kind, scene: x.scene, volume: x.volume, file: await resolve(x.url) })));
       if (!live) return;
       const assets = Object.fromEntries(resolved.filter(([, a]) => a && (a.data || a.file)));
-      const transfer = [voice?.bytes, music?.bytes, ...Object.values(assets).map((a) => a.file?.bytes)].filter(Boolean);
-      frame.current?.contentWindow?.postMessage({ type: 'nexoclip-story', props: { ...props, voice: null, music: null, assets: null }, audio: { voice, music }, assets }, '*', transfer);
+      const transfer = [voice?.bytes, music?.bytes, ...Object.values(assets).map((a) => a.file?.bytes), ...sounds.map((x) => x.file?.bytes)].filter(Boolean);
+      frame.current?.contentWindow?.postMessage({ type: 'nexoclip-story', props: { ...props, voice: null, music: null, assets: null, sounds: null }, audio: { voice, music }, assets, sounds: sounds.filter((x) => x.file) }, '*', transfer);
     })();
     return () => { live = false; };
   }, [ready, props]);
@@ -158,6 +159,13 @@ function Message({ message, onPick, onOpen, busy }) {
   return (
     <div className={`flex flex-col gap-2 ${mine ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[94%] rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed ${mine ? 'whitespace-pre-line rounded-br-md bg-[#d4ff64] text-black' : message.error ? 'bg-red-500/10 text-red-200 ring-1 ring-red-500/20' : 'rounded-bl-md bg-white/[0.045] text-[#f2eee5] ring-1 ring-white/[0.06]'}`}>
+        {message.attachments?.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1.5">
+            {message.attachments.map((a) => (a.type === 'image'
+              ? <img key={a.key} src={a.url} alt={a.name || a.key} className="h-16 w-16 rounded-lg object-cover ring-1 ring-black/10" />
+              : <span key={a.key} className="rounded-lg bg-black/10 px-2 py-1 text-[11px]">🎬 {a.name || a.key}</span>))}
+          </div>
+        )}
         {mine ? message.content : <Rich text={message.content} />}
         {message.credits > 0 && <span className="mt-1.5 block text-[10.5px] text-white/35">{message.credits} kredit</span>}
       </div>
@@ -190,7 +198,7 @@ function Message({ message, onPick, onOpen, busy }) {
 function PlanNotice({ story, onOpen, onApprove, disabled }) {
   const p = story.pending;
   if (!p) return null;
-  const parts = [p.what.includes('voice') && 'suara narator', p.what.includes('music') && 'musik', p.scenes?.length && `${p.scenes.length} adegan`].filter(Boolean).join(' · ');
+  const parts = [p.what.includes('voice') && 'suara narator', p.what.includes('music') && 'musik', p.what.includes('sounds') && 'suara latar/efek', p.scenes?.length && `${p.scenes.length} adegan`].filter(Boolean).join(' · ');
   return (
     <div className="flex w-[94%] flex-col gap-2 rounded-xl bg-[#d4ff64]/[0.06] p-3 ring-1 ring-[#d4ff64]/25">
       <div className="flex items-baseline justify-between gap-2">
@@ -261,6 +269,7 @@ function DetailPanel({ card, story, onClose, onApprove, busy }) {
             <div className="grid grid-cols-2 gap-1 text-[12px] text-white/70">
               {p.what.includes('voice') && <><span>Suara narator</span><span className="text-right">±{p.breakdown?.voice ?? '?'} kredit</span></>}
               {p.what.includes('music') && <><span>Musik</span><span className="text-right">±{p.breakdown?.music ?? '?'} kredit</span></>}
+              {p.what.includes('sounds') && <><span>Suara latar/efek</span><span className="text-right">±{p.breakdown?.sounds ?? '?'} kredit</span></>}
               {p.scenes?.length > 0 && <><span>Gambar {p.scenes.length} adegan</span><span className="text-right">±{p.breakdown?.draw ?? '?'} kredit</span></>}
               <span className="font-semibold text-white/90">Total</span><span className="text-right font-semibold text-white/90">±{p.credits} kredit</span>
             </div>
@@ -364,6 +373,18 @@ function AudioEditor({ story, onChange, disabled }) {
       <label className="flex items-center gap-2 text-[13px] text-white/75"><input type="checkbox" checked={story.music} disabled={disabled} onChange={(e) => onChange({ music: e.target.checked })} /> Musik latar</label>
       {story.music && <Field label="Prompt musik" hint="genre, suasana, instrumen, BPM, era"><textarea rows={4} value={story.musicPrompt} disabled={disabled} onChange={(e) => onChange({ musicPrompt: e.target.value })} className={inputClass} /></Field>}
       {story.musicTrack && <p className="text-[11px] text-white/40">{story.musicFor === story.musicPrompt ? 'Musik sudah dibuat dari prompt ini.' : 'Prompt berubah: musik akan dibuat ulang.'}</p>}
+      {story.sounds?.length > 0 && (
+        <div className="rounded-xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/40">Suara latar & efek khusus</div>
+          {story.sounds.map((x) => (
+            <div key={x.key} className="flex items-start gap-2 border-b border-white/[0.04] py-1.5 text-[12px] last:border-0">
+              <span className="flex-1 text-white/70"><b className="text-white/85">{x.key}</b> · {x.kind === 'effect' ? 'efek' : x.scene === null ? 'latar seluruh video' : `latar adegan ${x.scene + 1}`} · {x.seconds}s<br /><span className="text-white/45">{x.prompt}</span></span>
+              <span className="text-[10.5px] text-white/35">{x.url && x.madeFrom === x.prompt ? 'jadi' : 'belum dibuat'}</span>
+              <button type="button" disabled={disabled} onClick={() => onChange({ sounds: story.sounds.filter((y) => y.key !== x.key) })} className="text-[11px] text-red-300/70 hover:text-red-300">hapus</button>
+            </div>
+          ))}
+        </div>
+      )}
       {Object.keys(story.assets || {}).length > 0 && (
         <div className="rounded-xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/40">Gambar & animasi dari luar</div>
@@ -409,6 +430,8 @@ export default function StoryStudio({ authenticated = false, beforeGenerate = ()
   const [sceneErrors, setSceneErrors] = useState({});
   const [render, setRender] = useState(null); // { progress } while rendering, { url } when done, { error }
   const [atBottom, setAtBottom] = useState(true);
+  const [files, setFiles] = useState([]); // [{ id, url, contentType, name, uploading }]
+  const fileRef = useRef(null);
   const [chatWidth, dragChat] = useResizable('nexoclip_motion_chat_w', 400, 300, 640);
   const [sideWidth, dragSide] = useResizable('nexoclip_motion_side_w', 380, 300, 560);
   const renderRef = useRef(null);
@@ -506,9 +529,31 @@ export default function StoryStudio({ authenticated = false, beforeGenerate = ()
   };
   const send = (value = text) => {
     const message = value.trim();
-    if (!message || busy) return;
+    const ready = files.filter((f) => f.id);
+    if ((!message && !ready.length) || busy || files.some((f) => f.uploading)) return;
     setText('');
-    run({ type: 'story-chat', message }, message);
+    setFiles([]);
+    run({ type: 'story-chat', message, attachments: ready }, message || '(kirim file)');
+  };
+  // Pictures and videos for the AI to look at (style to copy, photos to animate), uploaded as workspace assets.
+  const attach = async (list) => {
+    for (const file of [...list].slice(0, 6 - files.length)) {
+      if (!/^(image|video)\//.test(file.type)) { setError('Kirim gambar atau video saja.'); continue; }
+      if (file.type.startsWith('video/') && file.size > 30 * 1024 * 1024) { setError('Video referensi maksimal 30 MB.'); continue; }
+      const temp = `${Date.now()}-${file.name}`;
+      setFiles((f) => [...f, { temp, name: file.name, contentType: file.type, uploading: true, preview: URL.createObjectURL(file) }]);
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const response = await fetch('/api/uploads', { method: 'POST', body: form, credentials: 'include', headers: { 'x-workspace-id': window.sessionStorage.getItem('nexoclip_workspace_id') || '' } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Upload gagal.');
+        setFiles((f) => f.map((x) => (x.temp === temp ? { ...x, id: data.id, url: data.url, contentType: data.contentType || file.type, uploading: false } : x)));
+      } catch (err) {
+        setFiles((f) => f.filter((x) => x.temp !== temp));
+        setError(err.message);
+      }
+    }
   };
   const produce = () => { setCard(null); run({ type: 'story-produce' }); };
   const newStory = () => { setProjectId(null); setStory(cleanStory({})); setJob(null); setError(''); setSceneErrors({}); setSelected(0); setCard(null); setRender(null); };
@@ -584,12 +629,26 @@ export default function StoryStudio({ authenticated = false, beforeGenerate = ()
           <DetailPanel card={card} story={story} onClose={() => setCard(null)} onApprove={produce} busy={busy} />
         </div>
         {dirty && <p className="text-[11px] text-amber-200/70">Ada editan (panel kanan atau rasio) yang belum disimpan. Simpan dulu sebelum minta AI.</p>}
-        <div className="flex items-end gap-2 rounded-2xl bg-white/[0.03] p-2 ring-1 ring-white/[0.07] focus-within:ring-[#d4ff64]/40">
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {files.map((f) => (
+              <span key={f.temp} className="relative">
+                {f.contentType.startsWith('image/') ? <img src={f.preview} alt={f.name} className={`h-14 w-14 rounded-lg object-cover ring-1 ring-white/10 ${f.uploading ? 'opacity-40' : ''}`} />
+                  : <span className={`flex h-14 items-center rounded-lg bg-white/[0.06] px-2 text-[11px] text-white/70 ring-1 ring-white/10 ${f.uploading ? 'opacity-40' : ''}`}>🎬 {f.name.slice(0, 16)}</span>}
+                <button type="button" onClick={() => setFiles((list) => list.filter((x) => x.temp !== f.temp))} className="absolute -right-1.5 -top-1.5 h-5 w-5 rounded-full bg-black/80 text-[11px] text-white ring-1 ring-white/20">×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); attach(e.dataTransfer.files); }}
+          className="flex items-end gap-2 rounded-2xl bg-white/[0.03] p-2 ring-1 ring-white/[0.07] focus-within:ring-[#d4ff64]/40">
+          <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => { attach(e.target.files); e.target.value = ''; }} />
+          <button type="button" title="Kirim gambar/video referensi" disabled={busy} onClick={() => fileRef.current?.click()} className="rounded-xl px-2 py-2 text-[16px] text-white/55 hover:bg-white/[0.06] hover:text-white">📎</button>
           <textarea ref={inputRef} value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))} rows={2} disabled={busy}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={story.scenes.length ? 'mis. adegan 3 ganti jadi api unggun, narasinya lebih santai' : 'Ceritakan video yang kamu mau…'}
+            placeholder={story.scenes.length ? 'mis. adegan 3 ganti jadi api unggun, narasinya lebih santai' : 'Ceritakan video yang kamu mau, kirim foto/video referensi, atau tempel link web…'}
             className="min-w-0 flex-1 resize-none bg-transparent px-1.5 py-1 text-[13.5px] outline-none placeholder:text-white/30" />
-          <button type="button" onClick={() => send()} disabled={busy || !text.trim()} className="rounded-xl bg-[#d4ff64] px-4 py-2 text-[13px] font-bold text-black disabled:opacity-40">Kirim</button>
+          <button type="button" onClick={() => send()} disabled={busy || (!text.trim() && !files.some((f) => f.id)) || files.some((f) => f.uploading)} className="rounded-xl bg-[#d4ff64] px-4 py-2 text-[13px] font-bold text-black disabled:opacity-40">Kirim</button>
         </div>
       </aside>
       <Handle onPointerDown={(e) => dragChat(e, 1)} />

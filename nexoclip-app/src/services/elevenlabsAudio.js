@@ -22,7 +22,11 @@ export const MAX_MUSIC_SECONDS = 300;
 export const ELEVENLABS_PRICES = {
   voiceoverPerThousandChars: 0.16,
   musicPerMinute: 0.30,
+  // Sound effects cost 40 ElevenLabs credits per second when the length is set (we always set it): 40 × $0.152/1,000.
+  soundPerSecond: 0.0065,
 };
+export const MIN_SOUND_SECONDS = 0.5;
+export const MAX_SOUND_SECONDS = 30;
 
 // Premade voices every ElevenLabs account has. Listed here because the API key
 // may lack the voices_read permission; their ids are stable.
@@ -69,12 +73,22 @@ export function validateAudioInput(input = {}) {
     }
     return { type, text, durationSeconds: seconds, instrumental: input.instrumental !== false };
   }
-  throw invalid('Audio type must be voiceover or music');
+  if (type === 'sound') {
+    if (!text) throw invalid('A sound description is required');
+    if (text.length > 450) throw invalid('The sound description is too long');
+    const seconds = Math.round(Number(input.durationSeconds) * 10) / 10;
+    if (!Number.isFinite(seconds) || seconds < MIN_SOUND_SECONDS || seconds > MAX_SOUND_SECONDS) {
+      throw invalid(`Sound length must be ${MIN_SOUND_SECONDS}-${MAX_SOUND_SECONDS} seconds`);
+    }
+    return { type, text, durationSeconds: seconds, loop: input.loop === true };
+  }
+  throw invalid('Audio type must be voiceover, music or sound');
 }
 
 export function audioCostUsd(input) {
   const audio = validateAudioInput(input);
   if (audio.type === 'voiceover') return (audio.text.length / 1000) * ELEVENLABS_PRICES.voiceoverPerThousandChars;
+  if (audio.type === 'sound') return audio.durationSeconds * ELEVENLABS_PRICES.soundPerSecond;
   return (audio.durationSeconds / 60) * ELEVENLABS_PRICES.musicPerMinute;
 }
 
@@ -98,7 +112,10 @@ export async function generateElevenLabsAudio(input, { apiKey = process.env.ELEV
   const audio = validateAudioInput(input);
   const [path, payload] = audio.type === 'voiceover'
     ? [`/v1/text-to-speech/${encodeURIComponent(audio.voiceId)}`, { text: audio.text, model_id: VOICEOVER_MODEL }]
-    : ['/v1/music', {
+    : audio.type === 'sound'
+      // a sound effect or an ambience (loop: true repeats without a seam)
+      ? ['/v1/sound-generation', { text: audio.text, duration_seconds: audio.durationSeconds, loop: audio.loop, prompt_influence: 0.5 }]
+      : ['/v1/music', {
       prompt: audio.text, music_length_ms: audio.durationSeconds * 1000, model_id: MUSIC_MODEL,
       force_instrumental: audio.instrumental,
     }];
