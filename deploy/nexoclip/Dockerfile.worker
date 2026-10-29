@@ -11,6 +11,8 @@ COPY nexoclip-app/packages/studio/package*.json ./packages/studio/
 RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
 
 COPY --chown=1001:1001 nexoclip-app/src ./src
+# The motion worker shares the Motion studio's scene model and style catalogue with the app.
+COPY --chown=1001:1001 nexoclip-app/components/motion ./components/motion
 COPY --chown=1001:1001 nexoclip-app/package.json ./package.json
 
 USER 1001:1001
