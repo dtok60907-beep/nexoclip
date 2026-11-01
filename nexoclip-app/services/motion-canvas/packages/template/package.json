@@ -1,0 +1,21 @@
+{
+  "name": "@motion-canvas/template",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Basic project template for Motion Canvas",
+  "author": "motion-canvas",
+  "license": "MIT",
+  "main": "src/project.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "dependencies": {
+    "@motion-canvas/core": "*",
+    "@motion-canvas/2d": "*"
+  },
+  "devDependencies": {
+    "@motion-canvas/ui": "*",
+    "@motion-canvas/vite-plugin": "*"
+  }
+}

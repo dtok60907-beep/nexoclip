@@ -1,0 +1,10 @@
+# Motion Canvas editor for local experiments (NexoClip). Runs the template project's
+# Vite dev server; source changes need a rebuild of this image.
+FROM node:20-bookworm
+WORKDIR /app
+COPY . .
+RUN HUSKY=0 npm ci --no-audit --no-fund
+# The editor loads the packages from source, but the Vite and FFmpeg plugins run built.
+RUN npx lerna run build --scope @motion-canvas/core --scope @motion-canvas/2d --scope @motion-canvas/ui --scope @motion-canvas/vite-plugin --scope @motion-canvas/ffmpeg
+EXPOSE 9000
+CMD ["npm", "run", "dev", "-w", "packages/template", "--", "--host", "0.0.0.0", "--port", "9000"]

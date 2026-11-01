@@ -1,0 +1,17 @@
+{
+  "name": "@motion-canvas/examples",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build --base /examples/"
+  },
+  "dependencies": {
+    "@motion-canvas/2d": "*",
+    "@motion-canvas/core": "*"
+  },
+  "devDependencies": {
+    "@motion-canvas/ui": "*",
+    "@motion-canvas/vite-plugin": "*"
+  }
+}

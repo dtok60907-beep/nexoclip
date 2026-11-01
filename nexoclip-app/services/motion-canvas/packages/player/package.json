@@ -1,0 +1,29 @@
+{
+  "name": "@motion-canvas/player",
+  "version": "3.17.2",
+  "description": "A custom element for displaying animations made with Motion Canvas",
+  "main": "dist/main.js",
+  "types": "types/main.d.ts",
+  "author": "motion-canvas",
+  "homepage": "https://motion-canvas.io/",
+  "bugs": "https://github.com/motion-canvas/motion-canvas/issues",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/motion-canvas/motion-canvas.git"
+  },
+  "files": [
+    "dist",
+    "types"
+  ],
+  "devDependencies": {
+    "@motion-canvas/core": "^3.17.2",
+    "sass": "^1.58.0",
+    "terser": "^5.16.1"
+  }
+}
