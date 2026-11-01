@@ -110,3 +110,22 @@ test('an oversized image prompt says it is too long, not missing', async () => {
   assert.throws(() => validateImageGenerationInput({ prompt: 'x'.repeat(10001), model: 'm' }), /too long \(10001\/10000/);
   assert.throws(() => validateImageGenerationInput({ prompt: '', model: 'm' }), /required/);
 });
+
+test('Seedance duration and image boundaries follow the model version', () => {
+  const run = (model, parameters) => validateVideoGenerationInput({ kind: 'video', prompt: 'A fox runs', model, parameters });
+  for (const model of ['bytedance/seedance-2.0', 'bytedance/seedance-2.0-fast', 'bytedance/seedance-2.0-mini']) {
+    for (const duration of [4, 7, 15]) assert.equal(run(model, { duration }).parameters.duration, duration);
+    for (const duration of [3, 16, 30]) assert.throws(() => run(model, { duration }), /duration/);
+    const refs = Array.from({ length: 10 }, (_, i) => `/api/assets/ref${i}/download`);
+    assert.equal(run(model, { referenceImages: refs.slice(0, 9) }).parameters.referenceImages.length, 9);
+    assert.throws(() => run(model, { referenceImages: refs }), /too many/);
+  }
+  assert.equal(run('bytedance/seedance-2.5', { duration: 30 }).parameters.duration, 30);
+});
+
+test('the Studio unfiltered endpoint uses Seedance 2.5 limits too', () => {
+  const model = 'ep-20260904190604-p8pjl';
+  const parameters = { duration: 30, referenceImages: Array.from({ length: 30 }, (_, i) => `/api/assets/ref${i}/download`) };
+  assert.equal(validateVideoGenerationInput({ kind: 'video', prompt: 'Test', model, parameters }).parameters.referenceImages.length, 30);
+  assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'Test', model, parameters: { duration: 31 } }), /duration/);
+});

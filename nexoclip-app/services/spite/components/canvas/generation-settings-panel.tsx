@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CaretDown, Check, FilmStrip, Image as ImageIcon, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
 import { getImageModels, getVideoModels } from '@/lib/fal-models'
-import { AUTO_DURATION, minVideoDurationSeconds, resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
+import { AUTO_DURATION, maxVideoDurationSeconds, minVideoDurationSeconds, resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
 
 type SettingsNode = {
   id: string
@@ -83,16 +83,20 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
       <div className="space-y-2.5 pt-3">
         <div className="relative">
           <button onClick={() => { setModelOpen(value => !value); setChoice(null) }} className="flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-[#202328] px-3 py-2.5 text-left hover:border-white/[0.2]">
-            <span><span className="block text-[11px] text-slate-500">Model</span><span className="text-sm font-semibold text-slate-100">{currentModel.name}</span></span>
+            <span><span className="block text-[11px] text-slate-500">Model</span><span className="text-sm font-semibold text-slate-100">{currentModel.name}</span></span><span className="ml-auto mr-2 shrink-0 text-xs font-semibold text-lime-300">{isVideo ? `Up to ${maxVideoDurationSeconds(currentModel)}s` : null}</span>
             <CaretDown size={16} className="text-slate-400" />
           </button>
           {modelOpen ? (
             <div className="absolute right-[calc(100%-14px)] top-0 z-50 w-[405px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#202328]/[.98] shadow-2xl backdrop-blur-xl">
               <div className="border-b border-white/[0.08] p-3"><div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#17191f] px-3 py-2 text-slate-400"><MagnifyingGlass size={16} /><input autoFocus value={search} onChange={event => setSearch(event.target.value)} placeholder="Search models..." className="w-full border-0 bg-transparent p-0 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-0" /></div></div>
-              <div className="max-h-[420px] overflow-y-auto p-2">{visibleModels.map(model => <button key={model.id} onClick={() => selectModel(model.id)} className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left ${model.id === currentModel.id ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'}`}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] text-slate-400"><Sparkle size={16} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{model.name}</span><span className="block truncate text-[11px] text-slate-500">{model.description}</span></span>{model.id === currentModel.id ? <Check size={15} className="text-lime-300" /> : null}</button>)}</div>
+              <div className="max-h-[420px] overflow-y-auto p-2">{visibleModels.map(model => <button key={model.id} onClick={() => selectModel(model.id)} className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left ${model.id === currentModel.id ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'}`}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] text-slate-400"><Sparkle size={16} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{model.name}</span><span className="block truncate text-[11px] text-slate-500">{model.description}</span></span>{isVideo ? <span className="shrink-0 text-[11px] font-semibold text-lime-300">Up to {maxVideoDurationSeconds(model)}s</span> : null}{model.id === currentModel.id ? <Check size={15} className="text-lime-300" /> : null}</button>)}</div>
             </div>
           ) : null}
         </div>
+
+        {isVideo && <p className="text-xs text-slate-400">{currentModel.videoTaskMode === 'frame'
+          ? 'Frames: 1 first image + 1 optional last image.'
+          : `Reference limits: ${currentModel.maxReferenceImages || 0} images · ${currentModel.maxReferenceVideos || 0} videos · ${currentModel.maxReferenceAudios || 0} audio clips. Video/audio: up to ${maxVideoDurationSeconds(currentModel)}s total per type.`}</p>}
 
         <div className="grid grid-cols-2 gap-2">
           {(['resolution', 'ratio'] as const).map(type => {
@@ -103,7 +107,7 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
           })}
         </div>
 
-        {isVideo ? <div className="rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-3"><div className="mb-2 flex items-center justify-between text-[13px] font-bold"><span>Duration</span><span className="flex items-center gap-2">{currentModel.supportsAutoDuration ? <button disabled={edit} onClick={() => patch({ duration: autoDuration ? `${duration}s` : AUTO_DURATION })} title={edit ? 'Edit keeps the source video length' : 'Let the model pick the length'} className={`rounded-md px-1.5 py-0.5 text-[10px] ${autoDuration ? 'bg-[#d8ff05]/20 text-[#d8ff05]' : 'bg-white/[0.06] text-slate-400'}`}>Auto</button> : null}<span>{autoDuration ? 'auto' : `${duration}s`}</span></span></div><input type="range" min={minDuration} max={30} step={1} value={duration} disabled={autoDuration} onChange={event => patch({ duration: `${event.target.value}s` })} className={`h-1.5 w-full cursor-ew-resize accent-[#d8ff05] ${autoDuration ? 'opacity-40' : ''}`} /><div className="mt-1 flex justify-between text-[9px] text-slate-500"><span>{minDuration}s</span><span>30s</span></div></div> : null}
+        {isVideo ? <div className="rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-3"><div className="mb-2 flex items-center justify-between text-[13px] font-bold"><span>Duration</span><span className="flex items-center gap-2">{currentModel.supportsAutoDuration ? <button disabled={edit} onClick={() => patch({ duration: autoDuration ? `${duration}s` : AUTO_DURATION })} title={edit ? 'Edit keeps the source video length' : 'Let the model pick the length'} className={`rounded-md px-1.5 py-0.5 text-[10px] ${autoDuration ? 'bg-[#d8ff05]/20 text-[#d8ff05]' : 'bg-white/[0.06] text-slate-400'}`}>Auto</button> : null}<span>{autoDuration ? 'auto' : `${duration}s`}</span></span></div><input type="range" aria-label="Video duration" min={minDuration} max={maxVideoDurationSeconds(currentModel)} step={1} value={duration} disabled={autoDuration} onChange={event => patch({ duration: `${event.target.value}s` })} className={`h-1.5 w-full cursor-ew-resize accent-[#d8ff05] ${autoDuration ? 'opacity-40' : ''}`} /><div className="mt-1 flex justify-between text-[9px] text-slate-500"><span>{minDuration}s</span><span>{maxVideoDurationSeconds(currentModel)}s</span></div></div> : null}
 
         <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-[#242832] px-3.5 py-3 text-[13px] font-bold"><span>Batch size</span><div className="flex items-center gap-3"><button onClick={() => patch({ [isVideo ? 'numVideos' : 'numImages']: Math.max(1, batch - 1) })} className="text-slate-400 hover:text-white">−</button><span>{batch}/4</span><button onClick={() => patch({ [isVideo ? 'numVideos' : 'numImages']: Math.min(4, batch + 1) })} className="text-slate-400 hover:text-white">＋</button></div></div>
 

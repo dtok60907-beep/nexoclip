@@ -273,6 +273,8 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
 
   const renderItem = ({ model: m, category }) => {
     const isV2V = category === "v2v";
+    const durations = isV2V ? [] : category === "i2v" ? getDurationsForI2VModel(m.id) : getDurationsForModel(m.id);
+    const maxDuration = durations.length ? Math.max(...durations) : null;
     return (
     <div
       key={`${category}:${m.id}`}
@@ -317,7 +319,10 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
           )}
         </div>
       </div>
-      {selectedModel === m.id && <CheckSvg />}
+      <div className="flex shrink-0 items-center gap-2">
+        {maxDuration && <span className="rounded-full bg-lime-400/10 px-2 py-1 text-[10px] font-semibold text-lime-300">Up to {maxDuration}s</span>}
+        {selectedModel === m.id && <CheckSvg />}
+      </div>
     </div>
     );
   };
@@ -1197,6 +1202,10 @@ export default function VideoStudio({
       }
     } else if (imageMode) {
       const maxImgs = getMaxImagesForI2VModel(selectedModel);
+      if (uploadedImageUrls.length > maxImgs) {
+        toast.error(`This model supports at most ${maxImgs} reference images.`);
+        return;
+      }
       if (maxImgs > 2) {
         if (uploadedImageUrls.length === 0) {
           toast.error("Please upload at least one reference image first.");
@@ -2111,6 +2120,8 @@ export default function VideoStudio({
                 </div>
               )}
 
+              {imageMode && <span className="text-xs text-white/50">Images: up to {getMaxImagesForI2VModel(selectedModel)}{currentModelObj?.lastImageField ? ' (first / last frame)' : ''}</span>}
+
               {/* Duration btn */}
               {showDuration && (
                 <div className="relative">
@@ -2123,7 +2134,7 @@ export default function VideoStudio({
                   >
                     <PromptDurationIcon />
                     <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                      {selectedDuration}s
+                      {selectedDuration}s{getCurrentDurations(selectedModel).length > 1 ? ` · up to ${Math.max(...getCurrentDurations(selectedModel))}s` : ""}
                     </span>
                   </button>
                   {openDropdown === "duration" && (
@@ -2133,21 +2144,13 @@ export default function VideoStudio({
                       <PromptPopoverHeader>
                         Duration
                       </PromptPopoverHeader>
-                      <PromptMenuList>
-                        {getCurrentDurations(selectedModel).map((d) => (
-                          <PromptMenuItem
-                            key={d}
-                            selected={selectedDuration === d}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDuration(d);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            {d}s
-                          </PromptMenuItem>
-                        ))}
-                      </PromptMenuList>
+                      <div className="p-3 min-w-56">
+                        <input type="range" aria-label="Video duration" aria-valuetext={`${selectedDuration} seconds`} min={0} max={getCurrentDurations(selectedModel).length - 1} step={1}
+                          value={Math.max(0, getCurrentDurations(selectedModel).indexOf(selectedDuration))}
+                          onChange={(event) => setSelectedDuration(getCurrentDurations(selectedModel)[Number(event.target.value)])}
+                          className="w-full accent-lime-400" />
+                        <div className="flex justify-between text-xs"><span>{getCurrentDurations(selectedModel)[0]}s</span><strong>{selectedDuration}s</strong><span>{getCurrentDurations(selectedModel).at(-1)}s</span></div>
+                      </div>
                     </PromptPopover>
                   )}
                 </div>

@@ -7,7 +7,7 @@ test('exposes three dedicated BytePlus endpoint models as distinct choices', () 
   assert.equal(seedance20?.name, 'Seedance 2.0 Unfiltered · Omni')
   assert.equal(seedance20?.providerModel, 'seedance-2.0-unfiltered')
   assert.deepEqual(seedance20?.resolutions, ['720p', '1080p'])
-  assert.deepEqual(seedance20?.durations, ['5s', '10s', '15s'])
+  assert.deepEqual(seedance20?.durations, Array.from({ length: 12 }, (_, i) => `${i + 4}s`))
 
   const seedance25 = getModelById('seedance-2.5-unfiltered')
   assert.equal(seedance25?.name, 'Seedance 2.5 Unfiltered · Omni')
@@ -29,4 +29,12 @@ test('preserves standard BytePlus model routes', () => {
   // The Frame variant is the same BytePlus model.
   assert.equal(getModelById('seedance-2.5-frame')?.providerModel, 'dreamina-seedance-2-5-260628')
   assert.equal(getModelById('seedream-5-pro')?.providerModel, 'dola-seedream-5-0-pro-260628')
+})
+
+test('omni reference caps distinguish 2.0 and 2.5; frame variants do not accept omni references', () => {
+  for (const id of ['seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini', 'seedance-2.0-unfiltered', 'seedance-2.5', 'seedance-2.5-unfiltered']) {
+    const model = getModelById(id)!
+    assert.deepEqual([model.maxReferenceImages, model.maxReferenceVideos, model.maxReferenceAudios], id.includes('2.5') ? [30, 10, 10] : [9, 3, 3])
+    assert.equal(getModelById(`${id}-frame`)?.maxReferenceImages, undefined)
+  }
 })

@@ -9,9 +9,9 @@ const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from
 
 // name, provider model id as priced by the app, and the options the Studio offers.
 export const PUBLIC_VIDEO_MODELS = [
-  // Up to 30 s (first/last frame and omni reference); 4K only up to 16 s.
-  { id: 'seedance-2.5', name: 'Seedance 2.5', model: 'bytedance/seedance-2.5', resolutions: ['480p', '720p', '1080p', '4k'], durations: range(4, 30), maxSeconds: { '4k': 16 } },
-  { id: 'seedance-2.0', name: 'Seedance 2.0', model: 'bytedance/seedance-2.0', resolutions: ['480p', '720p', '1080p'], durations: [5, 10, 15] },
+  // Direct BytePlus Seedance 2.5: 4–30 s at 480p, 720p, or 1080p.
+  { id: 'seedance-2.5', name: 'Seedance 2.5', model: 'bytedance/seedance-2.5', resolutions: ['480p', '720p', '1080p'], durations: range(4, 30) },
+  { id: 'seedance-2.0', name: 'Seedance 2.0', model: 'bytedance/seedance-2.0', resolutions: ['480p', '720p', '1080p'], durations: range(4, 15) },
   { id: 'seedance-2.0-fast', name: 'Seedance 2.0 Fast', model: 'bytedance/seedance-2.0-fast', resolutions: ['480p', '720p'], durations: range(4, 15) },
   { id: 'seedance-2.0-mini', name: 'Seedance 2.0 Mini', model: 'bytedance/seedance-2.0-mini', resolutions: ['480p', '720p'], durations: range(4, 15) },
   { id: 'veo-3.1', name: 'Veo 3.1', model: 'google/veo-3.1', resolutions: ['1080p'], durations: [8], audio: true },

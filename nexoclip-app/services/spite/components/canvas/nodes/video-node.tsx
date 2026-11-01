@@ -16,7 +16,7 @@ import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { CREDIT_CONFIRM_THRESHOLD, formatCredits, formatCreditsShort, useGenerationCredits } from '@/lib/generation-credits'
 import { resolveNodeMediaUrl, resolveNodeReferenceUrl } from '@/lib/node-media'
-import { resolveGenerationSettings, settingsForModelChange } from '@/lib/generation-settings'
+import { resolveGenerationSettings, settingsForModelChange, minVideoDurationSeconds, maxVideoDurationSeconds } from '@/lib/generation-settings'
 import { FIRST_POLL_DELAY_MS, GIVE_UP_AFTER_MS, isHiddenDocument, nextPollDelay } from '@/lib/generation-poll-schedule'
 import { useNodeOwnershipLock } from '@/hooks/use-node-ownership-lock'
 import { MAX_VIDEO_PROMPT_CHARS } from '@/lib/prompt-limits'
@@ -812,8 +812,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     referenceGroups.push(...compiled.refGroups)
     // Omni source videos and audio clips come from @mentions, numbered
     // @Video N / @Audio N in mention order.
-    const connectedVideoUrls = compiled.videoUrls.slice(0, currentModel.maxReferenceVideos || 0)
-    const connectedAudioUrls = compiled.audioUrls.slice(0, currentModel.maxReferenceAudios || 0)
+    const connectedVideoUrls = compiled.videoUrls
+    const connectedAudioUrls = compiled.audioUrls
 
     // A request stopped before submit must say why. The in-node error strip
     // can sit under the node's control bar, so every stop also raises a toast.
@@ -825,6 +825,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       }
       setStatus('idle')
       setSubmittedAt(undefined)
+    }
+
+    const imageCount = referenceGroups.reduce((total, group) => total + group.urls.length, 0)
+    if (imageCount > (currentModel.maxReferenceImages || 0) || connectedVideoUrls.length > (currentModel.maxReferenceVideos || 0) || connectedAudioUrls.length > (currentModel.maxReferenceAudios || 0)) {
+      stopBeforeSubmit(`Reference limit: ${currentModel.maxReferenceImages || 0} images, ${currentModel.maxReferenceVideos || 0} videos, ${currentModel.maxReferenceAudios || 0} audio clips.`)
+      return
     }
 
     // Same limit the server enforces; @mentions expand into long reference
@@ -1616,17 +1622,23 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
             {/* Duration - only if model supports it */}
             {durationOptions.length > 0 && (
-              <ControlSelect 
-                value={duration || currentModel?.defaultDuration || ''} 
-                section="duration"
-                options={durationOptions}
-                onChange={(value) => {
+              <div className="flex flex-col gap-1 text-xs">
+                <span>Duration: {duration || currentModel?.defaultDuration} ({minVideoDurationSeconds(currentModel)}–{maxVideoDurationSeconds(currentModel)}s)</span>
+                <input type="range" aria-label="Video duration" min={minVideoDurationSeconds(currentModel)} max={maxVideoDurationSeconds(currentModel)} step={1}
+                  value={parseInt(duration, 10) || 5} disabled={isGenerating || editMode || duration === 'auto'}
+                  onChange={event => {
+                    const value = `${event.target.value}s`
+                    syncGuardRef.current.beginUserEdit()
+                    setDuration(value)
+                    patchPersistedNodeData({ duration: value })
+                  }} />
+                {currentModel?.supportsAutoDuration && <button type="button" disabled={isGenerating || editMode} aria-pressed={duration === 'auto'} onClick={() => {
+                  const value = duration === 'auto' ? '5s' : 'auto'
                   syncGuardRef.current.beginUserEdit()
                   setDuration(value)
                   patchPersistedNodeData({ duration: value })
-                }}
-                disabled={isGenerating || editMode}
-              />
+                }}>Auto duration: {duration === 'auto' ? 'on' : 'off'}</button>}
+              </div>
             )}
             
             {currentModel?.supportsDraft && (

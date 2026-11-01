@@ -5,7 +5,8 @@
 // are only sent as real frames when nothing else references the job.
 
 export function isSeedance25Model(model) {
-  return /seedance-2[.-]5/i.test(String(model || ''));
+  const id = String(model || '');
+  return /seedance-2[.-]5/i.test(id) || id.split('/').at(-1) === 'ep-20260904190604-p8pjl';
 }
 
 // Canvas also lists a wired first frame among referenceImages (as image 1, so

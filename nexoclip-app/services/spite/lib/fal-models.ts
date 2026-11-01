@@ -24,6 +24,7 @@ export interface ModelConfig {
   // return_last_frame: keep the final frame to start the next shot from.
   supportsLastFrame?: boolean
   // Most source videos / audio clips one request accepts.
+  maxReferenceImages?: number
   maxReferenceVideos?: number
   maxReferenceAudios?: number
   aspectRatios: string[]
@@ -85,6 +86,8 @@ export const IMAGE_MODELS: ModelConfig[] = [
   image('seedream-5-lite-unfiltered', 'Seedream 5.0 Lite Unfiltered', 'byteplus', 'ep-20260907150433-zg8fr', SEEDREAM_RATIOS, ['1K', '2K', '4K'], '1:1', '2K'),
 ]
 
+const SEEDANCE_20_DURATIONS = Array.from({ length: 12 }, (_, i) => `${i + 4}s`)
+
 const SEEDANCE_25_DURATIONS = Array.from({ length: 27 }, (_, i) => `${i + 4}s`)
 
 // Shared by both Seedance 2.5 task families.
@@ -102,6 +105,7 @@ const SEEDANCE_25_OMNI: Partial<ModelConfig> = {
   supportsExtend: true,
   supportsEdit: true,
   supportsReferenceAudio: true,
+  maxReferenceImages: 30,
   maxReferenceVideos: 10,
   maxReferenceAudios: 10,
   inputTypes: ['text', 'image', 'video'],
@@ -123,10 +127,10 @@ const frame = (model: ModelConfig, extra: Partial<ModelConfig> = {}): ModelConfi
   ...model, id: `${model.id}-frame`, videoTaskMode: 'frame', name: `${model.name} · Frame`, description: `${model.name} from a wired first (and optional last) frame`, ...extra,
 })
 
-const SEEDANCE_20 = video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s'])
-const SEEDANCE_20_FAST = video('seedance-2.0-fast', 'Seedance 2.0 Fast', 'dreamina-seedance-2-0-fast-260128', ['480p', '720p'], ['5s', '10s', '15s'])
-const SEEDANCE_20_MINI = video('seedance-2.0-mini', 'Seedance 2.0 Mini', 'dreamina-seedance-2-0-mini-260615', ['480p', '720p'], ['5s', '10s', '15s'])
-const SEEDANCE_20_UNFILTERED = video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s'])
+const SEEDANCE_20 = video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], SEEDANCE_20_DURATIONS)
+const SEEDANCE_20_FAST = video('seedance-2.0-fast', 'Seedance 2.0 Fast', 'dreamina-seedance-2-0-fast-260128', ['480p', '720p'], SEEDANCE_20_DURATIONS)
+const SEEDANCE_20_MINI = video('seedance-2.0-mini', 'Seedance 2.0 Mini', 'dreamina-seedance-2-0-mini-260615', ['480p', '720p'], SEEDANCE_20_DURATIONS)
+const SEEDANCE_20_UNFILTERED = video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], SEEDANCE_20_DURATIONS)
 const SEEDANCE_25 = video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
 const SEEDANCE_25_UNFILTERED = video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p'], SEEDANCE_25_DURATIONS)
 
@@ -134,6 +138,7 @@ const SEEDANCE_25_UNFILTERED = video('seedance-2.5-unfiltered', 'Seedance 2.5 Un
 // alongside it (the server rejects audio-only requests for 2.0).
 const SEEDANCE_20_OMNI: Partial<ModelConfig> = {
   supportsReferenceAudio: true,
+  maxReferenceImages: 9,
   maxReferenceVideos: 3,
   maxReferenceAudios: 3,
   inputTypes: ['text', 'image', 'video'],

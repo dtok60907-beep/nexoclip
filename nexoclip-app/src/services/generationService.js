@@ -75,6 +75,7 @@ export function validateVideoGenerationInput(input, options = {}) {
     parameters.canvasProjectId = canvasProjectId;
   }
   const isSeedance25 = isSeedance25Model(model);
+  const isSeedance20 = /seedance-v?2[.-]0/i.test(model);
   const taskType = supplied.omniReferenceTaskType;
   const isExtend = taskType === 'extend';
   const isEdit = taskType === 'edit';
@@ -87,7 +88,7 @@ export function validateVideoGenerationInput(input, options = {}) {
   if (supplied.duration !== undefined) {
     const duration = Number(supplied.duration);
     // -1 lets Seedance 2.5 pick the length itself (for edit: the source video's length).
-    if (!Number.isInteger(duration) || (duration !== -1 && (duration < (isSeedance25 ? 4 : 1) || duration > (isSeedance25 ? 30 : 60))) || (duration === -1 && !isSeedance25)) throw new Error('Video duration is invalid');
+    if (!Number.isInteger(duration) || (duration !== -1 && (duration < (isSeedance25 || isSeedance20 ? 4 : 1) || duration > (isSeedance25 ? 30 : isSeedance20 ? 15 : 60))) || (duration === -1 && !isSeedance25)) throw new Error('Video duration is invalid');
     parameters.duration = duration;
   }
   if (supplied.draft !== undefined && typeof supplied.draft !== 'boolean') throw new Error('Video draft must be boolean');
@@ -105,8 +106,8 @@ export function validateVideoGenerationInput(input, options = {}) {
   if (isEdit && supplied.duration !== undefined && Number(supplied.duration) !== -1) throw new Error('Seedance edit keeps the source video length; duration must be auto (-1)');
   for (const key of ['resolution', 'seed', 'draft', 'outputFormat', 'generateAudio', 'watermark', 'returnLastFrame', 'omniReferenceTaskType', 'draftTaskId']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
   // Seedance 2.5 takes up to 30 images + 10 videos + 10 audio clips per
-  // request; the 2.0 family takes 9 + 3 + 3 (images stay at the older 10).
-  const limits = { referenceImages: isSeedance25 ? 30 : 10, referenceVideos: isSeedance25 ? 10 : 3, referenceAudios: isSeedance25 ? 10 : 3 };
+  // request; the 2.0 family takes 9 + 3 + 3.
+  const limits = { referenceImages: isSeedance25 ? 30 : isSeedance20 ? 9 : 10, referenceVideos: isSeedance25 ? 10 : 3, referenceAudios: isSeedance25 ? 10 : 3 };
   for (const key of ['referenceImages', 'referenceVideos', 'referenceAudios']) {
     if (supplied[key] !== undefined) {
       if (Array.isArray(supplied[key]) && supplied[key].length > limits[key]) throw new Error(`Video ${key} must be tenant asset references: too many (${supplied[key].length}/${limits[key]})`);

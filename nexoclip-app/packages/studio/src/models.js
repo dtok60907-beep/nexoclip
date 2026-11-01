@@ -3464,6 +3464,8 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
 // these models instead accept an input_references list of plain image_url entries,
 // same shape as the image/video reference contract used elsewhere in this app.
 export const OPENROUTER_MULTI_REFERENCE_MODELS = new Set([
+  'seedance-v2.0-i2v',
+  'seedance-2-image-to-video-fast',
   'seedance-2-mini-image-to-video',
   'kling-o1-reference-to-video',
   'kling-o1-standard-reference-to-video',
@@ -8008,6 +8010,10 @@ export const getDurationsForModel = (modelId) => {
   if (!model) return [5];
   const durInput = model.inputs?.duration;
   if (durInput && durInput.enum) return durInput.enum;
+  if (durInput?.minValue !== undefined && durInput?.maxValue !== undefined) {
+    const step = durInput.step || 1;
+    return Array.from({ length: Math.floor((durInput.maxValue - durInput.minValue) / step) + 1 }, (_, i) => durInput.minValue + i * step);
+  }
   if (durInput) return [durInput.default || 5];
   return [];
 };
@@ -19763,9 +19769,9 @@ export const getDurationsForI2VModel = (modelId) => {
     const dur = model.inputs && model.inputs.duration;
     if (!dur) return [];
     if (dur.enum) return dur.enum;
-    if (dur.minValue !== undefined && dur.maxValue !== undefined && dur.step) {
+    if (dur.minValue !== undefined && dur.maxValue !== undefined) {
         const vals = [];
-        for (let v = dur.minValue; v <= dur.maxValue; v += dur.step) vals.push(v);
+        for (let v = dur.minValue; v <= dur.maxValue; v += (dur.step || 1)) vals.push(v);
         return vals;
     }
     if (dur.default) return [dur.default];
@@ -19795,6 +19801,20 @@ for (const model of [...t2vModels, ...i2vModels]) {
     ...inputs,
     resolution: { enum: resolutions, title: 'Resolution', name: 'resolution', type: 'string', default: resolutions.includes('720p') ? '720p' : resolutions[0] },
   };
+}
+
+// Direct BytePlus capabilities override legacy proxy schemas.
+// https://docs.byteplus.com/en/docs/ModelArk/seedance-2-5
+for (const model of [...t2vModels, ...i2vModels]) {
+  const provider = OPENROUTER_VIDEO_MODEL_MAP[model.id] || '';
+  const is25 = provider === 'bytedance/seedance-2.5' || provider === 'ep-20260904190604-p8pjl';
+  if (!is25 && !/seedance-2\.0/.test(provider)) continue;
+  model.inputs.duration = { title: 'Duration', name: 'duration', type: 'int', default: 5, minValue: 4, maxValue: is25 ? 30 : 15, step: 1 };
+  if (OPENROUTER_MULTI_REFERENCE_MODELS.has(model.id)) {
+    model.maxImages = is25 ? 30 : 9;
+    if (model.inputs[model.imageField]) model.inputs[model.imageField].maxItems = model.maxImages;
+  }
+  if (is25 && model.inputs.resolution?.enum) model.inputs.resolution.enum = model.inputs.resolution.enum.filter(r => r.toLowerCase() !== '4k');
 }
 
 export const getResolutionsForI2VModel = (modelId) => {

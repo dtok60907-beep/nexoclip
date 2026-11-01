@@ -5,7 +5,7 @@ import { formatCredits, resolutionLabel, useModelPrices, usePublicPlans } from '
 
 const rupiah = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
 
-// Durations offered at a resolution (Seedance 2.5 goes to 30 s, but 4K only to 16 s).
+// Durations offered at the selected resolution.
 const durationsAt = (m, resolution) => m.durations.filter((d) => d <= (m.maxSeconds?.[resolution] ?? Infinity));
 
 // Keep the chosen options when they exist on the new model, otherwise take its defaults.
@@ -17,7 +17,7 @@ function forModel(data, kind, id, prev) {
   const m = data.video.find((x) => x.id === id) || data.video[0];
   const resolution = m.resolutions.includes(prev.resolution) ? prev.resolution : (m.resolutions.includes('720p') ? '720p' : (m.resolutions[0] ?? ''));
   const ds = durationsAt(m, resolution);
-  const duration = ds.includes(prev.duration) ? prev.duration : (ds.includes(5) ? 5 : ds[0]);
+  const duration = ds.includes(prev.duration) ? prev.duration : ds[ds.length - 1];
   return { ...prev, kind, model: m.id, resolution, duration, audio: true };
 }
 
@@ -45,7 +45,7 @@ export default function CreditCalculator({ onChoosePlan }) {
   const [nextKey, setNextKey] = useState(1);
 
   if (!data) return <div className="grid gap-4 lg:grid-cols-2">{[0, 1].map((k) => <div key={k} className="h-96 animate-pulse rounded-2xl border border-white/10 bg-white/[.03]" />)}</div>;
-  const current = draft || forModel(data, 'video', 'seedance-2.5', { kind: 'video', model: '', resolution: '720p', duration: 5, audio: true, quantity: 1 });
+  const current = draft || forModel(data, 'video', 'seedance-2.5', { kind: 'video', model: '', resolution: '720p', duration: 30, audio: true, quantity: 1 });
   const set = (patch) => setDraft({ ...current, ...patch });
   const video = current.kind === 'video' ? data.video.find((m) => m.id === current.model) : null;
   const image = current.kind === 'image' ? data.image.find((m) => m.id === current.model) : null;

@@ -25,14 +25,19 @@ const DEFAULT_MODEL: Record<GenerationKind, string> = {
 
 export const AUTO_DURATION = 'auto'
 
-export function clampVideoDurationSeconds(value: unknown, min = 5): number {
-  return Math.min(30, Math.max(min, Number.parseInt(String(value || '5'), 10) || 5))
+export function clampVideoDurationSeconds(value: unknown, min = 5, max = 30): number {
+  return Math.min(max, Math.max(min, Number.parseInt(String(value || '5'), 10) || 5))
 }
 
-// Shortest duration the model lists (Seedance 2.5 goes down to 4s).
+// Duration bounds from the model catalog, shared by saved nodes and controls.
 export function minVideoDurationSeconds(model: ModelConfig | undefined): number {
   const seconds = (model?.durations || []).map((value) => Number.parseInt(value, 10)).filter(Number.isFinite)
-  return seconds.length ? Math.min(5, ...seconds) : 5
+  return seconds.length ? Math.min(...seconds) : 5
+}
+
+export function maxVideoDurationSeconds(model: ModelConfig | undefined): number {
+  const seconds = (model?.durations || []).map(value => Number.parseInt(value, 10)).filter(Number.isFinite)
+  return seconds.length ? Math.max(...seconds) : 5
 }
 
 function text(value: unknown): string {
@@ -56,7 +61,7 @@ export function resolveGenerationSettings(kind: GenerationKind, data: Record<str
   const autoDuration = kind === 'video' && Boolean(model?.supportsAutoDuration) && (editMode || text(d.duration) === AUTO_DURATION)
   const duration = kind !== 'video' ? ''
     : autoDuration ? AUTO_DURATION
-    : `${clampVideoDurationSeconds(text(d.duration) || model?.defaultDuration, minVideoDurationSeconds(model))}s`
+    : `${clampVideoDurationSeconds(text(d.duration) || model?.defaultDuration, minVideoDurationSeconds(model), maxVideoDurationSeconds(model))}s`
   const supportsAudio = kind === 'video' && Boolean(model?.supportsAudio)
   return {
     modelId,

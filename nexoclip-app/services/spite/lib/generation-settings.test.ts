@@ -19,7 +19,7 @@ test('explicit values win and legacy model ids resolve to their current model', 
   assert.equal(settings.modelId, 'seedance-2.0')
   assert.deepEqual(
     [settings.resolution, settings.aspectRatio, settings.duration, settings.enableAudio],
-    ['1080p', '9:16', '30s', false],
+    ['1080p', '9:16', '15s', false],
   )
 })
 
@@ -38,11 +38,11 @@ test('changing model keeps supported toggles and resets the rest to model defaul
   })
 })
 
-test('Seedance 2.5 offers 4s and auto duration, older models clamp to 5s', () => {
+test('Seedance 2.5 offers 4s and auto duration, 2.0 also starts at 4s', () => {
   assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.5', duration: '4s' }).duration, '4s')
   assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.5', duration: 'auto' }).duration, 'auto')
   assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', duration: 'auto' }).duration, '5s')
-  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', duration: '4s' }).duration, '5s')
+  assert.equal(resolveGenerationSettings('video', { modelId: 'seedance-2.0', duration: '4s' }).duration, '4s')
 })
 
 test('edit mode forces auto duration and replaces extend', () => {
@@ -72,4 +72,16 @@ test('Seedance 2.5 Frame defaults to adaptive and has no omni-only modes', () =>
   assert.equal(settings.extendMode, false)
   assert.equal(settings.editMode, false)
   assert.equal(settings.model?.videoTaskMode, 'frame')
+})
+
+test('saved durations clamp to each Seedance version including frame and endpoint variants', () => {
+  for (const id of ['seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini', 'seedance-2.0-unfiltered', 'seedance-2.5', 'seedance-2.5-unfiltered']) {
+    for (const suffix of ['', '-frame']) {
+      const modelId = `${id}${suffix}`
+      const maximum = id.includes('2.5') ? 30 : 15
+      assert.equal(resolveGenerationSettings('video', { modelId, duration: '3s' }).duration, '4s')
+      assert.equal(resolveGenerationSettings('video', { modelId, duration: '7s' }).duration, '7s')
+      assert.equal(resolveGenerationSettings('video', { modelId, duration: '31s' }).duration, `${maximum}s`)
+    }
+  }
 })

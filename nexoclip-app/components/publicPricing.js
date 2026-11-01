@@ -39,14 +39,14 @@ export function usePublicPlans() {
 export const formatCredits = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(v) || 0);
 export const resolutionLabel = (r) => (r === '4k' ? '4K' : r);
 
-// Each model at its usual setting: 720p when offered, 5 seconds when offered (else the
-// shortest), with audio; images at 1K when offered.
+// Compare videos at their longest supported duration for the displayed resolution;
+// images use 1K when offered. Counts use the price of that exact configuration.
 export function usualRows(data) {
   if (!data) return { video: [], image: [] };
   const video = data.video.map((m) => {
     const resolution = m.resolutions.includes('720p') ? '720p' : (m.resolutions[0] ?? '');
-    const duration = m.durations.includes(5) ? 5 : m.durations[0];
-    const config = [resolution && resolutionLabel(resolution), `${duration}s`, m.audio && 'audio'].filter(Boolean).join(' · ');
+    const duration = Math.max(...m.durations.filter(d => d <= (m.maxSeconds?.[resolution] ?? Infinity)));
+    const config = [resolution && resolutionLabel(resolution), `${duration}s per video`, m.audio && 'audio'].filter(Boolean).join(' · ');
     return { id: m.id, name: m.name, config, credits: m.prices[`${resolution}|${duration}|1`] };
   });
   const image = data.image.map((m) => {
