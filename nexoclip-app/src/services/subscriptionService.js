@@ -44,7 +44,7 @@ export function currentMonth(sub) {
 export function quotePlan(plan, sub, at = new Date(), promo = null) {
   if (!isActive(sub, at)) {
     const quote = { kind: 'new', amountIdr: plan.priceIdr, creditsNow: plan.monthlyCredits, startsAt: at.toISOString() };
-    if (!promo || plan.interval !== promo.interval) return quote;
+    if (!promo || plan.interval !== promo.interval || plan.tier !== 'starter') return quote;
     return { ...quote, amountIdr: promoPrice(plan.priceIdr, promo), listPriceIdr: plan.priceIdr, promoPercent: promo.percent, promoEndsAt: promo.endsAt };
   }
   const current = findSubscriptionPlan(sub.plan_code);

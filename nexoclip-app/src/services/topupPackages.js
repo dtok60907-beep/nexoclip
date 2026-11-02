@@ -7,9 +7,9 @@
 // findTopupPackage() no longer resolves that code, so it can't be purchased,
 // but past topups that used it still display fine from their stored row data.
 export const TOPUP_PACKAGES = Object.freeze([
-  { code: 'topup_149k', name: 'Starter', description: 'Try every studio and model. Credits run low fast once you get going.', priceIdr: 149_000, credits: 750, bonusPercent: 0, popular: false },
-  { code: 'topup_399k', name: 'Creator', description: 'Enough for a weekly content flow, but you\'ll still be counting credits.', priceIdr: 399_000, credits: 2_200, bonusPercent: 10, popular: true },
-  { code: 'topup_899k', name: 'Pro', description: 'For campaigns and client work, without worrying about running out.', priceIdr: 899_000, credits: 5_400, bonusPercent: 20, popular: false },
+  { code: 'topup_229k', name: 'Starter', description: 'Coba semua studio dan satu video Seedance 2.5 30 detik 720p.', priceIdr: 229_000, credits: 1_200, bonusPercent: 0, popular: false },
+  { code: 'topup_449k', name: 'Creator', description: 'Untuk konten rutin tiap minggu dengan ruang untuk revisi.', priceIdr: 449_000, credits: 2_800, bonusPercent: 0, popular: true },
+  { code: 'topup_999k', name: 'Pro', description: 'Untuk kampanye dan kerjaan klien tanpa cepat kehabisan kredit.', priceIdr: 999_000, credits: 6_500, bonusPercent: 0, popular: false },
 ]);
 
 export function findTopupPackage(code) {

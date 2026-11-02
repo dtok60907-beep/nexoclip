@@ -2,9 +2,9 @@
 // the whole feature stays off until SUBSCRIPTIONS_ENABLED=1. Yearly costs ten months and
 // still delivers its credits month by month. Credits expire at the end of their month.
 const TIERS = [
-  { tier: 'starter', name: 'Starter', monthlyPriceIdr: 149_000, monthlyCredits: 850 },
-  { tier: 'creator', name: 'Creator', monthlyPriceIdr: 399_000, monthlyCredits: 2_400, popular: true },
-  { tier: 'pro', name: 'Pro', monthlyPriceIdr: 899_000, monthlyCredits: 5_800 },
+  { tier: 'starter', name: 'Starter', monthlyPriceIdr: 229_000, monthlyCredits: 1_200 },
+  { tier: 'creator', name: 'Creator', monthlyPriceIdr: 449_000, monthlyCredits: 2_800, popular: true },
+  { tier: 'pro', name: 'Pro', monthlyPriceIdr: 999_000, monthlyCredits: 6_500 },
 ];
 const YEARLY_PRICE_MONTHS = 10;
 
