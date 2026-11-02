@@ -9,6 +9,7 @@ export function validateAuthFields({ email, password }) {
 }
 
 export function getAuthRequest(mode, values) {
+  if (mode === 'forgot') return { path: '/api/auth/password/forgot', options: { method: 'POST', body: JSON.stringify({ email: values.email.trim() }) } };
   return {
     path: mode === 'register' ? '/api/auth/register' : '/api/auth/login',
     options: {
@@ -17,6 +18,7 @@ export function getAuthRequest(mode, values) {
         email: values.email.trim(),
         password: values.password,
         ...(mode === 'register' && values.displayName?.trim() ? { displayName: values.displayName.trim() } : {}),
+        ...(mode === 'register' ? { marketingOptIn: Boolean(values.marketingOptIn) } : {}),
       }),
     },
   };

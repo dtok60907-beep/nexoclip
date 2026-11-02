@@ -70,7 +70,7 @@ function Showcase() {
 export default function StudioAuthModal({ initialMode = 'login', initialError = '', onClose, onAuthenticated }) {
   const dialog = useRef(null);
   const [mode, setMode] = useState(initialMode);
-  const [values, setValues] = useState({ email: '', password: '', displayName: '' });
+  const [values, setValues] = useState({ email: '', password: '', displayName: '', marketingOptIn: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
   const [google, setGoogle] = useState(false);
@@ -96,13 +96,14 @@ export default function StudioAuthModal({ initialMode = 'login', initialError = 
     event.preventDefault();
     if (busy) return;
     const errors = validateAuthFields(values);
-    const validation = errors.email || (mode === 'register' ? errors.password : !values.password && 'Password is required.');
+    const validation = errors.email || (mode === 'forgot' ? '' : mode === 'register' ? errors.password : !values.password && 'Password is required.');
     if (validation) return setError(validation);
     setBusy(true);
     setError('');
     try {
       const { path, options } = getAuthRequest(mode, values);
       const result = await saasFetch(path, options);
+      if (mode === 'forgot') { setError('Jika email terdaftar, link reset sudah dikirim.'); return; }
       remember('email');
       await onAuthenticated(result);
     } catch (cause) {
@@ -125,7 +126,7 @@ export default function StudioAuthModal({ initialMode = 'login', initialError = 
           <div className="m-auto w-full max-w-[380px]">
             <p className="text-center text-2xl font-bold tracking-tight text-white" style={{ fontFamily: 'var(--font-display)' }}>nexo<span className="font-medium text-white/55">clip</span><span className="text-[#d4ff64]">.</span></p>
             <h2 id="studio-auth-title" className="mt-4 text-center text-[26px] font-semibold leading-tight text-white">
-              {register ? 'Create your account' : 'Welcome to Nexo Clip'}
+              {register ? 'Create your account' : mode === 'forgot' ? 'Reset your password' : 'Welcome to Nexo Clip'}
             </h2>
             <p className="mt-1.5 text-center text-sm text-white/50">{register ? 'Start making videos and images in minutes.' : 'Sign in to generate and save your work.'}</p>
 
@@ -154,23 +155,25 @@ export default function StudioAuthModal({ initialMode = 'login', initialError = 
               <label className="grid gap-1.5 text-xs text-white/60">Email
                 <input className={input} type="email" autoComplete="email" autoFocus required placeholder="you@example.com" value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} disabled={busy} />
               </label>
-              <label className="grid gap-1.5 text-xs text-white/60">Password
+              {mode !== 'forgot' && <label className="grid gap-1.5 text-xs text-white/60">Password
                 <input className={input} type="password" autoComplete={register ? 'new-password' : 'current-password'} required minLength={register ? 12 : undefined}
                   placeholder={register ? 'At least 12 characters' : 'Your password'} value={values.password} onChange={(e) => setValues({ ...values, password: e.target.value })} disabled={busy} />
-              </label>
+              </label>}
+              {register && <label className="flex items-start gap-2 text-xs leading-5 text-white/55"><input type="checkbox" checked={values.marketingOptIn} onChange={(e) => setValues({ ...values, marketingOptIn: e.target.checked })} disabled={busy} className="mt-1 accent-[#d4ff64]" />Saya mau menerima update produk, tips, dan promo NexoClip via email.</label>}
               {error && <p className="studio-auth-error" role="alert">{error}</p>}
               <button type="submit" disabled={busy}
                 className="mt-1 h-[52px] rounded-xl bg-[#d4ff64] text-sm font-bold text-black transition hover:brightness-95 disabled:opacity-50">
-                {busy ? 'Please wait…' : register ? 'Create account' : 'Sign in'}
+                {busy ? 'Please wait…' : register ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Sign in'}
               </button>
             </form>
 
             <p className="mt-5 text-center text-sm text-white/50">
-              {register ? 'Already have an account?' : 'New to Nexo Clip?'}{' '}
-              <button type="button" disabled={busy} onClick={() => { setMode(register ? 'login' : 'register'); setError(''); }} className="font-semibold text-[#d4ff64] hover:underline">
-                {register ? 'Sign in' : 'Create an account'}
+              {mode === 'forgot' ? 'Remembered your password?' : register ? 'Already have an account?' : 'New to Nexo Clip?'}{' '}
+              <button type="button" disabled={busy} onClick={() => { setMode(mode === 'forgot' || register ? 'login' : 'register'); setError(''); }} className="font-semibold text-[#d4ff64] hover:underline">
+                {mode === 'forgot' ? 'Sign in' : register ? 'Sign in' : 'Create an account'}
               </button>
             </p>
+            {!register && mode !== 'forgot' && <button type="button" className="mt-3 w-full text-center text-xs text-white/45 hover:text-white" onClick={() => { setMode('forgot'); setError(''); }}>Forgot password?</button>}
 
             <p className="mt-6 border-t border-white/10 pt-5 text-center text-xs text-white/40">
               For teams and agencies: <a href="https://wa.me/6285183162659" target="_blank" rel="noopener noreferrer" className="text-white/70 underline underline-offset-2 hover:text-white">Enterprise plans</a>

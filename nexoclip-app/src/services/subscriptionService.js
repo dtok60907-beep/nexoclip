@@ -3,6 +3,7 @@ import { pakasirClient } from '../lib/billing/pakasirClient.js';
 import { appendCreditEntryInTransaction } from './creditService.js';
 import { findSubscriptionPlan, firstPaymentPromo, promoPrice, SUBSCRIPTION_PLANS, subscriptionsEnabled } from './subscriptionPlans.js';
 import { newOrderId, withQuery } from './topupService.js';
+import { sendSubscriptionReminders } from './subscriptionReminderService.js';
 
 const PROVIDER_KEY = 'pakasir';
 const fail = (message, status, code) => Object.assign(new Error(message), { status, code });
@@ -347,7 +348,9 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
         return count;
       });
     }
-    return { granted, expired: await expireCredits() };
+    const expired = await expireCredits();
+    await sendSubscriptionReminders({ pool: db(), env }).catch((error) => console.warn('Subscription reminder sweep failed:', error.message));
+    return { granted, expired };
   }
 
   // Unspent credits of expired lots leave the balance through the ledger.

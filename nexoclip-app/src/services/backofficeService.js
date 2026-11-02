@@ -7,6 +7,7 @@ import { createBackofficeRepository } from '../repositories/backofficeRepository
 import { appendCreditEntryInTransaction } from './creditService.js';
 import { isPlatformOperator, operatorError, mapEconomicsTotals } from './economicsService.js';
 import { contractPricing, costIdrPerCredit } from './enterpriseContractPricing.js';
+import { resendService } from './resendService.js';
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
 const text=(v,max,label)=>{if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw fail(`${label} tidak valid`);return v.trim();};
@@ -16,6 +17,18 @@ const profitShare=(amount,totalCredits,cost)=>{const share=Math.floor((1-totalCr
 const money=v=>{if(!['number','string'].includes(typeof v)||! /^\d+$/.test(String(v))||!Number.isSafeInteger(Number(v))||Number(v)<1||Number(v)>2000000000)throw fail('Harga IDR tidak valid');return Number(v);};
 export function createBackofficeService({ repository, env=process.env, grant=appendCreditEntryInTransaction }={}) {
  const repo=()=>repository||createBackofficeRepository(getPool());
+ const sendDocumentEmail=async (order, type)=>{
+  if(!env.RESEND_API_KEY||!order?.customer_user_id)return;
+  const pool=getPool();
+  const user=(await pool.query('SELECT email, display_name FROM users WHERE id=$1',[order.customer_user_id])).rows[0];
+  if(!user?.email)return;
+  const origin=String(env.APP_ORIGIN||env.NEXT_PUBLIC_APP_URL||'http://localhost:3000').replace(/\/$/,'');
+  const url=`${origin}/admin/documents/${order.id}?doc=${type}`;
+  const common={CUSTOMER_NAME:user.display_name||user.email,INVOICE_NUMBER:order.invoice_number,TOTAL:`Rp ${Number(order.amount_idr).toLocaleString('id-ID')}`,INVOICE_URL:`${origin}/admin/documents/${order.id}?doc=invoice`};
+  const templateId=type==='invoice'?(env.RESEND_TEMPLATE_INVOICE_ISSUED||'a8937a47-3a89-4b8d-ba54-eba5971e478b'):(env.RESEND_TEMPLATE_DOCUMENT_READY||'5899e1c5-e826-4127-80ea-4b69463366ee');
+  const variables=type==='invoice'?common:{CUSTOMER_NAME:common.CUSTOMER_NAME,DOCUMENT_TYPE:'Konfirmasi aktivasi kredit',DOCUMENT_URL:url};
+  await resendService.sendTemplate({to:user.email,templateId,variables});
+ };
  function authorize(userId) {if(!isPlatformOperator(userId,env))throw operatorError();}
  function ids(workspaceId,customerId) {if(!uuid(workspaceId)||(customerId&&!uuid(customerId)))throw fail('ID tidak valid');}
  return {
@@ -45,7 +58,7 @@ export function createBackofficeService({ repository, env=process.env, grant=app
    authorize(userId);ids(workspaceId,input.customerId);
    if(!uuid(input.requestKey))throw fail('Kunci permintaan tidak valid');
    const r=repo();
-   return r.transaction(async db=>{
+   const outcome=await r.transaction(async db=>{
     if(!await r.lockWorkspace(db,workspaceId))throw fail('Workspace tidak ditemukan',404);
     if(!input.customerId||!await r.member(db,workspaceId,input.customerId))throw fail('Pelanggan tidak ada pada workspace ini',404);
     const audit=(action,reason,entityId)=>r.audit(db,{workspaceId,userId,customerId:input.customerId,action,reason,entityId});
@@ -56,8 +69,9 @@ export function createBackofficeService({ repository, env=process.env, grant=app
      const order=await r.createOrder(db,v);
      if(order.customer_user_id!==v.customerId||order.company_name!==v.company||Number(order.credits)!==v.credits||Number(order.bonus_credits)!==v.bonus||Number(order.amount_idr)!==v.amount||order.notes!==v.notes)throw fail('Kunci permintaan telah dipakai untuk ketentuan berbeda',409);
      // Replays do not duplicate audit records.
-     if(order.invoice_number===v.invoice)await audit('invoice_created','Penawaran kredit bisnis dibuat',order.id);
-     return {order};
+     const created=order.invoice_number===v.invoice;
+     if(created)await audit('invoice_created','Penawaran kredit bisnis dibuat',order.id);
+     return {order,created};
     }
     if(input.action==='grant') {
      const amount=count(input.credits);const reason=text(input.reason,500,'Alasan');
@@ -91,12 +105,18 @@ export function createBackofficeService({ repository, env=process.env, grant=app
     if(paidAt<new Date(Date.now()-366*86400000))throw fail('Waktu pembayaran lebih dari setahun lalu. Periksa tahunnya.');
     const fee=input.fee===null||input.fee===undefined||input.fee===''?null:Number(input.fee);
     if(fee!==null&&(!['number','string'].includes(typeof input.fee)||! /^\d+(\.\d{1,2})?$/.test(String(input.fee))||!Number.isFinite(fee)||fee>Number(order.amount_idr)))throw fail('Biaya pembayaran tidak valid');
-    if(order.status==='completed'){if(order.payment_reference!==reference||Number(order.payment_fee_idr??-1)!==Number(fee??-1)||new Date(order.paid_at).getTime()!==paidAt.getTime())throw fail('Invoice sudah dibayar dengan bukti berbeda',409);return {order};}
+    if(order.status==='completed'){if(order.payment_reference!==reference||Number(order.payment_fee_idr??-1)!==Number(fee??-1)||new Date(order.paid_at).getTime()!==paidAt.getTime())throw fail('Invoice sudah dibayar dengan bukti berbeda',409);return {order,settledNow:false};}
     if(order.status!=='pending')throw fail('Invoice dibatalkan',409);
     const entry=await grant(db,{workspaceId,amount:Number(order.credits)+Number(order.bonus_credits),reason:'business_topup',idempotencyKey:`business:${order.id}`,metadata:{operatorId:userId,invoiceNumber:order.invoice_number,customerId:input.customerId,paymentReference:reference},creditLot:{sourceType:'paid',amountIdr:order.amount_idr,paymentFeeIdr:fee}});
     const result=await r.recordPayment(db,order,userId,reference,paidAt.toISOString(),fee,entry);
-    await audit('invoice_paid',`Pembayaran diverifikasi operator: ${reference}`,order.id);return {order:result};
+    await audit('invoice_paid',`Pembayaran diverifikasi operator: ${reference}`,order.id);return {order:result,settledNow:true};
    });
+   if(input.action==='create'&&outcome.created) await sendDocumentEmail(outcome.order,'invoice').catch(error=>console.warn('[backoffice] invoice email failed:',error.message));
+   if(input.action==='settle'&&outcome.settledNow) {
+    await sendDocumentEmail(outcome.order,'invoice').catch(error=>console.warn('[backoffice] invoice email failed:',error.message));
+    await sendDocumentEmail(outcome.order,'activation').catch(error=>console.warn('[backoffice] activation email failed:',error.message));
+   }
+   return outcome;
   }
  };
 }

@@ -67,7 +67,7 @@ function PlanDetail({ tab, rows, credits, popular, features }) {
     const n = Math.floor(credits / row.credits);
     return <li key={row.id} className="flex items-center justify-between gap-3 py-[7px]">
       <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config} · {number(Math.round(row.credits))} cr</span></span>
-      <span className="flex-none text-right"><b className={`text-[15px] tabular-nums ${popular ? 'text-[#d4ff64]' : 'text-white'}`}>{n ? number(n) : '–'}</b><span className="block text-[10px] text-white/30">/ month</span></span>
+      <span className="flex-none text-right"><b className={`text-[15px] tabular-nums ${popular ? 'text-[#d4ff64]' : 'text-white'}`}>{n ? `± ${number(n)}` : '–'}</b><span className="block text-[10px] text-white/30">{tab === 'image' ? 'gambar' : 'video'} / bulan</span></span>
     </li>;
   })}</ul>;
 }
@@ -196,7 +196,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
             <div className="mb-1 flex gap-1 rounded-full bg-white/[.05] p-1" role="tablist" aria-label="Plan details">
               {detailTabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={detailTab === id} onClick={() => setDetailTab(id)} className={`flex-1 rounded-full py-1.5 text-[11px] font-bold transition ${detailTab === id ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>{label}</button>)}
             </div>
-            {detailTab !== 'features' && <p className="mb-1 mt-2 text-[10px] uppercase tracking-[.14em] text-white/30">Per month, any one of</p>}
+            {detailTab !== 'features' && <p className="mb-1 mt-2 text-[10px] uppercase tracking-[.14em] text-white/30">Perkiraan output per bulan · pilih satu model</p>}
             <PlanDetail tab={detailTab} rows={detailTab === 'image' ? rows.image : rows.video} credits={plan.monthlyCredits} popular={plan.popular} features={planFeatures(modelCount)} />
           </div>
         </article>;
