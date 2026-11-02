@@ -1,13 +1,14 @@
 import Link from 'next/link';
-export const adminLinks = [['/admin', 'Overview'], ['/admin/customers', 'Customers'], ['/admin/accounts', 'Accounts'], ['/admin/billing', 'Business billing'], ['/admin/projects', 'Project & bagi hasil'], ['/admin/provider-billing', 'Billing provider'], ['/admin/transactions', 'Transactions'], ['/admin/credits', 'Credits'], ['/admin/jobs', 'Jobs'], ['/admin/economics', 'Economics'], ['/admin/analytics', 'Analytics'], ['/admin/models', 'Model & tarif']];
+export const adminLinks = [['/admin', 'Overview'], ['/admin/customer-health', 'Customer health'], ['/admin/customers', 'Customers'], ['/admin/accounts', 'Accounts'], ['/admin/billing', 'Business billing'], ['/admin/production-quotation', 'Production quotation'], ['/admin/projects', 'Project & bagi hasil'], ['/admin/provider-billing', 'Billing provider'], ['/admin/transactions', 'Transactions'], ['/admin/credits', 'Credits'], ['/admin/jobs', 'Jobs'], ['/admin/economics', 'Economics'], ['/admin/analytics', 'Analytics'], ['/admin/models', 'Model & tarif']];
 const groups = [
- { label: 'Workspace', paths: ['/admin','/admin/customers','/admin/accounts'] },
- { label: 'Billing & credits', paths: ['/admin/billing','/admin/projects','/admin/provider-billing','/admin/transactions','/admin/credits'] },
+ { label: 'Workspace', paths: ['/admin','/admin/customer-health','/admin/customers','/admin/accounts'] },
+ { label: 'Billing & credits', paths: ['/admin/billing','/admin/production-quotation','/admin/projects','/admin/provider-billing','/admin/transactions','/admin/credits'] },
  { label: 'Operasional', paths: ['/admin/jobs','/admin/economics','/admin/analytics','/admin/models'] },
 ];
 const icons = {
  '/admin': 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
  '/admin/customers': 'M3 21V7h18v14 M9 7V3h6v4 M7 11h2 M15 11h2 M7 15h2 M15 15h2 M10 21v-3h4v3',
+ '/admin/customer-health': 'M4 19V5 M10 19V9 M16 19V3 M22 19H2',
  '/admin/accounts': 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75 M13 7a4 4 0 1 1-8 0a4 4 0 0 1 8 0',
  '/admin/billing': 'M6 3h12v18l-3-2-3 2-3-2-3 2z M9 7h6 M9 11h6 M9 15h3',
  '/admin/projects': 'M3 7h18v13H3z M8 7V4h8v3 M3 12h18 M10 12v2h4v-2',
