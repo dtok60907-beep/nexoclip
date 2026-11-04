@@ -222,6 +222,14 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
         return { text: "LM", bg: "bg-teal-500/10 text-teal-400 border-teal-500/25" };
       case "alibaba":
         return { text: "AL", bg: "bg-sky-500/10 text-sky-400 border-sky-500/25" };
+      case "wan":
+        return { text: "W", bg: "bg-sky-500/10 text-sky-400 border-sky-500/25" };
+      case "berry":
+        return { text: "B", bg: "bg-pink-500/10 text-pink-400 border-pink-500/25" };
+      case "qwen":
+        return { text: "Q", bg: "bg-violet-500/10 text-violet-400 border-violet-500/25" };
+      case "zai":
+        return { text: "Z", bg: "bg-cyan-500/10 text-cyan-400 border-cyan-500/25" };
       case "leonardoai":
         return { text: "LE", bg: "bg-violet-500/10 text-violet-400 border-violet-500/25" };
       case "stability":
