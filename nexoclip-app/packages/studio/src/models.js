@@ -3366,6 +3366,8 @@ export const t2iModels = [
 ];
 
 export const OPENROUTER_IMAGE_MODEL_MAP = {
+  'z-image-spicy-pro': 'z-image-spicy-pro',
+  'qwen-image-edit-spicy': 'qwen-image-edit-spicy',
   'nano-banana': 'google/gemini-2.5-flash-image',
   'nano-banana-pro': 'google/gemini-3-pro-image',
   'nano-banana-2': 'google/gemini-3.1-flash-image',
@@ -3401,6 +3403,14 @@ export const OPENROUTER_IMAGE_MODEL_MAP = {
 // tier/quality variants (e.g. seedance-2-vip-*-1080p) have no clear OpenRouter
 // equivalent and stay on MuAPI.
 export const OPENROUTER_VIDEO_MODEL_MAP = {
+  'w3.0-video': 'w3.0-video',
+  'w3.0-video-pro': 'w3.0-video-pro',
+  'w3.0-video-prime': 'w3.0-video-prime',
+  'w3.0-video-prime-pro': 'w3.0-video-prime-pro',
+  'berry-1.0': 'berry-1.0',
+  'berry-1.0-pro': 'berry-1.0-pro',
+  'berry-1.0-turbo': 'berry-1.0-turbo',
+  'berry-1.0-turbo-pro': 'berry-1.0-turbo-pro',
   'seedance-v2.0-t2v': 'bytedance/seedance-2.0',
   'seedance-v2.0-i2v': 'bytedance/seedance-2.0',
   'veo3.1-text-to-video': 'google/veo-3.1',
@@ -3469,6 +3479,14 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
 // these models instead accept an input_references list of plain image_url entries,
 // same shape as the image/video reference contract used elsewhere in this app.
 export const OPENROUTER_MULTI_REFERENCE_MODELS = new Set([
+  'w3.0-video',
+  'w3.0-video-pro',
+  'w3.0-video-prime',
+  'w3.0-video-prime-pro',
+  'berry-1.0',
+  'berry-1.0-pro',
+  'berry-1.0-turbo',
+  'berry-1.0-turbo-pro',
   'seedance-v2.0-i2v',
   'seedance-2-image-to-video-fast',
   'seedance-2-mini-image-to-video',
