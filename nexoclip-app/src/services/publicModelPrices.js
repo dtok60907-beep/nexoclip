@@ -25,7 +25,7 @@ export const PUBLIC_VIDEO_MODELS = [
   { id: 'grok-imagine', name: 'Grok Imagine Video', model: 'x-ai/grok-imagine-video', resolutions: ['720p'], durations: [6, 10, 15] },
   { id: 'happyhorse-1.1', name: 'Happy Horse 1.1', model: 'alibaba/happyhorse-1.1', resolutions: ['720p', '1080p'], durations: range(3, 15) },
   { id: 'happyhorse-1.0', name: 'Happy Horse 1.0', model: 'alibaba/happyhorse-1.0', resolutions: ['720p', '1080p'], durations: range(3, 15) },
-  { id: 'wan-2.6', name: 'Wan 2.6', model: 'alibaba/wan-2.6', resolutions: ['720p', '1080p'], durations: [5, 10, 15] },
+  { id: 'wan-3.0', name: 'Wan 3.0', model: 'w3.0-video', resolutions: ['480p', '720p', '1080p'], durations: range(2, 30) },
 ];
 
 // Without reference images; each option is one output image.
