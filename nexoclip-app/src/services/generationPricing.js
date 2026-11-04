@@ -184,11 +184,17 @@ const PER_SECOND_VIDEO_PRICES = [
   // discount before this quote; NexoClip only adds its configured markup).
   { match: /^w3\.0-video$/, tiers: { '480p': 0.05, '720p': 0.10, '1080p': 0.20 } },
   { match: /^w3\.0-video-prime$/, tiers: { '480p': 0.068, '720p': 0.14, '1080p': 0.28 } },
+  { match: /^w3\.0-video-pro$/, tiers: { '1080p': 0.27, '2k': 0.30, '4k': 0.345 } },
+  { match: /^w3\.0-video-prime-pro$/, tiers: { '1080p': 0.39, '2k': 0.42, '4k': 0.465 } },
+  { match: /^berry-1\.0$/, tiers: { '480p': 0.075, '720p': 0.15, '1080p': 0.30 }, sourceLength: true },
+  { match: /^berry-1\.0-turbo$/, tiers: { '480p': 0.102, '720p': 0.21, '1080p': 0.42 }, sourceLength: true },
+  { match: /^berry-1\.0-pro$/, tiers: { '1080p': 0.27, '2k': 0.30, '4k': 0.345 }, sourceLength: true },
+  { match: /^berry-1\.0-turbo-pro$/, tiers: { '1080p': 0.39, '2k': 0.42, '4k': 0.465 }, sourceLength: true },
   // Video-to-video: the output is as long as the source video.
   { match: /^runway\/aleph-2$/, tiers: { any: 0.28 }, minimum: 0.56, sourceLength: true },
   { match: /^alibaba\/wan-2\.7$/, tiers: { any: 0.10 }, sourceLength: true },
 ];
-const RESOLUTION_ORDER = ['480p', '720p', '1080p', '4k'];
+const RESOLUTION_ORDER = ['480p', '720p', '1080p', '2k', '4k'];
 // Video Studio always sends a duration; this only covers a missing one.
 const ASSUMED_PER_SECOND_VIDEO_SECONDS = 8;
 

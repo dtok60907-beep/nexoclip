@@ -3535,7 +3535,7 @@ export const getAspectRatiosForModel = (modelId) => {
 const MULEROUTER_VIDEO_MODELS = [
   ...['w3.0-video', 'w3.0-video-pro', 'w3.0-video-prime', 'w3.0-video-prime-pro', 'berry-1.0', 'berry-1.0-pro', 'berry-1.0-turbo', 'berry-1.0-turbo-pro'].map((id) => ({
     id, name: id.startsWith('w3.0') ? `Wan 3.0${id.includes('prime') ? ' Prime' : ''}${id.includes('pro') ? ' Pro' : ''}` : id.replace(/(^|-)([a-z])/g, (_, p, c) => `${p}${c.toUpperCase()}`), provider: id.startsWith('w3.0') ? 'alibaba' : 'berry', provider_name: id.startsWith('w3.0') ? 'Alibaba · Wan' : 'Berry', endpoint: id,
-    inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, aspect_ratio: { enum: ['16:9', '9:16', '1:1'], type: 'string', title: 'Aspect Ratio', name: 'aspect_ratio', default: '16:9' }, duration: { enum: Array.from({ length: 27 }, (_, i) => i + 4), type: 'integer', title: 'Duration', name: 'duration', default: 5 } },
+    inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, aspect_ratio: { enum: ['16:9', '9:16', '1:1'], type: 'string', title: 'Aspect Ratio', name: 'aspect_ratio', default: '16:9' }, resolution: { enum: /pro/.test(id) ? ['1080p', '2K', '4K'] : ['480p', '720p', '1080p'], type: 'string', title: 'Resolution', name: 'resolution', default: /pro/.test(id) ? '1080p' : '720p' }, duration: { enum: Array.from({ length: 29 }, (_, i) => i + 2), type: 'integer', title: 'Duration', name: 'duration', default: 5 } },
   })),
 ];
 export const t2vModels = [
