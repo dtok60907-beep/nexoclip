@@ -5,6 +5,7 @@ import { createGoogleImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
 import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
+import { createMuleRouterAdapter } from './mulerouter/adapter.js';
 import { getDirectProvider, resolveDirectProviderModel, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
 import { randomUUID } from 'node:crypto';
 
@@ -31,6 +32,7 @@ function directConfigured(env, provider) {
   if (provider === 'google') return Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
   if (provider === 'openai') return Boolean(env.OPENAI_API_KEY);
   if (provider === 'byteplus') return Boolean(env.BYTEPLUS_API_KEY && env.BYTEPLUS_BASE_URL);
+  if (provider === 'mulerouter') return Boolean(env.MULEROUTER_API_KEY);
   return false;
 }
 
@@ -52,6 +54,7 @@ function directAdapter(env, provider, operation, fetchImpl) {
   if (operation === 'image' && provider === 'byteplus') return createBytePlusImageAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl });
   if (operation === 'video' && provider === 'byteplus') return createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl });
   if (operation === 'video' && provider === 'openai') return createOpenAIVideoAdapter({ apiKey: env.OPENAI_API_KEY, fetch: fetchImpl });
+  if (provider === 'mulerouter') return createMuleRouterAdapter({ apiKey: env.MULEROUTER_API_KEY, baseUrl: env.MULEROUTER_BASE_URL, vendor: env.MULEROUTER_DEFAULT_VENDOR, fetch: fetchImpl });
   return null;
 }
 
@@ -137,6 +140,12 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       const directParams = { ...params, model: directModel, ...(mapping.imageSizing ? { imageSizing: mapping.imageSizing } : {}) };
       return observeDispatch(operation, 'byteplus',
         () => operation === 'image' ? adapter.generate(directParams) : adapter.submit(directParams), options);
+    }
+    if (mapping?.provider === 'mulerouter') {
+      if (!directConfigured(env, 'mulerouter')) throw createDirectProviderUnavailableError(params.model, 'mulerouter');
+      const adapter = directAdapter(env, 'mulerouter', operation, fetchImpl);
+      return observeDispatch(operation, 'mulerouter',
+        () => operation === 'image' ? adapter.generate(params) : adapter.submit(params), options);
     }
     return withFallback(operation, params, primary, options);
   }

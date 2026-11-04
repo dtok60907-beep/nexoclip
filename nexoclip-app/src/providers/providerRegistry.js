@@ -1,4 +1,17 @@
 const DIRECT_MODEL_MAP = new Map([
+  // MuleRouter model IDs from the public model catalog. The adapter keeps the
+  // vendor route configurable because MuleRouter can expose the same model ID
+  // under a different vendor namespace.
+  ['w3.0-video', { provider: 'mulerouter', model: 'w3.0-video' }],
+  ['w3.0-video-pro', { provider: 'mulerouter', model: 'w3.0-video-pro' }],
+  ['w3.0-video-prime', { provider: 'mulerouter', model: 'w3.0-video-prime' }],
+  ['w3.0-video-prime-pro', { provider: 'mulerouter', model: 'w3.0-video-prime-pro' }],
+  ['berry-1.0', { provider: 'mulerouter', model: 'berry-1.0' }],
+  ['berry-1.0-pro', { provider: 'mulerouter', model: 'berry-1.0-pro' }],
+  ['berry-1.0-turbo', { provider: 'mulerouter', model: 'berry-1.0-turbo' }],
+  ['berry-1.0-turbo-pro', { provider: 'mulerouter', model: 'berry-1.0-turbo-pro' }],
+  ['z-image-spicy-pro', { provider: 'mulerouter', model: 'z-image-spicy-pro' }],
+  ['qwen-image-edit-spicy', { provider: 'mulerouter', model: 'qwen-image-edit-spicy' }],
   ['google-imagen4', { provider: 'google', model: 'imagen-4.0-generate-001' }],
   ['google-imagen4-fast', { provider: 'google', model: 'imagen-4.0-fast-generate-001' }],
   ['google-imagen4-ultra', { provider: 'google', model: 'imagen-4.0-ultra-generate-001' }],

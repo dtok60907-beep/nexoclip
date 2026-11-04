@@ -1,4 +1,8 @@
 // Auto-generated from models_dump.json
+const MULEROUTER_IMAGE_MODELS = [
+  { id: 'z-image-spicy-pro', name: 'Z Image Spicy Pro', provider: 'mulerouter', provider_name: 'MuleRouter', endpoint: 'z-image-spicy-pro', inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, aspect_ratio: { enum: ['1:1', '16:9', '9:16'], type: 'string', title: 'Aspect Ratio', name: 'aspect_ratio', default: '1:1' } } },
+  { id: 'qwen-image-edit-spicy', name: 'Qwen Image Edit Spicy', provider: 'mulerouter', provider_name: 'MuleRouter', endpoint: 'qwen-image-edit-spicy', inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, image: { type: 'string', title: 'Reference Image', name: 'image' } } },
+];
 export const t2iModels = [
   {
     "id": "nano-banana",
@@ -3357,7 +3361,8 @@ export const t2iModels = [
     },
     "provider": "alibaba",
     "provider_name": "Alibaba"
-  }
+  },
+  ...MULEROUTER_IMAGE_MODELS
 ];
 
 export const OPENROUTER_IMAGE_MODEL_MAP = {
@@ -3509,6 +3514,12 @@ export const getAspectRatiosForModel = (modelId) => {
 // ==========================================
 // Text-to-Video Models
 // ==========================================
+const MULEROUTER_VIDEO_MODELS = [
+  ...['w3.0-video', 'w3.0-video-pro', 'w3.0-video-prime', 'w3.0-video-prime-pro', 'berry-1.0', 'berry-1.0-pro', 'berry-1.0-turbo', 'berry-1.0-turbo-pro'].map((id) => ({
+    id, name: id.replace(/(^|-)([a-z])/g, (_, p, c) => `${p}${c.toUpperCase()}`), provider: 'mulerouter', provider_name: 'MuleRouter', endpoint: id,
+    inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, aspect_ratio: { enum: ['16:9', '9:16', '1:1'], type: 'string', title: 'Aspect Ratio', name: 'aspect_ratio', default: '16:9' }, duration: { enum: Array.from({ length: 27 }, (_, i) => i + 4), type: 'integer', title: 'Duration', name: 'duration', default: 5 } },
+  })),
+];
 export const t2vModels = [
   {
     "id": "seedance-lite-t2v",
@@ -7992,7 +8003,8 @@ export const t2vModels = [
     },
     "provider": "minimax",
     "provider_name": "Minimax"
-  }
+  },
+  ...MULEROUTER_VIDEO_MODELS
 ];
 
 export const getVideoModelById = (id) => t2vModels.find(m => m.id === id);
