@@ -45,10 +45,13 @@ const PLAN_AUDIENCE = {
 function planFeatures(modelCount) {
   return [
     [modelCount ? `All ${modelCount} AI models` : 'All AI models', 'Video and image, no model locked'],
-    ['Image Studio and Video Studio', 'Text, image and reference to video'],
+    ['Image Studio', 'Text-to-image, image editing and references'],
+    ['Video Studio', 'Text, image and reference-to-video workflows'],
     ['Canvas', 'Chain prompts, references and results'],
-    ['AI Director', 'A finished video from a brief'],
+    ['AI Director', 'Create a finished video from a brief'],
     ['Failed generations refunded', 'Credits come back automatically'],
+    ['Watermark-free exports', 'Clean output for your content'],
+    ['Commercial use', 'Use your generated content commercially'],
     ['Top up anytime', 'Top-up credits never expire'],
     ['Upgrade anytime', 'Prorated for the rest of your period'],
     ['QRIS or virtual account', 'No card, no auto-debit'],
@@ -65,7 +68,7 @@ function PlanDetail({ tab, rows, credits, popular, features }) {
   }
   return <ul className="divide-y divide-white/[.06]">{rows.map((row) => <li key={row.id} className="flex items-center gap-3 py-[7px]">
     <span className={`grid h-4 w-4 flex-none place-items-center rounded-full text-[10px] font-black ${popular ? 'bg-[#d4ff64] text-black' : 'bg-white/10 text-[#d4ff64]'}`}>✓</span>
-    <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config}</span></span>
+    <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span></span>
   </li>)}</ul>;
 }
 
