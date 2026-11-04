@@ -62,7 +62,7 @@ test('submits Qwen Image Edit Spicy with its required primary image field', asyn
     seed: 7,
     referenceImages: ['https://cdn.example/source.png', 'https://cdn.example/style.png'],
   });
-  assert.match(request.url, /\/vendors\/alibaba\/v1\/qwen-image-edit-spicy\/generation$/);
+  assert.match(request.url, /\/vendors\/carrothub\/v1\/qwen-image-edit-spicy\/generation$/);
   assert.equal(request.body.image, 'https://cdn.example/source.png');
   assert.deepEqual(request.body.reference_images, ['https://cdn.example/style.png']);
   assert.equal(request.body.ratio, undefined);
