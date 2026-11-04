@@ -1,6 +1,9 @@
 const DEFAULT_BASE_URL = 'https://api.mulerouter.ai';
 const DEFAULT_VENDOR = 'carrothub';
 const MODEL_VENDORS = Object.freeze({
+  'wan-2.5': 'alibaba',
+  'wan-2.6': 'alibaba',
+  'wan-2.7': 'alibaba',
   'w3.0-video': 'alibaba',
   'w3.0-video-pro': 'alibaba',
   'w3.0-video-prime': 'alibaba',

@@ -73,6 +73,10 @@ const DIRECT_BYTEPLUS_SEEDANCE_MODELS = new Set([
 
 const DIRECT_PREFIXES = [
   ['mulerouter/', 'mulerouter'],
+  // Wan models are exposed by MuleRouter under the Alibaba vendor route.
+  // Keep the public model IDs namespaced for pricing/UI compatibility, but
+  // route them directly instead of sending them through OpenRouter first.
+  ['alibaba/wan-', 'mulerouter'],
   ['google/', 'google'],
   ['gemini-', 'google'],
   ['imagen-', 'google'], 

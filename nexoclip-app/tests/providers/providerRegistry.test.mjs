@@ -19,6 +19,11 @@ test('maps supported generator model IDs to direct providers', () => {
   assert.equal(getDirectProvider('flux-2-pro'), null);
 });
 
+test('routes Alibaba Wan models through MuleRouter directly', () => {
+  assert.deepEqual(getDirectProvider('alibaba/wan-2.6'), { provider: 'mulerouter', model: 'wan-2.6' });
+  assert.deepEqual(getDirectProvider('alibaba/wan-2.7'), { provider: 'mulerouter', model: 'wan-2.7' });
+});
+
 test('only classifies transient failures as retryable', () => {
   for (const status of [408, 409, 429, 500, 502, 503, 504]) assert.equal(isRetryableProviderError({ status }), true);
   assert.equal(isRetryableProviderError({ status: 401 }), false);
