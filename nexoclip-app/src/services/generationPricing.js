@@ -305,6 +305,10 @@ const OPENROUTER_IMAGE_SNAPSHOT = {
   // output-token equivalent keeps the existing reservation/settlement path.
   'z-image-spicy-pro': { prompt: 0, completion: 0, image_output: 0.03 / 4160 },
   'qwen-image-edit-spicy': { prompt: 0, completion: 0, image_output: 0.05 / 4160 },
+  'mulerouter/z-image-spicy-pro': { prompt: 0, completion: 0, image_output: 0.03 / 4160 },
+  'alibaba/z-image-spicy-pro': { prompt: 0, completion: 0, image_output: 0.03 / 4160 },
+  'mulerouter/qwen-image-edit-spicy': { prompt: 0, completion: 0, image_output: 0.05 / 4160 },
+  'alibaba/qwen-image-edit-spicy': { prompt: 0, completion: 0, image_output: 0.05 / 4160 },
 };
 
 // Output tokens per generated image, used for the reservation only (the
