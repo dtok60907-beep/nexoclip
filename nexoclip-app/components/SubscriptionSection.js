@@ -68,7 +68,7 @@ function PlanDetail({ tab, rows, credits, popular, features }) {
   }
   return <ul className="divide-y divide-white/[.06]">{rows.map((row) => <li key={row.id} className="flex items-center gap-3 py-[7px]">
     <span className={`grid h-4 w-4 flex-none place-items-center rounded-full text-[10px] font-black ${popular ? 'bg-[#d4ff64] text-black' : 'bg-white/10 text-[#d4ff64]'}`}>✓</span>
-    <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span></span>
+    <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span>{row.duration ? <span className="block text-[11px] text-white/35">hingga {row.duration} detik</span> : null}</span>
   </li>)}</ul>;
 }
 
