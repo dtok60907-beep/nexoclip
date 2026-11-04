@@ -18,12 +18,12 @@ test('submits, polls and downloads a MuleRouter task using the documented vendor
     return response({}, 200, { 'content-type': 'video/mp4' });
   } });
   const submitted = await adapter.submit({ model: 'w3.0-video', prompt: 'a product film', duration: 10, generateAudio: true });
-  assert.equal(submitted.providerRequestId, 'mulerouter:carrothub:w3.0-video:task-1');
+  assert.equal(submitted.providerRequestId, 'mulerouter:alibaba:w3.0-video:task-1');
   const status = await adapter.poll(submitted.providerRequestId);
   assert.equal(status.status, 'completed');
   const downloaded = await adapter.downloadContent(submitted.providerRequestId, 0, status.output);
   assert.equal(downloaded.contentType, 'video/mp4');
-  assert.match(calls[0].url, /\/vendors\/carrothub\/v1\/w3\.0-video\/generation$/);
+  assert.match(calls[0].url, /\/vendors\/alibaba\/v1\/w3\.0-video\/generation$/);
   assert.equal(JSON.parse(calls[0].options.body).audio, true);
   assert.equal(calls[0].options.headers.Authorization, 'Bearer test-key');
 });

@@ -1,5 +1,11 @@
 const DEFAULT_BASE_URL = 'https://api.mulerouter.ai';
 const DEFAULT_VENDOR = 'carrothub';
+const MODEL_VENDORS = Object.freeze({
+  'w3.0-video': 'alibaba',
+  'w3.0-video-pro': 'alibaba',
+  'w3.0-video-prime': 'alibaba',
+  'w3.0-video-prime-pro': 'alibaba',
+});
 
 export const MULEROUTER_MODELS = Object.freeze([
   'w3.0-video', 'w3.0-video-pro', 'w3.0-video-prime', 'w3.0-video-prime-pro',
@@ -51,20 +57,26 @@ function routeFor(model, vendor) {
   if (!raw) throw new TypeError('model is required');
   const slash = raw.indexOf('/');
   if (raw.startsWith('mulerouter/') && slash > 0) return { vendor: raw.slice(slash + 1).split('/')[0], model: raw.slice(raw.indexOf('/', slash + 1) + 1) || raw.slice(slash + 1) };
-  return { vendor: vendor || DEFAULT_VENDOR, model: raw };
+  return { vendor: MODEL_VENDORS[raw] || vendor || DEFAULT_VENDOR, model: raw };
 }
 
 function requestBody(params) {
   const body = { prompt: params.prompt };
   if (params.duration !== undefined) body.duration = Number(params.duration);
   if (params.resolution) body.resolution = params.resolution;
-  if (params.aspectRatio) body.aspect_ratio = params.aspectRatio;
+  if (params.aspectRatio) body.ratio = params.aspectRatio;
   if (params.seed !== undefined) body.seed = params.seed;
   if (params.generateAudio !== undefined) body.audio = Boolean(params.generateAudio);
   if (params.quality) body.quality = params.quality;
-  if (params.referenceImages?.length) body.image_urls = params.referenceImages;
-  if (params.referenceVideos?.length) body.video_urls = params.referenceVideos;
-  if (params.frameImages?.length) body.frame_images = params.frameImages;
+  if (params.referenceImages?.length) body.reference_images = params.referenceImages;
+  if (params.referenceVideos?.length) body.reference_videos = params.referenceVideos;
+  if (params.referenceAudios?.length) body.reference_audios = params.referenceAudios;
+  if (params.frameImages?.length) {
+    const first = params.frameImages.find((frame) => frame?.frame_type === 'first_frame' || frame?.frameType === 'first_frame')?.image_url?.url;
+    const last = params.frameImages.find((frame) => frame?.frame_type === 'last_frame' || frame?.frameType === 'last_frame')?.image_url?.url;
+    if (first) body.first_frame = first;
+    if (last) body.last_frame = last;
+  }
   return { ...body, ...(params.muleRouterPayload || {}) };
 }
 
