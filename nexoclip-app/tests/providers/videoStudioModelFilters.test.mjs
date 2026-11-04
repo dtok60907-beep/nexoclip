@@ -116,9 +116,13 @@ test('first-last-frame and plain image-to-video ids are NOT flagged as multi-ref
   }
 });
 
-test('no new OPENROUTER_V2V_MODEL_MAP entries were added this pass', () => {
+test('Video Tools includes Wan 3.0 reference-video variants', () => {
   assert.deepEqual(Object.keys(OPENROUTER_V2V_MODEL_MAP).sort(), [
     'runway-aleph-v2v',
+    'w3.0-video',
+    'w3.0-video-prime',
+    'w3.0-video-prime-pro',
+    'w3.0-video-pro',
     'wan2.7-video-edit',
     'wan2.7-video-extend',
   ]);

@@ -20,7 +20,7 @@ export interface EffectiveGenerationSettings {
 
 const DEFAULT_MODEL: Record<GenerationKind, string> = {
   image: 'nano-banana-pro',
-  video: 'seedance-2.0',
+  video: 'seedance-2.5',
 }
 
 export const AUTO_DURATION = 'auto'

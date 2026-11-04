@@ -145,7 +145,7 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       if (!directConfigured(env, 'mulerouter')) throw createDirectProviderUnavailableError(params.model, 'mulerouter');
       const adapter = directAdapter(env, 'mulerouter', operation, fetchImpl);
       return observeDispatch(operation, 'mulerouter',
-        () => operation === 'image' ? adapter.generate(params) : adapter.submit(params), options);
+        () => operation === 'image' ? adapter.generate({ ...params, model: mapping.model }) : adapter.submit({ ...params, model: mapping.model }), options);
     }
     return withFallback(operation, params, primary, options);
   }

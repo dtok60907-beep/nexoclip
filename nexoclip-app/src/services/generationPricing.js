@@ -213,6 +213,7 @@ function inputImageCount(parameters = {}) {
 }
 
 export function perSecondVideoCostUsd(model, parameters = {}) {
+  model = String(model).replace(/^mulerouter\//, '');
   const basis = videoSecondCostBasis(model, parameters);
   if (!basis) return null;
   const entry = PER_SECOND_VIDEO_PRICES.find((candidate) => candidate.match.test(String(model)));
@@ -223,6 +224,7 @@ export function perSecondVideoCostUsd(model, parameters = {}) {
 }
 
 function videoSecondCostBasis(model, parameters = {}) {
+  model = String(model).replace(/^mulerouter\//, '');
   const entry = PER_SECOND_VIDEO_PRICES.find((candidate) => candidate.match.test(String(model)));
   if (!entry) return null;
   const resolution = String(parameters.resolution || '1080p').toLowerCase();

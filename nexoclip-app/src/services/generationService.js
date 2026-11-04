@@ -75,6 +75,8 @@ export function validateVideoGenerationInput(input, options = {}) {
     parameters.canvasProjectId = canvasProjectId;
   }
   const isSeedance25 = isSeedance25Model(model);
+  const isWan3 = /^(?:mulerouter\/)?w3\.0-video(?:-prime)?(?:-pro)?$/.test(model);
+  if (isWan3 && supplied.duration !== undefined && (!Number.isInteger(Number(supplied.duration)) || Number(supplied.duration) < 2 || Number(supplied.duration) > 30)) throw new Error('Wan 3.0 duration must be 2–30 seconds');
   const isSeedance20 = /seedance-v?2[.-]0/i.test(model);
   const taskType = supplied.omniReferenceTaskType;
   const isExtend = taskType === 'extend';
@@ -108,6 +110,7 @@ export function validateVideoGenerationInput(input, options = {}) {
   // Seedance 2.5 takes up to 30 images + 10 videos + 10 audio clips per
   // request; the 2.0 family takes 9 + 3 + 3.
   const limits = { referenceImages: isSeedance25 ? 30 : isSeedance20 ? 9 : 10, referenceVideos: isSeedance25 ? 10 : 3, referenceAudios: isSeedance25 ? 10 : 3 };
+  if (isWan3) { limits.referenceVideos = 5; limits.referenceAudios = 5; }
   for (const key of ['referenceImages', 'referenceVideos', 'referenceAudios']) {
     if (supplied[key] !== undefined) {
       if (Array.isArray(supplied[key]) && supplied[key].length > limits[key]) throw new Error(`Video ${key} must be tenant asset references: too many (${supplied[key].length}/${limits[key]})`);
@@ -121,6 +124,7 @@ export function validateVideoGenerationInput(input, options = {}) {
     throw new Error('Audio references need an image or video reference on this model');
   }
   if (supplied.frameImages !== undefined) {
+    if (isWan3 && supplied.frameImages.length && ((supplied.referenceVideos || []).length || (supplied.referenceAudios || []).length || (supplied.referenceImages || []).some(url => !supplied.frameImages.some(frame => frame.url === url)))) throw new Error('Wan 3.0 keyframes cannot be combined with Omni references');
     if (!Array.isArray(supplied.frameImages) || supplied.frameImages.length > 2 || !supplied.frameImages.every((frame) => validAssetReferences([frame?.url], options) && ['first_frame', 'last_frame'].includes(frame.frameType))) throw new Error('Video frame images must be tenant asset references');
     parameters.frameImages = supplied.frameImages;
   }

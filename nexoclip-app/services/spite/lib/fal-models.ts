@@ -1,6 +1,6 @@
 export type ModelCategory = 'image' | 'video'
 export type InputType = 'text' | 'image' | 'video'
-export type DirectProvider = 'google' | 'openai' | 'byteplus'
+export type DirectProvider = 'google' | 'openai' | 'byteplus' | 'mulerouter'
 
 export interface ModelConfig {
   id: string
@@ -146,6 +146,14 @@ const SEEDANCE_20_OMNI: Partial<ModelConfig> = {
 
 // The omni entry keeps each model's original id so existing nodes stay valid.
 export const VIDEO_MODELS: ModelConfig[] = [
+  ...['w3.0-video', 'w3.0-video-pro', 'w3.0-video-prime', 'w3.0-video-prime-pro'].flatMap(id => {
+    const name = `Wan 3.0${id.includes('prime') ? ' Prime' : ''}${id.endsWith('-pro') ? ' Pro' : ''}`
+    const base: ModelConfig = {
+      ...video(id, name, id, id.endsWith('-pro') ? ['1080p', '2K', '4K'] : ['480p', '720p', '1080p'], Array.from({ length: 29 }, (_, i) => `${i + 2}s`)),
+      provider: 'mulerouter', aspectRatios: ['16:9', '4:3', '1:1', '3:4', '9:16', 'adaptive'],
+    }
+    return [omni(base, { inputTypes: ['text', 'image', 'video'], supportsReferenceAudio: true, maxReferenceImages: 10, maxReferenceVideos: 5, maxReferenceAudios: 5 }), frame(base)]
+  }),
   omni(SEEDANCE_20, SEEDANCE_20_OMNI),
   frame(SEEDANCE_20),
   omni(SEEDANCE_20_FAST, SEEDANCE_20_OMNI),

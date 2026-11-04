@@ -61,6 +61,9 @@ function routeFor(model, vendor) {
 }
 
 function requestBody(params) {
+  if (params.frameImages?.length && (params.referenceImages?.length || params.referenceVideos?.length || params.referenceAudios?.length)) {
+    throw Object.assign(new Error('Keyframes cannot be combined with reference media'), { code: 'INVALID_REFERENCE_COMBINATION', status: 400 });
+  }
   const body = { prompt: params.prompt };
   if (params.duration !== undefined) body.duration = Number(params.duration);
   if (params.resolution) body.resolution = params.resolution;

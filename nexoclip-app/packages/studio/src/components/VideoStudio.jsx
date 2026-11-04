@@ -319,7 +319,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
           </span>
           {isV2V ? (
             <span className="text-[9px] text-orange-400/70">
-              {m.imageField ? "Upload a video and image" : "Upload a video to use"}
+              {m.imageOptional ? "Reference video · optional image" : m.imageField ? "Upload a video and image" : "Upload a video to use"}
             </span>
           ) : (
             selectedProvider === "all" && m.provider_name && (
@@ -646,7 +646,7 @@ export default function VideoStudio({
   // ── update controls when model/mode changes ──────────────────────────────
   const applyControlsForModel = useCallback(
     (modelId, isImageMode, isV2vMode) => {
-      if (isV2vMode) {
+      if (isV2vMode && !modelId.startsWith('w3.0')) {
         setShowAr(false);
         setShowDuration(false);
         setShowResolution(false);
@@ -861,7 +861,7 @@ export default function VideoStudio({
         : null;
       const targetModel = imageMode
         ? i2vModels.find((model) => model.id === selectedModel)
-        : sibling || openRouterI2VModels[0];
+        : i2vModels.find((model) => model.id === `${selectedModel}-frame`) || sibling || i2vModels.find((model) => model.id === 'seedance-2.5-omni-reference');
 
       if (!targetModel) return;
 
@@ -939,12 +939,12 @@ export default function VideoStudio({
           setImageMode(false);
         }
         setV2vMode(true);
-        const firstV2V = openRouterV2VModels[0];
+        const firstV2V = openRouterV2VModels.find(m => m.id === selectedModel.replace(/-frame$/, '')) || openRouterV2VModels[0];
         setSelectedModel(firstV2V.id);
         setSelectedModelName(firstV2V.name);
         applyControlsForModel(firstV2V.id, false, true);
-        setPrompt("");
-        setPromptDisabled(true);
+        if (!firstV2V.hasPrompt) setPrompt("");
+        setPromptDisabled(!firstV2V.hasPrompt);
       } catch (err) {
         toast.error(`Video upload failed: ${err.message}`);
       } finally {
@@ -1097,12 +1097,12 @@ export default function VideoStudio({
             setImageMode(false);
           }
           setV2vMode(true);
-          const firstV2V = openRouterV2VModels[0];
+          const firstV2V = openRouterV2VModels.find(m => m.id === selectedModel.replace(/-frame$/, '')) || openRouterV2VModels[0];
           setSelectedModel(firstV2V.id);
           setSelectedModelName(firstV2V.name);
           applyControlsForModel(firstV2V.id, false, true);
-          setPrompt("");
-          setPromptDisabled(true);
+          if (!firstV2V.hasPrompt) setPrompt("");
+          setPromptDisabled(!firstV2V.hasPrompt);
         }
       }
     } catch (err) {
@@ -1196,7 +1196,7 @@ export default function VideoStudio({
         toast.error("Please upload a video first.");
         return;
       }
-      if (currentModel?.imageField && !uploadedImageUrl) {
+      if (currentModel?.imageField && !currentModel.imageOptional && !uploadedImageUrl) {
         toast.error("Please upload a reference image for motion control.");
         return;
       }
@@ -1253,6 +1253,9 @@ export default function VideoStudio({
           workspace_id: workspaceId,
           video_url: uploadedVideoUrl,
           prompt: trimmedPrompt || "Process the uploaded video",
+          ...(currentModel?.inputs?.duration ? { duration: selectedDuration } : {}),
+          ...(currentModel?.inputs?.resolution ? { resolution: selectedResolution } : {}),
+          ...(currentModel?.inputs?.aspect_ratio ? { aspect_ratio: selectedAr } : {}),
         };
         if (currentModel?.imageField && uploadedImageUrl) {
           v2vParams.image_url = uploadedImageUrl;
