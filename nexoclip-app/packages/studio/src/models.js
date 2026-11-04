@@ -3516,7 +3516,7 @@ export const getAspectRatiosForModel = (modelId) => {
 // ==========================================
 const MULEROUTER_VIDEO_MODELS = [
   ...['w3.0-video', 'w3.0-video-pro', 'w3.0-video-prime', 'w3.0-video-prime-pro', 'berry-1.0', 'berry-1.0-pro', 'berry-1.0-turbo', 'berry-1.0-turbo-pro'].map((id) => ({
-    id, name: id.replace(/(^|-)([a-z])/g, (_, p, c) => `${p}${c.toUpperCase()}`), provider: 'mulerouter', provider_name: 'MuleRouter', endpoint: id,
+    id, name: id.startsWith('w3.0') ? `Wan 3.0${id.includes('prime') ? ' Prime' : ''}${id.includes('pro') ? ' Pro' : ''}` : id.replace(/(^|-)([a-z])/g, (_, p, c) => `${p}${c.toUpperCase()}`), provider: 'mulerouter', provider_name: 'MuleRouter', endpoint: id,
     inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, aspect_ratio: { enum: ['16:9', '9:16', '1:1'], type: 'string', title: 'Aspect Ratio', name: 'aspect_ratio', default: '16:9' }, duration: { enum: Array.from({ length: 27 }, (_, i) => i + 4), type: 'integer', title: 'Duration', name: 'duration', default: 5 } },
   })),
 ];

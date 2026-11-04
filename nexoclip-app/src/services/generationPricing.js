@@ -180,6 +180,10 @@ const PER_SECOND_VIDEO_PRICES = [
   { match: /^alibaba\/happyhorse-1\.0$/, tiers: { '720p': 0.0988, '1080p': 0.1694 } },
   { match: /^alibaba\/happyhorse-1\.1$/, tiers: { '720p': 0.0988, '1080p': 0.1278 } },
   { match: /^alibaba\/wan-2\.6$/, tiers: { '480p': 0.04, '720p': 0.08, '1080p': 0.12 }, imageTiers: { '720p': 0.10, '1080p': 0.15 } },
+  // MuleRouter official Wan 3.0 rates (the provider already applies its own
+  // discount before this quote; NexoClip only adds its configured markup).
+  { match: /^w3\.0-video$/, tiers: { '480p': 0.05, '720p': 0.10, '1080p': 0.20 } },
+  { match: /^w3\.0-video-prime$/, tiers: { '480p': 0.068, '720p': 0.14, '1080p': 0.28 } },
   // Video-to-video: the output is as long as the source video.
   { match: /^runway\/aleph-2$/, tiers: { any: 0.28 }, minimum: 0.56, sourceLength: true },
   { match: /^alibaba\/wan-2\.7$/, tiers: { any: 0.10 }, sourceLength: true },
