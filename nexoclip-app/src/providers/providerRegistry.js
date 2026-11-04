@@ -72,6 +72,7 @@ const DIRECT_BYTEPLUS_SEEDANCE_MODELS = new Set([
 ]);
 
 const DIRECT_PREFIXES = [
+  ['mulerouter/', 'mulerouter'],
   ['google/', 'google'],
   ['gemini-', 'google'],
   ['imagen-', 'google'], 

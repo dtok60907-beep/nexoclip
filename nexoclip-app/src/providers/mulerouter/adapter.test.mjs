@@ -27,3 +27,14 @@ test('submits, polls and downloads a MuleRouter task using the documented vendor
   assert.equal(JSON.parse(calls[0].options.body).audio, true);
   assert.equal(calls[0].options.headers.Authorization, 'Bearer test-key');
 });
+
+test('accepts a future MuleRouter model through an explicit vendor/model id', async () => {
+  let url;
+  const adapter = createMuleRouterAdapter({ apiKey: 'test-key', fetch: async (requestUrl, options = {}) => {
+    url = requestUrl;
+    return response(options.method === 'POST' ? { id: 'future-1' } : { status: 'succeeded', output: 'https://cdn.example/out.mp4' });
+  } });
+  const result = await adapter.submit({ model: 'mulerouter/alibaba/future-video', prompt: 'test' });
+  assert.equal(result.providerRequestId, 'mulerouter:alibaba:future-video:future-1');
+  assert.match(url, /\/vendors\/alibaba\/v1\/future-video\/generation$/);
+});
