@@ -63,13 +63,10 @@ function PlanDetail({ tab, rows, credits, popular, features }) {
       <span className="min-w-0"><span className="block text-[13px] text-white/85">{name}</span><span className="block text-[11px] text-white/35">{detail}</span></span>
     </li>)}</ul>;
   }
-  return <ul className="divide-y divide-white/[.06]">{rows.map((row) => {
-    const n = Math.floor(credits / row.credits);
-    return <li key={row.id} className="flex items-center justify-between gap-3 py-[7px]">
-      <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config} · {number(Math.round(row.credits))} cr</span></span>
-      <span className="flex-none text-right"><b className={`text-[15px] tabular-nums ${popular ? 'text-[#d4ff64]' : 'text-white'}`}>{n ? `± ${number(n)}` : '–'}</b><span className="block text-[10px] text-white/30">{tab === 'image' ? 'gambar' : 'video'} / bulan</span></span>
-    </li>;
-  })}</ul>;
+  return <ul className="divide-y divide-white/[.06]">{rows.map((row) => <li key={row.id} className="flex items-center gap-3 py-[7px]">
+    <span className={`grid h-4 w-4 flex-none place-items-center rounded-full text-[10px] font-black ${popular ? 'bg-[#d4ff64] text-black' : 'bg-white/10 text-[#d4ff64]'}`}>✓</span>
+    <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config}</span></span>
+  </li>)}</ul>;
 }
 
 // Monthly and yearly plans above the top-ups. Renders nothing while subscriptions are
@@ -196,7 +193,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
             <div className="mb-1 flex gap-1 rounded-full bg-white/[.05] p-1" role="tablist" aria-label="Plan details">
               {detailTabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={detailTab === id} onClick={() => setDetailTab(id)} className={`flex-1 rounded-full py-1.5 text-[11px] font-bold transition ${detailTab === id ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>{label}</button>)}
             </div>
-            {detailTab !== 'features' && <p className="mb-1 mt-2 text-[10px] uppercase tracking-[.14em] text-white/30">Perkiraan output per bulan · pilih satu model</p>}
+            {detailTab !== 'features' && <p className="mb-1 mt-2 text-[10px] uppercase tracking-[.14em] text-white/30">Model yang tersedia di paket ini</p>}
             <PlanDetail tab={detailTab} rows={detailTab === 'image' ? rows.image : rows.video} credits={plan.monthlyCredits} popular={plan.popular} features={planFeatures(modelCount)} />
           </div>
         </article>;
@@ -212,7 +209,6 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
       <ul className="grid gap-x-5 gap-y-1.5 text-xs text-white/65 sm:grid-cols-2">{ENTERPRISE_POINTS.map((f) => <li key={f}><span className="mr-1.5 text-[#d4ff64]">✓</span>{f}</li>)}</ul>
       <a href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap rounded-full bg-[#d4ff64] px-5 py-3 text-center text-sm font-bold text-black transition hover:bg-[#e2ff91]">Chat via WhatsApp →</a>
     </div>
-    <p className="mt-3 text-xs text-white/35">Counts assume all of a month's credits go to that one model, videos with audio. Other resolutions, durations and mixes: use the Calculator tab.</p>
     <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-white/45">
       <span>🔒 Secure checkout via Pakasir (QRIS, virtual account)</span>
       <span>No auto-debit: you renew when you choose</span>

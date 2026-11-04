@@ -31,9 +31,6 @@ function formatNumber(value) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(value) || 0);
 }
 
-// The models a pack is shown in, priced by the app's engine (/api/public/model-prices).
-const HIGHLIGHTS = ['seedance-2.5', 'seedance-2.0', 'kling-3.0-pro', 'veo-3.1-fast', 'nano-banana-2'];
-
 export default function BillingContent({ workspaceId, balance, onCompleted, onRequireAuth, embedded = false }) {
   const [packages, setPackages] = useState(null);
   const [topups, setTopups] = useState([]);
@@ -41,7 +38,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const rows = usualRows(useModelPrices());
-  const highlights = HIGHLIGHTS.map((id) => [...rows.video, ...rows.image].find((r) => r.id === id)).filter(Boolean);
+  const models = [...rows.video, ...rows.image];
 
   const load = useCallback(async () => {
     const data = await saasFetch('/api/billing/topups', { headers: workspaceId ? { 'x-workspace-id': workspaceId } : {} });
@@ -133,7 +130,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#d4ff64]">Add-on</p>
           <h1 className="mt-1 text-2xl font-bold">Top up credits</h1>
-          <p className="mt-1 text-sm text-white/45">Extra credits for subscribers, on top of your plan. Top-up credits never expire, and bigger packs come with bonus credits.</p>
+          <p className="mt-1 max-w-2xl text-sm text-white/45">Kredit tambahan di luar paket bulanan. Sekali bayar, tidak memperpanjang langganan, tidak auto-debit, dan tidak kedaluwarsa.</p>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,#1a1f17,#10120f)] px-4 py-3">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#d4ff64]/15 text-lg text-[#d4ff64]">◈</span>
@@ -166,7 +163,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
                   {pkg.popular && <span className="rounded-full bg-[#d4ff64] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Best value</span>}
                 </div>
               </div>
-              <p className="mt-1.5 min-h-[34px] text-xs leading-relaxed text-white/45">{pkg.description}</p>
+                <p className="mt-1.5 min-h-[34px] text-xs leading-relaxed text-white/45">{pkg.description} <span className="text-[#d4ff64]">· sekali bayar</span></p>
 
               <div className="mt-4 flex items-baseline gap-1.5"><span className="text-[34px] font-bold leading-none tracking-tight">{formatNumber(pkg.credits)}</span><span className="text-sm text-white/45">credits</span></div>
               <p className="mt-1.5 text-xs text-white/45">{pkg.bonusPercent > 0 ? <>{formatNumber(base)} + <b className="text-[#d4ff64]">{formatNumber(pkg.credits - base)} bonus</b> · one-time payment</> : 'one-time payment'}</p>
@@ -177,7 +174,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
                 onClick={() => buy(pkg.code)}
                 className={`mt-4 flex w-full items-center justify-between rounded-full px-5 py-3 text-sm font-bold transition disabled:opacity-50 ${pkg.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e2ff91]' : 'border border-white/15 bg-white/[.06] text-white hover:border-[#d4ff64]/60 hover:text-[#d4ff64]'}`}
               >
-                <span>{buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.name}`}</span>
+                <span>{buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.label || `Extra ${formatNumber(pkg.credits)} credits`}`}</span>
                 <span>{formatRupiah(pkg.priceIdr)} →</span>
               </button>
 
@@ -188,12 +185,9 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
               </div>
             </div>
 
-            {highlights.length > 0 && <div className="border-t border-white/[.08] bg-black/15 px-5 pb-5 pt-3">
-              <p className="mb-1 text-[10px] uppercase tracking-[.14em] text-white/30">Any one of</p>
-              <ul className="divide-y divide-white/[.06]">{highlights.map((row) => <li key={row.id} className="flex items-center justify-between gap-3 py-[7px]">
-                <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span><span className="block truncate text-[11px] text-white/35">{row.config} · {formatNumber(Math.round(row.credits))} cr</span></span>
-                <b className={`text-[15px] tabular-nums ${pkg.popular ? 'text-[#d4ff64]' : 'text-white'}`}>{formatNumber(Math.floor(pkg.credits / row.credits))}</b>
-              </li>)}</ul>
+            {models.length > 0 && <div className="border-t border-white/[.08] bg-black/15 px-5 pb-5 pt-3">
+              <p className="mb-2 text-[10px] uppercase tracking-[.14em] text-white/30">Akses semua {models.length} model</p>
+              <div className="flex flex-wrap gap-1.5">{models.map((row) => <span key={row.id} className="rounded-full border border-white/10 bg-white/[.04] px-2 py-1 text-[11px] text-white/65">{row.name}</span>)}</div>
             </div>}
           </article>;
         })}
