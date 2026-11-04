@@ -148,9 +148,8 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
         {packages === null && !error && [0, 1, 2].map((key) => <div key={key} className="h-80 animate-pulse rounded-[22px] border border-white/10 bg-white/[.03]" />)}
         {packages?.map((pkg) => {
           const base = Math.round(pkg.credits / (1 + pkg.bonusPercent / 100));
-          const perCredit = pkg.priceIdr / pkg.credits;
           const smallest = packages[0];
-          const saving = smallest ? Math.round((1 - perCredit / (smallest.priceIdr / smallest.credits)) * 100) : 0;
+          const saving = smallest ? Math.round((1 - (pkg.priceIdr / pkg.credits) / (smallest.priceIdr / smallest.credits)) * 100) : 0;
           return <article
             key={pkg.code}
             className={`relative flex flex-col overflow-hidden rounded-[22px] border ${pkg.popular ? 'border-[#d4ff64]/60 bg-[linear-gradient(165deg,#26301b_0%,#141812_45%,#0f120e_100%)] shadow-[0_24px_70px_-30px_rgba(212,255,100,.45)]' : 'border-white/10 bg-[linear-gradient(165deg,#1a1d19_0%,#121411_50%,#0f110e_100%)]'}`}
@@ -179,8 +178,8 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
               </button>
 
               <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-white/[.08] bg-black/20 text-center">
-                <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{formatRupiah(perCredit)}</p><p className="text-[10px] text-white/40">per credit</p></div>
-                <div className="border-x border-white/[.08] px-2 py-2.5"><p className={`text-[15px] font-bold ${saving > 0 ? 'text-[#d4ff64]' : 'text-white/50'}`}>{saving > 0 ? `-${saving}%` : 'Base'}</p><p className="text-[10px] text-white/40">vs Starter pack</p></div>
+                <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{formatNumber(pkg.credits)}</p><p className="text-[10px] text-white/40">credits added</p></div>
+                <div className="border-x border-white/[.08] px-2 py-2.5"><p className={`text-[15px] font-bold ${saving > 0 ? 'text-[#d4ff64]' : 'text-white/50'}`}>{saving > 0 ? `-${saving}%` : 'Base'}</p><p className="text-[10px] text-white/40">best value</p></div>
                 <div className="px-2 py-2.5"><p className="text-[15px] font-bold">∞</p><p className="text-[10px] text-white/40">never expire</p></div>
               </div>
             </div>

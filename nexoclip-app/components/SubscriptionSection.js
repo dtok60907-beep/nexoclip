@@ -155,8 +155,9 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
       {plans.map((plan) => {
         const current = active && sub.planCode === plan.code;
         const perMonth = plan.interval === 'yearly' ? plan.priceIdr / 12 : plan.priceIdr;
-        const perCredit = perMonth / plan.monthlyCredits;
-        const saving = smallest ? Math.round((1 - perCredit / (smallest.priceIdr / smallest.monthlyCredits)) * 100) : 0;
+        const saving = smallest ? Math.round((1 - (perMonth / plan.monthlyCredits) / (smallest.priceIdr / smallest.monthlyCredits)) * 100) : 0;
+        const imageEstimate = Math.floor(plan.monthlyCredits / Math.min(...rows.image.map((row) => row.credits)));
+        const videoEstimate = Math.floor(plan.monthlyCredits / Math.min(...rows.video.map((row) => row.credits)));
         const detailTabs = [['video', `Video · ${rows.video.length}`], ['image', `Image · ${rows.image.length}`], ['features', 'Features']];
         return <article key={plan.code} className={`relative flex flex-col overflow-hidden rounded-[22px] border ${plan.popular ? 'border-[#d4ff64]/60 bg-[linear-gradient(165deg,#26301b_0%,#141812_45%,#0f120e_100%)] shadow-[0_24px_70px_-30px_rgba(212,255,100,.45)]' : 'border-white/10 bg-[linear-gradient(165deg,#1a1d19_0%,#121411_50%,#0f110e_100%)]'}`}>
           <div className="p-5 pb-4">
@@ -184,8 +185,8 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
 
             <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-white/[.08] bg-black/20 text-center">
               <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{number(plan.monthlyCredits)}</p><p className="text-[10px] text-white/40">credits / month</p></div>
-              <div className="border-x border-white/[.08] px-2 py-2.5"><p className="text-[15px] font-bold">{rupiah(perCredit)}</p><p className="text-[10px] text-white/40">per credit</p></div>
-              <div className="px-2 py-2.5"><p className={`text-[15px] font-bold ${saving > 0 ? 'text-[#d4ff64]' : 'text-white/50'}`}>{saving > 0 ? `-${saving}%` : 'Base'}</p><p className="text-[10px] text-white/40">vs Starter</p></div>
+              <div className="border-x border-white/[.08] px-2 py-2.5"><p className="text-[15px] font-bold">{number(imageEstimate)}</p><p className="text-[10px] text-white/40">up to images</p></div>
+              <div className="px-2 py-2.5"><p className="text-[15px] font-bold text-[#d4ff64]">{number(videoEstimate)}</p><p className="text-[10px] text-white/40">up to videos</p></div>
             </div>
           </div>
 

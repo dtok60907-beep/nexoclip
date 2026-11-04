@@ -46,7 +46,7 @@ export function usualRows(data) {
   const video = data.video.map((m) => {
     const resolution = m.resolutions.includes('720p') ? '720p' : (m.resolutions[0] ?? '');
     const duration = Math.max(...m.durations.filter(d => d <= (m.maxSeconds?.[resolution] ?? Infinity)));
-    const config = [resolution && resolutionLabel(resolution), `${duration}s per video`, m.audio && 'audio'].filter(Boolean).join(' · ');
+    const config = [resolution && resolutionLabel(resolution), m.audio && 'audio'].filter(Boolean).join(' · ');
     return { id: m.id, name: m.name, config, credits: m.prices[`${resolution}|${duration}|1`] };
   });
   const image = data.image.map((m) => {
