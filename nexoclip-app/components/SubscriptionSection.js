@@ -22,7 +22,7 @@ function quoteLabel(plan, current) {
 
 // A signed-out visitor sees what a new workspace pays (quotePlan on the server).
 function guestQuote(plan, promo) {
-  if (!promo || plan.interval !== promo.interval || plan.tier !== 'starter') return { kind: 'new', amountIdr: plan.priceIdr };
+  if (!promo || plan.interval !== promo.interval || plan.tier !== promo.tier) return { kind: 'new', amountIdr: plan.priceIdr };
   return { kind: 'new', amountIdr: Math.round(plan.priceIdr * (100 - promo.percent) / 100), listPriceIdr: plan.priceIdr, promoPercent: promo.percent, promoEndsAt: promo.endsAt };
 }
 
@@ -143,7 +143,7 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
       </div>
     </div>
     {promo && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300/30 bg-gradient-to-r from-amber-300/15 to-pink-400/10 px-4 py-3 text-sm">
-      <p className="text-amber-50"><b>Launch promo: {promo.promoPercent}% off Starter bulan pertama</b>. Kredit tetap penuh.</p>
+      <p className="text-amber-50"><b>Launch promo: {promo.promoPercent}% off Creator bulan pertama</b>. Kredit tetap penuh.</p>
       <p className="text-xs text-amber-100/70">Until {day(new Date(new Date(promo.promoEndsAt) - 1))}</p>
     </div>}
     {active && <div className={`mt-4 grid gap-3 rounded-xl border p-4 text-sm sm:grid-cols-3 ${daysLeft <= 7 ? tones.info : 'border-white/10 bg-white/[.03] text-white/75'}`}>

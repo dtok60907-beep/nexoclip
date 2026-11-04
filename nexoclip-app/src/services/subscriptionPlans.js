@@ -33,7 +33,7 @@ export function firstPaymentPromo(env = process.env, at = new Date()) {
   const percent = env.SUBSCRIPTION_PROMO_PERCENT === undefined || env.SUBSCRIPTION_PROMO_PERCENT === '' ? PROMO_PERCENT : Number(env.SUBSCRIPTION_PROMO_PERCENT);
   const endsAt = env.SUBSCRIPTION_PROMO_ENDS_AT || PROMO_ENDS_AT;
   if (!(percent > 0) || percent > PROMO_MAX_PERCENT || !(new Date(endsAt) > at)) return null;
-  return { percent, endsAt: new Date(endsAt).toISOString(), interval: 'monthly' };
+  return { percent, endsAt: new Date(endsAt).toISOString(), interval: 'monthly', tier: 'creator' };
 }
 
 export const promoPrice = (priceIdr, promo) => Math.round(priceIdr * (100 - promo.percent) / 100);

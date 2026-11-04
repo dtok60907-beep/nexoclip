@@ -60,12 +60,10 @@ const { firstPaymentPromo } = await import('../../src/services/subscriptionPlans
 
 test('launch promo: 20% off the first monthly payment until the end of 30 Nov (WIB)', () => {
   const at = new Date('2026-11-16T00:00:00Z'), promo = firstPaymentPromo({}, at);
-  assert.deepEqual(promo, { percent: 20, endsAt: '2026-11-30T17:00:00.000Z', interval: 'monthly' });
-  assert.deepEqual(quotePlan(plan('sub_pro_monthly'), null, at, promo), {
-    kind: 'new', amountIdr: 719200, creditsNow: 5800, startsAt: '2026-11-16T00:00:00.000Z',
-    listPriceIdr: 899000, promoPercent: 20, promoEndsAt: '2026-11-30T17:00:00.000Z',
-  });
-  assert.equal(quotePlan(plan('sub_pro_yearly'), null, at, promo).amountIdr, 8990000);
+  assert.deepEqual(promo, { percent: 20, endsAt: '2026-11-30T17:00:00.000Z', interval: 'monthly', tier: 'creator' });
+  assert.equal(quotePlan(plan('sub_pro_monthly'), null, at, promo).amountIdr, 999000);
+  assert.equal(quotePlan(plan('sub_creator_monthly'), null, at, promo).amountIdr, 359200);
+  assert.equal(quotePlan(plan('sub_pro_yearly'), null, at, promo).amountIdr, 9990000);
   assert.equal(quotePlan(plan('sub_creator_monthly'), monthlyStarter, at, promo).kind, 'upgrade');
   assert.equal(firstPaymentPromo({}, new Date('2026-11-30T17:00:00Z')), null);
   assert.equal(firstPaymentPromo({ SUBSCRIPTION_PROMO_PERCENT: '0' }, at), null);
