@@ -48,3 +48,22 @@ test('accepts MuleRouter documented task_info response envelopes for images', as
   assert.equal(result.providerRequestId, 'mulerouter:carrothub:z-image-spicy-pro:image-task-1');
   assert.deepEqual(result.outputs, ['https://cdn.example/image.png']);
 });
+
+test('submits Qwen Image Edit Spicy with its required primary image field', async () => {
+  let request;
+  const adapter = createMuleRouterAdapter({ apiKey: 'test-key', fetch: async (url, options = {}) => {
+    request = { url, body: JSON.parse(options.body) };
+    return response({ task_info: { id: 'qwen-task-1', status: 'queued' } }, 202);
+  } });
+  await adapter.submit({
+    model: 'qwen-image-edit-spicy',
+    prompt: 'edit the image',
+    aspectRatio: '9:16',
+    seed: 7,
+    referenceImages: ['https://cdn.example/source.png', 'https://cdn.example/style.png'],
+  });
+  assert.match(request.url, /\/vendors\/alibaba\/v1\/qwen-image-edit-spicy\/generation$/);
+  assert.equal(request.body.image, 'https://cdn.example/source.png');
+  assert.deepEqual(request.body.reference_images, ['https://cdn.example/style.png']);
+  assert.equal(request.body.ratio, undefined);
+});

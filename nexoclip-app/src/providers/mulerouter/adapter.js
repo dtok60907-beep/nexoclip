@@ -1,6 +1,7 @@
 const DEFAULT_BASE_URL = 'https://api.mulerouter.ai';
 const DEFAULT_VENDOR = 'carrothub';
 const MODEL_VENDORS = Object.freeze({
+  'qwen-image-edit-spicy': 'alibaba',
   'wan-2.5': 'alibaba',
   'wan-2.6': 'alibaba',
   'wan-2.7': 'alibaba',
@@ -68,13 +69,21 @@ function requestBody(params) {
     throw Object.assign(new Error('Keyframes cannot be combined with reference media'), { code: 'INVALID_REFERENCE_COMBINATION', status: 400 });
   }
   const body = { prompt: params.prompt };
+  const isQwenImageEditSpicy = params.model === 'qwen-image-edit-spicy';
   if (params.duration !== undefined) body.duration = Number(params.duration);
   if (params.resolution) body.resolution = params.resolution;
-  if (params.aspectRatio) body.ratio = params.aspectRatio;
+  if (params.aspectRatio && !isQwenImageEditSpicy) body.ratio = params.aspectRatio;
   if (params.seed !== undefined) body.seed = params.seed;
   if (params.generateAudio !== undefined) body.audio = Boolean(params.generateAudio);
   if (params.quality) body.quality = params.quality;
-  if (params.referenceImages?.length) body.reference_images = params.referenceImages;
+  if (params.referenceImages?.length) {
+    if (isQwenImageEditSpicy) {
+      body.image = params.referenceImages[0];
+      if (params.referenceImages.length > 1) body.reference_images = params.referenceImages.slice(1, 3);
+    } else {
+      body.reference_images = params.referenceImages;
+    }
+  }
   if (params.referenceVideos?.length) body.reference_videos = params.referenceVideos;
   if (params.referenceAudios?.length) body.reference_audios = params.referenceAudios;
   if (params.frameImages?.length) {
