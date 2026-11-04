@@ -295,6 +295,10 @@ const OPENROUTER_IMAGE_SNAPSHOT = {
   'qwen/qwen-image-3': { prompt: 0, completion: 0, image: 0.003, image_token: 0.00000718562874251497, image_output: 0.00000718562874251497 },
   'qwen/qwen-image-3-pro': { prompt: 0, completion: 0, image: 0.003, image_token: 0.00000958083832335329, image_output: 0.00000958083832335329 },
   'x-ai/grok-imagine-image-2.0': { prompt: 0, completion: 0, image: 0.01, image_token: 0.00000958083832335329, image_output: 0.00000958083832335329 },
+  // MuleRouter image endpoints are billed flat per successful output. The
+  // output-token equivalent keeps the existing reservation/settlement path.
+  'z-image-spicy-pro': { prompt: 0, completion: 0, image_output: 0.03 / 4160 },
+  'qwen-image-edit-spicy': { prompt: 0, completion: 0, image_output: 0.05 / 4160 },
 };
 
 // Output tokens per generated image, used for the reservation only (the
