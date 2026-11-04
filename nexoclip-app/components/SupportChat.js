@@ -17,7 +17,7 @@ export default function SupportChat() {
   if (!visible) return null;
   return (
     <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label="Chat dengan NexoClip lewat WhatsApp" title="Chat dengan NexoClip lewat WhatsApp"
-      className="group fixed bottom-5 right-5 z-[150] flex h-[52px] items-center gap-2 rounded-full bg-[#25d366] pl-[14px] pr-[14px] text-white shadow-[0_12px_32px_-8px_rgba(37,211,102,0.55)] transition-[padding,transform] duration-200 hover:-translate-y-0.5 hover:pr-5">
+      className="group fixed bottom-20 right-5 z-[150] flex h-[52px] w-[52px] min-w-[52px] items-center justify-center gap-2 rounded-full bg-[#25d366] p-0 text-white shadow-[0_12px_32px_-8px_rgba(37,211,102,0.55)] transition-[padding,width,transform] duration-200 hover:-translate-y-0.5 hover:w-auto hover:px-[14px] sm:bottom-5">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={WHATSAPP_PATH} /></svg>
       <span className="max-w-0 overflow-hidden whitespace-nowrap text-[13.5px] font-semibold transition-[max-width] duration-200 group-hover:max-w-[180px] group-focus-visible:max-w-[180px]">Chat dengan NexoClip</span>
     </a>
