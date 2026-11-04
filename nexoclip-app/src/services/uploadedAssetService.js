@@ -33,15 +33,17 @@ export async function persistUploadedAsset({ workspaceId, buffer, contentType, f
   if (!workspaceId) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
   const extension = extensionFor(filename, contentType);
   const key = `${workspaceId}/uploads/${randomUUID()}.${extension}`;
-  const url = await putUploadedObject(storage, key, buffer, contentType);
+  await putUploadedObject(storage, key, buffer, contentType);
   const result = await getPool().query(
     `INSERT INTO assets (workspace_id, storage_key, filename, content_type, size_bytes)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id, workspace_id, storage_key, filename, content_type, size_bytes, created_at`,
     [workspaceId, key, filename || key.split('/').pop(), contentType, buffer.length],
   );
+  // Keep the browser-facing reference tenant-scoped. The worker resolves this
+  // canonical URL to a signed/public storage URL before calling a provider.
   return {
     ...result.rows[0],
-    url: url || `/api/assets/${encodeURIComponent(result.rows[0].id)}/download?workspace_id=${encodeURIComponent(workspaceId)}`,
+    url: `/api/assets/${encodeURIComponent(result.rows[0].id)}/download?workspace_id=${encodeURIComponent(workspaceId)}`,
   };
 }
