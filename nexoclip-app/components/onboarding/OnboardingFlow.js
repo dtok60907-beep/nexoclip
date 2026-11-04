@@ -76,20 +76,20 @@ function OptionCard({ selected, onClick, label, hint, icon: Icon, multi }) {
       aria-pressed={selected}
       className={`group relative flex w-full items-start gap-3.5 rounded-[20px] border p-4 text-left transition duration-150 ${
         selected
-          ? 'border-[#A175FF] bg-[#A175FF]/10 shadow-[0_0_0_4px_rgba(161,117,255,0.15)]'
-          : 'border-[#110C2A]/10 bg-white hover:-translate-y-0.5 hover:border-[#A175FF]/50 hover:shadow-[0_10px_30px_-12px_rgba(17,12,42,0.25)]'
+          ? 'border-[#d4ff64] bg-[#d4ff64]/10 shadow-[0_0_0_4px_rgba(212,255,100,0.12)]'
+          : 'border-white/10 bg-white/[.04] hover:-translate-y-0.5 hover:border-[#d4ff64]/50 hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,0.5)]'
       }`}
     >
       {Icon && (
-        <span className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] transition ${selected ? 'bg-[#A175FF] text-[#110C2A]' : 'bg-[#110C2A]/[.05] text-[#110C2A]/70 group-hover:text-[#7d3cff]'}`}>
+        <span className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] transition ${selected ? 'bg-[#d4ff64] text-[#0b0c0a]' : 'bg-white/[.08] text-white/65 group-hover:text-[#d4ff64]'}`}>
           <Icon />
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-bold text-[#110C2A]">{label}</span>
-        {hint && <span className="mt-0.5 block text-[13px] leading-snug text-[#110C2A]/55">{hint}</span>}
+        <span className="block text-[15px] font-bold text-white">{label}</span>
+        {hint && <span className="mt-0.5 block text-[13px] leading-snug text-white/50">{hint}</span>}
       </span>
-      <span className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center border transition ${multi ? 'rounded-[6px]' : 'rounded-full'} ${selected ? 'border-[#A175FF] bg-[#A175FF] text-[#110C2A]' : 'border-[#110C2A]/20 bg-white'}`}>
+      <span className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center border transition ${multi ? 'rounded-[6px]' : 'rounded-full'} ${selected ? 'border-[#d4ff64] bg-[#d4ff64] text-[#0b0c0a]' : 'border-white/20 bg-white/[.04]'}`}>
         {selected && <Icons.check className="h-3.5 w-3.5" />}
       </span>
     </button>
@@ -103,7 +103,7 @@ function Chip({ selected, onClick, children }) {
       onClick={onClick}
       aria-pressed={selected}
       className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
-        selected ? 'border-[#A175FF] bg-[#A175FF] text-[#110C2A]' : 'border-[#110C2A]/12 bg-white text-[#110C2A]/75 hover:border-[#A175FF]/60 hover:text-[#110C2A]'
+        selected ? 'border-[#d4ff64] bg-[#d4ff64] text-[#0b0c0a]' : 'border-white/12 bg-white/[.04] text-white/75 hover:border-[#d4ff64]/60 hover:text-white'
       }`}
     >
       {selected && <Icons.check className="h-3.5 w-3.5" />}
@@ -115,14 +115,14 @@ function Chip({ selected, onClick, children }) {
 function StepHeader({ eyebrow, title, subtitle }) {
   return (
     <header className="mb-7">
-      {eyebrow && <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#A175FF]">{eyebrow}</p>}
-      <h1 className="text-[28px] font-black leading-tight tracking-tight text-[#110C2A] sm:text-[34px]">{title}</h1>
-      {subtitle && <p className="mt-2.5 text-[15px] leading-relaxed text-[#110C2A]/60">{subtitle}</p>}
+      {eyebrow && <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#d4ff64]">{eyebrow}</p>}
+      <h1 className="text-[28px] font-black leading-tight tracking-tight text-white sm:text-[34px]">{title}</h1>
+      {subtitle && <p className="mt-2.5 text-[15px] leading-relaxed text-white/55">{subtitle}</p>}
     </header>
   );
 }
 
-const SectionLabel = ({ children }) => <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[#110C2A]/50">{children}</p>;
+const SectionLabel = ({ children }) => <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-white/45">{children}</p>;
 
 // ---------------------------------------------------------------- flow -----
 
@@ -203,8 +203,8 @@ export default function OnboardingFlow() {
 
   if (!ready) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#FFF6DE]">
-        <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#A175FF]/25 border-t-[#A175FF]" aria-label="Loading" />
+      <main className="grid min-h-screen place-items-center bg-[#0b0c0a]">
+        <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-[#d4ff64]" aria-label="Loading" />
       </main>
     );
   }
@@ -213,28 +213,28 @@ export default function OnboardingFlow() {
   const nextLabel = step.id === 'welcome' ? "Let's go" : step.id === 'source' && !answers.source ? 'Skip this one' : step.id === 'credits' ? 'Finish setup' : 'Continue';
 
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#FFF6DE] text-[#110C2A]">
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#0b0c0a] text-[#f5f7ef]">
       <style>{`
         @keyframes nxo-step-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
         .nxo-step { animation: nxo-step-in 380ms cubic-bezier(.2,.8,.2,1) both; }
         @media (prefers-reduced-motion: reduce) { .nxo-step { animation: none; } }
       `}</style>
-      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#A175FF]/25 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-[#8BDFDD]/35 blur-3xl" />
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#d4ff64]/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-[#2d827a]/20 blur-3xl" />
 
       {/* Top bar */}
       <div className="relative z-10 mx-auto flex w-full max-w-3xl items-center gap-4 px-5 pt-6 sm:px-8">
-        <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] bg-[#110C2A] text-base font-black text-[#A175FF]">N</div>
+        <div className="flex-shrink-0 text-xl font-black tracking-[-.08em] text-white">nexo<span className="text-white/45">clip</span><span className="text-[#d4ff64]">.</span></div>
         <div className="flex-1">
-          <div className="h-1.5 overflow-hidden rounded-full bg-[#110C2A]/10" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full rounded-full bg-gradient-to-r from-[#A175FF] to-[#7d3cff] transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+            <div className="h-full rounded-full bg-gradient-to-r from-[#d4ff64] to-[#9dbd3c] transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
           </div>
-          <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#110C2A]/45">
+          <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
             {step.question ? `Step ${questionNumber} of ${QUESTION_COUNT}` : step.id === 'done' ? 'All set' : 'Getting started'}
           </p>
         </div>
         {step.id !== 'done' && (
-          <button type="button" onClick={() => save('skipped', '/studio')} disabled={saving} className="flex-shrink-0 rounded-full px-3 py-2 text-sm font-semibold text-[#110C2A]/55 transition hover:bg-[#110C2A]/5 hover:text-[#110C2A] disabled:opacity-50">
+          <button type="button" onClick={() => save('skipped', '/studio')} disabled={saving} className="flex-shrink-0 rounded-full px-3 py-2 text-sm font-semibold text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-50">
             Skip for now
           </button>
         )}
@@ -245,12 +245,12 @@ export default function OnboardingFlow() {
         <div key={step.id} className="nxo-step">
           {step.id === 'welcome' && (
             <div className="text-center sm:pt-6">
-              <div className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-[28px] bg-[#110C2A] text-[#A175FF] shadow-[0_20px_50px_-15px_rgba(161,117,255,0.7)]">
+              <div className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-[28px] bg-[#d4ff64] text-[#0b0c0a] shadow-[0_20px_50px_-15px_rgba(212,255,100,0.45)]">
                 <Icons.sparkle className="h-9 w-9" />
               </div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#A175FF]">Welcome to Nexoclip</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#d4ff64]">Welcome to Nexoclip</p>
               <h1 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl">Hi {firstName}, let&apos;s set up<br className="hidden sm:block" /> your studio.</h1>
-              <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-[#110C2A]/60">
+              <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-white/55">
                 A few quick questions so we can point you to the right tools. It takes about two minutes, and you can change your mind anytime.
               </p>
               <div className="mx-auto mt-10 grid max-w-xl gap-3 text-left sm:grid-cols-3">
@@ -259,10 +259,10 @@ export default function OnboardingFlow() {
                   [Icons.coins, 'One balance', 'Credits work in every studio'],
                   [Icons.sparkle, 'A tailored start', 'We suggest where to begin'],
                 ].map(([Icon, title, body]) => (
-                  <div key={title} className="rounded-[20px] border border-white/70 bg-white/70 p-4 backdrop-blur">
-                    <Icon className="h-5 w-5 text-[#7d3cff]" />
+                  <div key={title} className="rounded-[20px] border border-white/10 bg-white/[.04] p-4 text-left backdrop-blur">
+                    <Icon className="h-5 w-5 text-[#d4ff64]" />
                     <p className="mt-3 text-sm font-bold">{title}</p>
-                    <p className="mt-0.5 text-[13px] text-[#110C2A]/55">{body}</p>
+                    <p className="mt-0.5 text-[13px] text-white/50">{body}</p>
                   </div>
                 ))}
               </div>
@@ -281,14 +281,14 @@ export default function OnboardingFlow() {
           {step.id === 'brand' && (
             <>
               <StepHeader eyebrow="Your brand" title="Tell us about what you sell" subtitle="Your brand name is optional. The category helps us understand what you make." />
-              <label htmlFor="brandName" className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-[#110C2A]/50">Brand or shop name <span className="font-semibold normal-case tracking-normal text-[#110C2A]/35">(optional)</span></label>
+              <label htmlFor="brandName" className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-white/45">Brand or shop name <span className="font-semibold normal-case tracking-normal text-white/30">(optional)</span></label>
               <input
                 id="brandName"
                 value={answers.brandName}
                 onChange={(event) => setAnswers((current) => ({ ...current, brandName: event.target.value }))}
                 maxLength={80}
                 placeholder="e.g. Kopi Senja, Glow Lab"
-                className="w-full rounded-[18px] border border-[#110C2A]/10 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-[#110C2A]/35 focus:border-[#A175FF] focus:ring-4 focus:ring-[#A175FF]/15"
+                className="w-full rounded-[18px] border border-white/10 bg-white/[.05] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-[#d4ff64] focus:ring-4 focus:ring-[#d4ff64]/15"
               />
               <div className="mt-8">
                 <SectionLabel>Product category</SectionLabel>
@@ -305,7 +305,7 @@ export default function OnboardingFlow() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {GOALS.map((goal) => <OptionCard key={goal.id} multi icon={GOAL_ICONS[goal.id]} label={goal.label} hint={goal.hint} selected={answers.goals.includes(goal.id)} onClick={() => toggle('goals', goal.id)} />)}
               </div>
-              <p className="mt-4 text-[13px] text-[#110C2A]/50">{answers.goals.length ? `${answers.goals.length} selected` : 'Choose at least one'}</p>
+              <p className="mt-4 text-[13px] text-white/45">{answers.goals.length ? `${answers.goals.length} selected` : 'Choose at least one'}</p>
             </>
           )}
 
@@ -315,14 +315,14 @@ export default function OnboardingFlow() {
               <div className="flex flex-wrap gap-2.5">
                 {PLATFORMS.map((platform) => <Chip key={platform.id} selected={answers.platforms.includes(platform.id)} onClick={() => toggle('platforms', platform.id)}>{platform.label}</Chip>)}
               </div>
-              <div className="mt-8 rounded-[20px] border border-white/70 bg-white/70 p-5 backdrop-blur">
+              <div className="mt-8 rounded-[20px] border border-white/10 bg-white/[.04] p-5 backdrop-blur">
                 <p className="text-sm font-bold">Formats Nexoclip supports</p>
                 <div className="mt-4 flex items-end gap-5">
                   {[['9:16', 'h-16 w-9', 'TikTok, Reels, Shorts'], ['1:1', 'h-12 w-12', 'Feed and marketplace'], ['16:9', 'h-9 w-16', 'YouTube and web']].map(([ratio, size, use]) => (
                     <div key={ratio} className="flex flex-col items-start gap-2">
-                      <span className={`${size} rounded-md border-2 border-[#A175FF] bg-[#A175FF]/10`} />
+                      <span className={`${size} rounded-md border-2 border-[#d4ff64] bg-[#d4ff64]/10`} />
                       <span className="text-xs font-bold">{ratio}</span>
-                      <span className="text-[11px] leading-tight text-[#110C2A]/50">{use}</span>
+                      <span className="text-[11px] leading-tight text-white/45">{use}</span>
                     </div>
                   ))}
                 </div>
@@ -362,14 +362,14 @@ export default function OnboardingFlow() {
                   const Icon = TOOL_ICONS[id];
                   const isPick = id === recommended;
                   return (
-                    <div key={id} className={`flex items-start gap-4 rounded-[20px] border p-4 ${isPick ? 'border-[#110C2A] bg-[#110C2A] text-white shadow-[0_20px_50px_-20px_rgba(17,12,42,0.6)]' : 'border-[#110C2A]/10 bg-white'}`}>
-                      <span className={`grid h-11 w-11 flex-shrink-0 place-items-center rounded-[14px] ${isPick ? 'bg-[#A175FF] text-[#110C2A]' : 'bg-[#110C2A]/[.05] text-[#7d3cff]'}`}><Icon /></span>
+                    <div key={id} className={`flex items-start gap-4 rounded-[20px] border p-4 ${isPick ? 'border-[#d4ff64]/50 bg-[#d4ff64]/10 text-white shadow-[0_20px_50px_-20px_rgba(212,255,100,0.25)]' : 'border-white/10 bg-white/[.04]'}`}>
+                      <span className={`grid h-11 w-11 flex-shrink-0 place-items-center rounded-[14px] ${isPick ? 'bg-[#d4ff64] text-[#0b0c0a]' : 'bg-white/[.08] text-[#d4ff64]'}`}><Icon /></span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="text-[15px] font-bold">{tool.label}</span>
-                          {isPick && <span className="rounded-full bg-[#A175FF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#110C2A]">Recommended for you</span>}
+                          {isPick && <span className="rounded-full bg-[#d4ff64] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#0b0c0a]">Recommended for you</span>}
                         </span>
-                        <span className={`mt-1 block text-[13px] leading-relaxed ${isPick ? 'text-white/70' : 'text-[#110C2A]/55'}`}>{tool.summary}</span>
+                        <span className="mt-1 block text-[13px] leading-relaxed text-white/55">{tool.summary}</span>
                       </span>
                     </div>
                   );
@@ -387,16 +387,16 @@ export default function OnboardingFlow() {
                   ['± 101', 'credits per video', '5 seconds with Kling 3'],
                   ['0', 'expiry', 'Credits never expire'],
                 ].map(([value, unit, note]) => (
-                  <div key={unit} className="rounded-[20px] border border-white/70 bg-white/80 p-5 backdrop-blur">
-                    <p className="text-3xl font-black tracking-tight text-[#7d3cff]">{value}</p>
+                    <div key={unit} className="rounded-[20px] border border-white/10 bg-white/[.04] p-5 backdrop-blur">
+                    <p className="text-3xl font-black tracking-tight text-[#d4ff64]">{value}</p>
                     <p className="text-sm font-bold">{unit}</p>
-                    <p className="mt-1.5 text-[12px] leading-snug text-[#110C2A]/50">{note}</p>
+                    <p className="mt-1.5 text-[12px] leading-snug text-white/45">{note}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 rounded-[20px] border border-white/70 bg-white/70 p-5 backdrop-blur">
+              <div className="mt-4 rounded-[20px] border border-white/10 bg-white/[.04] p-5 backdrop-blur">
                 <p className="text-sm font-bold">Tips to make credits go further</p>
-                <ul className="mt-3 space-y-2.5 text-[13px] leading-relaxed text-[#110C2A]/65">
+                <ul className="mt-3 space-y-2.5 text-[13px] leading-relaxed text-white/60">
                   {[
                     'Start with a Draft at 480p, then render 1080p only for the take you like.',
                     'Try ideas as images first; they cost a fraction of a video.',
@@ -406,11 +406,11 @@ export default function OnboardingFlow() {
                   ))}
                 </ul>
               </div>
-              <div className="mt-4 flex items-start gap-4 rounded-[20px] bg-[#110C2A] p-5 text-white">
-                <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] bg-[#A175FF] text-[#110C2A]"><Icons.qr /></span>
+              <div className="mt-4 flex items-start gap-4 rounded-[20px] bg-[#d4ff64] p-5 text-[#0b0c0a]">
+                <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] bg-[#0b0c0a] text-[#d4ff64]"><Icons.qr /></span>
                 <span>
                   <span className="block text-sm font-bold">Top up to start creating</span>
-                  <span className="mt-1 block text-[13px] leading-relaxed text-white/65">Packages from Rp 229.000 for 1.200 credits, paid with QRIS or a bank virtual account. Find it under Credits → Top Up.</span>
+                  <span className="mt-1 block text-[13px] leading-relaxed text-[#0b0c0a]/65">Packages from Rp 229.000 for 1.200 credits, paid with QRIS or a bank virtual account. Find it under Credits → Top Up.</span>
                 </span>
               </div>
             </>
@@ -418,21 +418,21 @@ export default function OnboardingFlow() {
 
           {step.id === 'done' && (
             <div className="text-center sm:pt-4">
-              <div className="mx-auto mb-7 grid h-20 w-20 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_20px_50px_-15px_rgba(16,185,129,0.7)]">
+              <div className="mx-auto mb-7 grid h-20 w-20 place-items-center rounded-full bg-[#d4ff64] text-[#0b0c0a] shadow-[0_20px_50px_-15px_rgba(212,255,100,0.45)]">
                 <Icons.check className="h-10 w-10" />
               </div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#A175FF]">You&apos;re all set</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#d4ff64]">You&apos;re all set</p>
               <h1 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl">Your studio is ready{answers.brandName.trim() ? `, ${answers.brandName.trim()}` : ''}.</h1>
-              <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-[#110C2A]/60">
+              <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-white/55">
                 We picked a starting point from your answers. Everything else is one click away in the sidebar.
               </p>
-              <div className="mx-auto mt-9 max-w-md rounded-[24px] border border-[#110C2A] bg-[#110C2A] p-6 text-left text-white">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#A175FF]">Start here</p>
+              <div className="mx-auto mt-9 max-w-md rounded-[24px] border border-[#d4ff64]/30 bg-white/[.05] p-6 text-left text-white">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#d4ff64]">Start here</p>
                 <div className="mt-3 flex items-start gap-4">
-                  {(() => { const Icon = TOOL_ICONS[recommended]; return <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-[16px] bg-[#A175FF] text-[#110C2A]"><Icon /></span>; })()}
+                  {(() => { const Icon = TOOL_ICONS[recommended]; return <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-[16px] bg-[#d4ff64] text-[#0b0c0a]"><Icon /></span>; })()}
                   <span>
                     <span className="block text-lg font-bold">{TOOLS[recommended].label}</span>
-                    <span className="mt-1 block text-[13px] leading-relaxed text-white/65">{TOOLS[recommended].summary}</span>
+                    <span className="mt-1 block text-[13px] leading-relaxed text-white/60">{TOOLS[recommended].summary}</span>
                   </span>
                 </div>
               </div>
@@ -443,16 +443,16 @@ export default function OnboardingFlow() {
                     ...answers.goals.map((id) => GOALS.find((goal) => goal.id === id)?.label),
                     ...answers.platforms.map((id) => PLATFORMS.find((platform) => platform.id === id)?.label),
                   ].filter(Boolean).map((label) => (
-                    <span key={label} className="rounded-full border border-[#110C2A]/10 bg-white/70 px-3 py-1 text-xs font-semibold text-[#110C2A]/65">{label}</span>
+                    <span key={label} className="rounded-full border border-white/10 bg-white/[.05] px-3 py-1 text-xs font-semibold text-white/65">{label}</span>
                   ))}
                 </div>
               )}
               {error && <p role="alert" className="mx-auto mt-5 max-w-md rounded-[14px] border border-red-300 bg-red-50 px-3.5 py-2.5 text-sm text-red-600">{error}</p>}
               <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
-                <button type="button" onClick={() => save('completed', TOOLS[recommended].path.startsWith('/studio') ? `${TOOLS[recommended].path}?tour=1` : TOOLS[recommended].path)} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-[#A175FF] px-5 py-3.5 text-sm font-bold text-[#110C2A] shadow-lg shadow-[#A175FF]/25 transition hover:-translate-y-0.5 hover:bg-[#9467f4] disabled:translate-y-0 disabled:opacity-60">
+                <button type="button" onClick={() => save('completed', TOOLS[recommended].path.startsWith('/studio') ? `${TOOLS[recommended].path}?tour=1` : TOOLS[recommended].path)} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-[#d4ff64] px-5 py-3.5 text-sm font-bold text-[#0b0c0a] shadow-lg shadow-[#d4ff64]/20 transition hover:-translate-y-0.5 hover:bg-[#e1ff91] disabled:translate-y-0 disabled:opacity-60">
                   {saving ? 'Opening…' : `Open ${TOOLS[recommended].label}`}<Icons.arrow className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={() => save('completed', '/studio?tour=1')} disabled={saving} className="flex-1 rounded-[18px] border border-[#110C2A]/12 bg-white px-5 py-3.5 text-sm font-bold text-[#110C2A] transition hover:border-[#110C2A]/30 disabled:opacity-60">
+                <button type="button" onClick={() => save('completed', '/studio?tour=1')} disabled={saving} className="flex-1 rounded-[18px] border border-white/15 bg-white/[.04] px-5 py-3.5 text-sm font-bold text-white transition hover:border-white/30 disabled:opacity-60">
                   Explore the Studio
                 </button>
               </div>
@@ -463,23 +463,23 @@ export default function OnboardingFlow() {
 
       {/* Footer navigation */}
       {step.id !== 'done' && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#110C2A]/[.06] bg-[#FFF6DE]/85 backdrop-blur-xl">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-[#0b0c0a]/85 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
             <button
               type="button"
               onClick={back}
               disabled={stepIndex === 0}
-              className="flex items-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-semibold text-[#110C2A]/60 transition hover:bg-[#110C2A]/5 hover:text-[#110C2A] disabled:invisible"
+              className="flex items-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-semibold text-white/55 transition hover:bg-white/10 hover:text-white disabled:invisible"
             >
               <Icons.back className="h-4 w-4" />Back
             </button>
             <div className="flex items-center gap-3">
-              <span className="hidden text-xs text-[#110C2A]/40 sm:inline">Press Enter ↵</span>
+              <span className="hidden text-xs text-white/35 sm:inline">Press Enter ↵</span>
               <button
                 type="button"
                 onClick={next}
                 disabled={!canContinue(step.id, answers)}
-                className="flex items-center gap-2 rounded-[18px] bg-[#110C2A] px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#1d1640] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex items-center gap-2 rounded-[18px] bg-[#d4ff64] px-6 py-3 text-sm font-bold text-[#0b0c0a] transition hover:-translate-y-0.5 hover:bg-[#e1ff91] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {nextLabel}<Icons.arrow className="h-4 w-4" />
               </button>
