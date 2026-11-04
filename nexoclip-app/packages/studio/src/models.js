@@ -1,7 +1,10 @@
 // Auto-generated from models_dump.json
-const MULEROUTER_IMAGE_MODELS = [
+const MULEROUTER_T2I_MODELS = [
   { id: 'z-image-spicy-pro', name: 'Z Image Spicy Pro', provider: 'zai', provider_name: 'Z.ai', endpoint: 'z-image-spicy-pro', inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, aspect_ratio: { enum: ['1:1', '16:9', '9:16'], type: 'string', title: 'Aspect Ratio', name: 'aspect_ratio', default: '1:1' } } },
-  { id: 'qwen-image-edit-spicy', name: 'Qwen Image Edit Spicy', provider: 'qwen', provider_name: 'Qwen', endpoint: 'qwen-image-edit-spicy', inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, image: { type: 'string', title: 'Reference Image', name: 'image' } } },
+];
+
+const MULEROUTER_I2I_MODELS = [
+  { id: 'qwen-image-edit-spicy', name: 'Qwen Image Edit Spicy', provider: 'qwen', provider_name: 'Qwen', endpoint: 'qwen-image-edit-spicy', imageField: 'image_url', maxImages: 1, inputs: { prompt: { type: 'string', title: 'Prompt', name: 'prompt' }, image_url: { type: 'string', title: 'Reference Image', name: 'image_url' } } },
 ];
 export const t2iModels = [
   {
@@ -3362,7 +3365,7 @@ export const t2iModels = [
     "provider": "alibaba",
     "provider_name": "Alibaba"
   },
-  ...MULEROUTER_IMAGE_MODELS
+  ...MULEROUTER_T2I_MODELS
 ];
 
 export const OPENROUTER_IMAGE_MODEL_MAP = {
@@ -8057,6 +8060,7 @@ export const getResolutionsForVideoModel = (modelId) => {
 };
 // Auto-generated from schema_data.json — Image to Image models
 export const i2iModels = [
+  ...MULEROUTER_I2I_MODELS,
   {
     "id": "ai-image-upscaler",
     "name": "AI Image Upscaler",
