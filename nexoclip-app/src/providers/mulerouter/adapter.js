@@ -33,11 +33,11 @@ function value(payload, ...keys) {
 }
 
 function normalizeStatus(payload) {
-  const raw = String(value(payload, 'status', 'state', 'data.status') || '').toLowerCase();
+  const raw = String(value(payload, 'status', 'state', 'task_info.status', 'data.status', 'data.task_info.status') || '').toLowerCase();
   const status = raw === 'succeeded' || raw === 'success' ? 'completed'
     : raw === 'canceled' || raw === 'error' ? (raw === 'error' ? 'failed' : 'cancelled')
       : raw || 'running';
-  const output = value(payload, 'output', 'data.output', 'outputs', 'data.outputs', 'result', 'data.result');
+  const output = value(payload, 'output', 'data.output', 'outputs', 'data.outputs', 'images', 'data.images', 'videos', 'data.videos', 'result', 'data.result');
   const urls = Array.isArray(output) ? output : output ? [output] : [];
   return {
     ...payload,
@@ -102,7 +102,7 @@ export function createMuleRouterAdapter({ baseUrl = DEFAULT_BASE_URL, apiKey, ve
   async function submit(params = {}) {
     if (!params.prompt || typeof params.prompt !== 'string') throw new TypeError('prompt is required');
     const payload = await json(endpoint(params.model), { method: 'POST', headers, body: JSON.stringify(requestBody(params)) });
-    const id = value(payload, 'id', 'task_id', 'taskId', 'data.id', 'data.task_id');
+    const id = value(payload, 'id', 'task_id', 'taskId', 'task_info.id', 'data.id', 'data.task_id', 'data.task_info.id');
     if (!id) throw Object.assign(new Error('MuleRouter returned no task id'), { code: 'MULEROUTER_INVALID_RESPONSE' });
     const route = routeFor(params.model, vendor);
     const requestId = `mulerouter:${route.vendor}:${route.model}:${id}`;

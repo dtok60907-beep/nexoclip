@@ -38,3 +38,13 @@ test('accepts a future MuleRouter model through an explicit vendor/model id', as
   assert.equal(result.providerRequestId, 'mulerouter:alibaba:future-video:future-1');
   assert.match(url, /\/vendors\/alibaba\/v1\/future-video\/generation$/);
 });
+
+test('accepts MuleRouter documented task_info response envelopes for images', async () => {
+  const adapter = createMuleRouterAdapter({ apiKey: 'test-key', pollIntervalMs: 0, fetch: async (url, options = {}) => {
+    if (options.method === 'POST') return response({ task_info: { id: 'image-task-1', status: 'queued' } }, 202);
+    return response({ task_info: { id: 'image-task-1', status: 'succeeded' }, images: ['https://cdn.example/image.png'] });
+  } });
+  const result = await adapter.generate({ model: 'z-image-spicy-pro', prompt: 'test image' });
+  assert.equal(result.providerRequestId, 'mulerouter:carrothub:z-image-spicy-pro:image-task-1');
+  assert.deepEqual(result.outputs, ['https://cdn.example/image.png']);
+});
