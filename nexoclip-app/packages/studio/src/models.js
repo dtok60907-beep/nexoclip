@@ -11382,7 +11382,7 @@ export const i2iModels = [
 
 // Auto-generated from schema_data.json — Image to Video models
 export const i2vModels = [
-  ...MULEROUTER_VIDEO_MODELS.filter(model => model.id.startsWith('w3.0')).flatMap(model => {
+  ...MULEROUTER_VIDEO_MODELS.filter(model => model.id.startsWith('w3.0') || model.id.startsWith('berry-')).flatMap(model => {
     const frameId = `${model.id}-frame`;
     OPENROUTER_VIDEO_MODEL_MAP[frameId] = model.id;
     return [
@@ -19939,7 +19939,7 @@ export const getMaxImagesForI2IModel = (modelId) => {
 
 // ─── Video-to-Video models ────────────────────────────────────────────────────
 export const v2vModels = [
-  ...MULEROUTER_VIDEO_MODELS.filter(model => model.id.startsWith('w3.0')).map(model => {
+  ...MULEROUTER_VIDEO_MODELS.filter(model => model.id.startsWith('w3.0') || model.id.startsWith('berry-')).map(model => {
     OPENROUTER_V2V_MODEL_MAP[model.id] = model.id;
     return { ...model, name: `${model.name} · Reference Video`, videoField: 'video_url', imageField: 'image_url', imageOptional: true, hasPrompt: true, promptRequired: true };
   }),
