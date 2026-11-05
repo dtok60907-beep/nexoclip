@@ -110,30 +110,6 @@ const APERTURE_EFFECT = {
   "f/11": "deep focus clarity, sharp foreground to background",
 };
 
-const ASSET_URLS = {
-  "Modular 8K Digital": "/assets/cinema/modular_8k_digital.webp",
-  "Full-Frame Cine Digital": "/assets/cinema/full_frame_cine_digital.webp",
-  "Grand Format 70mm Film": "/assets/cinema/grand_format_70mm_film.webp",
-  "Studio Digital S35": "/assets/cinema/studio_digital_s35.webp",
-  "Classic 16mm Film": "/assets/cinema/classic_16mm_film.webp",
-  "Premium Large Format Digital":
-    "/assets/cinema/premium_large_format_digital.webp",
-  "Creative Tilt Lens": "/assets/cinema/creative_tilt_lens.webp",
-  "Compact Anamorphic": "/assets/cinema/compact_anamorphic.webp",
-  "Extreme Macro": "/assets/cinema/extreme_macro.webp",
-  "70s Cinema Prime": "/assets/cinema/70s_cinema_prime.webp",
-  "Classic Anamorphic": "/assets/cinema/classic_anamorphic.webp",
-  "Premium Modern Prime": "/assets/cinema/premium_modern_prime.webp",
-  "Warm Cinema Prime": "/assets/cinema/warm_cinema_prime.webp",
-  "Swirl Bokeh Portrait": "/assets/cinema/swirl_bokeh_portrait.webp",
-  "Vintage Prime": "/assets/cinema/vintage_prime.webp",
-  "Halation Diffusion": "/assets/cinema/halation_diffusion.webp",
-  "Clinical Sharp Prime": "/assets/cinema/clinical_sharp_prime.webp",
-  "f/1.4": "/assets/cinema/f_1_4.webp",
-  "f/4": "/assets/cinema/f_4.webp",
-  "f/11": "/assets/cinema/f_11.webp",
-};
-
 const ASPECT_RATIOS = ["16:9", "21:9", "9:16", "1:1", "4:5"];
 const RESOLUTIONS = ["1K", "2K", "4K"];
 const CAMERAS = Object.keys(CAMERA_MAP);
@@ -217,187 +193,15 @@ function Dropdown({ title, items, selected, onSelect, triggerRef, onClose }) {
 
 // Camera configuration controls
 
-function ScrollColumn({ title, items, columnKey, value, onChange }) {
-  const listRef = useRef(null);
-  const isDragging = useRef(false);
-  const startY = useRef(0);
-  const scrollTopStart = useRef(0);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return undefined;
-
-    const timer = setTimeout(() => {
-      const target = Array.from(list.children).find(
-        (child) => child.dataset.value === String(value),
-      );
-      if (target) target.scrollIntoView({ block: "center" });
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleScroll = useCallback(() => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const centerY = list.scrollTop + list.clientHeight / 2;
-    const children = Array.from(list.children).filter(
-      (child) => child.dataset.value,
-    );
-    let closest = null;
-    let minimumDistance = Infinity;
-
-    children.forEach((child) => {
-      const childCenter = child.offsetTop + child.offsetHeight / 2;
-      const distance = Math.abs(centerY - childCenter);
-      if (distance < minimumDistance) {
-        minimumDistance = distance;
-        closest = child;
-      }
-    });
-
-    children.forEach((child) => {
-      const selected = child === closest;
-      child.dataset.selected = String(selected);
-      child.setAttribute("aria-selected", String(selected));
-    });
-
-    if (closest) {
-      const nextValue =
-        columnKey === "focal"
-          ? parseInt(closest.dataset.value, 10)
-          : closest.dataset.value;
-      if (String(nextValue) !== String(value)) onChange(nextValue);
-    }
-  }, [columnKey, onChange, value]);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return undefined;
-
-    list.addEventListener("scroll", handleScroll);
-    const timer = setTimeout(handleScroll, 150);
-
-    return () => {
-      list.removeEventListener("scroll", handleScroll);
-      clearTimeout(timer);
-    };
-  }, [handleScroll]);
-
-  const handleMouseDown = (event) => {
-    const list = listRef.current;
-    if (!list) return;
-
-    isDragging.current = true;
-    list.classList.add("cursor-grabbing");
-    list.classList.remove("snap-y");
-    startY.current = event.pageY - list.offsetTop;
-    scrollTopStart.current = list.scrollTop;
-    event.preventDefault();
-  };
-
-  const stopDragging = () => {
-    const list = listRef.current;
-    isDragging.current = false;
-    if (!list) return;
-    list.classList.remove("cursor-grabbing");
-    list.classList.add("snap-y");
-  };
-
-  const handleMouseMove = (event) => {
-    const list = listRef.current;
-    if (!isDragging.current || !list) return;
-
-    event.preventDefault();
-    const y = event.pageY - list.offsetTop;
-    list.scrollTop = scrollTopStart.current - (y - startY.current) * 1.5;
-  };
-
-  const handleItemClick = (item) => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const target = Array.from(list.children).find(
-      (child) => child.dataset.value === String(item),
-    );
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
-
-  return (
-    <section className="flex w-[170px] shrink-0 snap-center flex-col md:w-[190px]">
-      <div className="mb-3 flex items-center justify-between px-1">
-        <h3 className="text-xs font-semibold text-white/75">{title}</h3>
-        <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-b from-[#d4ff64] to-[#a855f7] shadow-[0_0_6px_rgba(212,255,100,0.5)]" />
-      </div>
-
-      <div className="relative h-[320px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#030303] shadow-inner">
-        <div className="pointer-events-none absolute inset-x-2 top-1/2 z-0 h-[82px] -translate-y-1/2 rounded-xl border border-[#d4ff64]/20 bg-gradient-to-r from-[#d4ff64]/15 to-purple-500/10 shadow-[0_0_15px_rgba(212,255,100,0.1)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-gradient-to-b from-[#030303] via-[#030303]/85 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#030303] via-[#030303]/85 to-transparent" />
-
-        <div
-          ref={listRef}
-          role="listbox"
-          aria-label={title}
-          className="relative z-10 h-full cursor-grab snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          onMouseDown={handleMouseDown}
-          onMouseLeave={stopDragging}
-          onMouseUp={stopDragging}
-          onMouseMove={handleMouseMove}
-        >
-          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
-          {items.map((item) => {
-            const imageUrl = ASSET_URLS[item];
-            const selected = String(item) === String(value);
-
-            return (
-              <button
-                key={item}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                data-value={item}
-                data-selected={selected}
-                onClick={() => handleItemClick(item)}
-                className="group flex h-[82px] w-full snap-center select-none items-center justify-center gap-2.5 px-4 text-left opacity-30 transition-all duration-200 data-[selected=true]:opacity-100"
-              >
-                <span
-                  className={`flex shrink-0 items-center justify-center font-semibold transition-colors ${
-                    imageUrl
-                      ? "h-10 w-10"
-                      : "text-base text-white/55 group-data-[selected=true]:text-[#d4ff64]"
-                  }`}
-                >
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt=""
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <>
-                      {item}
-                      {columnKey === "focal" ? "mm" : ""}
-                    </>
-                  )}
-                </span>
-                {columnKey !== "focal" && (
-                  <span className="line-clamp-2 min-w-0 text-[10px] font-medium leading-snug text-white/60 transition-colors group-data-[selected=true]:text-white">
-                    {item}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
-        </div>
-      </div>
-
-    </section>
-  );
+function CameraSettingChoices({ title, items, columnKey, value, onChange }) {
+ return <fieldset className="min-w-0"><legend className="mb-3 text-xs font-semibold uppercase tracking-widest text-white/60">{title}</legend>
+ <div className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1">{items.map(item => {
+ const selected = String(item) === String(value);
+ return <button key={item} type="button" aria-pressed={selected} onClick={() => onChange(item)}
+ className={"flex min-h-[52px] items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#d4ff64] " + (selected ? "border-[#d4ff64]/50 bg-[#d4ff64]/10 text-[#d4ff64]" : "border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.07] hover:text-white")}>
+ <span>{item}{columnKey === "focal" ? "mm" : ""}</span>{selected && <span aria-hidden="true">✓</span>}</button>;
+ })}</div></fieldset>;
 }
-
 function CameraControlsOverlay({
   isOpen,
   onClose,
@@ -493,30 +297,30 @@ function CameraControlsOverlay({
           </button>
         </div>
 
-        <div className="overflow-x-auto px-5 py-6 no-scrollbar md:px-7 md:py-7">
-          <div className="mx-auto flex w-max min-w-full justify-start gap-3 sm:justify-center md:gap-5">
-            <ScrollColumn
+        <div className="overflow-y-auto px-5 py-6 md:px-7 md:py-7">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <CameraSettingChoices
               title="Camera"
               items={CAMERAS}
               columnKey="camera"
               value={settings.camera}
               onChange={updateSetting("camera")}
             />
-            <ScrollColumn
+            <CameraSettingChoices
               title="Lens"
               items={LENSES}
               columnKey="lens"
               value={settings.lens}
               onChange={updateSetting("lens")}
             />
-            <ScrollColumn
+            <CameraSettingChoices
               title="Focal length"
               items={FOCAL_LENGTHS}
               columnKey="focal"
               value={settings.focal}
               onChange={updateSetting("focal")}
             />
-            <ScrollColumn
+            <CameraSettingChoices
               title="Aperture"
               items={APERTURES}
               columnKey="aperture"
@@ -1024,47 +828,11 @@ export default function CinemaStudio({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 animate-fade-in-up transition-all duration-700 min-h-[50vh]">
-            {/* Overlapping floating cards */}
-            <div className="flex items-center justify-center gap-1.5 md:gap-3 mb-10 select-none scale-90 sm:scale-100">
-              <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl -rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/sdxl-image.avif"
-                  alt="Creative asset 1"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl -rotate-[4deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/chroma-image.avif"
-                  alt="Creative asset 2"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-18 h-18 sm:w-24 sm:h-24 rounded-full border border-white/10 shadow-2xl rotate-[6deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/neta-lumina.avif"
-                  alt="Creative asset 3"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/perfect-pony-xl.avif"
-                  alt="Creative asset 4"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
-              <span className="text-white font-black uppercase text-xl sm:text-3xl tracking-wide mb-1 opacity-90">START CREATING WITH</span>
-              <span className="text-[#d4ff64] font-black uppercase text-2xl sm:text-4xl sm:mt-1 tracking-tight">
-                CINEMA STUDIO
-              </span>
-            </h1>
-            <p className="text-white/40 text-xs sm:text-sm font-medium tracking-wide text-center max-w-lg leading-relaxed px-4">
-              What would you shoot with infinite budget? Control cameras, lighting, lenses, and prompt high-end cinematic scenes.
-            </p>
+<div aria-hidden="true" className="relative mb-7 flex h-24 w-40 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.02]"><span className="absolute left-3 top-3 h-4 w-4 border-l border-t border-[#d4ff64]/70" /><span className="absolute bottom-3 right-3 h-4 w-4 border-b border-r border-[#d4ff64]/70" /><span className="text-xs font-medium tracking-[0.3em] text-white/45">TAKE 01</span></div>
+<p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#d4ff64]">NexoClip Cinema</p>
+<h1 className="mb-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Your first frame starts here.</h1>
+<p className="max-w-md text-sm leading-relaxed text-white/60">Describe your scene below. Shape the look with a camera, lens, and depth of field that fit your story.</p>
+<button type="button" onClick={() => setIsOverlayOpen(true)} className="mt-6 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#d4ff64]">Set up your camera <span aria-hidden="true">↗</span></button>
           </div>
         )}
       </div>
@@ -1226,7 +994,7 @@ export default function CinemaStudio({
               >
                 <div className="w-1.5 h-1.5 bg-[#d4ff64] rounded-full shadow-lg shadow-[#d4ff64]/20 shrink-0" />
                 <span className="max-w-[120px] truncate text-xs font-semibold text-white/70 group-hover:text-[#d4ff64] transition-colors">
-                  {settings.camera} · {formatSummaryValue()}
+                  Camera · {formatSummaryValue()}
                 </span>
               </button>
             </PromptControls>

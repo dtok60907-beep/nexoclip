@@ -1,74 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { HOME_VIDEO_SECTIONS } from './homeShowcaseVideos';
-
-function VideoPreview({ item, onClose }) {
-  const dialog = useRef(null);
-
-  useEffect(() => {
-    const previous = document.activeElement;
-    dialog.current?.showModal();
-    return () => previous?.focus?.();
-  }, []);
-
-  return <dialog ref={dialog} className="suite-preview suite-video-preview" aria-label={item.title} onCancel={onClose} onClick={event => { if (event.target === dialog.current) onClose(); }}>
-    <div className="suite-preview-inner">
-      <button className="studio-auth-close" onClick={onClose} aria-label="Close preview">×</button>
-      <video src={item.url} controls autoPlay playsInline preload="metadata" />
-      <div><span className="suite-video-modal-kicker">NEXOCLIP SHOWCASE</span><h2>{item.title}</h2><button className="suite-primary" onClick={onClose}>Back to showcase <span aria-hidden="true">↗</span></button></div>
-    </div>
-  </dialog>;
-}
-
-const CARD_VARIANTS = ['framed', 'overlay', 'poster', 'spotlight'];
-
-function ShowcaseVideo({ item, sectionId, variant, index, onSelect }) {
-  const videoRef = useRef(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return undefined;
-
-    const startPreview = () => {
-      if (!video.dataset.loaded) {
-        video.src = item.url;
-        video.dataset.loaded = 'true';
-        video.load();
-      }
-      video.play().catch(() => {});
-    };
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) startPreview();
-      else video.pause();
-    }, { rootMargin: '100px 0px', threshold: 0.15 });
-
-    observer.observe(video);
-    return () => {
-      observer.disconnect();
-      video.pause();
-    };
-  }, [item.url]);
-
-  const number = String(index + 1).padStart(2, '0');
-  return <button type="button"
-    className={`suite-card suite-card--${variant} suite-showcase-video`}
-    onClick={() => onSelect(item)} aria-label={`Play ${item.title}`}>
-    <span className="suite-showcase-video-frame suite-card-media">
-      <video ref={videoRef} muted loop playsInline preload="none" aria-hidden="true" />
-    </span>
-    <span className={`suite-card-caption suite-card-caption--${variant}`}>
-      {variant === 'poster' && <span className="suite-card-number" aria-hidden="true">{number}</span>}
-      <span className="suite-card-caption-text"><span className="suite-card-title">{item.title}</span><span className="suite-card-kicker">{sectionId}</span></span>
-      <span className="suite-card-arrow" aria-hidden="true">↗</span>
-    </span>
-  </button>;
-}
+import { useState } from 'react';
 
 export default function StudioHome({ onNavigate }) {
   const [mode, setMode] = useState('director');
   const [prompt, setPrompt] = useState('');
-  const [preview, setPreview] = useState(null);
   const destination = mode === 'image' ? 'image' : mode === 'director' ? 'director' : 'video';
   const submitPrompt = () => onNavigate(destination, prompt.trim());
 
@@ -76,7 +12,8 @@ export default function StudioHome({ onNavigate }) {
     <div className="suite-home-inner">
       <section className="suite-composer-hero" aria-labelledby="suite-home-title">
         <p className="suite-hero-kicker"><span /> YOUR CREATIVE STUDIO</p>
-        <h1 id="suite-home-title">What are we making today?</h1>
+        <h1 id="suite-home-title">What will you create today?</h1>
+        <p className="nx-home-subtitle">A scene. A story. Your next big idea.</p>
         <div className="suite-mode-switch" role="tablist" aria-label="Choose a creation mode">
           {[['director', '✳', 'Director'], ['video', '▷', 'Video'], ['image', '✧', 'Image']].map(([id, icon, label]) => <button key={id} role="tab" aria-selected={mode === id} className={mode === id ? 'is-selected' : ''} onClick={() => setMode(id)}><span aria-hidden="true">{icon}</span>{label}</button>)}
         </div>
@@ -91,21 +28,21 @@ export default function StudioHome({ onNavigate }) {
         <div className="suite-prompt-ideas"><span>Try</span>{['A dreamy short film about summer', 'A product ad in soft morning light', 'A portrait from another world'].map(idea => <button key={idea} onClick={() => setPrompt(idea)}>{idea}</button>)}</div>
       </section>
 
-      <div className="suite-video-library-intro"><span className="suite-showcase-live-dot" /><p>Made with Nexoclip</p><span>Real videos · Real ideas · All motion</span></div>
-      <div className="suite-video-sections">
-        {HOME_VIDEO_SECTIONS.map((section, index) => <section className={`suite-video-section suite-video-section-${section.layout}`} key={section.id} aria-labelledby={`showcase-${section.id}`}>
-          <div className="suite-section-heading suite-reference-heading">
-            <div><h2 id={`showcase-${section.id}`}>{section.title}</h2><p className="suite-video-section-description">{section.description}</p></div>
-            <button className="suite-video-section-action" onClick={() => onNavigate('video')}>Explore videos <span aria-hidden="true">↗</span></button>
-          </div>
-          <div className={`suite-video-row suite-video-row--${section.variant || CARD_VARIANTS[index % CARD_VARIANTS.length]}`}>
-            {section.videos.map((item, i) => <ShowcaseVideo key={item.id} item={item} index={i} sectionId={section.title}
-              variant={section.variant || CARD_VARIANTS[index % CARD_VARIANTS.length]} onSelect={setPreview} />)}
-          </div>
-        </section>)}
-      </div>
+      <section className="nx-home-editorial" aria-label="Creative inspiration">
+        <div className="nx-home-editorial-copy"><span>FROM IDEA TO SOMETHING REAL</span><h2>Your imagination.<br />In a new light.</h2><p>Explore a look, build a scene, or tell a story. Start with an idea and make it yours.</p></div>
+        <div className="nx-home-moodboard"><img src="/showcase/portrait.webp" alt="Portrait photography inspiration" /><img src="/showcase/skincare.webp" alt="Product photography inspiration" /><img src="/showcase/fashion.webp" alt="Fashion editorial inspiration" /></div>
+      </section>
+      <section className="nx-home-starters" aria-labelledby="nx-starter-title">
+        <div><h2 id="nx-starter-title">A little inspiration to get started</h2><p>Pick a starting point. Make it your own in the studio.</p></div>
+        <div className="nx-home-starter-grid">{[
+          ['Product Ad', 'director', 'Create a cinematic product ad in soft morning light. Start with a close-up, reveal the product, and finish with a clean hero shot.'],
+          ['UGC Video', 'director', 'Create a natural UGC-style product video with an engaging opening, a simple demonstration, and a friendly closing.'],
+          ['Cinematic Shot', 'video', 'A cinematic tracking shot through a quiet city at blue hour, warm windows, subtle reflections, slow natural camera movement.'],
+          ['Product Photo', 'image', 'An editorial product photograph on a warm stone pedestal, soft side lighting, subtle shadows, a clean neutral background.'],
+        ].map(([label, tab, idea], index) => <button key={label} onClick={() => onNavigate(tab, idea)}><span className="nx-starter-number">0{index + 1}</span><span>{label}</span><span aria-hidden="true">↗</span></button>)}</div>
+      </section>
+
       <footer className="suite-footer"><span>nexoclip <span>— A home for your imagination.</span></span><span>Explore first. Create when you’re ready.</span></footer>
     </div>
-    {preview && <VideoPreview item={preview} onClose={() => setPreview(null)} />}
   </main>;
 }
