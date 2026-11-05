@@ -28,10 +28,6 @@ export default function StudioHome({ onNavigate }) {
         <div className="suite-prompt-ideas"><span>Try</span>{['A dreamy short film about summer', 'A product ad in soft morning light', 'A portrait from another world'].map(idea => <button key={idea} onClick={() => setPrompt(idea)}>{idea}</button>)}</div>
       </section>
 
-      <section className="nx-home-editorial" aria-label="Creative inspiration">
-        <div className="nx-home-editorial-copy"><span>FROM IDEA TO SOMETHING REAL</span><h2>Your imagination.<br />In a new light.</h2><p>Explore a look, build a scene, or tell a story. Start with an idea and make it yours.</p></div>
-        <div className="nx-home-moodboard"><img src="/showcase/portrait.webp" alt="Portrait photography inspiration" /><img src="/showcase/skincare.webp" alt="Product photography inspiration" /><img src="/showcase/fashion.webp" alt="Fashion editorial inspiration" /></div>
-      </section>
       <section className="nx-home-starters" aria-labelledby="nx-starter-title">
         <div><h2 id="nx-starter-title">A little inspiration to get started</h2><p>Pick a starting point. Make it your own in the studio.</p></div>
         <div className="nx-home-starter-grid">{[
