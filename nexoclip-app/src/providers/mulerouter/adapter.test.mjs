@@ -67,3 +67,15 @@ test('submits Qwen Image Edit Spicy with its required primary image field', asyn
   assert.deepEqual(request.body.reference_images, ['https://cdn.example/style.png']);
   assert.equal(request.body.ratio, undefined);
 });
+
+test('times out a MuleRouter request instead of leaving the worker hanging', async () => {
+  const adapter = createMuleRouterAdapter({
+    apiKey: 'test-key', requestTimeoutMs: 1,
+    fetch: (_url, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }),
+  });
+  await assert.rejects(() => adapter.submit({ model: 'berry-1.0-turbo', prompt: 'test' }), {
+    code: 'MULEROUTER_UNAVAILABLE',
+  });
+});

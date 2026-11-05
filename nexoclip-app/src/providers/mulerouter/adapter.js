@@ -1,5 +1,6 @@
 const DEFAULT_BASE_URL = 'https://api.mulerouter.ai';
 const DEFAULT_VENDOR = 'carrothub';
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 const MODEL_VENDORS = Object.freeze({
   'qwen-image-edit-spicy': 'carrothub',
   'wan-2.5': 'alibaba',
@@ -95,7 +96,7 @@ function requestBody(params) {
   return { ...body, ...(params.muleRouterPayload || {}) };
 }
 
-export function createMuleRouterAdapter({ baseUrl = DEFAULT_BASE_URL, apiKey, vendor = DEFAULT_VENDOR, fetch: fetchImpl = globalThis.fetch, pollIntervalMs = 1_000, maxPolls = 120 } = {}) {
+export function createMuleRouterAdapter({ baseUrl = DEFAULT_BASE_URL, apiKey, vendor = DEFAULT_VENDOR, fetch: fetchImpl = globalThis.fetch, pollIntervalMs = 1_000, maxPolls = 120, requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
   if (!apiKey || typeof apiKey !== 'string') throw new TypeError('apiKey is required');
   if (typeof fetchImpl !== 'function') throw new TypeError('fetch is required');
   const root = String(baseUrl).replace(/\/+$/, '');
@@ -106,7 +107,10 @@ export function createMuleRouterAdapter({ baseUrl = DEFAULT_BASE_URL, apiKey, ve
   };
   async function json(url, options) {
     let response;
-    try { response = await fetchImpl(url, options); } catch { throw errorFor(503, 'MuleRouter is temporarily unavailable'); }
+    const requestOptions = options?.signal || typeof AbortSignal === 'undefined'
+      ? options
+      : { ...options, signal: AbortSignal.timeout(requestTimeoutMs) };
+    try { response = await fetchImpl(url, requestOptions); } catch { throw errorFor(503, 'MuleRouter is temporarily unavailable'); }
     if (!response.ok) {
       let detail = '';
       try { const body = await response.json(); detail = body?.error?.message || body?.message || ''; } catch { /* empty */ }

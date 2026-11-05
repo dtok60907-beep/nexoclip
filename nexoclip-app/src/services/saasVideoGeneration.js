@@ -325,8 +325,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const { provider, providerRequestId, usage } = resumed || await submitToProvider(job, observe);
     const dispatchId = latestObservation?.dispatchId || randomUUID();
     let observedUsage = usage;
-    const observeRequest = observe ? (eventType) => observe({ provider, providerRequestId, dispatchId, eventType, usage: observedUsage }) : null;
-    if (observeRequest) await observeRequest('submitted');
+    // Persist the provider task before any billing observation or polling work.
+    // A slow/failing COGS write must not make an accepted provider job look undispatched.
     if (!resumed && job.claim_token) {
       try {
         await recordProviderRequest(pool, { generationId: job.id, claimToken: job.claim_token, provider, providerRequestId });
@@ -334,6 +334,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
         console.error('[video] could not record provider request id', job.id, error?.message);
       }
     }
+    const observeRequest = observe ? (eventType) => observe({ provider, providerRequestId, dispatchId, eventType, usage: observedUsage }) : null;
+    if (observeRequest) await observeRequest('submitted');
     let status;
     let completedAtProvider = false;
     let terminalAtProvider = false;
