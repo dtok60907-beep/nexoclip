@@ -154,6 +154,19 @@ export const VIDEO_MODELS: ModelConfig[] = [
     }
     return [omni(base, { inputTypes: ['text', 'image', 'video'], supportsReferenceAudio: true, maxReferenceImages: 10, maxReferenceVideos: 5, maxReferenceAudios: 5 }), frame(base)]
   }),
+  ...['berry-1.0', 'berry-1.0-pro', 'berry-1.0-turbo', 'berry-1.0-turbo-pro'].flatMap(id => {
+    const tier = id.replace('berry-1.0', '').replace(/^-/, '').replace(/-/g, ' ')
+    const name = `Berry 1.0${tier ? ` ${tier.replace(/\b\w/g, (letter) => letter.toUpperCase())}` : ''}`
+    const base: ModelConfig = {
+      ...video(id, name, id, id.includes('pro') ? ['1080p', '2K', '4K'] : ['480p', '720p', '1080p'], Array.from({ length: 29 }, (_, i) => `${i + 2}s`)),
+      provider: 'mulerouter', providerModel: id, falModel: id,
+      aspectRatios: ['16:9', '4:3', '1:1', '3:4', '9:16', 'adaptive'],
+    }
+    return [
+      omni(base, { inputTypes: ['text', 'image', 'video'], supportsReferenceAudio: true, maxReferenceImages: 10, maxReferenceVideos: 5, maxReferenceAudios: 5 }),
+      frame(base, { inputTypes: ['text', 'image'] }),
+    ]
+  }),
   omni(SEEDANCE_20, SEEDANCE_20_OMNI),
   frame(SEEDANCE_20),
   omni(SEEDANCE_20_FAST, SEEDANCE_20_OMNI),
