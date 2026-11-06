@@ -48,6 +48,7 @@ const MarketingStudio = studioLazy('MarketingStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
 const MotionStudio = dynamic(() => import('./motion/MotionHub.js'), { ssr: false, loading: StudioLoading });
+const SocialStudio = dynamic(() => import('./SocialStudio.js'), { ssr: false, loading: StudioLoading });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
 const LANDING_URL = 'https://www.nexoclip.com';
@@ -56,6 +57,7 @@ const LANDING_URL = 'https://www.nexoclip.com';
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
 const TABS = [
+  { id: 'social', label: 'Social', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4M17 3v4M3 11h18m-13 5 3 2 5-4" /></svg> },
   { id: 'home', label: 'Home', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></svg> },
   {
     id: 'image',
@@ -511,7 +513,7 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   const handleTabChange = useCallback((tabId, prompt = '') => {
-    if (['billing', 'usage', 'canvas', 'director'].includes(tabId) && !requireAuth()) return;
+    if (['billing', 'usage', 'canvas', 'director', 'social'].includes(tabId) && !requireAuth()) return;
     if (tabId === 'canvas') {
       window.location.assign('/canvas');
       return;
@@ -805,6 +807,7 @@ export default function StandaloneShell({ initialTab, children }) {
                 </>)}
                 {group('Workspace', 'Space', <>
                   {navLink('canvas', 'Canvas')}
+                  {navLink('social', 'Social', <span className="nx-badge">NEW</span>)}
                   {navLink('usage', 'Usage')}
                 </>)}
               </nav>
@@ -905,7 +908,8 @@ export default function StandaloneShell({ initialTab, children }) {
         <div className="suite-content min-w-0 relative overflow-hidden text-white">
         {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} />}
         {authStatus !== 'loading' && <>
-        {['billing', 'usage'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to view your credits and usage.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
+        {['billing', 'usage', 'social'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to access your workspace.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
+        {activeTab === 'social' && authStatus === 'authenticated' && <SocialStudio key={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : ''} workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} />}
         {activeTab === 'director' && (authStatus === 'authenticated'
           ? <div className="h-full w-full"><DirectorApp initialBrief={studioPrompt} /></div>
           : <div className="suite-private"><h2>AI Director</h2><p>Sign in to plan and produce videos with the Director.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>)}
