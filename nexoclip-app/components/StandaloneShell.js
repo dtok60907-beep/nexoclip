@@ -48,7 +48,6 @@ const MarketingStudio = studioLazy('MarketingStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
 const MotionStudio = dynamic(() => import('./motion/MotionHub.js'), { ssr: false, loading: StudioLoading });
-const SocialStudio = dynamic(() => import('./SocialStudio.js'), { ssr: false, loading: StudioLoading });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
 const LANDING_URL = 'https://www.nexoclip.com';
@@ -514,6 +513,10 @@ export default function StandaloneShell({ initialTab, children }) {
 
   const handleTabChange = useCallback((tabId, prompt = '') => {
     if (['billing', 'usage', 'canvas', 'director', 'social'].includes(tabId) && !requireAuth()) return;
+    if (tabId === 'social') {
+      window.location.assign('https://social.nexoclip.com');
+      return;
+    }
     if (tabId === 'canvas') {
       window.location.assign('/canvas');
       return;
@@ -909,7 +912,6 @@ export default function StandaloneShell({ initialTab, children }) {
         {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} />}
         {authStatus !== 'loading' && <>
         {['billing', 'usage', 'social'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to access your workspace.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
-        {activeTab === 'social' && authStatus === 'authenticated' && <SocialStudio key={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : ''} workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} />}
         {activeTab === 'director' && (authStatus === 'authenticated'
           ? <div className="h-full w-full"><DirectorApp initialBrief={studioPrompt} /></div>
           : <div className="suite-private"><h2>AI Director</h2><p>Sign in to plan and produce videos with the Director.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>)}
