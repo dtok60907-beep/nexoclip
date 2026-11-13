@@ -6,11 +6,6 @@
 :8080 {
 	encode zstd gzip
 
-	@social host social.nexoclip.com
-	handle @social {
-		reverse_proxy {$POSTIZ_UPSTREAM:ai-ugc-postiz.railway.internal:5000}
-	}
-
 	handle /healthz {
 		respond "ok" 200
 	}
