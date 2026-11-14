@@ -15,6 +15,7 @@ import { recoverUnreservedGenerations, releaseGenerationReservation, settleUnres
 import { recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
 import { recordGenerationCostObservation } from '../services/generationCostService.js';
 import { deploymentEnvironment } from '../lib/deploymentEnvironment.js';
+import { createTikTokPublishWorker } from './tiktokPublishWorker.mjs';
 
 // A worker killed mid-job (deploys restart this service) leaves the job
 // 'running'. Recover it once its lease has been expired for a grace period;
@@ -88,11 +89,15 @@ export async function createVideoWorker({
     provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs, recordCost:(pool,input)=>recordCost(pool,{...input,env}),
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
+  const tiktokWorker = env.TIKTOK_CLIENT_KEY && env.TIKTOK_TOKEN_ENCRYPTION_KEY
+    ? createTikTokPublishWorker({ Queue, Worker, connection, pool, storage, env, onError })
+    : null;
   let closed = false;
   return { async close() {
     if (closed) return;
     closed = true;
     clearSchedule(interval);
+    await tiktokWorker?.close();
     await worker.pause();
     await worker.close();
     await queue.close();

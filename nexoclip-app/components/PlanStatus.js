@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 const DAY_MS = 86_400_000;
-const DISMISS_KEY = 'nexoclip_promo_dismissed';
+const DISMISS_KEY = 'nexoclip_promo_dismissed_session';
 const day = (v) => new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 // The workspace's plan and whether the launch promo applies to it. Signed out, only the
@@ -12,6 +12,7 @@ const day = (v) => new Date(v).toLocaleDateString('en-GB', { day: 'numeric', mon
 export function usePlanStatus(authStatus, refreshKey) {
   const [status, setStatus] = useState(null);
   useEffect(() => {
+    setStatus(null);
     if (authStatus === 'loading') return undefined;
     let cancelled = false;
     const workspaceId = window.sessionStorage.getItem('nexoclip_workspace_id');
@@ -47,23 +48,23 @@ export function PlanPill({ status, onClick }) {
 }
 
 // Strip above the Studio header while the promo applies to this visitor; closing it
-// hides it until the next promo.
+// hides it for the current browser session.
 export function PromoBanner({ status, onOpen }) {
   const promo = status?.enabled ? status.promo : null;
   const [dismissed, setDismissed] = useState(true);
   useEffect(() => {
     if (!promo) return;
-    try { setDismissed(window.localStorage.getItem(DISMISS_KEY) === promo.promoEndsAt); } catch { setDismissed(false); }
+    try { setDismissed(window.sessionStorage.getItem(DISMISS_KEY) === promo.promoEndsAt); } catch { setDismissed(false); }
   }, [promo]);
-  if (!promo || dismissed) return null;
+  if (!promo || dismissed || !(promo.promoPercent > 0) || !(new Date(promo.promoEndsAt).getTime() > Date.now())) return null;
   const close = () => {
     setDismissed(true);
-    try { window.localStorage.setItem(DISMISS_KEY, promo.promoEndsAt); } catch { /* storage blocked */ }
+    try { window.sessionStorage.setItem(DISMISS_KEY, promo.promoEndsAt); } catch { /* storage blocked */ }
   };
   return <div className="suite-promo-banner" role="region" aria-label="Promotion">
     <p>
       <b>Launch promo: {promo.promoPercent}% off your first month</b>
-      <span> on any monthly plan, with every credit included. Until {day(new Date(promo.promoEndsAt) - 1)}.</span>
+      <span> · Until {day(new Date(promo.promoEndsAt) - 1)}.</span>
     </p>
     <button type="button" className="suite-promo-cta" onClick={onOpen}>See plans</button>
     <button type="button" className="suite-promo-close" onClick={close} aria-label="Close promotion">×</button>

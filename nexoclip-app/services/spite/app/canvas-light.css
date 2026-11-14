@@ -1,0 +1,81 @@
+/* Canvas shares the studio palette; media previews keep their dark scrims. */
+.nx-canvas-light {
+  color-scheme:light;
+  --background:#faf9fd; --canvas:#f7f6fb; --foreground:#292435;
+  --muted-foreground:#746c81; --accent:#7952c9; --accent-foreground:#fff;
+  --accent-hover:#6540b0; --card:#fff; --card-foreground:#292435;
+  --border:#e5dfed; --border-bright:#cfc0e4; --input:#f3f0f8; --ring:#9873da;
+  --glass-bg:#fff; --glass-border:#e5dfed; --glass-shine:#fff;
+}
+.nx-canvas-light body, .nx-canvas-light .spite-ozone-bg { background:#faf9fd; color:#292435; }
+.nx-canvas-light .spite-grain { display:none; }
+.nx-canvas-light .glass { background:rgba(255,255,255,.96); border-color:#e5dfed; box-shadow:0 3px 16px #37264e08; }
+.nx-canvas-light .glass-hover:hover { background:#fff; border-color:#c5b2e2; box-shadow:0 5px 20px #37264e0c; }
+.nx-canvas-light .spite-canvas-shell, .nx-canvas-light .dot-grid { background-color:#f7f6fb; background-image:radial-gradient(#d8d2e4 1px,transparent 1px); }
+.nx-canvas-light .accent-glow { box-shadow:0 2px 12px #7952c918; }
+.nx-canvas-light .spite-react-flow .react-flow__edge-path { stroke:#a38bc9; filter:none; }
+.nx-canvas-light .spite-react-flow .react-flow__edge.selected .react-flow__edge-path { stroke:#7952c9; filter:none; }
+.nx-canvas-light .spite-react-flow .react-flow__connection-path { stroke:#7952c9; filter:none; }
+.nx-canvas-light .spite-react-flow .react-flow__node-imageGen > div,
+.nx-canvas-light .spite-react-flow .react-flow__node-videoGen > div { border-radius:14px; }
+.nx-canvas-light [class*="border-white/"], .nx-canvas-light [class*="border-[#2"] { border-color:#e5dfed!important; }
+.nx-canvas-light [class*="bg-white/"] { background-color:#f0ecf7; }
+.nx-canvas-light [class*="text-slate-1"], .nx-canvas-light [class*="text-slate-2"],
+.nx-canvas-light [class*="text-slate-3"], .nx-canvas-light [class*="text-[#f2f4f8]"],
+.nx-canvas-light [class*="text-[#e8ebf0]"], .nx-canvas-light [class*="text-[#F0EDE6]"] { color:#383043; }
+.nx-canvas-light [class*="text-slate-4"], .nx-canvas-light [class*="text-slate-5"] { color:#756b82; }
+.nx-canvas-light [class*="text-sky-"], .nx-canvas-light [class*="text-[#d4ff64]"],
+.nx-canvas-light [class*="text-[#c8ff33]"], .nx-canvas-light [class*="text-[#d8ff05]"] { color:#7952c9; }
+.nx-canvas-light [class*="bg-[#d8ff05]"], .nx-canvas-light [class*="bg-[#ccff00]"] { background:#e9dff9; color:#513197; }
+.nx-canvas-light :is(input,textarea,select) { color:#383043; caret-color:#7952c9; }
+.nx-canvas-light :is(input,textarea,select)[class*="bg-black/"] { background:#f3f0f8; }
+.nx-canvas-light ::placeholder { color:#8a8196; opacity:1; }
+.nx-canvas-light :is(button,a,input,textarea,select):focus-visible { outline:2px solid #9873da; outline-offset:3px; }
+.nx-canvas-light [class*="shadow-2xl"], .nx-canvas-light [class*="shadow-xl"] { --tw-shadow:0 8px 28px #30204412; }
+.nx-canvas-light .menu-scroll { scrollbar-color:#c6bdd4 transparent; }
+.nx-canvas-hero { position:relative; isolation:isolate; overflow:hidden; border:1px solid #e9e2ef; border-radius:20px; min-height:280px; margin:32px auto 0; max-width:1072px; background:#f4f0fa; }
+.nx-canvas-hero > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-1; }
+.nx-canvas-hero > div { padding:40px; max-width:530px; }
+.nx-canvas-hero .nx-canvas-eyebrow { color:#7952c9; font-size:11px; font-weight:700; letter-spacing:.14em; }
+.nx-canvas-hero h1 { font-size:clamp(28px,3vw,40px); line-height:1.15; letter-spacing:-.04em; font-weight:650; margin:12px 0; }
+.nx-canvas-hero p { font-size:14px; line-height:1.6; color:#746c81; }
+.nx-canvas-hero a { display:inline-flex; gap:16px; margin-top:20px; padding:10px 16px; border-radius:10px; background:#7952c9; color:white; font-size:13px; font-weight:600; }
+@media(max-width:767px) { .nx-canvas-hero { margin:20px 24px 0; min-height:260px; } .nx-canvas-hero > div { padding:28px 24px; background:rgba(250,249,253,.8); } }
+
+.nx-canvas-light [class*="bg-[#080A0C]"],
+.nx-canvas-light [class*="bg-[#0A0C10]"],
+.nx-canvas-light [class*="bg-[#0D0F12]"],
+.nx-canvas-light [class*="bg-[#0E1014]"],
+.nx-canvas-light [class*="bg-[#0a0a0c]"],
+.nx-canvas-light [class*="bg-[#0a0c0e]"],
+.nx-canvas-light [class*="bg-[#0b0c10]"],
+.nx-canvas-light [class*="bg-[#0b0c11]"],
+.nx-canvas-light [class*="bg-[#0c0d12]"],
+.nx-canvas-light [class*="bg-[#111316]"],
+.nx-canvas-light [class*="bg-[#111318]"],
+.nx-canvas-light [class*="bg-[#12141c]"],
+.nx-canvas-light [class*="bg-[#141414]"],
+.nx-canvas-light [class*="bg-[#141719]"],
+.nx-canvas-light [class*="bg-[#15171d]"],
+.nx-canvas-light [class*="bg-[#161a22]"],
+.nx-canvas-light [class*="bg-[#17191e]"],
+.nx-canvas-light [class*="bg-[#17191f]"],
+.nx-canvas-light [class*="bg-[#181b22]"],
+.nx-canvas-light [class*="bg-[#1A1D21]"],
+.nx-canvas-light [class*="bg-[#1a1114]"],
+.nx-canvas-light [class*="bg-[#1a1d21]"],
+.nx-canvas-light [class*="bg-[#1d2027]"],
+.nx-canvas-light [class*="bg-[#1e2025]"],
+.nx-canvas-light [class*="bg-[#20222a]"],
+.nx-canvas-light [class*="bg-[#202328]"],
+.nx-canvas-light [class*="bg-[#20232a]"],
+.nx-canvas-light [class*="bg-[#242832]"],
+.nx-canvas-light [class*="bg-[#282b34]"],
+.nx-canvas-light [class*="bg-[#2a2d35]"] { background-color:#fff!important; color:#383043; }
+ .nx-canvas-light [class*="bg-white/"][class*="text-white"] { color:#513197; }
+.nx-canvas-light [class*="hover:text-white"]:hover { color:#6540b0; }
+.nx-canvas-light [class*="group/media"] [class*="text-slate-"],
+.nx-canvas-light [class*="bg-black/"] [class*="text-white"] { color:#fff; }
+.nx-canvas-light .react-flow__controls { background:#fff; border:1px solid #e5dfed; border-radius:10px; overflow:hidden; box-shadow:0 3px 12px #3020440c; }
+.nx-canvas-light .react-flow__controls-button { background:#fff; fill:#74618f; border-color:#e5dfed; }
+.nx-canvas-light .react-flow__controls-button:hover { background:#f0eaf9; }

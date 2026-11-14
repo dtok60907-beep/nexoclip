@@ -21,7 +21,7 @@ const DEFAULT_ACTION_CLASS =
   "bg-[#d4ff64] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#d4ff64]/20 hover:shadow-[#d4ff64]/35 border border-[#d4ff64]/10 z-10 disabled:opacity-50 disabled:cursor-not-allowed";
 
 const CONTROL_LAYOUT_CLASS =
-  "h-[38px] flex items-center gap-2 rounded-md transition-all border group whitespace-nowrap shadow-inner focus:outline-none focus-visible:border-[#d4ff64]/45 focus-visible:ring-1 focus-visible:ring-[#d4ff64]/30";
+  "nx-prompt-control h-[38px] flex items-center gap-2 rounded-md transition-all border group whitespace-nowrap shadow-inner focus:outline-none focus-visible:border-[#d4ff64]/45 focus-visible:ring-1 focus-visible:ring-[#d4ff64]/30";
 
 const CONTROL_IDLE_CLASS =
   "text-white bg-[#16161a]/60 hover:bg-[#202026]/80 border-white/[0.06]";
@@ -30,13 +30,13 @@ const CONTROL_ACTIVE_CLASS =
   "text-[#d4ff64] bg-[#d4ff64]/10 hover:bg-[#d4ff64]/15 border-[#d4ff64]/25";
 
 const MEDIA_CONTROL_LAYOUT_CLASS =
-  "w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group focus:outline-none focus-visible:border-[#d4ff64]/45 focus-visible:ring-1 focus-visible:ring-[#d4ff64]/30";
+  "nx-prompt-media w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group focus:outline-none focus-visible:border-[#d4ff64]/45 focus-visible:ring-1 focus-visible:ring-[#d4ff64]/30";
 
 const DEFAULT_POPOVER_POSITION_CLASS =
   "absolute bottom-[calc(100%+12px)] left-0 z-50";
 
 const DEFAULT_POPOVER_CLASS =
-  "bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[160px] max-h-[40vh] overflow-y-auto custom-scrollbar";
+  "nx-prompt-popover bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[160px] max-h-[40vh] overflow-y-auto custom-scrollbar";
 
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");

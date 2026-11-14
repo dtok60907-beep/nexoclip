@@ -16,20 +16,25 @@ import LowBalanceDialog from './LowBalanceDialog';
 import { lowBalanceLevel, nextLowBalanceDialog } from '../src/lib/lowBalance.js';
 import StudioTour from './tour/StudioTour';
 import StudioHome from './StudioHome';
+import useDashboardData from './useDashboardData';
+import WorkspaceLibrary from './WorkspaceLibrary';
 import StudioAuthModal from './saas/StudioAuthModal';
+import TikTokAccountsPanel from './TikTokAccountsPanel';
+import TikTokPublishDialog from './TikTokPublishDialog';
+import SocialPublishing from './SocialPublishing';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
 const StudioLoading = () => (
-  <div className="h-full w-full bg-black flex items-center justify-center text-white/20">Loading Studio...</div>
+  <div className="h-full w-full bg-[#fafafd] flex items-center justify-center text-[#777184]">Loading Studio...</div>
 );
 
 const ComingSoon = ({ title }) => (
-  <div className="h-full w-full bg-[#030303] flex items-center justify-center text-center px-6">
+  <div className="h-full w-full bg-[#fafafd] text-[#292733] flex items-center justify-center text-center px-6">
     <div>
-      <div className="text-xs uppercase tracking-widest text-white/40 mb-3">Coming Soon</div>
-      <h2 className="text-2xl font-semibold text-white mb-2">{title}</h2>
-      <p className="text-white/50 max-w-md mx-auto">We&apos;re putting the finishing touches on this studio. Check back soon.</p>
+      <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">Coming Soon</div>
+      <h2 className="text-2xl font-semibold text-slate-900 mb-2">{title}</h2>
+      <p className="text-slate-500 max-w-md mx-auto">We&apos;re putting the finishing touches on this studio. Check back soon.</p>
     </div>
   </div>
 );
@@ -56,6 +61,7 @@ const LANDING_URL = 'https://www.nexoclip.com';
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
 const TABS = [
+  ...[['projects', 'Projects'], ['media', 'Media Library']].map(([id, label]) => ({ id, label, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7V5h7l2 2h9v13H3Z"/></svg> })),
   { id: 'home', label: 'Home', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></svg> },
   {
     id: 'image',
@@ -208,6 +214,12 @@ const TABS = [
     )
   },
   {
+    id: 'accounts',
+    label: 'Connected Accounts',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M19 8v6M16 11h6"/></svg>
+  },
+  {id:'publish',label:'Social Publishing',icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m22 2-7 20-4-9-9-4Z"/><path d="m22 2-11 11"/></svg>},
+  {
     id: 'ai-influencer',
     label: 'AI Influencer Studio',
     icon: (
@@ -219,7 +231,7 @@ const TABS = [
 ];
 
 // The header's page title for each tab (sidebar labels where they differ from TABS).
-const TAB_TITLES = { home: 'Home', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', motion: 'Motion', billing: 'Top up', usage: 'Usage', canvas: 'Canvas' };
+const TAB_TITLES = { home: 'Home', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', motion: 'Motion', billing: 'Top up', usage: 'Usage', accounts: 'Connected Accounts', canvas: 'Canvas' };
 
 const NOTIFICATIONS_STORAGE_KEY = 'open_gen_notifications_v1';
 const MAX_VISIBLE_NOTIFICATIONS = 3;
@@ -327,6 +339,7 @@ export default function StandaloneShell({ initialTab, children }) {
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const [imageVisited, setImageVisited] = useState(() => getInitialTab() === 'image');
   const [studioPrompt, setStudioPrompt] = useState('');
+  const [tiktokVideo, setTiktokVideo] = useState(null);
   // Tabs that take the whole width: no sidebar, a back button in the header instead.
   const isFullWidthTab = activeTab === 'director' || activeTab === 'motion';
 
@@ -337,6 +350,9 @@ export default function StandaloneShell({ initialTab, children }) {
   const [tourOpen, setTourOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
+  const [featureSearch, setFeatureSearch] = useState('');
+  const [selectedProject, setSelectedProject] = useState('');
+  const dashboardData = useDashboardData(authStatus);
 
   // Sidebar Collapsed & Mobile Drawer State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -511,13 +527,14 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   const handleTabChange = useCallback((tabId, prompt = '') => {
-    if (['billing', 'usage', 'canvas', 'director'].includes(tabId) && !requireAuth()) return;
+    if (['billing', 'usage', 'canvas', 'director', 'projects', 'media'].includes(tabId) && !requireAuth()) return;
     if (tabId === 'canvas') {
       window.location.assign('/canvas');
       return;
     }
     window.history.pushState(null, '', `/studio/${tabId}`);
-    if (typeof prompt === 'string' && prompt.trim()) setStudioPrompt(prompt.trim());
+    if (tabId === 'projects') setSelectedProject(prompt);
+    else if (typeof prompt === 'string' && prompt.trim()) setStudioPrompt(prompt.trim());
     if (tabId === 'image') setImageVisited(true);
     setActiveTab(tabId);
   }, [requireAuth]);
@@ -716,7 +733,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
   return (
     <div
-      className="nx-shell"
+      className={`nx-shell${activeTab === 'home' ? ' nx-home-shell' : ''}`}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -754,7 +771,7 @@ export default function StandaloneShell({ initialTab, children }) {
             const isActive = activeTab === id;
             return (
               <a key={id} href={`/studio/${id}`} onClick={(event) => handleNavigationItemClick(event, id)}
-                aria-current={isActive ? 'page' : undefined} aria-label={label} title={isCollapsed ? label : undefined}
+                data-tour={id === 'canvas' ? 'canvas-link' : undefined} aria-current={isActive ? 'page' : undefined} aria-label={label} title={isCollapsed ? label : undefined}
                 className={`nx-link${isActive ? ' is-active' : ''}`}>
                 <span className="nx-icon">{tab.icon}</span>
                 <span className="nx-label">{label}</span>
@@ -768,9 +785,6 @@ export default function StandaloneShell({ initialTab, children }) {
               {children}
             </div>
           );
-          const sub = planStatus?.subscription;
-          const planActive = sub?.status === 'active';
-          const daysLeft = planActive ? Math.max(0, Math.ceil((new Date(sub.currentPeriodEnd) - Date.now()) / 86_400_000)) : null;
           return (
             <aside className={`nx-side${isCollapsed ? ' is-collapsed' : ''}${isMobileOpen ? ' is-open' : ''}`}>
               <div className="nx-side-head">
@@ -783,65 +797,13 @@ export default function StandaloneShell({ initialTab, children }) {
               </button>
 
               <nav data-tour="studio-nav" aria-label="Studio navigation" className="nx-nav">
-                {navLink('home', 'Home')}
-                {group('Agent', 'Agent', (() => {
-                  const isActive = activeTab === 'director';
-                  return (
-                    <a href="/studio/director" onClick={(event) => handleNavigationItemClick(event, 'director')}
-                      aria-current={isActive ? 'page' : undefined} aria-label="AI Director" title={isCollapsed ? 'AI Director' : undefined}
-                      className={`nx-link nx-agent${isActive ? ' is-active' : ''}`}>
-                      <span className="nx-agent-icon">{tabFor('director')?.icon}</span>
-                      <span className="nx-label"><strong>AI Director</strong><small>Brief → script → video</small></span>
-                    </a>
-                  );
-                })())}
-                {group('Create', 'Create', <>
-                  {navLink('video', 'Video', <span className="nx-badge">HOT</span>)}
-                  {navLink('image', 'Image')}
-                  {navLink('cinema', 'World')}
-                  {navLink('ai-influencer', 'Character')}
-                  {navLink('motion', 'Motion', <span className="nx-badge">NEW</span>)}
-                  {navLink('audio', 'Audio')}
-                </>)}
-                {group('Workspace', 'Space', <>
-                  {navLink('canvas', 'Canvas')}
-                  {navLink('usage', 'Usage')}
-                </>)}
+                {group('Workspace', 'Work', <>{navLink('home', 'Home')}{navLink('projects', 'Projects')}{navLink('media', 'Media Library')}</>)}
+                {group('Creative Studio', 'Create', <>{navLink('director', 'AI Director')}{navLink('canvas', 'Canvas Editor')}{['video', 'image', 'cinema', 'ai-influencer', 'motion'].map((id) => navLink(id, tabFor(id).label))}</>)}
+                {group('Marketing Studio', 'Market', <>{navLink('publish', 'Social Publishing')}{['Ads Manager', 'Analytics'].map((label) => <span key={label} className="nx-link nx-unavailable" aria-disabled="true" title={`${label} — coming soon`}><span className="nx-icon" aria-hidden="true">{label === 'Ads Manager' ? '⚑' : '▥'}</span><span className="nx-label">{label}</span><small className="nx-label">Soon</small></span>)}</>)}
+                {group('Account', 'Account', <>{navLink('accounts', 'Connected Accounts')}{navLink('usage', 'Usage & Billing')}<a href="/account" className="nx-link" title="Settings"><span className="nx-icon" aria-hidden="true">⚙</span><span className="nx-label">Settings</span></a></>)}
               </nav>
 
-              {isCollapsed ? (
-                <button type="button" className="nx-plus" onClick={() => (authStatus === 'authenticated' ? setPricingOpen(true) : openAuth('login'))}
-                  aria-label={authStatus === 'authenticated' ? 'Top up credits' : 'Sign in'} title={authStatus === 'authenticated' ? 'Top up credits' : 'Sign in'}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-                </button>
-              ) : authStatus === 'authenticated' ? (
-                <div className="nx-card">
-                  {planActive ? <>
-                    <span className="nx-card-kicker">Your plan</span>
-                    <strong className="nx-card-title">{sub.name}</strong>
-                    <span className={`nx-card-note${daysLeft <= 7 ? ' is-warn' : ''}`}>{daysLeft === 0 ? 'Ends today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}</span>
-                  </> : planStatus?.enabled ? <>
-                    <span className="nx-card-kicker">No plan yet</span>
-                    <strong className="nx-card-title">Monthly credits</strong>
-                    <span className="nx-card-note">{planStatus.promo ? `${planStatus.promo.promoPercent}% off your first month` : 'Credits every month for every studio'}</span>
-                  </> : <>
-                    <span className="nx-card-kicker">Credits</span>
-                    <strong className="nx-card-title">{balance !== null ? Number(balance).toLocaleString() : '—'}</strong>
-                  </>}
-                  <button type="button" data-tour="top-up" className="nx-card-button" onClick={() => setPricingOpen(true)}>
-                    {planActive || !planStatus?.enabled ? 'Top up credits' : 'See plans'}
-                  </button>
-                  <a className="nx-card-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise ↗</a>
-                </div>
-              ) : (
-                <div className="nx-card">
-                  <span className="nx-card-kicker">Start creating</span>
-                  <strong className="nx-card-title">Sign in to generate</strong>
-                  <span className="nx-card-note">Your images and videos are saved to your workspace.</span>
-                  <button type="button" className="nx-card-button" onClick={() => openAuth('login')}>Sign in</button>
-                  <button type="button" className="nx-card-link w-full" onClick={() => openAuth('register')}>Create an account</button>
-                </div>
-              )}
+              <div className="nx-sidebar-profile">{authStatus === 'authenticated' ? <AccountMenu showAdminLink sidebar={!isCollapsed} /> : <button type="button" onClick={() => openAuth('login')} aria-label="Sign in">{isCollapsed ? '↗' : 'Sign in to your workspace'}</button>}</div>
 
               <div className="nx-foot">
                 <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="nx-help" aria-label="Chat dengan NexoClip lewat WhatsApp" title={isCollapsed ? 'Chat dengan NexoClip' : undefined}>
@@ -875,10 +837,15 @@ export default function StandaloneShell({ initialTab, children }) {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
                   </button>
                 )}
-                <h1 aria-live="polite">{TAB_TITLES[activeTab] || TABS.find(tab => tab.id === activeTab)?.label || 'Home'}</h1>
+                {activeTab !== 'home' && <h1 aria-live="polite">{TAB_TITLES[activeTab] || TABS.find(tab => tab.id === activeTab)?.label || 'Home'}</h1>}
               </div>
 
               <div className="nx-actions">
+                <div className="nx-search-wrap">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                  <input type="search" value={featureSearch} onChange={(event) => setFeatureSearch(event.target.value)} placeholder="Search projects, media, or features…" aria-label="Search projects, media, or features" onKeyDown={(event) => { if (event.key === 'Escape') { setFeatureSearch(''); event.currentTarget.blur(); } }} />
+                  {featureSearch.trim() && <div className="nx-search-results" aria-label="Search results">{TABS.filter((tab) => !tab.hidden && `${tab.label} ${tab.id}`.toLowerCase().includes(featureSearch.toLowerCase())).slice(0, 6).map((tab) => <button type="button" key={tab.id} onClick={() => { setFeatureSearch(''); handleTabChange(tab.id); }}><span>{tab.icon}</span>{tab.label}</button>)}{!TABS.some((tab) => !tab.hidden && `${tab.label} ${tab.id}`.toLowerCase().includes(featureSearch.toLowerCase())) && <span className="nx-search-empty">No matching feature</span>}{authStatus === 'authenticated' && <><small className="nx-search-empty">Projects & media</small>{dashboardData.loading ? <span className="nx-search-empty" role="status">Searching…</span> : <>{[...dashboardData.projects.map((p) => ({ id: p.id, name: p.name, kind: 'projects' })), ...dashboardData.assets.map((a) => ({ id: a.id, name: a.filename, url: a.url, kind: 'media' }))].filter((item) => item.name.toLowerCase().includes(featureSearch.trim().toLowerCase())).slice(0, 6).map((item) => item.url ? <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer">{item.name}<small>Media ↗</small></a> : <button type="button" key={item.id} onClick={() => { setFeatureSearch(''); handleTabChange(item.kind, item.id); }}>{item.name}<small>Project</small></button>)}{(dashboardData.errors.projects || dashboardData.errors.assets) && <button type="button" onClick={dashboardData.retry}>Some results unavailable. Retry</button>}</>}</>}</div>}
+                </div>
                 <button type="button" data-tour="tour-button" className="nx-round nx-hide-sm" aria-label="Take the Studio tour" title="Take the Studio tour" onClick={() => setTourOpen(true)}>?</button>
                 {authStatus !== 'authenticated' ? <>
                   <button type="button" className="nx-text-link" onClick={() => setPricingOpen(true)}>Pricing</button>
@@ -886,9 +853,9 @@ export default function StandaloneShell({ initialTab, children }) {
                   <button type="button" className="nx-text-link" onClick={() => openAuth('login')}>Log in</button>
                   <button type="button" className="nx-cta" onClick={() => openAuth('register')}>Start creating <span aria-hidden="true">↗</span></button>
                 </> : <>
-                  <button type="button" data-tour="credit-balance" onClick={() => (creditLevel ? setPricingOpen(true) : handleTabChange('usage'))}
+                  <button type="button" data-tour="credit-balance" onClick={() => setPricingOpen(true)}
                     className={`nx-credits${creditLevel ? ` is-${creditLevel}` : ''}`}
-                    aria-label={creditLevel ? 'Credits are running low, top up' : 'View credit usage'}
+                    aria-label={creditLevel ? 'Credits are running low, top up' : 'View plans and credits'}
                     title={creditLevel === 'empty' ? 'You are out of credits. Click to top up.' : creditLevel === 'low' ? 'Your credits are running low. Click to top up.' : undefined}>
                     <i aria-hidden="true">✦</i>
                     <strong>{balance !== null ? Number(balance).toLocaleString() : '—'}</strong>
@@ -902,8 +869,9 @@ export default function StandaloneShell({ initialTab, children }) {
           )}
 
         {/* Studio Content */}
-        <div className="suite-content min-w-0 relative overflow-hidden text-white">
-        {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} />}
+        <div className={`suite-content min-w-0 relative overflow-hidden${activeTab !== 'home' && activeTab !== 'canvas' ? ' nx-studio-light' : ''}`}>
+        {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} authStatus={authStatus} data={dashboardData} />}
+        {['projects', 'media'].includes(activeTab) && <WorkspaceLibrary kind={activeTab === 'projects' ? 'projects' : 'assets'} data={dashboardData} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
         {authStatus !== 'loading' && <>
         {['billing', 'usage'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to access your workspace.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
         {activeTab === 'director' && (authStatus === 'authenticated'
@@ -913,9 +881,11 @@ export default function StandaloneShell({ initialTab, children }) {
         {activeTab === 'usage' && authStatus === 'authenticated' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} onTopUp={() => handleTabChange('billing')} /> : imageVisited && <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
           <ImageStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
+        {activeTab === 'accounts' && (authStatus === 'authenticated' ? <TikTokAccountsPanel /> : <div className="suite-private"><h2>Connected accounts</h2><p>Sign in to connect TikTok.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>)}
+        {activeTab === 'publish' && (authStatus === 'authenticated' ? <SocialPublishing/> : <div className="suite-private"><h2>Social publishing</h2><p>Sign in to publish your workspace media.</p><button className="suite-primary" onClick={()=>openAuth('login')}>Sign in</button></div>)}
         {activeTab === 'video' && (
           <div className="h-full w-full">
-            <VideoStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
+            <VideoStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onPublish={(entry) => authStatus === 'authenticated' ? setTiktokVideo(entry) : openAuth('login')} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
           </div>
         )}
         {activeTab === 'vibe-motion' && (
@@ -1101,6 +1071,7 @@ export default function StandaloneShell({ initialTab, children }) {
       `}</style>
 
       {authOpen && <StudioAuthModal initialMode={authMode} initialError={authError} onClose={() => setAuthOpen(false)} onAuthenticated={finishAuthentication} />}
+      {tiktokVideo && <TikTokPublishDialog video={tiktokVideo} onClose={() => setTiktokVideo(null)} />}
       {pricingOpen && <PricingModal
         workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null}
         balance={balance}

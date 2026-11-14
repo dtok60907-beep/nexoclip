@@ -123,7 +123,7 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
     }
   };
 
-  return <main className={`${embedded ? 'h-full overflow-auto p-4 text-white sm:p-6' : 'h-full overflow-auto p-5 text-white md:p-8'}`}>
+  return <main className={`nx-content-page ${embedded ? 'h-full overflow-auto p-4 sm:p-6' : 'h-full overflow-auto p-5 md:p-8'}`}>
     <div className={`mx-auto ${embedded ? 'max-w-[1280px]' : 'max-w-5xl'}`}>
       <SubscriptionSection workspaceId={workspaceId} onCompleted={onCompleted} onRequireAuth={onRequireAuth} />
       <div className="flex flex-wrap items-end justify-between gap-4">

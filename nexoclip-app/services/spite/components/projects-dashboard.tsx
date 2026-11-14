@@ -75,7 +75,7 @@ export function ProjectsDashboard() {
   }
 
   return (
-    <>
+    <div className="nx-canvas-light min-h-screen bg-background text-foreground">
       {/* Brand background: ozone gradient base + film grain overlay,
           both fixed-position so the atmosphere stays consistent as the
           project grid scrolls. Mirrors the login page. The dot-grid sits
@@ -83,16 +83,6 @@ export function ProjectsDashboard() {
           spans the whole page (not just the hero) so scrolling into the
           project grid doesn't hit a visible seam where the pattern stops. */}
       <div className="spite-ozone-bg fixed inset-0 z-0 pointer-events-none" aria-hidden="true" />
-      <div className="spite-grain" aria-hidden="true" />
-      <div
-        className="fixed inset-0 z-[1] pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(rgba(107,143,168,0.14) 1.2px, transparent 1.2px)',
-          backgroundSize: '24px 24px',
-        }}
-        aria-hidden="true"
-      />
-
       <div className="relative z-10 min-h-screen">
         {/* Header */}
         <header className="sticky top-0 z-50">
@@ -125,7 +115,7 @@ export function ProjectsDashboard() {
         )}
 
         {/* Main content */}
-        <main className="max-w-6xl mx-auto px-6 md:px-10 py-10">
+        <main id="canvas-projects" className="max-w-6xl mx-auto px-6 md:px-10 py-10">
 
           {/* Section label. While searching, show the result count instead. */}
           <div className="flex items-baseline justify-between gap-3 mb-6">
@@ -229,6 +219,6 @@ export function ProjectsDashboard() {
       </div>
 
       <OnboardingTour surface="dashboard" />
-    </>
+    </div>
   )
 }

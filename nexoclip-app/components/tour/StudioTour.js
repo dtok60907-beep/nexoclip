@@ -17,8 +17,8 @@ export const TOUR_STEPS = [
     target: 'studio-nav',
     tab: 'image',
     title: 'Every tool lives in the sidebar',
-    body: 'Tools are grouped by what they make.',
-    points: ['Images: Image Studio, Cinema Studio, AI Influencer', 'Video: Video Studio', 'Credits: Top Up and Usage'],
+    body: 'Find your projects, creative tools, and account controls here.',
+    points: ['Workspace: projects and saved media', 'Creative Studio: Director, Canvas, and more creative tools', 'Account: integrations, usage, and billing'],
   },
   {
     target: 'canvas-link',
@@ -91,12 +91,12 @@ export const TOUR_STEPS = [
   {
     target: 'credit-balance',
     title: 'Your credit balance',
-    body: 'Every studio and Canvas draw from this one balance. Click it to see what each generation used.',
+    body: 'Every studio and Canvas draw from this one balance. Click it to view plans and add credits.',
   },
   {
-    target: 'top-up',
+    target: 'credit-balance',
     title: 'Top up anytime',
-    body: 'Packages start at Rp 229.000 for 1.200 credits, paid with QRIS or a bank virtual account. Credits never expire.',
+    body: 'Open the credit balance or Billing & credits in your account menu to see current plans and pricing.',
   },
   {
     target: 'jobs',

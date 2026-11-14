@@ -1,0 +1,138 @@
+
+/* Light surfaces for the existing studio components, including lazy-loaded tools. */
+.nx-studio-light [class~="bg-[#030303]"],
+.nx-studio-light [class~="bg-[#050505]"],
+.nx-studio-light [class~="bg-[#070708]/30"],
+.nx-studio-light [class~="bg-[#070708]/50"],
+.nx-studio-light [class~="bg-[#07090e]"],
+.nx-studio-light [class~="bg-[#0a0a0a]"],
+.nx-studio-light [class~="bg-[#0a0a0b]/95"],
+.nx-studio-light [class~="bg-[#0b0b0d]"],
+.nx-studio-light [class~="bg-[#0b0c0a]"],
+.nx-studio-light [class~="bg-[#0b0d10]"],
+.nx-studio-light [class~="bg-[#0b0e13]"],
+.nx-studio-light [class~="bg-[#0d0d0f]"],
+.nx-studio-light [class~="bg-[#0d0d0f]/50"],
+.nx-studio-light [class~="bg-[#0d0f12]"],
+.nx-studio-light [class~="bg-[#0e1117]"],
+.nx-studio-light [class~="bg-[#0f0f11]/90"],
+.nx-studio-light [class~="bg-[#0f0f12]"],
+.nx-studio-light [class~="bg-[#0f1216]"],
+.nx-studio-light [class~="bg-[#101318]"],
+.nx-studio-light [class~="bg-[#101318]/80"],
+.nx-studio-light [class~="bg-[#111111]"],
+.nx-studio-light [class~="bg-[#11130f]"],
+.nx-studio-light [class~="bg-[#111310]"],
+.nx-studio-light [class~="bg-[#111418]"],
+.nx-studio-light [class~="bg-[#11151b]"],
+.nx-studio-light [class~="bg-[#131316]/60"],
+.nx-studio-light [class~="bg-[#131316]/80"],
+.nx-studio-light [class~="bg-[#141414]"],
+.nx-studio-light [class~="bg-[#151515]/95"],
+.nx-studio-light [class~="bg-[#15161a]"],
+.nx-studio-light [class~="bg-[#161616]"],
+.nx-studio-light [class~="bg-[#161618]"],
+.nx-studio-light [class~="bg-[#16161a]/60"],
+.nx-studio-light [class~="bg-[#16181d]"],
+.nx-studio-light [class~="bg-[#161915]"],
+.nx-studio-light [class~="bg-[#181b20]"],
+.nx-studio-light [class~="bg-[#1a1a1a]"],
+.nx-studio-light [class~="bg-[#1c1c22]"] { background-color:#fff!important; }
+.nx-shell .suite-content.nx-studio-light { color:#252532; background:#fafafd; color-scheme:light; }
+.nx-studio-light :is(.bg-app-bg,.bg-panel-bg,.bg-card-bg) { background:#fafafd!important; }
+.nx-studio-light :is(.bg-zinc-900,.bg-zinc-950,.bg-neutral-900,.bg-neutral-950,.bg-gray-900,.bg-gray-950,.bg-black) { background:#fff!important; }
+.nx-studio-light [class*="bg-white/"] { background-color:#f4f3f9!important; }
+.nx-studio-light [class*="bg-black/"]:not(.absolute):not(.fixed):not(button) { background-color:#f6f5fa!important; }
+.nx-studio-light [class*="border-white/"], .nx-studio-light [class*="border-gray-"], .nx-studio-light [class*="border-zinc-"] { border-color:#e5e3ed!important; }
+.nx-studio-light :is(.text-white,.text-gray-100,.text-gray-200,.text-gray-300,.text-zinc-100,.text-zinc-200,.text-zinc-300) { color:#292733!important; }
+.nx-studio-light [class*="text-white/"], .nx-studio-light :is(.text-gray-400,.text-gray-500,.text-gray-600,.text-zinc-400,.text-zinc-500,.text-secondary,.text-muted) { color:#716d7f!important; }
+.nx-studio-light :is(input,textarea,select) { color:#292733; border-color:#dfdce8; accent-color:#7554ee; color-scheme:light; }
+.nx-studio-light :is(input,textarea)::placeholder { color:#8a8597!important; }
+.nx-studio-light option { color:#292733; background:#fff; }
+.nx-studio-light :is(.text-primary,[class*="text-[#d4ff64]"],[class*="text-lime-"],[class*="text-cyan-"],[class*="text-violet-300"],[class*="text-purple-300"]) { color:#704de0!important; }
+.nx-studio-light [class*="bg-[#d4ff64]/"], .nx-studio-light [class*="bg-lime-300/"], .nx-studio-light [class*="bg-primary/"] { background-color:#f0eafd!important; }
+.nx-studio-light :is(.bg-primary,[class~="bg-[#d4ff64]"],.bg-lime-300,.bg-lime-400,.bg-violet-600,.bg-purple-600) { color:#fff!important; background-color:#7554ee!important; }
+.nx-studio-light :is(.bg-primary,[class~="bg-[#d4ff64]"],.bg-lime-300,.bg-lime-400,.bg-violet-600,.bg-purple-600) :is(span,svg) { color:inherit!important; }
+.nx-studio-light [class*="hover:bg-white/"]:hover { background-color:#ede9f7!important; }
+.nx-studio-light [class*="hover:text-white"]:hover { color:#5b3bc0!important; }
+.nx-studio-light [class*="text-red-"], .nx-studio-light [class*="text-rose-"] { color:#ba334e!important; }
+.nx-studio-light [class*="text-amber-"], .nx-studio-light [class*="text-yellow-"] { color:#8d640b!important; }
+.nx-studio-light [class*="text-green-"], .nx-studio-light [class*="text-emerald-"] { color:#237657!important; }
+.nx-studio-light :is(.shadow-xl,.shadow-2xl,[class*="shadow-["]) { box-shadow:0 5px 22px #27233a0c!important; }
+/* Media scrims keep their contrast; the surrounding editor panels stay light. */
+.nx-studio-light :is(.absolute,.fixed,button)[class*="bg-black/"] { color:#fff!important; }
+.nx-studio-light :is(.absolute,button)[class*="bg-black/"] :is(.text-white,[class*="text-white/"],.text-gray-300) { color:#fff!important; }
+.nx-studio-light .fixed[class*="bg-black/"] > [class*="bg-[#"] { color:#292733!important; }
+.nx-studio-light :focus-visible { outline-color:#7554ee; }
+.nx-shell .suite-private { background:#fafafd; }
+.nx-shell .suite-private h2 { color:#292733; }
+.nx-shell .suite-private p { color:#716d7f; }
+
+.nx-studio-light [class~="text-[#e6e7ea]"],
+.nx-studio-light [class~="text-[#f2eee5]"] { color:#595365!important; }
+
+.nx-studio-light [class*="bg-zinc-8"], .nx-studio-light [class*="bg-zinc-9"], .nx-studio-light [class*="bg-neutral-8"], .nx-studio-light [class*="bg-neutral-9"], .nx-studio-light [class*="bg-gray-8"], .nx-studio-light [class*="bg-gray-9"] { background-color:#f5f3f9!important; }
+.nx-studio-light :is(.text-neutral-200,.text-neutral-300,.text-slate-200,.text-slate-300) { color:#595365!important; }
+.nx-studio-light .divide-white\/10 > :not([hidden]) ~ :not([hidden]) { border-color:#e5e3ed; }
+
+/* Shared composers had a dark gradient underneath the light-theme text. */
+.nx-studio-light [data-tour="prompt-composer"],
+.nx-studio-light .nx-prompt-popover {
+  background:#fff!important;
+  color:#292733!important;
+  border-color:#ded9e9!important;
+  box-shadow:0 8px 32px #30204412!important;
+}
+.nx-studio-light [data-tour="prompt-input"] {
+  background:transparent!important;
+  color:#292733!important;
+  caret-color:#704de0;
+  -webkit-text-fill-color:#292733;
+}
+.nx-studio-light [data-tour="prompt-input"]::placeholder {
+  color:#777083!important;
+  -webkit-text-fill-color:#777083;
+  opacity:1;
+}
+.nx-studio-light :is(.nx-prompt-control,.nx-prompt-media) {
+  background:#f6f4fa!important;
+  border-color:#ded9e9!important;
+  color:#51475f!important;
+  box-shadow:none!important;
+}
+.nx-studio-light :is(.nx-prompt-control,.nx-prompt-media):hover {
+  background:#eee8fa!important;
+  border-color:#c5b5e7!important;
+}
+.nx-studio-light :is(.nx-prompt-control,.nx-prompt-media)[class*="text-[#d4ff64]"] {
+  background:#eee8ff!important;
+  color:#6440cc!important;
+}
+.nx-studio-light :is(.nx-prompt-control,.nx-prompt-media) :is(span,svg) { color:inherit!important; }
+.nx-studio-light :is(.nx-prompt-control,.nx-prompt-media):not(:disabled) :is(span,svg) { opacity:1; }
+.nx-studio-light [data-tour="prompt-generate"] {
+  color:#fff!important;
+  background:#7554ee!important;
+  border-color:transparent!important;
+  box-shadow:0 3px 10px #7554ee22!important;
+}
+.nx-studio-light [data-tour="prompt-generate"] :is(span,svg) { color:inherit!important; }
+.nx-studio-light [data-tour="prompt-composer"] :is(input,select) {
+  background:#fff!important;
+  color:#292733!important;
+  border-color:#ded9e9!important;
+}
+.nx-studio-light :is(.nx-prompt-control,.nx-prompt-media,[data-tour="prompt-input"],[data-tour="prompt-generate"]):focus-visible {
+  outline:2px solid #9276e5;
+  outline-offset:3px;
+}
+
+/* Chat artifacts use light surfaces instead of the legacy dark gradients. */
+.nx-studio-light .nx-ai-card-surface { background:#fff!important; color:#292435; border-color:#ded8e9!important; box-shadow:0 4px 16px #3020440a!important; }
+.nx-studio-light .nx-ai-card-body { background:#f7f5fb!important; color:#494152; border-color:#e8e2f0!important; }
+.nx-studio-light .nx-ai-card-action { background:#eee8fa!important; color:#6240bb!important; border-color:#d9cdec!important; }
+.nx-studio-light .nx-ai-card-action:hover { background:#e5daf7!important; color:#51319e!important; }
+.nx-studio-light [class*="text-[#e4f5bd]"] { color:#7046c2!important; }
+.nx-studio-light [class*="border-[#d4ff64]"] { border-color:#b8a0e7!important; }
+.nx-studio-light [class*="ring-[#d4ff64]"] { --tw-ring-color:#9270d9!important; }
+.nx-studio-light [class*="hover:bg-[#d4ff64]"]:hover { background-color:#eee8fa!important; }

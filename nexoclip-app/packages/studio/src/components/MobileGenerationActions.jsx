@@ -204,6 +204,7 @@ export function GenerationCopyButtons({
 }
 
 function ActionIcon({ kind }) {
+  if (kind === "publish") return <span className="text-[10px] font-bold">TT</span>;
   if (kind === "text") {
     return <CopyContentIcon kind="text" />;
   }

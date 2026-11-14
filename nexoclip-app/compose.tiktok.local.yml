@@ -1,0 +1,13 @@
+# Use together with ../docker-compose.yml. Secrets stay in the ignored env file.
+services:
+  caddy:
+    ports:
+      - "127.0.0.1:8080:80"
+  nexoclip-app:
+    environment:
+      PUBLIC_APP_URL: http://localhost
+    env_file:
+      - ./nexoclip-app/.env.tiktok.local
+  nexoclip-video-worker:
+    env_file:
+      - ./nexoclip-app/.env.tiktok.local

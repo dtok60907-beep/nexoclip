@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 // Header account control: avatar button + dropdown (Account, Log out).
 // Self-contained — fetches the session and handles logout on its own so it can
 // drop into any header (Studio shell, AI Storyboard, …).
-export default function AccountMenu({ admin = false, showAdminLink = false }) {
+export default function AccountMenu({ admin = false, showAdminLink = false, sidebar = false }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [open, setOpen] = useState(false);
@@ -59,19 +59,20 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
   const initial = (name || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative" onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 py-1 pl-1 pr-1.5 transition-colors hover:border-white/20 hover:bg-white/10"
+        className="nx-account-trigger flex items-center gap-2 rounded-full border border-violet-100 bg-white p-1.5 text-slate-600 transition-colors hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400"
       >
-        <span className="grid h-7 w-7 place-items-center rounded-full border border-white/[0.08] bg-gradient-to-br from-[#d4ff64]/30 to-purple-500/20 text-[11px] font-bold text-[#d4ff64]">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-100 text-sm font-semibold text-violet-700">
           {initial}
         </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-white/50 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">
+        {sidebar && <span className="nx-profile-name">{name}</span>}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
@@ -79,16 +80,17 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0d0d0f] shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+          className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-violet-100 bg-white text-slate-700 shadow-lg"
         >
-          <div className="border-b border-white/[0.06] px-4 py-3">
-            <p className="truncate text-[13px] font-semibold text-white">{user?.displayName || 'Nexoclip user'}</p>
-            {user?.email && <p className="truncate text-[11px] text-white/40">{user.email}</p>}
+          <div className="border-b border-violet-100 px-4 py-3">
+            <p className="truncate text-[13px] font-semibold text-slate-800">{user?.displayName || 'Nexoclip user'}</p>
+            {user?.email && <p className="truncate text-[11px] text-slate-500">{user.email}</p>}
           </div>
+          {!admin && <a href="/studio/billing" role="menuitem" className="block px-4 py-2.5 text-[13px] text-slate-600">Billing & credits</a>}
           {!admin && <a
             href="/account"
             role="menuitem"
-            className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-white/75 transition-colors hover:bg-white/[0.05] hover:text-white"
+            className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-slate-600 transition-colors hover:bg-violet-50 hover:text-slate-800"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -96,14 +98,14 @@ export default function AccountMenu({ admin = false, showAdminLink = false }) {
             </svg>
             Account
           </a>}
-          {showAdminLink && user?.isPlatformOperator === true && <a href="/admin" role="menuitem" className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-cyan-200 transition-colors hover:bg-white/[0.05]">Buka Admin console ↗</a>}
-          {logoutError && <p className="px-4 pt-2 text-[11px] text-red-300" role="alert">{logoutError}</p>}
+          {showAdminLink && user?.isPlatformOperator === true && <a href="/admin" role="menuitem" className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-violet-700 transition-colors hover:bg-violet-50">Buka Admin console ↗</a>}
+          {logoutError && <p className="px-4 pt-2 text-[11px] text-red-600" role="alert">{logoutError}</p>}
           <button
             type="button"
             role="menuitem"
             onClick={handleLogout}
             disabled={loggingOut}
-            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

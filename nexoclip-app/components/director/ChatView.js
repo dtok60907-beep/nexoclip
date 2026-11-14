@@ -107,20 +107,20 @@ function StepGroup({ items, live }) {
 function CardShell({ icon, title, accent, children, action, onAction, actionDisabled, secondary }) {
   return (
     <div className="w-full max-w-[380px]">
-      <div className="rounded-[18px] border border-white/[0.09] bg-gradient-to-b from-[#1c1f25] to-[#121418] p-1.5 shadow-[0_10px_30px_#0006]">
+      <div className="rounded-[18px] border border-white/[0.09] nx-ai-card-surface bg-white p-1.5 shadow-[0_10px_30px_#0006]">
         <div className="flex min-w-0 items-center gap-2 px-2.5 pb-2 pt-1.5">
           <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[#d4ff64]/15 text-[12px] text-[#d4ff64]">{icon}</span>
           <span className="truncate text-[13px] font-semibold text-white">
             {title}{accent && <span className={ACCENT}> — {accent}</span>}
           </span>
         </div>
-        <div className="rounded-[14px] border border-white/[0.06] bg-gradient-to-b from-[#2a2e35] via-[#1d2026] to-[#17191d] p-3">{children}</div>
+        <div className="rounded-[14px] border border-white/[0.06] nx-ai-card-body bg-[#f7f5fb] p-3">{children}</div>
       </div>
       {(action || secondary) && (
         <div className="mt-2 flex gap-2">
           {action && (
             <button type="button" onClick={onAction} disabled={actionDisabled}
-              className="flex-1 rounded-full border border-white/[0.1] bg-gradient-to-b from-[#2b2e34] to-[#1b1d21] py-2 text-[12px] font-semibold text-white/90 hover:border-white/25 disabled:opacity-50">
+              className="flex-1 rounded-full border border-white/[0.1] nx-ai-card-action bg-[#eee8fa] py-2 text-[12px] font-semibold text-white/90 hover:border-white/25 disabled:opacity-50">
               {action}
             </button>
           )}

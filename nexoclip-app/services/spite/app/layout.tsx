@@ -3,6 +3,7 @@ import { Montserrat, Inter, Geist_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import { DialogHost } from '@/components/ui/dialog-host'
 import './globals.css'
+import './canvas-light.css'
 import ImpersonationBanner from '@/components/impersonation-banner'
 import SupportChat from '@/components/support-chat'
 

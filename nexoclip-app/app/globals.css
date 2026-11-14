@@ -4,6 +4,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+:root { --font-sans: Inter, "Helvetica Neue", Arial, sans-serif; --font-mono: "SFMono-Regular", Consolas, monospace; }
+
 body {
   background: #050505;
   color: white;

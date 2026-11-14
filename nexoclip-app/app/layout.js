@@ -1,8 +1,8 @@
 import './globals.css';
 import './suite.css';
 import './shell.css';
+import './studio-light.css';
 import localFont from "next/font/local";
-import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import ImpersonationBanner from '../components/ImpersonationBanner';
 import SupportChat from '../components/SupportChat';
 
@@ -10,20 +10,6 @@ import SupportChat from '../components/SupportChat';
 // Plus Jakarta Sans for all UI text, Geist Mono for numbers/timecodes (`font-mono`), and
 // Clash Display (Fontshare, ITF Free Font License, free for commercial use) as
 // `font-display` for headings.
-const sans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
-
-const mono = Geist_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
-
 const display = localFont({
   src: [
     { path: "./fonts/ClashDisplay-500.woff2", weight: "500" },
@@ -45,7 +31,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${sans.variable} ${mono.variable} ${display.variable}`}>{children}<ImpersonationBanner /><SupportChat /></body>
+      <body className={display.variable}>{children}<ImpersonationBanner /><SupportChat /></body>
     </html>
   );
 }
