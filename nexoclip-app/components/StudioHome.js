@@ -137,13 +137,10 @@ const ShowcaseCard = memo(function ShowcaseCard({
   onOpen,
   onBroken,
   pausePlayback,
-  prefersReducedMotion,
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
-  const [isVisible, setIsVisible] = useState(index < 5);
   const [isHovered, setIsHovered] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
-  const cardRef = useRef(null);
   const videoElRef = useRef(null);
 
   const title = useMemo(() => formatPortfolioName(video), [video]);
@@ -169,23 +166,7 @@ const ShowcaseCard = memo(function ShowcaseCard({
     }
   }, []);
 
-  useEffect(() => {
-    const node = cardRef.current;
-    if (!node || typeof IntersectionObserver === 'undefined') {
-      setIsVisible(true);
-      return undefined;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsVisible(entry.isIntersecting);
-      },
-      { rootMargin: '80px 220px', threshold: 0.05 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
-  const shouldMountVideo = Boolean(previewUrl) && (isVisible || isHovered) && (!prefersReducedMotion || isHovered);
+  const shouldMountVideo = Boolean(previewUrl) && isHovered;
   const shouldPlayVideo = shouldMountVideo && !pausePlayback;
 
   useEffect(() => {
@@ -225,7 +206,6 @@ const ShowcaseCard = memo(function ShowcaseCard({
 
   return (
     <div
-      ref={cardRef}
       role="button"
       tabIndex={0}
       className={`nx-reel-card${isHovered ? ' is-hovered' : ''}`}
@@ -269,7 +249,7 @@ const ShowcaseCard = memo(function ShowcaseCard({
             loop
             playsInline
             autoPlay={!pausePlayback}
-            preload={index < 5 ? 'auto' : 'metadata'}
+            preload="auto"
             aria-hidden="true"
             className={`nx-showcase-hover-video${videoReady ? ' is-ready' : ''}`}
             onLoadedData={(event) => {
@@ -935,7 +915,6 @@ export default function StudioHome({ onNavigate, onCreate, initialPrompt = '', o
                 onOpen={openVideoModal}
                 onBroken={markBroken}
                 pausePlayback={Boolean(modalState)}
-                prefersReducedMotion={Boolean(prefersReducedMotion)}
               />
             ))}
           </div>

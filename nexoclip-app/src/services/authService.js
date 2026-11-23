@@ -196,7 +196,7 @@ export async function loginUser({ email, password }) {
   try {
     const user = await findUserByEmail(client, normalizedEmail);
     if (!user || !(await verifyPassword(password, user.password_hash))) {
-      throw new Error('Invalid email or password');
+      throw Object.assign(new Error('Invalid email or password'), { status: 401 });
     }
     const session = await createSessionForClient(client, user.id);
     return { user: { id: user.id, email: user.email, display_name: user.display_name, email_verified_at: user.email_verified_at }, ...session };

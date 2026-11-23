@@ -20,8 +20,12 @@ export function createLoginPostHandler({ authenticate = loginUser, env = process
         maxAge: Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
       });
       return response;
-    } catch {
-      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    } catch (error) {
+      if (error?.status === 401) {
+        return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+      }
+      console.error('Password login failed', { code: error?.code || 'UNKNOWN' });
+      return NextResponse.json({ error: 'Login is temporarily unavailable. Please try again.' }, { status: 503 });
     }
   };
 }

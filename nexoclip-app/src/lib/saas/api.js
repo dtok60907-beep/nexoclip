@@ -22,6 +22,9 @@ export async function saasFetch(path, options = {}) {
     const response = await fetch(path, { ...options, credentials: 'include', headers });
     const payload = await response.json().catch(() => null);
     if (response.ok) return payload;
+    if (response.status === 401 && !path.startsWith('/api/auth/') && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nexoclip:session-expired'));
+    }
     throw errorWith(payload?.code || `HTTP_${response.status}`, response.status, payload?.error || SAFE_HTTP_MESSAGE);
   } catch (error) {
     if (error?.status) throw error;

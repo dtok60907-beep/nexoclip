@@ -42,11 +42,25 @@ test('password login returns a trusted operator destination and preserves the Ht
 });
 
 test('failed password login exposes neither operator capability nor session cookie', async () => {
-  const handler = createLoginPostHandler({ env, authenticate: async () => { throw new Error('provider credential detail'); } });
+  const handler = createLoginPostHandler({ env, authenticate: async () => { throw Object.assign(new Error('Invalid email or password'), { status: 401 }); } });
   const response = await handler(loginRequest());
   assert.equal(response.status, 401);
   assert.equal(response.headers.get('set-cookie'), null);
   assert.deepEqual(await response.json(), { error: 'Invalid email or password' });
+});
+
+test('login infrastructure errors return a retryable response without exposing details', async () => {
+  const handler = createLoginPostHandler({ env, authenticate: async () => { throw Object.assign(new Error('private connection string'), { code: 'ECONNRESET' }); } });
+  const previousError = console.error;
+  console.error = () => {};
+  try {
+    const response = await handler(loginRequest());
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('set-cookie'), null);
+    assert.deepEqual(await response.json(), { error: 'Login is temporarily unavailable. Please try again.' });
+  } finally {
+    console.error = previousError;
+  }
 });
 
 test('login navigation routes operators to economics while preserving normal internal destinations', () => {

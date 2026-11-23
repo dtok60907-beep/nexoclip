@@ -234,7 +234,7 @@ export default function StudioAuthModal({ initialMode = 'login', initialError = 
     setError('');
     try {
       const { path, options } = getAuthRequest(mode, values);
-      const result = await saasFetch(path, options);
+      const result = await saasFetch(path, { ...options, signal: AbortSignal.timeout(20000) });
       if (mode === 'forgot') { setError('If that email is registered, a password reset link has been sent.'); return; }
       remember('email');
       await onAuthenticated(result);

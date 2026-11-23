@@ -15,7 +15,11 @@ export function getPool() {
       pool.end().catch(() => {});
     }
     poolUrl = process.env.DATABASE_URL;
-    pool = new Pool({ connectionString: poolUrl });
+    pool = new Pool({
+      connectionString: poolUrl,
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 10000,
+    });
   }
 
   return pool;

@@ -59,6 +59,7 @@ import StudioAuthModal from './saas/StudioAuthModal';
 import TikTokPublishDialog from './TikTokPublishDialog';
 import SocialPublishing from './SocialPublishing';
 import MetaAdsManager from './MetaAdsManager';
+import IntegrationApps from './IntegrationApps';
 // All heavy studio workspaces are lazy-loaded so /studio/home boots instantly without compiling studio bundles.
 const createStudioLoader = (label, variant = 'split') => function LazyStudioSkeleton() {
   return <NxStudioSkeleton label={label} variant={variant} />;
@@ -200,6 +201,7 @@ function RailGlyph({ id }) {
 const TABS = [
   { id: 'team', label: 'Workspace', hidden: true, icon: <Building2 size={18} /> },
   { id: 'projects', label: 'Projects', icon: <NxIcon name="projects" size={18} /> },
+  { id: 'accounts', label: 'Integrations', icon: <NxIcon name="accounts" size={18} /> },
   { id: 'media', label: 'Media Library', icon: <NxIcon name="media" size={18} /> },
   { id: 'templates', label: 'Templates', icon: <NxIcon name="apps" size={18} /> },
   { id: 'products', label: 'Products', icon: <NxIcon name="projects" size={18} /> },
@@ -369,6 +371,7 @@ export default function StandaloneShell({ initialTab, children }) {
     setAuthStatus('authenticated');
     setSessionVersion(version => version + 1);
     setAuthOpen(false);
+    setAuthError('');
     if (pricingAfterAuth.current) {
       const nextModalTab = pricingAfterAuth.current;
       pricingAfterAuth.current = null;
@@ -783,28 +786,45 @@ export default function StandaloneShell({ initialTab, children }) {
 
   useEffect(() => {
     let cancelled = false;
+    let expiryTimer;
+
+    const scheduleSessionExpiry = (expiresAt) => {
+      const checkExpiry = () => {
+        const timestamp = Date.parse(expiresAt);
+        if (!Number.isFinite(timestamp)) return;
+        const remaining = timestamp - Date.now();
+        if (remaining <= 0) {
+          window.dispatchEvent(new Event('nexoclip:session-expired'));
+          return;
+        }
+        expiryTimer = window.setTimeout(checkExpiry, Math.min(remaining, 24 * 60 * 60 * 1000));
+      };
+      checkExpiry();
+    };
 
     async function restoreSaaSSession() {
       try {
-        const sessionResponse = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
+        const sessionResponse = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(10000) });
         const session = await sessionResponse.json();
         if (!session.authenticated) {
           window.sessionStorage.removeItem('nexoclip_workspace_id');
           if (!cancelled) setAuthStatus('guest');
           return;
         }
-        const workspaceResponse = await fetch('/api/workspaces', { credentials: 'include', cache: 'no-store' });
+        scheduleSessionExpiry(session.expiresAt);
+        const workspaceResponse = await fetch('/api/workspaces', { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(10000) });
         const workspacePayload = await workspaceResponse.json();
         if (!workspaceResponse.ok) throw new Error('Workspace unavailable');
         const workspaces = Array.isArray(workspacePayload.workspaces) ? workspacePayload.workspaces : [];
         const workspace = workspaces[0];
+        if (!workspace?.id) throw new Error('Workspace unavailable');
         if (!cancelled) setUserWorkspaces(workspaces);
         if (workspace?.id && typeof window !== 'undefined') {
           window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
           window.sessionStorage.setItem('nexoclip_workspace_name', workspace.name);
-          await refreshBalance();
         }
         if (!cancelled) setAuthStatus('authenticated');
+        if (workspace?.id) void refreshBalance();
       } catch {
         window.sessionStorage.removeItem('nexoclip_workspace_id');
         if (!cancelled) setAuthStatus('guest');
@@ -813,7 +833,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
     setHasMounted(true);
     restoreSaaSSession();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.clearTimeout(expiryTimer); };
   }, [sessionVersion, refreshBalance]);
 
   useEffect(() => {
@@ -852,6 +872,19 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   useEffect(() => {
+    const handleExpiredSession = () => {
+      authReturnTo.current = window.location.pathname + window.location.search;
+      window.sessionStorage.removeItem('nexoclip_workspace_id');
+      window.sessionStorage.removeItem('nexoclip_workspace_name');
+      setAuthStatus('guest');
+      setAuthError('Your session expired. Please sign in again.');
+      setBalance(null);
+    };
+    window.addEventListener('nexoclip:session-expired', handleExpiredSession);
+    return () => window.removeEventListener('nexoclip:session-expired', handleExpiredSession);
+  }, [openAuth]);
+
+  useEffect(() => {
     const onAuthRequired = () => { setAuthStatus('guest'); openAuth('login'); };
     window.addEventListener('muapi:auth-required', onAuthRequired);
     return () => window.removeEventListener('muapi:auth-required', onAuthRequired);
@@ -860,9 +893,9 @@ export default function StandaloneShell({ initialTab, children }) {
   useEffect(() => {
     if (authStatus === 'guest' && activeTab !== 'home') {
       authReturnTo.current = window.location.pathname + window.location.search;
-      openAuth('login');
+      openAuth('login', authError);
     }
-  }, [authStatus, activeTab, openAuth]);
+  }, [authStatus, activeTab, authError, openAuth]);
 
 
   // Project cards carry text. Only file drags belong to the media uploader.
@@ -932,6 +965,15 @@ export default function StandaloneShell({ initialTab, children }) {
       onDrop={currentTab === 'home' ? undefined : handleDrop}
     >
       {authStatus === 'guest' && currentTab === 'home' && (
+        <button
+          type="button"
+          className="fixed right-5 top-5 z-[250] rounded-xl bg-[#5b45f2] px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-[#4935df]"
+          onClick={() => openAuth('login')}
+        >
+          Log in
+        </button>
+      )}
+      {authStatus === 'guest' && currentTab !== 'home' && (
         <button
           type="button"
           className="fixed right-5 top-5 z-[250] rounded-xl bg-[#5b45f2] px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-[#4935df]"
@@ -1132,6 +1174,7 @@ export default function StandaloneShell({ initialTab, children }) {
                 )}
 
                 {railLink('projects', 'Projects', 'Projects')}
+                {railLink('accounts', 'Integrations', 'Integrations')}
 
                 {/* Library — opens docked extended sidebar (matching My Brand behavior, no hover flyout) */}
                 <a
@@ -1474,6 +1517,7 @@ export default function StandaloneShell({ initialTab, children }) {
         {currentTab === 'team' && authStatus === 'authenticated' && <WorkspaceOnboarding onNavigate={handleNavigationItemClick} view={teamSubView} />}
         {currentTab === 'apps' && <AppsHub onNavigate={handleTabChange} />}
         {currentTab === 'projects' && <ProjectLibrary key={sessionVersion} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
+        {currentTab === 'accounts' && <IntegrationApps key={sessionVersion} authStatus={authStatus} onSignIn={() => openAuth('login')} />}
         {currentTab === 'templates' && <TemplatesHub onNavigate={handleTabChange} />}
         {currentTab === 'products' && <ProductsLibrary authStatus={authStatus} onSignIn={() => openAuth('login')} onNavigate={handleTabChange} />}
         {currentTab === 'media' && <WorkspaceLibrary kind="assets" data={dashboardData} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
