@@ -171,8 +171,8 @@ export function GenerationCopyButtons({
           title={copiedKind === "text" ? "Prompt copied" : "Copy prompt"}
           aria-label={copiedKind === "text" ? "Prompt copied" : "Copy prompt"}
           onClick={(event) => runCopy(event, "text")}
-          className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-md transition-all hover:bg-[#d4ff64] hover:text-black ${
-            copiedKind === "text" ? "text-[#d4ff64]" : "text-white"
+          className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[#14141f]/75 backdrop-blur-md transition-all hover:bg-[#5b45f2] hover:border-[#5b45f2] hover:text-white ${
+            copiedKind === "text" ? "bg-[#5b45f2] border-[#5b45f2] text-white" : "text-white"
           }`}
         >
           {copiedKind === "text" ? (
@@ -188,8 +188,8 @@ export function GenerationCopyButtons({
           title={copiedKind === "image" ? "Image copied" : "Copy image"}
           aria-label={copiedKind === "image" ? "Image copied" : "Copy image"}
           onClick={(event) => runCopy(event, "image")}
-          className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-md transition-all hover:bg-[#d4ff64] hover:text-black ${
-            copiedKind === "image" ? "text-[#d4ff64]" : "text-white"
+          className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[#14141f]/75 backdrop-blur-md transition-all hover:bg-[#5b45f2] hover:border-[#5b45f2] hover:text-white ${
+            copiedKind === "image" ? "bg-[#5b45f2] border-[#5b45f2] text-white" : "text-white"
           }`}
         >
           {copiedKind === "image" ? (
@@ -351,16 +351,16 @@ export default function MobileGenerationActions({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 min-w-[178px] overflow-hidden rounded-xl border border-white/15 bg-[#151515]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+        <div className="absolute right-0 top-12 z-50 min-w-[184px] overflow-hidden rounded-2xl border border-[#e6e7f0] bg-white p-1.5 shadow-[0_18px_48px_rgba(20,20,31,0.16)]">
           {availableActions.map((action) => (
             <button
               key={`${action.kind}-${action.label}`}
               type="button"
               onClick={(event) => runAction(event, action)}
-              className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition-colors ${
+              className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-medium transition-colors ${
                 action.danger
-                  ? "text-red-400 hover:bg-red-500/15 active:bg-red-500/20"
-                  : "text-white hover:bg-white/10 active:bg-white/15"
+                  ? "text-[#c01048] hover:bg-[#fff1f3] active:bg-[#ffe4e8]"
+                  : "text-[#14141f] hover:bg-[#f2f0ff] hover:text-[#4c38d6] active:bg-[#e7e3ff]"
               }`}
             >
               <span className="flex h-6 w-6 items-center justify-center">

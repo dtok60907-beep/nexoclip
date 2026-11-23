@@ -1,0 +1,542 @@
+/* ==========================================================================
+   Nexoclip Studio — AI Director
+   Aligned 1:1 with Studio Home Web Kit (Royal Violet #5B45F2 + DotGrid Ground)
+   Collapsible secondary sidebar, Home-identical hero composer & showcase rail,
+   serene centered chat canvas, and quiet Production Board.
+   ========================================================================== */
+
+:root {
+  --dr-canvas: #ffffff;
+  --dr-hero-base: #fafafa;
+  --dr-board-canvas: #f7f8fa;
+  --dr-surface: #ffffff;
+  --dr-surface-soft: #fafafd;
+  --dr-surface-muted: #f3f4f8;
+  --dr-surface-hover: #f4f4f9;
+
+  --dr-bubble-assistant: #f1f1f4;
+  --dr-bubble-user: #f2f0ff;
+
+  --dr-stage: #0f1117;
+  --dr-stage-elevated: #171a24;
+  --dr-stage-border: #232838;
+
+  --dr-border: #e6e7f0;
+  --dr-border-subtle: #efeff5;
+  --dr-border-strong: #d5d7e4;
+
+  --dr-ink: #14141f;
+  --dr-body: #2d2e3f;
+  --dr-secondary: #5e5e72;
+  --dr-muted: #7a7b90;
+
+  --dr-accent: #5b45f2;
+  --dr-accent-hover: #4731d8;
+  --dr-accent-soft: #f2f0ff;
+  --dr-accent-soft-hover: #e6e2ff;
+  --dr-accent-border: #ddd7fe;
+  --dr-accent-ink: #4c38d6;
+
+  --dr-green-bg: #ecfdf3;
+  --dr-green-border: #c5f0d6;
+  --dr-green-ink: #147a49;
+
+  --dr-amber-bg: #fff8eb;
+  --dr-amber-border: #fce0b0;
+  --dr-amber-ink: #a05c07;
+
+  --dr-red-bg: #fff1f3;
+  --dr-red-border: #fccdd6;
+  --dr-red-ink: #c01048;
+
+  --dr-font: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --dr-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Outer studio shell on AI Director & AI Motion */
+.nx-shell.is-director-tab,
+.nx-shell.is-motion-tab {
+  background: var(--dr-canvas);
+}
+
+.nx-shell.is-director-tab .suite-content,
+.nx-shell.is-motion-tab .suite-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--dr-canvas) !important;
+  color: var(--dr-ink);
+  color-scheme: light;
+}
+
+.nx-shell.is-director-tab .nx-side.nx-icon-rail,
+.nx-shell.is-motion-tab .nx-side.nx-icon-rail {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right-color: #ececf2;
+  box-shadow: none;
+}
+
+.nx-shell.is-director-tab:has(.dr-sidebar-collapsed) .nx-side.nx-icon-rail,
+.nx-shell.is-motion-tab:has(.dr-sidebar-collapsed) .nx-side.nx-icon-rail {
+  border-top-right-radius: 14px;
+  border-bottom-right-radius: 14px;
+  border-right-color: var(--dr-border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.035);
+}
+
+/* ==========================================================================
+   Full-Bleed Interactive DotGrid Ground Behind Both Sidebars (Same as Home)
+   ========================================================================== */
+
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero),
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) {
+  background: var(--dr-hero-base);
+}
+
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-frame,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-frame {
+  position: relative;
+  background-color: var(--dr-hero-base);
+  background-image: none;
+}
+
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-side,
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-main,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-side,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-main {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .suite-content,
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .director-ui,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .suite-content,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .director-ui {
+  background: transparent !important;
+}
+
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-side.nx-icon-rail,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .nx-side.nx-icon-rail {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: #e4e4e7;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.035);
+}
+
+.nx-shell.is-director-tab:has(.dr-hero-stage, .nx-director-skel-hero) .dr-sidebar,
+.nx-shell.is-motion-tab:has(.dr-hero-stage, .nx-director-skel-hero) .dr-sidebar {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: #e4e4e7;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.035);
+}
+
+/* Root Director container */
+.director-ui {
+  font-family: var(--dr-font);
+  color: var(--dr-ink);
+  background: var(--dr-canvas);
+  color-scheme: light;
+  word-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.director-ui * {
+  box-sizing: border-box;
+}
+
+/* Secondary collapsible AI Director sidebar (paired with the Studio icon rail) */
+.dr-sidebar {
+  position: relative;
+  z-index: 2;
+  width: 236px;
+  flex-shrink: 0;
+  height: calc(100% - 16px);
+  margin: 8px 0;
+  background: var(--dr-surface);
+  border: 1px solid var(--dr-border);
+  border-left: 0;
+  border-radius: 0 14px 14px 0;
+  box-shadow: 0 1px 3px rgba(20, 20, 31, 0.03);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px 12px;
+  overflow: hidden;
+  transition: transform 220ms var(--dr-ease), opacity 200ms var(--dr-ease);
+}
+
+@media (max-width: 1080px) and (min-width: 768px) {
+  .dr-sidebar {
+    width: 206px;
+  }
+}
+
+@media (max-width: 767px) {
+  .nx-shell.is-director-tab .nx-side.nx-icon-rail,
+  .nx-shell.is-motion-tab .nx-side.nx-icon-rail {
+    border-radius: 16px !important;
+  }
+
+  .dr-sidebar {
+    position: fixed;
+    top: 10px;
+    bottom: 10px;
+    left: 10px;
+    z-index: 60;
+    height: auto;
+    margin: 0;
+    width: min(276px, calc(100vw - 44px));
+    border: 1px solid var(--dr-border);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(20, 20, 31, 0.18);
+    transform: translateX(calc(-100% - 24px));
+    pointer-events: none;
+  }
+
+  .dr-sidebar.is-mobile-open {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+}
+
+/* ==========================================================================
+   AI Director New Project Hero — Identical to Authenticated Studio Home
+   ========================================================================== */
+
+.dr-hero-stage {
+  position: relative;
+  background: transparent;
+}
+
+.dr-hero-scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 24px 48px;
+}
+
+.dr-hero-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 1080px;
+  min-height: clamp(360px, 52vh, 520px);
+  margin: 0 auto;
+  padding: 36px 0 52px;
+}
+
+.dr-hero-icon-btn {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid #e4e2f0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4c4d61;
+  box-shadow: 0 2px 8px rgba(18, 16, 38, 0.05);
+  transition: background-color 160ms var(--dr-ease), border-color 160ms var(--dr-ease), color 160ms var(--dr-ease);
+}
+
+.dr-hero-icon-btn:hover {
+  background: #f8f7ff;
+  border-color: #c8bffb;
+  color: #5b45f2;
+}
+
+/* Mode tabs — identical to authenticated Studio Home (.nx-home-tabs) */
+.dr-hero-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 4px;
+  border: 1px solid rgba(20, 20, 31, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 10px rgba(18, 16, 38, 0.06);
+}
+
+.dr-hero-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #5b5b70;
+  background: transparent;
+  cursor: pointer;
+  transition: color 180ms ease-out, background-color 180ms ease-out;
+}
+
+.dr-hero-tab-pill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 8px;
+  background: #5b45f2;
+  box-shadow: 0 4px 12px rgba(91, 69, 242, 0.28);
+}
+
+.dr-hero-tab-inner {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dr-hero-tab:hover:not(.is-active) {
+  color: #14141f;
+  background: rgba(91, 69, 242, 0.06);
+}
+
+.dr-hero-tab.is-active {
+  color: #ffffff;
+  background: transparent;
+}
+
+.dr-hero-title {
+  margin: 0 0 34px;
+  color: #14141f;
+  font-family: var(--font-sans), var(--dr-font);
+  font-size: clamp(30px, 2.35vw, 46px);
+  font-weight: 450;
+  line-height: 1.18;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  text-align: center;
+}
+
+/* Elevated Hero Composer — identical to HomeComposer (.nx-composer) */
+.dr-hero-composer {
+  padding: 18px 14px 14px;
+  border: 1px solid #e4e2f0;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow:
+    0 20px 44px -22px rgba(24, 18, 66, 0.2),
+    0 2px 8px rgba(18, 16, 38, 0.04);
+  transition: border-color 180ms ease-out, box-shadow 180ms ease-out;
+}
+
+.dr-hero-composer:focus-within,
+.dr-hero-composer.is-dragging {
+  border-color: #7c6bf7;
+  box-shadow:
+    0 18px 42px -20px rgba(91, 69, 242, 0.34),
+    0 0 0 3px rgba(91, 69, 242, 0.14);
+}
+
+.dr-composer-typewriter {
+  position: absolute;
+  inset: 0 0 10px 0;
+  padding: 0 8px;
+  pointer-events: none;
+  user-select: none;
+  color: #747387;
+  font-size: 18px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.dr-composer-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.14em;
+  border-radius: 1px;
+  background: #5b45f2;
+  animation: dr-caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes dr-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Home-identical Showcase Rail inside AI Director */
+.dr-reel-section {
+  --nx-reel-height: 236px;
+  flex: 0 0 auto;
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding-bottom: 12px;
+}
+
+@media (max-width: 1100px) {
+  .dr-reel-section {
+    --nx-reel-height: 208px;
+  }
+}
+
+@media (max-width: 767px) {
+  .dr-hero-scroll {
+    padding: 0 16px 32px;
+  }
+
+  .dr-hero-center {
+    min-height: 320px;
+    padding: 24px 0 40px;
+  }
+
+  .dr-hero-title {
+    font-size: 30px;
+    margin-bottom: 24px;
+  }
+
+  .dr-composer-typewriter {
+    font-size: 16px;
+  }
+
+  .dr-reel-section {
+    --nx-reel-height: 184px;
+  }
+}
+
+/* Floating pill composer & crisp bottom surface (active project chat) */
+.dr-composer-fade {
+  background: #ffffff;
+  border-top: 1px solid #f2f2f7;
+}
+
+.dr-composer-pill {
+  box-shadow:
+    0 2px 10px rgba(20, 20, 31, 0.035),
+    0 10px 28px rgba(20, 20, 31, 0.045);
+}
+
+/* Quiet settings popover inside Board */
+.dr-popover {
+  animation: dr-pop-in 160ms var(--dr-ease);
+  box-shadow:
+    0 4px 12px rgba(20, 20, 31, 0.06),
+    0 20px 44px -14px rgba(20, 20, 31, 0.16);
+}
+
+@keyframes dr-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Calm, unobtrusive scrollbars inside Director panels */
+.director-ui ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.director-ui ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.director-ui ::-webkit-scrollbar-thumb {
+  background: rgba(20, 20, 31, 0.12);
+  border-radius: 999px;
+}
+
+.director-ui ::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 20, 31, 0.24);
+}
+
+/* Accessible focus ring across controls */
+.director-ui :focus-visible {
+  outline: 2px solid var(--dr-accent);
+  outline-offset: 2px;
+}
+
+.director-ui input:focus-visible,
+.director-ui textarea:focus-visible,
+.director-ui select:focus-visible {
+  outline: none;
+}
+
+/* Cinema stage: always dark & crisp for frame/video viewing */
+.dr-cinema-stage {
+  background: var(--dr-stage);
+  border: 1px solid var(--dr-stage-border);
+  color: #f3f4f8;
+  color-scheme: dark;
+}
+
+/* Draggable split handle between Chat and Workspace */
+.dr-resizer {
+  position: relative;
+  width: 6px;
+  flex: none;
+  cursor: col-resize;
+  background: transparent;
+  margin-left: -3px;
+  margin-right: -3px;
+  z-index: 15;
+  transition: background-color 160ms var(--dr-ease);
+}
+
+.dr-resizer::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 36px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 160ms var(--dr-ease), height 160ms var(--dr-ease);
+}
+
+.dr-resizer:hover {
+  background: rgba(91, 69, 242, 0.08);
+}
+
+.dr-resizer:hover::after,
+.dr-resizer:active::after {
+  background: var(--dr-accent);
+  height: 52px;
+}
+
+/* Clean audio element sizing inside light cards */
+.director-ui audio {
+  color-scheme: light;
+  border-radius: 10px;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .director-ui *,
+  .director-ui *::before,
+  .director-ui *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

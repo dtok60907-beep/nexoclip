@@ -13,6 +13,8 @@ export async function findActiveSession(client, tokenHash) {
   const result = await client.query(
     `SELECT s.id, s.user_id, s.expires_at, s.created_at,
             u.email, u.display_name,
+            (SELECT m.workspace_id FROM workspace_memberships m WHERE m.user_id=u.id
+             ORDER BY (m.workspace_id=u.current_workspace_id) DESC NULLS LAST,m.created_at,m.id LIMIT 1) AS workspace_id,
             i.operator_user_id AS impersonator_user_id, i.read_only AS impersonation_read_only
      FROM sessions s
      JOIN users u ON u.id = s.user_id

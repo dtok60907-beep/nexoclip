@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
 import { getPool } from '../db/pool.js';
+import { meldapayClient } from '../lib/billing/meldapayClient.js';
 import { pakasirClient } from '../lib/billing/pakasirClient.js';
 import * as repository from '../repositories/topupRepository.js';
 import { appendCreditEntryInTransaction } from './creditService.js';
 import { TOPUP_PACKAGES, findTopupPackage } from './topupPackages.js';
 
-const PROVIDER_KEY = 'pakasir';
+const PROVIDER_KEY = 'meldapay';
 const MAX_LIST = 20;
 
 function serviceError(message, status, code) {
@@ -38,8 +39,7 @@ export function toPublicTopup(row) {
   };
 }
 
-export function createTopupService({ pool = getPool(), gateway = pakasirClient, env = process.env } = {}) {
-  const allowSandbox = () => env.PAKASIR_ALLOW_SANDBOX === '1';
+export function createTopupService({ pool = getPool(), gateway = meldapayClient, env = process.env } = {}) {
 
   async function withTransaction(work) {
     const client = await pool.connect();
@@ -56,33 +56,30 @@ export function createTopupService({ pool = getPool(), gateway = pakasirClient, 
     }
   }
 
-  // Grants credits only from Pakasir's authenticated status API, never from a
+  // Grants credits only from the gateway's authenticated status API, never from a
   // webhook body, so a forged or replayed notification cannot add credits.
-  async function settleByTxnId(txnId) {
+  async function settleByTxnId(txnId, providerKey = PROVIDER_KEY) {
     if (!txnId) throw serviceError('txn_id is required', 400, 'INVALID_TOPUP');
-    const remote = await gateway.getTransactionStatus(txnId);
+    const remote = await (providerKey === 'pakasir' ? pakasirClient : gateway).getTransactionStatus(txnId);
 
     return withTransaction(async (client) => {
-      const topup = await repository.lockTopupByTxnId(client, PROVIDER_KEY, txnId);
+      const topup = await repository.lockTopupByTxnId(client, providerKey, txnId);
       if (!topup) throw serviceError('Top-up not found', 404, 'TOPUP_NOT_FOUND');
       if (topup.status !== 'pending') return topup;
 
       if (remote.status === 'canceled') return repository.markTopupClosed(client, topup.id, 'canceled');
       if (remote.status !== 'completed') return topup;
 
-      if (remote.order_id !== topup.order_id || Number(remote.amount) !== Number(topup.amount_idr)) {
+      if ((remote.order_id && remote.order_id !== topup.order_id) || Number(remote.amount) !== Number(topup.amount_idr)) {
         throw serviceError('Payment does not match the top-up order', 409, 'TOPUP_MISMATCH');
       }
-      if (remote.is_sandbox && !allowSandbox()) {
-        throw serviceError('Sandbox payments are not accepted', 409, 'TOPUP_SANDBOX');
-      }
-
+      if (remote.is_sandbox && env.PAKASIR_ALLOW_SANDBOX !== '1') throw serviceError('Sandbox payments are not accepted', 409, 'TOPUP_SANDBOX');
       const entry = await appendCreditEntryInTransaction(client, {
         workspaceId: topup.workspace_id,
         amount: Number(topup.credits),
         reason: 'topup',
         idempotencyKey: `topup:${topup.id}`,
-        metadata: { topupId: topup.id, orderId: topup.order_id, txnId, amountIdr: Number(topup.amount_idr), provider: PROVIDER_KEY, sandbox: Boolean(remote.is_sandbox) },
+        metadata: { topupId: topup.id, orderId: topup.order_id, txnId, amountIdr: Number(topup.amount_idr), provider: providerKey, sandbox: Boolean(remote.is_sandbox) },
         creditLot: {
           sourceType: remote.is_sandbox ? 'sandbox' : 'paid',
           amountIdr: remote.is_sandbox ? 0 : topup.amount_idr,
@@ -90,8 +87,7 @@ export function createTopupService({ pool = getPool(), gateway = pakasirClient, 
         },
       });
       return repository.markTopupCompleted(client, topup.id, {
-        creditLedgerId: entry.id,
-        isSandbox: Boolean(remote.is_sandbox),
+        creditLedgerId: entry.id, isSandbox: Boolean(remote.is_sandbox),
         completedAt: remote.completed_at,
       });
     });
@@ -102,27 +98,25 @@ export function createTopupService({ pool = getPool(), gateway = pakasirClient, 
       return TOPUP_PACKAGES.map((pkg) => ({ ...pkg }));
     },
 
-    async createTopup({ workspaceId, userId, packageCode, returnUrl }) {
+    async createTopup({ workspaceId, userId, packageCode, webhookUrl }) {
       const pkg = findTopupPackage(packageCode);
       if (!pkg) throw serviceError('Unknown top-up package', 400, 'INVALID_TOPUP');
       if (!gateway.isConfigured()) throw serviceError('Payments are not configured', 503, 'PAYMENTS_DISABLED');
 
       const topup = await repository.insertTopup(pool, {
-        workspaceId, userId, packageCode: pkg.code, amountIdr: pkg.priceIdr, credits: pkg.credits, orderId: newOrderId(),
+        workspaceId, userId, packageCode: pkg.code, amountIdr: pkg.priceIdr, credits: pkg.credits, orderId: newOrderId(), providerKey: PROVIDER_KEY,
       });
 
       let transaction;
       try {
-        transaction = await gateway.createTransaction({ orderId: topup.order_id, amount: pkg.priceIdr, method: 'payment_link' });
+        transaction = await gateway.createTransaction({ orderId: topup.order_id, amount: pkg.priceIdr, callbackUrl: webhookUrl });
         if (!transaction.txn_id || !transaction.payment_link) throw serviceError('Payment gateway returned no payment link', 502, 'PAYMENT_GATEWAY_ERROR');
       } catch (error) {
         await repository.markTopupClosed(pool, topup.id, 'failed', error.message);
         throw error;
       }
 
-      const paymentUrl = withQuery(transaction.payment_link, {
-        redirect: returnUrl ? withQuery(returnUrl, { topup: topup.id }) : null,
-      });
+      const paymentUrl = transaction.payment_link;
       const updated = await repository.attachProviderTransaction(pool, topup.id, {
         txnId: transaction.txn_id, paymentUrl, isSandbox: Boolean(transaction.is_sandbox),
       });
@@ -140,7 +134,7 @@ export function createTopupService({ pool = getPool(), gateway = pakasirClient, 
       if (!topup) throw serviceError('Top-up not found', 404, 'TOPUP_NOT_FOUND');
       if (topup.status !== 'pending' || !topup.provider_txn_id) return toPublicTopup(topup);
       try {
-        return toPublicTopup(await settleByTxnId(topup.provider_txn_id));
+        return toPublicTopup(await settleByTxnId(topup.provider_txn_id, topup.provider_key));
       } catch (error) {
         if (error.code === 'TOPUP_MISMATCH' || error.code === 'TOPUP_SANDBOX') throw error;
         return toPublicTopup(topup); // Gateway hiccup or rate limit: the next poll retries.

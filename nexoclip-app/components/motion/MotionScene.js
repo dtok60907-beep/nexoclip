@@ -401,7 +401,7 @@ function Film({ s, title, subtitle, cta, content }) {
         {v === 'archive' && <AbsoluteFill style={{ background: `radial-gradient(ellipse at center, transparent 40%, ${muted}cc 100%)` }} />}
         {!v && <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 40%, #2a2a2a 0%, ${bg} 70%)` }} />}
         {content || <Stack>
-          {v === 'archive' && <Fade start={0.3} style={{ fontSize: 26 * u, letterSpacing: '0.4em', color: accent, marginBottom: 24 * u, textTransform: 'uppercase' }}>— Arsip —</Fade>}
+          {v === 'archive' && <Fade start={0.3} style={{ fontSize: 26 * u, letterSpacing: '0.4em', color: accent, marginBottom: 24 * u, textTransform: 'uppercase' }}>— Archive —</Fade>}
           <div style={{ fontSize: titleSize(title, u, 116), fontWeight: v === 'sunset' ? 700 : 400, fontStyle: v === 'story' ? 'italic' : 'normal', lineHeight: 1.08, opacity: p(0.4, 1.8, Easing.inOut(Easing.quad)), letterSpacing: !v ? '0.12em' : '0', textTransform: !v ? 'uppercase' : 'none', filter: `blur(${(1 - p(0.4, 1.6)) * 12 * u}px)`, maxWidth: width * 0.84 }}>{title}</div>
           <div style={{ height: 2 * u, width: 220 * u, background: accent, margin: `${30 * u}px auto`, transform: `scaleX(${p(1.3, 2.1)})` }} />
           {subtitle && <Fade start={1.7} y={0} style={{ fontSize: 38 * u, opacity: 0.85, fontStyle: 'italic', maxWidth: Math.min(width, height * 1.4) * 0.78 }}>{subtitle}</Fade>}
@@ -640,7 +640,7 @@ function LayerBody({ layer, start, look, maxWidth }) {
     case 'code':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 * u }}>
-          <span style={{ fontFamily: sans, fontSize: 24 * u, letterSpacing: '0.25em', color: fg, opacity: 0.7 }}>KODE</span>
+          <span style={{ fontFamily: sans, fontSize: 24 * u, letterSpacing: '0.25em', color: fg, opacity: 0.7 }}>CODE</span>
           <span style={{ fontFamily: mono, fontSize: 56 * u, fontWeight: 700, color: fg, padding: `${14 * u}px ${36 * u}px`, border: `${4 * u}px dashed ${accent}`, borderRadius: 16 * u, background: `${fg}12`, letterSpacing: '0.08em' }}>{layer.text}</span>
         </div>
       );
@@ -661,7 +661,7 @@ function LayerBody({ layer, start, look, maxWidth }) {
       }
       const whole = Math.ceil(remaining);
       const parts = total >= 3600 ? [Math.floor(whole / 3600), Math.floor(whole / 60) % 60, whole % 60] : [Math.floor(whole / 60), whole % 60];
-      const labels = total >= 3600 ? ['JAM', 'MENIT', 'DETIK'] : ['MENIT', 'DETIK'];
+      const labels = total >= 3600 ? ['HRS', 'MIN', 'SEC'] : ['MIN', 'SEC'];
       const tick = 1 - (remaining - Math.floor(remaining));
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 * u }}>

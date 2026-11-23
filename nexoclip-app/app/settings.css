@@ -1,0 +1,910 @@
+/* ==========================================================================
+   NexoClip Settings — Editorial Light-Surface Minimalism
+   Aligned with Usage & Billing (#F6F6FA / #FFFFFF), Obsidian Ink (#18181B),
+   and measured Royal Violet (#5B45F2) accents.
+   ========================================================================== */
+
+.nx-set-page {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--nx-ub-bg, #f6f6fa);
+  color: var(--nx-ub-ink, #14141f);
+  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.nx-set-page.is-standalone {
+  min-height: 100vh;
+  height: auto;
+}
+
+.nx-set-standalone-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--nx-ub-border, #eaeaf2);
+  background-color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+}
+
+.nx-set-standalone-bar-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  height: 58px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nx-set-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--nx-ub-ink, #14141f);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.nx-set-brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background-color: #18181b;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nx-set-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 28px 64px;
+}
+
+@media (max-width: 768px) {
+  .nx-set-standalone-bar-inner {
+    padding: 0 16px;
+  }
+  .nx-set-container {
+    padding: 20px 16px 48px;
+  }
+}
+
+/* ---------- Header ---------- */
+.nx-set-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.nx-set-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  color: var(--nx-ub-ink, #14141f);
+}
+
+.nx-set-subtitle {
+  margin: 6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nx-ub-muted, #84859a);
+}
+
+.nx-set-subtitle strong {
+  color: var(--nx-ub-ink-secondary, #4c4d61);
+  font-weight: 600;
+}
+
+.nx-set-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Tabs Rail (Animate UI Highlight) ---------- */
+.nx-set-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nx-set-tabs-row::-webkit-scrollbar {
+  display: none;
+}
+
+.nx-set-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid #e4e4e9;
+  background-color: #f1f1f5;
+  flex-shrink: 0;
+}
+
+.nx-set-tab-pill {
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid rgba(24, 24, 27, 0.06);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.06), 0 2px 6px -2px rgba(24, 24, 27, 0.08);
+}
+
+.nx-set-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 550;
+  color: #6b6b7a;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.nx-set-tab-btn:hover {
+  color: #18181b;
+}
+
+.nx-set-tab-btn.is-active {
+  color: #18181b;
+  font-weight: 600;
+}
+
+.nx-set-tab-btn:focus-visible {
+  outline: 2px solid var(--nx-ub-violet, #5b45f2);
+  outline-offset: 2px;
+}
+
+.nx-set-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background-color: rgba(24, 24, 27, 0.07);
+  color: #52525b;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Cards & Layout ---------- */
+.nx-set-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.nx-set-card {
+  background-color: var(--nx-ub-surface, #ffffff);
+  border: 1px solid var(--nx-ub-border, #eaeaf2);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(20, 20, 31, 0.025), 0 10px 28px -22px rgba(20, 20, 31, 0.14);
+  overflow: hidden;
+}
+
+.nx-set-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--nx-ub-border, #eaeaf2);
+}
+
+.nx-set-card-title {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--nx-ub-ink, #14141f);
+}
+
+.nx-set-card-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nx-ub-muted, #84859a);
+}
+
+.nx-set-card-body {
+  padding: 22px 24px;
+}
+
+.nx-set-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--nx-ub-border, #eaeaf2);
+  background-color: #fafafd;
+}
+
+@media (max-width: 640px) {
+  .nx-set-card-head,
+  .nx-set-card-body,
+  .nx-set-card-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* ---------- Profile Identity Hero ---------- */
+.nx-set-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--nx-ub-border, #eaeaf2);
+}
+
+.nx-set-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background-color: #f2f0ff;
+  border: 1px solid #d4cdfc;
+  color: #4731d8;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
+.nx-set-identity-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.nx-set-identity-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-set-identity-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--nx-ub-ink, #14141f);
+}
+
+.nx-set-identity-email {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--nx-ub-muted, #84859a);
+  word-break: break-all;
+}
+
+/* ---------- Badges & Status Pills ---------- */
+.nx-set-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.nx-set-badge.is-violet {
+  background-color: #f2f0ff;
+  border: 1px solid #d4cdfc;
+  color: #4731d8;
+}
+
+.nx-set-badge.is-neutral {
+  background-color: #f4f4f7;
+  border: 1px solid #e4e4ec;
+  color: #52525b;
+}
+
+.nx-set-badge.is-emerald {
+  background-color: #ecfdf3;
+  border: 1px solid #d1fadf;
+  color: #147a49;
+}
+
+.nx-set-badge.is-amber {
+  background-color: #fff8eb;
+  border: 1px solid #fde7c2;
+  color: #a66208;
+}
+
+/* ---------- Form Controls ---------- */
+.nx-set-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 720px) {
+  .nx-set-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nx-set-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.nx-set-field.is-full {
+  grid-column: 1 / -1;
+}
+
+.nx-set-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nx-ub-ink, #14141f);
+}
+
+.nx-set-label-hint {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--nx-ub-muted, #84859a);
+}
+
+.nx-set-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nx-set-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 13px;
+  border-radius: 10px;
+  border: 1px solid var(--nx-ub-border-strong, #dcdce8);
+  background-color: #ffffff;
+  color: var(--nx-ub-ink, #14141f);
+  font-size: 13.5px;
+  font-weight: 450;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.nx-set-input.has-trailing {
+  padding-right: 40px;
+}
+
+.nx-set-input::placeholder {
+  color: #9b9caf;
+}
+
+.nx-set-input:hover:not(:disabled):not([readonly]) {
+  border-color: #c5c5d6;
+}
+
+.nx-set-input:focus {
+  border-color: var(--nx-ub-violet, #5b45f2);
+  box-shadow: 0 0 0 3px rgba(91, 69, 242, 0.12);
+}
+
+.nx-set-input:disabled,
+.nx-set-input[readonly] {
+  background-color: #f6f6fa;
+  color: #6b6b7d;
+  cursor: not-allowed;
+}
+
+.nx-set-input.is-invalid {
+  border-color: #e11d48;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.08);
+}
+
+.nx-set-input-action {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.nx-set-input-action:hover {
+  background-color: #f4f4f6;
+  color: #18181b;
+}
+
+.nx-set-helper {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--nx-ub-muted, #84859a);
+}
+
+.nx-set-field-error {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #be123c;
+}
+
+/* ---------- Buttons ---------- */
+.nx-set-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #18181b;
+  background-color: #18181b;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 1px 2px rgba(24, 24, 27, 0.12),
+    0 8px 18px -12px rgba(24, 24, 27, 0.55);
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+.nx-set-btn-primary:hover:not(:disabled) {
+  background-color: #27272a;
+  border-color: #27272a;
+}
+
+.nx-set-btn-primary:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.nx-set-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #dcdce8;
+  background-color: #ffffff;
+  color: #27272a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(20, 20, 31, 0.03);
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.nx-set-btn-secondary:hover:not(:disabled) {
+  border-color: #c5c5d4;
+  background-color: #f8f8fb;
+  color: #14141f;
+}
+
+.nx-set-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nx-set-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #e4e4ec;
+  background-color: #ffffff;
+  color: #52525b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.nx-set-btn-danger:hover:not(:disabled) {
+  border-color: #fecdd3;
+  background-color: #fff1f2;
+  color: #be123c;
+}
+
+.nx-set-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nx-set-btn-primary:focus-visible,
+.nx-set-btn-secondary:focus-visible,
+.nx-set-btn-danger:focus-visible {
+  outline: 2px solid var(--nx-ub-violet, #5b45f2);
+  outline-offset: 2px;
+}
+
+/* Protect dark button foreground inside .nx-studio-light overrides */
+.nx-studio-light .nx-set-btn-primary,
+.nx-studio-light .nx-set-btn-primary :is(span, svg),
+.nx-studio-light .nx-set-brand-mark {
+  color: #ffffff !important;
+}
+
+.nx-studio-light .nx-set-btn-primary {
+  background-color: #18181b !important;
+  border-color: #18181b !important;
+}
+
+.nx-studio-light .nx-set-btn-primary:hover:not(:disabled) {
+  background-color: #27272a !important;
+  border-color: #27272a !important;
+}
+
+/* ---------- Inline Banners ---------- */
+.nx-set-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.nx-set-banner.is-success {
+  background-color: #ecfdf3;
+  border: 1px solid #d1fadf;
+  color: #147a49;
+}
+
+.nx-set-banner.is-error {
+  background-color: #fff1f3;
+  border: 1px solid #ffe0e6;
+  color: #be123c;
+}
+
+.nx-set-banner.is-info {
+  background-color: #f2f0ff;
+  border: 1px solid #d4cdfc;
+  color: #4731d8;
+}
+
+/* ---------- Session & Action Rows ---------- */
+.nx-set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 24px;
+}
+
+.nx-set-row + .nx-set-row {
+  border-top: 1px solid var(--nx-ub-border, #eaeaf2);
+}
+
+.nx-set-row-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.nx-set-row-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nx-ub-ink, #14141f);
+}
+
+.nx-set-row-desc {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--nx-ub-muted, #84859a);
+  line-height: 1.45;
+}
+
+/* ---------- Workspaces List ---------- */
+.nx-set-ws-create-bar {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--nx-ub-border, #eaeaf2);
+  background-color: #fafafd;
+}
+
+.nx-set-ws-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.nx-set-ws-create-form .nx-set-field {
+  flex: 1 1 240px;
+}
+
+.nx-set-ws-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nx-set-ws-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 24px;
+  transition: background-color 150ms ease;
+}
+
+.nx-set-ws-item + .nx-set-ws-item {
+  border-top: 1px solid var(--nx-ub-border, #eaeaf2);
+}
+
+.nx-set-ws-item.is-active {
+  background-color: #faf9ff;
+}
+
+.nx-set-ws-item:not(.is-active):hover {
+  background-color: #fbfbfe;
+}
+
+.nx-set-ws-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background-color: #f3f3f7;
+  border: 1px solid #e4e4ec;
+  color: #3f3f46;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.nx-set-ws-item.is-active .nx-set-ws-avatar {
+  background-color: #f2f0ff;
+  border-color: #d4cdfc;
+  color: #4731d8;
+}
+
+.nx-set-ws-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.nx-set-ws-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nx-ub-ink, #14141f);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nx-set-ws-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--nx-ub-muted, #84859a);
+}
+
+@media (max-width: 640px) {
+  .nx-set-row,
+  .nx-set-ws-create-bar,
+  .nx-set-ws-item {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* ---------- Password Checklist ---------- */
+.nx-set-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.nx-set-check-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #e4e4ec;
+  background-color: #f8f8fc;
+  color: #71717a;
+  font-size: 11.5px;
+  font-weight: 550;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.nx-set-check-chip.is-met {
+  background-color: #ecfdf3;
+  border-color: #c3f3d8;
+  color: #147a49;
+}
+
+/* ---------- Billing & Credits Bento ---------- */
+.nx-set-billing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 820px) {
+  .nx-set-billing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nx-set-metric-label {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--nx-ub-muted, #84859a);
+}
+
+.nx-set-metric-value {
+  margin: 8px 0 0;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--nx-ub-ink, #14141f);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nx-set-metric-unit {
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--nx-ub-muted, #84859a);
+  letter-spacing: 0;
+}
+
+.nx-set-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 680px) {
+  .nx-set-shortcuts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nx-set-shortcut-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--nx-ub-border, #eaeaf2);
+  background-color: #ffffff;
+  color: inherit;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.nx-set-shortcut-card:hover {
+  border-color: #d4cdfc;
+  background-color: #fcfcff;
+  box-shadow: 0 6px 20px -16px rgba(91, 69, 242, 0.35);
+}
+
+.nx-set-shortcut-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background-color: #f4f4f8;
+  color: #3f3f46;
+  flex-shrink: 0;
+}
+
+.nx-set-shortcut-card:hover .nx-set-shortcut-icon {
+  background-color: #f2f0ff;
+  color: #5b45f2;
+}
+
+/* ---------- Empty / Guest Prompt ---------- */
+.nx-set-guest-card {
+  max-width: 520px;
+  margin: 56px auto 0;
+  padding: 36px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.nx-set-guest-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background-color: #f2f0ff;
+  border: 1px solid #d4cdfc;
+  color: #5b45f2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-set-tab-btn,
+  .nx-set-input,
+  .nx-set-btn-primary,
+  .nx-set-btn-secondary,
+  .nx-set-btn-danger,
+  .nx-set-ws-item,
+  .nx-set-shortcut-card {
+    transition: none !important;
+  }
+}

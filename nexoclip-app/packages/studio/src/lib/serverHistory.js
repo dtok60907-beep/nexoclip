@@ -38,8 +38,12 @@ export function mergeHistory(serverEntries, localEntries, hiddenIds = []) {
 // Loads the account's succeeded jobs of one kind; `refresh` reloads after a generation.
 export function useServerHistory(kind, { enabled = true, limit = 100 } = {}) {
   const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(Boolean(enabled));
   const refresh = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       const response = await fetch(`/api/jobs?kind=${encodeURIComponent(kind)}&limit=${limit}`, { credentials: "include" });
       if (!response.ok) return;
@@ -47,8 +51,10 @@ export function useServerHistory(kind, { enabled = true, limit = 100 } = {}) {
       setEntries((jobs || []).map(historyEntryFromJob).filter(Boolean));
     } catch {
       /* offline or signed out: the local history still shows */
+    } finally {
+      setLoading(false);
     }
   }, [kind, enabled, limit]);
   useEffect(() => { refresh(); }, [refresh]);
-  return { entries, refresh };
+  return { entries, loading, refresh };
 }

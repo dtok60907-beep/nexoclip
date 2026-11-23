@@ -1,36 +1,74 @@
 'use client';
 
+import { motion } from 'motion/react';
+import { NxIcon } from './ui/nx-icon';
+import { NxBrandLoader, NxDirectorSkeleton, NxProfileBadgeSkeleton, NxStudioSkeleton } from './ui/nx-loading';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import UsageContent from './UsageContent';
 import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
-import { SUPPORT_WHATSAPP_URL } from './publicPricing';
-import { WHATSAPP_PATH } from './SupportChat';
+import SettingsContent from './SettingsContent';
+import BrandKitContent from './BrandKitContent';
 import PricingModal from './PricingModal';
 import { PromoBanner, usePlanStatus } from './PlanStatus';
 import LowBalanceDialog from './LowBalanceDialog';
 import { lowBalanceLevel, nextLowBalanceDialog } from '../src/lib/lowBalance.js';
 import StudioTour from './tour/StudioTour';
+import { getFeatureTips } from './tour/featureTips';
+import {
+  ArrowLeft,
+  Building2,
+  Check,
+  CircleDot,
+  Clapperboard,
+  Crown,
+  Film,
+  Image as ImageIcon,
+  Images,
+  Layers,
+  LayoutGrid,
+  LayoutTemplate,
+  Lightbulb,
+  Package,
+  Plus,
+  Search,
+  Settings as SettingsIcon,
+  Sparkles,
+  UserRound,
+  Users,
+  Video,
+  Workflow,
+  X as CloseIcon,
+} from 'lucide-react';
 import StudioHome from './StudioHome';
+import AppsHub from './AppsHub';
+import TemplatesHub from './TemplatesHub';
+import ProductsLibrary from './ProductsLibrary';
+import CreateQuickModal from './CreateQuickModal';
+import GetStartedPopover from './GetStartedPopover';
 import useDashboardData from './useDashboardData';
+import GenerationProject from './GenerationProject';
+import ProjectLibrary from './ProjectLibrary';
+import WorkspaceOnboarding from './WorkspaceOnboarding';
 import WorkspaceLibrary from './WorkspaceLibrary';
 import StudioAuthModal from './saas/StudioAuthModal';
-import TikTokAccountsPanel from './TikTokAccountsPanel';
 import TikTokPublishDialog from './TikTokPublishDialog';
 import SocialPublishing from './SocialPublishing';
-// Default tab is kept static so the first paint of /studio has no loading flash.
-import { ImageStudio } from 'studio';
+import MetaAdsManager from './MetaAdsManager';
+// All heavy studio workspaces are lazy-loaded so /studio/home boots instantly without compiling studio bundles.
+const createStudioLoader = (label, variant = 'split') => function LazyStudioSkeleton() {
+  return <NxStudioSkeleton label={label} variant={variant} />;
+};
 
-const StudioLoading = () => (
-  <div className="h-full w-full bg-[#fafafd] flex items-center justify-center text-[#777184]">Loading Studio...</div>
-);
+const DirectorLoading = () => <NxDirectorSkeleton label="Loading AI Director" surface="light" variant="full" />;
+const MotionLoading = () => <NxDirectorSkeleton label="Loading AI Motion" surface="light" variant="full" />;
 
 const ComingSoon = ({ title }) => (
-  <div className="h-full w-full bg-[#fafafd] text-[#292733] flex items-center justify-center text-center px-6">
+  <div className="h-full w-full bg-white text-[#292733] flex items-center justify-center text-center px-6">
     <div>
       <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">Coming Soon</div>
       <h2 className="text-2xl font-semibold text-slate-900 mb-2">{title}</h2>
@@ -39,20 +77,23 @@ const ComingSoon = ({ title }) => (
   </div>
 );
 
-// The rest are lazy-loaded so they only compile/download when their tab is opened.
-const studioLazy = (name) => dynamic(() => import('studio').then(mod => mod[name]), {
+// Lazy-loaded studio workspaces so they only compile/download when their tab is opened.
+const studioLazy = (name, label, variant = 'split') => dynamic(() => import('studio').then(mod => mod[name]), {
   ssr: false,
-  loading: StudioLoading,
+  loading: createStudioLoader(label, variant),
 });
 
-const VideoStudio = studioLazy('VideoStudio');
-const VibeMotionStudio = studioLazy('VibeMotionStudio');
-const CinemaStudio = studioLazy('CinemaStudio');
-const AudioStudio = studioLazy('AudioStudio');
-const MarketingStudio = studioLazy('MarketingStudio');
-const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
-const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: StudioLoading });
-const MotionStudio = dynamic(() => import('./motion/MotionHub.js'), { ssr: false, loading: StudioLoading });
+const ImageStudio = studioLazy('ImageStudio', 'Loading Image Studio', 'canvas');
+
+const VideoStudio = studioLazy('VideoStudio', 'Loading Video Studio', 'canvas');
+const VibeMotionStudio = studioLazy('VibeMotionStudio', 'Loading Vibe Motion', 'canvas');
+const CinemaStudio = studioLazy('CinemaStudio', 'Loading Cinema Studio', 'canvas');
+const AudioStudio = studioLazy('AudioStudio', 'Loading Audio Studio', 'canvas');
+const MarketingStudio = studioLazy('MarketingStudio', 'Loading Marketing Studio', 'canvas');
+const AiInfluencerStudio = studioLazy('AiInfluencerStudio', 'Loading AI Influencer Studio', 'split');
+const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: DirectorLoading });
+const MotionStudio = dynamic(() => import('./motion/MotionHub.js'), { ssr: false, loading: MotionLoading });
+const DotGrid = dynamic(() => import('./ui/DotGrid'), { ssr: false });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
 const LANDING_URL = 'https://www.nexoclip.com';
@@ -60,178 +101,171 @@ const LANDING_URL = 'https://www.nexoclip.com';
 
 const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
+const sidebarIcons = {
+  'home': 'home',
+  'apps': 'apps',
+  'projects': 'projects',
+  'media': 'media',
+  'director': 'director',
+  'canvas': 'canvas',
+  'video': 'video',
+  'image': 'image',
+  'cinema': 'cinema',
+  'ai-influencer': 'ai-influencer',
+  'motion': 'motion',
+  'publish': 'publish',
+  'ads': 'ads',
+  'accounts': 'accounts',
+  'usage': 'usage',
+  'analytics': 'analytics',
+  'settings': 'settings',
+  'brand-kit': 'settings',
+};
+
+function RailGlyph({ id }) {
+  switch (id) {
+    case 'team':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="fill" d="M5 20V5.5A1.5 1.5 0 0 1 6.5 4h7A1.5 1.5 0 0 1 15 5.5V20" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="fill" d="M15 10h3.5A1.5 1.5 0 0 1 20 11.5V20" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M3 20h18M8.5 8h3M8.5 12h3M8.5 16h3" stroke="currentColor" strokeWidth="1.75" />
+        </svg>
+      );
+    case 'home':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="fill" d="M4.5 10.2 12 3.8l7.5 6.4V19a1.8 1.8 0 0 1-1.8 1.8H6.3A1.8 1.8 0 0 1 4.5 19v-8.8Z" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M9.8 20.8v-5.3a1.2 1.2 0 0 1 1.2-1.2h2a1.2 1.2 0 0 1 1.2 1.2v5.3" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M2.8 10.6 12 3l9.2 7.6" stroke="currentColor" strokeWidth="1.8" />
+        </svg>
+      );
+    case 'create':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <circle data-tone="fill" cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M12 8.2v7.6M8.2 12h7.6" stroke="currentColor" strokeWidth="1.9" />
+        </svg>
+      );
+    case 'director':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="fill" d="M6 5.5 17 12 6 18.5V5.5z" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M19 4v3.5M17.25 5.75h3.5" stroke="currentColor" strokeWidth="1.85" />
+        </svg>
+      );
+    case 'apps':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <rect data-tone="fill" x="3.5" y="3.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.75" />
+          <rect data-tone="fill" x="13.5" y="3.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.75" />
+          <rect data-tone="fill" x="3.5" y="13.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.75" />
+          <rect data-tone="fill" x="13.5" y="13.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.75" />
+        </svg>
+      );
+    case 'projects':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="fill" d="M3.5 7.5a2 2 0 0 1 2-2h4.1l1.9 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10z" stroke="currentColor" strokeWidth="1.75" />
+        </svg>
+      );
+    case 'library':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="fill" d="M5 7.5A2 2 0 0 1 7 5.5h10a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-11Z" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M8.5 5.5V4a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v1.5" stroke="currentColor" strokeWidth="1.65" />
+          <path data-tone="stroke" d="M9.5 11.5a2.5 2.5 0 0 0 5 0" stroke="currentColor" strokeWidth="1.75" />
+        </svg>
+      );
+    case 'brand-kit':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="fill" d="m11.5 6.8 4.4-1.2a1.5 1.5 0 0 1 1.9 1.1l1.8 7.3a1.5 1.5 0 0 1-1.1 1.8L11.5 17.6" stroke="currentColor" strokeWidth="1.7" />
+          <path data-tone="fill" d="M4.5 5.5A1.5 1.5 0 0 1 6 4h4.5A1.5 1.5 0 0 1 12 5.5v13a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5v-13z" stroke="currentColor" strokeWidth="1.75" />
+          <circle cx="8.25" cy="16.4" r="1.1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'accounts':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+          <path data-tone="stroke" d="M9.5 6.5V3.5M14.5 6.5V3.5" stroke="currentColor" strokeWidth="1.8" />
+          <path data-tone="fill" d="M7 6.5h10v4a5 5 0 0 1-10 0v-4Z" stroke="currentColor" strokeWidth="1.75" />
+          <path data-tone="stroke" d="M12 15.5v4a1.5 1.5 0 0 0 1.5 1.5H16" stroke="currentColor" strokeWidth="1.75" />
+        </svg>
+      );
+    default:
+      return <NxIcon name={id} size={17} />;
+  }
+}
 const TABS = [
-  ...[['projects', 'Projects'], ['media', 'Media Library']].map(([id, label]) => ({ id, label, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7V5h7l2 2h9v13H3Z"/></svg> })),
-  { id: 'home', label: 'Home', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></svg> },
-  {
-    id: 'image',
-    label: 'Image Studio',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-        <circle cx="8.5" cy="8.5" r="1.5"/>
-        <polyline points="21 15 16 10 5 21"/>
-      </svg>
-    )
-  },
-  {
-    id: 'video',
-    label: 'Video Studio',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="23 7 16 12 23 17 23 7"/>
-        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-      </svg>
-    )
-  },
-  {
-    id: 'audio',
-    label: 'Audio Studio',
-    hidden: true, // pure-MuAPI, no fallback — see docs/2026-08-24-muapi-dependency-audit.md
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 18V5l12-2v13"/>
-        <circle cx="6" cy="18" r="3"/>
-        <circle cx="18" cy="16" r="3"/>
-      </svg>
-    )
-  },
-  {
-    id: 'vibe-motion',
-    label: 'Vibe Motion',
-    hidden: true, // pure-MuAPI, no fallback — see docs/2026-08-24-muapi-dependency-audit.md
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-      </svg>
-    )
-  },
-  {
-    id: 'lipsync',
-    label: 'Lip Sync',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-        <line x1="12" y1="19" x2="12" y2="22"/>
-      </svg>
-    )
-  },
-  {
-    id: 'body-swap',
-    label: 'Body Swap',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="8.5" cy="7" r="4"/>
-        <polyline points="17 11 19 13 23 9"/>
-        <path d="M23 13v-2"/>
-      </svg>
-    )
-  },
-  {
-    id: 'cinema',
-    label: 'Cinema Studio',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
-        <line x1="7" y1="2" x2="7" y2="22"/>
-        <line x1="17" y1="2" x2="17" y2="22"/>
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <line x1="2" y1="7" x2="7" y2="7"/>
-        <line x1="2" y1="17" x2="7" y2="17"/>
-        <line x1="17" y1="17" x2="22" y2="17"/>
-        <line x1="17" y1="7" x2="22" y2="7"/>
-      </svg>
-    )
-  },
-  {
-    id: 'marketing',
-    label: 'Marketing Studio',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        <line x1="8" y1="9" x2="16" y2="9"/>
-        <line x1="8" y1="13" x2="14" y2="13"/>
-      </svg>
-    )
-  },
-  {
-    id: 'canvas',
-    label: 'Canvas',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="6" height="6" rx="1"/>
-        <rect x="15" y="3" width="6" height="6" rx="1"/>
-        <rect x="9" y="15" width="6" height="6" rx="1"/>
-        <path d="M6 9v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9"/>
-        <path d="M12 13v2"/>
-      </svg>
-    )
-  },
-  {
-    // AI Director (OpenMontage pipeline): brief -> research -> script -> scene plan -> assets.
-    id: 'director',
-    label: 'AI Director',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>
-        <path d="m4 11-.8-3.4a1 1 0 0 1 .7-1.2l13.6-3.3a1 1 0 0 1 1.2.7L19.5 7z"/>
-        <path d="m8.5 5.6 2.3 3.3M13.6 4.4l2.3 3.3"/>
-      </svg>
-    )
-  },
-  {
-    id: 'motion',
-    label: 'Motion',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 17c3-6 6-6 9 0s6 6 9 0"/>
-        <circle cx="12" cy="7" r="3"/>
-      </svg>
-    )
-  },
-  {
-    id: 'billing',
-    label: 'Top Up',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="6" width="20" height="14" rx="2"/>
-        <path d="M2 10h20"/>
-        <path d="M16 15h2"/>
-        <path d="M6 6V4h12v2"/>
-      </svg>
-    )
-  },
-  {
-    id: 'usage',
-    label: 'Usage',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 3v18h18"/>
-        <path d="M7 15l4-4 3 3 5-6"/>
-      </svg>
-    )
-  },
-  {
-    id: 'accounts',
-    label: 'Connected Accounts',
-    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M19 8v6M16 11h6"/></svg>
-  },
-  {id:'publish',label:'Social Publishing',icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m22 2-7 20-4-9-9-4Z"/><path d="m22 2-11 11"/></svg>},
-  {
-    id: 'ai-influencer',
-    label: 'AI Influencer Studio',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-      </svg>
-    )
-  },
+  { id: 'team', label: 'Workspace', hidden: true, icon: <Building2 size={18} /> },
+  { id: 'projects', label: 'Projects', icon: <NxIcon name="projects" size={18} /> },
+  { id: 'media', label: 'Media Library', icon: <NxIcon name="media" size={18} /> },
+  { id: 'templates', label: 'Templates', icon: <NxIcon name="apps" size={18} /> },
+  { id: 'products', label: 'Products', icon: <NxIcon name="projects" size={18} /> },
+  { id: 'home', label: 'Home', icon: <NxIcon name="home" size={18} /> },
+  { id: 'apps', label: 'Apps', icon: <NxIcon name="apps" size={18} /> },
+  { id: 'image', label: 'Image Studio', icon: <NxIcon name="image" size={18} /> },
+  { id: 'video', label: 'Video Studio', icon: <NxIcon name="video" size={18} /> },
+  { id: 'audio', label: 'Audio Studio', hidden: true, icon: <NxIcon name="audio" size={18} /> },
+  { id: 'vibe-motion', label: 'Vibe Motion', hidden: true, icon: <NxIcon name="vibe-motion" size={18} /> },
+  { id: 'lipsync', label: 'Lip Sync', icon: <NxIcon name="lipsync" size={18} /> },
+  { id: 'body-swap', label: 'Body Swap', icon: <NxIcon name="body-swap" size={18} /> },
+  { id: 'cinema', label: 'Cinema Studio', icon: <NxIcon name="cinema" size={18} /> },
+  { id: 'marketing', label: 'Marketing Studio', icon: <NxIcon name="marketing" size={18} /> },
+  { id: 'canvas', label: 'Canvas', icon: <NxIcon name="canvas" size={18} /> },
+  { id: 'director', label: 'AI Director', icon: <NxIcon name="director" size={18} /> },
+  { id: 'motion', label: 'Motion', icon: <NxIcon name="motion" size={18} /> },
+  { id: 'billing', label: 'Top Up', icon: <NxIcon name="billing" size={18} /> },
+  { id: 'usage', label: 'Usage', icon: <NxIcon name="usage" size={18} /> },
+  { id: 'brand-kit', label: 'Brand Kit', icon: <NxIcon name="settings" size={18} /> },
+  { id: 'settings', label: 'Settings', icon: <NxIcon name="settings" size={18} /> },
+  { id: 'ads', label: 'Ads Manager', hidden: true, icon: <NxIcon name="ads" size={18} /> },
+  { id: 'publish', label: 'Social Publishing', hidden: true, icon: <NxIcon name="publish" size={18} /> },
+  { id: 'ai-influencer', label: 'AI Influencer Studio', icon: <NxIcon name="ai-influencer" size={18} /> },
 ];
 
 // The header's page title for each tab (sidebar labels where they differ from TABS).
-const TAB_TITLES = { home: 'Home', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', motion: 'Motion', billing: 'Top up', usage: 'Usage', accounts: 'Connected Accounts', canvas: 'Canvas' };
+const TAB_TITLES = { home: 'Home', apps: 'Apps', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', motion: 'Motion', billing: 'Top up', usage: 'Usage', 'brand-kit': 'Brand Kit', settings: 'Settings', accounts: 'Integration Apps', canvas: 'Canvas' };
+
+const LIBRARY_TAB_IDS = new Set(['templates', 'products', 'media']);
+
+const APPS_EXT_NAV = [
+  { id: 'apps', label: 'All Apps', group: 'overview', icon: LayoutGrid },
+  { id: 'home', label: 'AI Ads & UGC', group: 'studios', icon: Sparkles },
+  { id: 'director', label: 'AI Director', group: 'studios', icon: Clapperboard },
+  { id: 'motion', label: 'AI Motion', group: 'studios', icon: Film },
+  { id: 'canvas', label: 'Canvas Filmmaking', group: 'studios', icon: Workflow },
+  { id: 'ai-influencer', label: 'AI Influencer', group: 'classic', icon: UserRound },
+  { id: 'video', label: 'Video Studio', group: 'classic', icon: Video },
+  { id: 'image', label: 'Image Studio', group: 'classic', icon: ImageIcon },
+];
+
+const LIBRARY_EXT_NAV = [
+  { id: 'templates', label: 'Templates', group: 'library', icon: LayoutTemplate },
+  { id: 'products', label: 'Products', group: 'library', icon: Package },
+  { id: 'media', label: 'Media Library', group: 'library', icon: Images },
+];
+
+const WORKSPACE_EXT_NAV = [
+  { id: 'team', view: 'switch', label: 'Switch Workspace', group: 'workspace', icon: Layers },
+  { id: 'team/members', view: 'manage', label: 'Team Members', group: 'workspace', icon: Users },
+  { id: 'team/new', view: 'new', label: 'New Workspace', group: 'workspace', icon: Plus },
+];
+
+const parseTeamSubView = (pathValue) => {
+  const seg = (pathValue || '').split('/')[3];
+  if (seg === 'new') return 'new';
+  if (seg === 'members') return 'manage';
+  return 'switch';
+};
+
+const getDefaultExtSidebar = (tabId) => {
+  if (tabId === 'team') return 'team';
+  if (tabId === 'apps') return 'apps';
+  if (LIBRARY_TAB_IDS.has(tabId)) return 'library';
+  return null;
+};
 
 const NOTIFICATIONS_STORAGE_KEY = 'open_gen_notifications_v1';
 const MAX_VISIBLE_NOTIFICATIONS = 3;
@@ -265,6 +299,7 @@ const persistNotifications = (notifications) => {
 
 export default function StandaloneShell({ initialTab, children }) {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
   const slug = params?.slug || []; 
   const idFromParams = params?.id;
@@ -299,8 +334,11 @@ export default function StandaloneShell({ initialTab, children }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [authError, setAuthError] = useState('');
-  const [pricingOpen, setPricingOpen] = useState(false);
-  const pricingAfterAuth = useRef(false);
+  const [pricingModalTab, setPricingModalTab] = useState(null);
+  const pricingOpen = pricingModalTab !== null;
+  const openPricingModal = useCallback((tab = 'plans') => setPricingModalTab(tab), []);
+  const closePricingModal = useCallback(() => setPricingModalTab(null), []);
+  const pricingAfterAuth = useRef(null);
   const [sessionVersion, setSessionVersion] = useState(0);
   const authReturnTo = useRef('/studio/home');
   const openAuth = useCallback((mode = 'login', error = '') => {
@@ -313,42 +351,72 @@ export default function StandaloneShell({ initialTab, children }) {
     openAuth('login');
     return false;
   }, [authStatus, openAuth]);
-  const requestPricingAuth = useCallback(() => {
-    pricingAfterAuth.current = true;
-    setPricingOpen(false);
+  const requestPricingAuth = useCallback((tab = 'plans') => {
+    pricingAfterAuth.current = tab || pricingModalTab || 'plans';
+    setPricingModalTab(null);
     openAuth('login');
-  }, [openAuth]);
+  }, [openAuth, pricingModalTab]);
   const finishAuthentication = useCallback(async (result) => {
     const response = await fetch('/api/workspaces', { credentials: 'include', cache: 'no-store' });
     if (!response.ok) throw new Error('Could not load your workspace. Please try signing in again.');
     const payload = await response.json();
-    const workspace = payload.workspaces?.[0];
+    const workspaces = Array.isArray(payload.workspaces) ? payload.workspaces : [];
+    const workspace = workspaces[0];
     if (!workspace?.id) throw new Error('No workspace is available for this account.');
+    setUserWorkspaces(workspaces);
     window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
+    window.sessionStorage.setItem('nexoclip_workspace_name', workspace.name);
     setAuthStatus('authenticated');
     setSessionVersion(version => version + 1);
     setAuthOpen(false);
     if (pricingAfterAuth.current) {
-      pricingAfterAuth.current = false;
-      setPricingOpen(true);
+      const nextModalTab = pricingAfterAuth.current;
+      pricingAfterAuth.current = null;
+      setPricingModalTab(nextModalTab);
     }
-    if (result?.user?.isPlatformOperator) router.push('/admin/economics');
-    else if (authReturnTo.current !== '/studio/home') router.push(authReturnTo.current);
+    if (result?.user?.isPlatformOperator) {
+      router.push('/admin/economics');
+    } else if (authReturnTo.current && authReturnTo.current !== '/studio/home') {
+      const targetPath = authReturnTo.current;
+      const match = targetPath.match(/^\/studio\/([^/?#]+)/);
+      if (match && TABS.some((t) => t.id === match[1])) {
+        const nextTab = match[1];
+        if (nextTab === 'image') setImageVisited(true);
+        setActiveTab(nextTab);
+        window.history.pushState(null, '', targetPath);
+      } else {
+        router.push(targetPath);
+      }
+    }
     authReturnTo.current = '/studio/home';
   }, [router]);
   const [activeTab, setActiveTab] = useState(getInitialTab());
+  const [teamSubView, setTeamSubView] = useState(() => parseTeamSubView(pathname));
+  const [userWorkspaces, setUserWorkspaces] = useState([]);
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState(null);
+  const [extSidebar, setExtSidebar] = useState(() => getDefaultExtSidebar(getInitialTab()));
+  const [extSidebarSearch, setExtSidebarSearch] = useState('');
+  const [directorHeroActive, setDirectorHeroActive] = useState(true);
+  const [motionHeroActive, setMotionHeroActive] = useState(true);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [getStartedOpen, setGetStartedOpen] = useState(false);
   const [imageVisited, setImageVisited] = useState(() => getInitialTab() === 'image');
+  const [homeSelection, setHomeSelection] = useState(null);
   const [studioPrompt, setStudioPrompt] = useState('');
   const [tiktokVideo, setTiktokVideo] = useState(null);
-  // Tabs that take the whole width: no sidebar, a back button in the header instead.
-  const isFullWidthTab = activeTab === 'director' || activeTab === 'motion';
 
   const [balance, setBalance] = useState(null);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const creditLevel = lowBalanceLevel(balance);
   const planStatus = usePlanStatus(authStatus, `${sessionVersion}:${pricingOpen}`);
   const [tourOpen, setTourOpen] = useState(false);
+  const [tourMode, setTourMode] = useState('tips');
+  const openFeatureTips = useCallback(() => {
+    setTourMode('tips');
+    setTourOpen(true);
+  }, []);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+
   const [hasMounted, setHasMounted] = useState(false);
   const [featureSearch, setFeatureSearch] = useState('');
   const [selectedProject, setSelectedProject] = useState('');
@@ -480,6 +548,7 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   const makeGenerationEndCallback = useCallback((tabId) => () => {
+    if (['video', 'cinema', 'ai-influencer'].includes(tabId)) window.dispatchEvent(new Event('nexoclip:project-changed'));
     setGenerationCounts((previous) => {
       const currentCount = previous[tabId] || 0;
       if (currentCount <= 1) {
@@ -511,7 +580,10 @@ export default function StandaloneShell({ initialTab, children }) {
       const tabId = segments[1] || 'home';
       if (TABS.find(t => t.id === tabId)) {
         if (tabId === 'image') setImageVisited(true);
+        if (tabId === 'team') setTeamSubView(parseTeamSubView(path));
         setActiveTab(tabId);
+        setExtSidebar(getDefaultExtSidebar(tabId));
+        setExtSidebarSearch('');
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -519,29 +591,53 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   useEffect(() => {
+    if (pathname?.startsWith('/studio/team')) {
+      setTeamSubView(parseTeamSubView(pathname));
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get('tour') !== '1') return;
     url.searchParams.delete('tour');
     window.history.replaceState(null, '', url.pathname + url.search);
+    setTourMode('tour');
     setTourOpen(true);
   }, []);
 
-  const handleTabChange = useCallback((tabId, prompt = '') => {
-    if (['billing', 'usage', 'canvas', 'director', 'projects', 'media'].includes(tabId) && !requireAuth()) return;
-    if (tabId === 'canvas') {
-      window.location.assign('/canvas');
-      return;
-    }
-    window.history.pushState(null, '', `/studio/${tabId}`);
+  const handleTabChange = useCallback((destination, prompt = '') => {
+    const [tabId, subSegment] = destination.split('/');
+    window.history.pushState(null, '', `/studio/${destination}`);
     if (tabId === 'projects') setSelectedProject(prompt);
     else if (typeof prompt === 'string' && prompt.trim()) setStudioPrompt(prompt.trim());
     if (tabId === 'image') setImageVisited(true);
+    if (tabId === 'team') {
+      setTeamSubView(subSegment === 'new' ? 'new' : subSegment === 'members' ? 'manage' : 'switch');
+    }
     setActiveTab(tabId);
-  }, [requireAuth]);
+    setExtSidebar(getDefaultExtSidebar(tabId));
+    setExtSidebarSearch('');
+  }, []);
 
   // A brief handed over from the landing page (/studio/director?prompt=…) opens the
   // Director's new-project form with it. It is kept in sessionStorage so it survives
   // signing in with Google, which leaves the page; once the Director has it, it is dropped.
+  const handleHomeCreate = useCallback(async (tabId, prompt, files, modelId) => {
+    if (!requireAuth()) {
+      authReturnTo.current = `/studio/${tabId}`;
+      return false;
+    }
+    if (files.length && !['image', 'video'].includes(tabId)) throw new Error('This studio does not accept references here.');
+    // Load the destination before leaving the draft; failures remain recoverable in the composer.
+    if (tabId === 'director') await import('./director/DirectorApp.js');
+    else await import('studio');
+    setStudioPrompt(prompt);
+    setHomeSelection({ tabId, modelId });
+    setDroppedFiles(files.length ? files : null);
+    handleTabChange(tabId, prompt);
+    return true;
+  }, [handleTabChange, requireAuth]);
+
   const pendingPromptFromStorage = useRef(false);
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -592,6 +688,77 @@ export default function StandaloneShell({ initialTab, children }) {
     }
   };
 
+  const handleRailSectionClick = (event, section) => {
+    if (!(event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey)) {
+      return;
+    }
+    event.preventDefault();
+    if (section === 'team') {
+      if (currentTab === 'team' && extSidebar === 'team') {
+        setExtSidebar(null);
+      } else {
+        setExtSidebarSearch('');
+        if (currentTab !== 'team') {
+          handleTabChange('team');
+        }
+        setExtSidebar('team');
+      }
+      return;
+    }
+    if (section === 'apps') {
+      if (currentTab === 'apps' && extSidebar === 'apps') {
+        setExtSidebar(null);
+      } else {
+        setExtSidebarSearch('');
+        if (currentTab !== 'apps') {
+          handleTabChange('apps');
+        }
+        setExtSidebar('apps');
+      }
+      return;
+    }
+    if (section === 'library') {
+      if (LIBRARY_TAB_IDS.has(currentTab) && extSidebar === 'library') {
+        setExtSidebar(null);
+      } else {
+        setExtSidebarSearch('');
+        if (!LIBRARY_TAB_IDS.has(currentTab)) {
+          handleTabChange('templates');
+        }
+        setExtSidebar('library');
+      }
+    }
+  };
+
+  const handleQuickSwitchWorkspace = useCallback(async (workspace) => {
+    if (!workspace?.id || switchingWorkspaceId) return;
+    const currentId = userWorkspaces[0]?.id || (typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null);
+    if (workspace.id === currentId) {
+      window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
+      window.sessionStorage.setItem('nexoclip_workspace_name', workspace.name);
+      handleTabChange('projects');
+      setIsMobileOpen(false);
+      return;
+    }
+    setSwitchingWorkspaceId(workspace.id);
+    try {
+      const response = await fetch('/api/workspaces/current', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ workspaceId: workspace.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Could not switch workspace.');
+      const nextActive = payload.workspaces?.[0] || workspace;
+      window.sessionStorage.setItem('nexoclip_workspace_id', nextActive.id);
+      window.sessionStorage.setItem('nexoclip_workspace_name', nextActive.name);
+      window.location.assign('/studio/projects');
+    } catch {
+      setSwitchingWorkspaceId(null);
+    }
+  }, [handleTabChange, switchingWorkspaceId, userWorkspaces]);
+
   // Auto-hide header when inside a specific workflow view
   useEffect(() => {
     const isEditingWorkflow = (activeTab === 'canvas' || !!idFromParams) && urlWorkflowId;
@@ -626,12 +793,15 @@ export default function StandaloneShell({ initialTab, children }) {
           if (!cancelled) setAuthStatus('guest');
           return;
         }
-        const workspaceResponse = await fetch('/api/workspaces', { credentials: 'include' });
+        const workspaceResponse = await fetch('/api/workspaces', { credentials: 'include', cache: 'no-store' });
         const workspacePayload = await workspaceResponse.json();
         if (!workspaceResponse.ok) throw new Error('Workspace unavailable');
-        const workspace = workspacePayload.workspaces?.[0];
+        const workspaces = Array.isArray(workspacePayload.workspaces) ? workspacePayload.workspaces : [];
+        const workspace = workspaces[0];
+        if (!cancelled) setUserWorkspaces(workspaces);
         if (workspace?.id && typeof window !== 'undefined') {
           window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
+          window.sessionStorage.setItem('nexoclip_workspace_name', workspace.name);
           await refreshBalance();
         }
         if (!cancelled) setAuthStatus('authenticated');
@@ -653,7 +823,7 @@ export default function StandaloneShell({ initialTab, children }) {
       const next = params.get('next');
       authReturnTo.current = next?.startsWith('/') && !next.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(next)
         ? next
-        : intent === 'register' ? '/onboarding' : '/studio/home';
+        : '/studio/home';
       const errors = {
         google: 'Google sign-in did not complete. Please try again.',
         google_state: 'Your Google sign-in expired. Please try again.',
@@ -687,30 +857,37 @@ export default function StandaloneShell({ initialTab, children }) {
     return () => window.removeEventListener('muapi:auth-required', onAuthRequired);
   }, [openAuth]);
 
+  useEffect(() => {
+    if (authStatus === 'guest' && activeTab !== 'home') {
+      authReturnTo.current = window.location.pathname + window.location.search;
+      openAuth('login');
+    }
+  }, [authStatus, activeTab, openAuth]);
 
-  // Drag and Drop Handlers
+
+  // Project cards carry text. Only file drags belong to the media uploader.
+  const isFileDrag = (e) => Array.from(e.dataTransfer.types).includes('Files');
   const handleDragOver = useCallback((e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
   }, []);
 
   const handleDragEnter = useCallback((e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      setIsDragging(true);
-    }
+    setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
     // Only set to false if we're leaving the container itself, not moving between children
     if (e.currentTarget.contains(e.relatedTarget)) return;
     setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback((e) => {
+    if (!e.dataTransfer.files.length) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -726,205 +903,660 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   if (!hasMounted) return (
-    <div className="min-h-screen bg-[#0b0c0a] flex items-center justify-center">
-      <div className="animate-spin text-[#d4ff64] text-3xl">◌</div>
-    </div>
+    <NxBrandLoader
+      fullScreen
+      label="Nexoclip Studio"
+      sublabel="Preparing your creative workspace"
+    />
   );
 
+  const currentTab = activeTab;
+  const activeFeatureTip = getFeatureTips(currentTab);
+  const showSidebar = authStatus === 'authenticated' && (currentTab === 'home' || isHeaderVisible);
+  const isHomeDotGrid = currentTab === 'home' && authStatus === 'authenticated';
+  const isDirectorDotGrid = currentTab === 'director' && directorHeroActive;
+  const isMotionDotGrid = currentTab === 'motion' && motionHeroActive;
+  const isRedesignedStudioTab = ['image', 'video', 'ai-influencer', 'motion', 'vibe-motion'].includes(currentTab);
+  const isStudioDotGrid = ['image', 'video', 'vibe-motion'].includes(currentTab);
+  const showDotGridBg = isHomeDotGrid || isDirectorDotGrid || isMotionDotGrid || isStudioDotGrid;
+  const isLibraryTab = LIBRARY_TAB_IDS.has(currentTab);
+  const showExtSidebar = showSidebar && (extSidebar === 'team' || extSidebar === 'apps' || extSidebar === 'library');
+  const sidebarPinnedIds = new Set(['team', 'home', 'apps', 'projects', 'templates', 'products', 'media', 'brand-kit', 'accounts', 'usage', 'billing', 'settings']);
+  const showGlobalTopBar = authStatus === 'authenticated' && ['team', 'home', 'apps', 'projects', 'templates', 'products', 'media', 'accounts'].includes(currentTab);
   return (
     <div
-      className={`nx-shell${activeTab === 'home' ? ' nx-home-shell' : ''}`}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      className={`nx-shell${currentTab === 'home' ? ' nx-home-shell' : ''}${isHomeDotGrid ? ' nx-home-authed' : ''}${currentTab === 'brand-kit' ? ' is-brand-kit-tab' : ''}${showExtSidebar ? ' has-ext-sidebar' : ''}${currentTab === 'director' ? ' is-director-tab' : ''}${currentTab === 'motion' ? ' is-motion-tab' : ''}${isRedesignedStudioTab ? ' is-studio-redesign' : ''}${isStudioDotGrid ? ' is-studio-dotgrid' : ''}`}
+      onDragOver={currentTab === 'home' ? undefined : handleDragOver}
+      onDragEnter={currentTab === 'home' ? undefined : handleDragEnter}
+      onDragLeave={currentTab === 'home' ? undefined : handleDragLeave}
+      onDrop={currentTab === 'home' ? undefined : handleDrop}
     >
+      {authStatus === 'guest' && currentTab === 'home' && (
+        <button
+          type="button"
+          className="fixed right-5 top-5 z-[250] rounded-xl bg-[#5b45f2] px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-[#4935df]"
+          onClick={() => openAuth('login')}
+        >
+          Log in
+        </button>
+      )}
       {/* Drag Overlay */}
-      {isDragging && (
-        <div className="fixed inset-0 z-[100] bg-[#d4ff64]/10 backdrop-blur-md border-4 border-dashed border-[#d4ff64]/50 flex items-center justify-center pointer-events-none transition-all duration-300">
-          <div className="bg-[#0b0c0a] p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 scale-110 animate-pulse">
-            <div className="w-20 h-20 bg-[#d4ff64] rounded-2xl flex items-center justify-center">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5">
+      {authStatus === 'authenticated' && isDragging && (
+        <div className="fixed inset-0 z-[100] bg-[#5b45f2]/10 backdrop-blur-md border-4 border-dashed border-[#5b45f2]/45 flex items-center justify-center pointer-events-none transition-all duration-300">
+          <div className="bg-white p-8 rounded-3xl border border-[#e6e7f0] shadow-[0_24px_60px_rgba(20,20,31,0.16)] flex flex-col items-center gap-4">
+            <div className="w-16 h-16 bg-[#f2f0ff] text-[#5b45f2] border border-[#ddd7fe] rounded-2xl flex items-center justify-center">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
             </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-white">Drop your media here</span>
-              <span className="text-sm text-white/40">Images, videos, or audio files</span>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-lg font-semibold text-[#14141f]">Drop your media here</span>
+              <span className="text-sm text-[#5e5e72]">Images, videos, or audio files</span>
             </div>
           </div>
         </div>
       )}
 
-      {isHeaderVisible && <PromoBanner status={planStatus} onOpen={() => setPricingOpen(true)} />}
 
       <div className="nx-frame">
-        {isMobileOpen && <div className="nx-scrim md:hidden" onClick={() => setIsMobileOpen(false)} />}
+        {showDotGridBg && (
+          <div className="nx-home-dotgrid-bg" aria-hidden="true">
+            <DotGrid
+              baseColor="#d6d3e6"
+              activeColor="#5b45f2"
+              shape="circle"
+              dotSize={4}
+              gap={10}
+              proximity={105}
+              strength={0.3}
+              bounce={0}
+              tension={1}
+              returnDuration={0.3}
+              shockRadius={80}
+              shockStrength={5}
+              swell={0}
+              stretch={0.4}
+              glow={0.5}
+              fade={0}
+              opacity={0.72}
+              intro={false}
+              clickShock={false}
+            />
+          </div>
+        )}
+        {showSidebar && isMobileOpen && <div className="nx-scrim md:hidden" onClick={() => setIsMobileOpen(false)} />}
 
-        {/* Floating sidebar; folds into an icon rail, and is a drawer on phones. */}
-        {isHeaderVisible && !isFullWidthTab && (() => {
-          const isCollapsed = isSidebarCollapsed && !isMobileOpen;
+        {/* Floating icon-rail sidebar (becomes a labeled drawer on mobile) */}
+        {showSidebar && (() => {
           const tabFor = (id) => TABS.find((tab) => tab.id === id);
-          const navLink = (id, label, extra = null) => {
+          const railLink = (id, label, ariaTitle = label) => {
             const tab = tabFor(id);
-            if (!tab) return null;
-            const isActive = activeTab === id;
+            if (!tab || tab.hidden) return null;
+            const isActive =
+              currentTab === id ||
+              (id === 'apps' && !sidebarPinnedIds.has(currentTab));
             return (
-              <a key={id} href={`/studio/${id}`} onClick={(event) => handleNavigationItemClick(event, id)}
-                data-tour={id === 'canvas' ? 'canvas-link' : undefined} aria-current={isActive ? 'page' : undefined} aria-label={label} title={isCollapsed ? label : undefined}
-                className={`nx-link${isActive ? ' is-active' : ''}`}>
-                <span className="nx-icon">{tab.icon}</span>
-                <span className="nx-label">{label}</span>
-                {extra}
+              <a
+                key={id}
+                href={`/studio/${id}`}
+                onClick={(event) => handleNavigationItemClick(event, id)}
+                data-rail-id={id}
+                data-tour={id === 'canvas' ? 'canvas-link' : undefined}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={ariaTitle}
+                title={ariaTitle}
+                className={`nx-rail-link${isActive ? ' is-active' : ''}`}
+              >
+                <span className="nx-rail-icon-wrap" aria-hidden="true">
+                  <RailGlyph id={id} />
+                </span>
+                <span className="nx-rail-label">{label}</span>
               </a>
             );
           };
-          const group = (label, shortLabel, children) => (
-            <div className="nx-group">
-              <span className="nx-group-label">{isCollapsed ? shortLabel : label}</span>
-              {children}
-            </div>
-          );
+          const isUsageActive = currentTab === 'usage' || currentTab === 'billing';
+          const isSettingsActive = currentTab === 'settings';
+          const workspaceName = userWorkspaces[0]?.name || window.sessionStorage.getItem('nexoclip_workspace_name') || 'Workspace';
           return (
-            <aside className={`nx-side${isCollapsed ? ' is-collapsed' : ''}${isMobileOpen ? ' is-open' : ''}`}>
-              <div className="nx-side-head">
-                {isCollapsed
-                  ? <Link href="/" aria-label="Nexo Clip home" className="nx-monogram">n</Link>
-                  : <Link href="/" aria-label="Nexo Clip home" className="nx-wordmark">nexo<span>clip</span><i>.</i></Link>}
+            <aside
+              aria-label="Studio workspace navigation"
+              className={`nx-side nx-icon-rail${isMobileOpen ? ' is-open' : ''}`}
+            >
+              <div className="nx-rail-head-mobile">
+                <a
+                  href="/studio/home"
+                  onClick={(event) => handleNavigationItemClick(event, 'home')}
+                  aria-label="Nexoclip Home"
+                  title="Nexoclip Home"
+                  className="nx-rail-brand"
+                >
+                  <span className="nx-rail-brand-mark" aria-hidden="true">
+                    <img
+                      src="/brand/nexoclip-mark.png"
+                      alt=""
+                      className="nx-rail-brand-mark-img"
+                    />
+                  </span>
+                  <img
+                    src="/brand/nexoclip-lockup.png"
+                    alt="nexoclip"
+                    className="nx-rail-brand-lockup"
+                  />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileOpen(false)}
+                  aria-label="Close navigation"
+                  className="nx-rail-mobile-close"
+                >
+                  <CloseIcon size={16} />
+                </button>
               </div>
-              <button type="button" className="nx-fold" onClick={toggleSidebar} aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={isCollapsed ? 'm9 18 6-6-6-6' : 'm15 18-6-6 6-6'} /></svg>
-              </button>
 
-              <nav data-tour="studio-nav" aria-label="Studio navigation" className="nx-nav">
-                {group('Workspace', 'Work', <>{navLink('home', 'Home')}{navLink('projects', 'Projects')}{navLink('media', 'Media Library')}</>)}
-                {group('Creative Studio', 'Create', <>{navLink('director', 'AI Director')}{navLink('canvas', 'Canvas Editor')}{['video', 'image', 'cinema', 'ai-influencer', 'motion'].map((id) => navLink(id, tabFor(id).label))}</>)}
-                {group('Marketing Studio', 'Market', <>{navLink('publish', 'Social Publishing')}{['Ads Manager', 'Analytics'].map((label) => <span key={label} className="nx-link nx-unavailable" aria-disabled="true" title={`${label} — coming soon`}><span className="nx-icon" aria-hidden="true">{label === 'Ads Manager' ? '⚑' : '▥'}</span><span className="nx-label">{label}</span><small className="nx-label">Soon</small></span>)}</>)}
-                {group('Account', 'Account', <>{navLink('accounts', 'Connected Accounts')}{navLink('usage', 'Usage & Billing')}<a href="/account" className="nx-link" title="Settings"><span className="nx-icon" aria-hidden="true">⚙</span><span className="nx-label">Settings</span></a></>)}
+              <div className="nx-rail-divider" role="separator" />
+
+              <nav data-tour="studio-nav" aria-label="Studio navigation" className="nx-rail-nav">
+                {/* Workspace — opens docked extended sidebar (matching Apps, Library & My Brand) */}
+                <a
+                  href="/studio/team"
+                  onClick={(event) => handleRailSectionClick(event, 'team')}
+                  data-rail-id="team"
+                  aria-current={currentTab === 'team' ? 'page' : undefined}
+                  aria-expanded={extSidebar === 'team'}
+                  aria-label={'Workspace: ' + workspaceName}
+                  title={'Workspace: ' + workspaceName}
+                  className={`nx-rail-link${currentTab === 'team' ? ' is-active' : ''}`}
+                >
+                  <span className="nx-rail-icon-wrap" aria-hidden="true">
+                    <RailGlyph id="team" />
+                  </span>
+                  <span className="nx-rail-label">
+                    <span className="block max-w-[52px] truncate md:max-w-[52px] max-md:max-w-[150px]">{workspaceName}</span>
+                  </span>
+                </a>
+                {extSidebar === 'team' && (
+                  <div className="nx-rail-mobile-subnav" aria-label="Workspace submenu">
+                    {WORKSPACE_EXT_NAV.map((item) => {
+                      const ItemIcon = item.icon;
+                      const isSubActive = currentTab === 'team' && teamSubView === item.view;
+                      return (
+                        <a
+                          key={item.id}
+                          href={`/studio/${item.id}`}
+                          onClick={(event) => handleNavigationItemClick(event, item.id)}
+                          className={`nx-rail-mobile-subitem${isSubActive ? ' is-active' : ''}`}
+                        >
+                          <ItemIcon size={14} strokeWidth={1.85} aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {railLink('home', 'Home', 'Studio Home')}
+
+                {/* Apps — opens docked extended sidebar (matching My Brand behavior, no hover flyout) */}
+                <a
+                  href="/studio/apps"
+                  onClick={(event) => handleRailSectionClick(event, 'apps')}
+                  data-rail-id="apps"
+                  aria-current={currentTab === 'apps' || !sidebarPinnedIds.has(currentTab) ? 'page' : undefined}
+                  aria-expanded={extSidebar === 'apps'}
+                  aria-label="Apps & Studios"
+                  title="Apps & Studios"
+                  className={`nx-rail-link${currentTab === 'apps' || !sidebarPinnedIds.has(currentTab) ? ' is-active' : ''}`}
+                >
+                  <span className="nx-rail-icon-wrap" aria-hidden="true">
+                    <RailGlyph id="apps" />
+                  </span>
+                  <span className="nx-rail-label">Apps</span>
+                </a>
+                {extSidebar === 'apps' && (
+                  <div className="nx-rail-mobile-subnav" aria-label="Apps submenu">
+                    {APPS_EXT_NAV.map((item) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <a
+                          key={item.id}
+                          href={`/studio/${item.id}`}
+                          onClick={(event) => handleNavigationItemClick(event, item.id)}
+                          className={`nx-rail-mobile-subitem${currentTab === item.id ? ' is-active' : ''}`}
+                        >
+                          <ItemIcon size={14} strokeWidth={1.85} aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {railLink('projects', 'Projects', 'Projects')}
+
+                {/* Library — opens docked extended sidebar (matching My Brand behavior, no hover flyout) */}
+                <a
+                  href="/studio/templates"
+                  onClick={(event) => handleRailSectionClick(event, 'library')}
+                  data-rail-id="library"
+                  aria-current={isLibraryTab ? 'page' : undefined}
+                  aria-expanded={extSidebar === 'library'}
+                  aria-label="Library (Templates, Products & Media)"
+                  title="Library"
+                  className={`nx-rail-link${isLibraryTab ? ' is-active' : ''}`}
+                >
+                  <span className="nx-rail-icon-wrap" aria-hidden="true">
+                    <RailGlyph id="library" />
+                  </span>
+                  <span className="nx-rail-label">Library</span>
+                </a>
+                {extSidebar === 'library' && (
+                  <div className="nx-rail-mobile-subnav" aria-label="Library submenu">
+                    {LIBRARY_EXT_NAV.map((item) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <a
+                          key={item.id}
+                          href={`/studio/${item.id}`}
+                          onClick={(event) => handleNavigationItemClick(event, item.id)}
+                          className={`nx-rail-mobile-subitem${currentTab === item.id ? ' is-active' : ''}`}
+                        >
+                          <ItemIcon size={14} strokeWidth={1.85} aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {railLink('brand-kit', 'My Brand', 'My Brand (Brand Kit)')}
               </nav>
 
-              <div className="nx-sidebar-profile">{authStatus === 'authenticated' ? <AccountMenu showAdminLink sidebar={!isCollapsed} /> : <button type="button" onClick={() => openAuth('login')} aria-label="Sign in">{isCollapsed ? '↗' : 'Sign in to your workspace'}</button>}</div>
-
-              <div className="nx-foot">
-                <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="nx-help" aria-label="Chat dengan NexoClip lewat WhatsApp" title={isCollapsed ? 'Chat dengan NexoClip' : undefined}>
-                  <span className="nx-help-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d={WHATSAPP_PATH} /></svg>
-                  </span>
-                  <span className="nx-label"><strong>Chat dengan NexoClip</strong><small>Lewat WhatsApp</small></span>
+              <div className="nx-rail-bottom">
+                <a
+                  href="/studio/usage"
+                  onClick={(event) => handleNavigationItemClick(event, 'usage')}
+                  aria-label="Usage & Billing"
+                  title="Usage & Billing"
+                  aria-current={isUsageActive ? 'page' : undefined}
+                  className={`nx-rail-util is-gem${isUsageActive ? ' is-active' : ''}`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+                    <path data-tone="fill" d="M6 4h12l3 5-9 11L3 9l3-5z" stroke="currentColor" strokeWidth="1.8" />
+                    <path data-tone="stroke" d="M3 9h18" stroke="currentColor" strokeWidth="1.7" />
+                  </svg>
+                  <span className="nx-rail-util-label">Usage &amp; Billing</span>
                 </a>
-                <nav className="nx-legal" aria-label="Kebijakan">
-                  <a href={`${LANDING_URL}/privacy`} target="_blank" rel="noopener noreferrer">Kebijakan Privasi</a>
-                  <span aria-hidden="true">·</span>
-                  <a href={`${LANDING_URL}/terms`} target="_blank" rel="noopener noreferrer">Ketentuan Layanan</a>
-                </nav>
+
+                {currentTab !== 'home' && (
+                  <button
+                    type="button"
+                    data-tour="tour-button"
+                    onClick={() => {
+                      setIsMobileOpen(false);
+                      openFeatureTips();
+                    }}
+                    aria-label={`Tips for ${activeFeatureTip.title}`}
+                    title={`Tips · ${activeFeatureTip.shortTitle}`}
+                    className="nx-rail-util is-tips"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+                      <path data-tone="stroke" d="M9 18h6M10 21.5h4" stroke="currentColor" strokeWidth="1.8" />
+                      <path data-tone="fill" d="M12 2.5a6.5 6.5 0 0 0-3.8 11.75c.65.48 1.05 1.24 1.05 2.05V17h5.5v-.7c0-.81.4-1.57 1.05-2.05A6.5 6.5 0 0 0 12 2.5Z" stroke="currentColor" strokeWidth="1.8" />
+                    </svg>
+                    <span className="nx-rail-util-label">Tips · {activeFeatureTip.shortTitle}</span>
+                  </button>
+                )}
+
+                <a
+                  href="/studio/settings"
+                  onClick={(event) => handleNavigationItemClick(event, 'settings')}
+                  aria-label="Settings"
+                  title="Settings"
+                  aria-current={isSettingsActive ? 'page' : undefined}
+                  className={`nx-rail-util is-settings${isSettingsActive ? ' is-active' : ''}`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="nx-rail-svg" aria-hidden="true">
+                    <path data-tone="fill" d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.75" />
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.75" />
+                  </svg>
+                  <span className="nx-rail-util-label">Settings</span>
+                </a>
+
+                {authStatus === 'loading' && (
+                  <div className="nx-rail-account-wrap">
+                    <NxProfileBadgeSkeleton sidebar={false} />
+                  </div>
+                )}
+
+                {authStatus === 'authenticated' && (
+                  <AccountMenu
+                    showAdminLink
+                    rail
+                    onUpgrade={() => openPricingModal('plans')}
+                    onOpenSettings={() => handleTabChange('settings')}
+                  />
+                )}
               </div>
             </aside>
           );
         })()}
 
-        <div className="nx-main">
-          {isHeaderVisible && (
-            <header className="nx-top">
-              <div className="nx-title">
-                {/* The Director is a full-width workspace without the sidebar; this is its way out. */}
-                {isFullWidthTab ? (
-                  <button type="button" onClick={() => handleTabChange('home')} aria-label="Back to Studio" className="nx-back">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
-                    Studio
-                  </button>
-                ) : (
-                  <button type="button" onClick={() => setIsMobileOpen(!isMobileOpen)} className="nx-burger" aria-label="Open navigation" aria-expanded={isMobileOpen}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
+        {/* Docked Extended Sidebar for Workspace, Apps & Library (matches My Brand .bs-tree panel) */}
+        {showExtSidebar && (() => {
+          const isTeam = extSidebar === 'team';
+          const isApps = extSidebar === 'apps';
+          const title = isTeam ? 'Workspace' : isApps ? 'Apps' : 'Library';
+          const placeholder = isTeam ? 'Search workspace...' : isApps ? 'Search apps...' : 'Search library...';
+          const allItems = isTeam ? WORKSPACE_EXT_NAV : isApps ? APPS_EXT_NAV : LIBRARY_EXT_NAV;
+          const query = extSidebarSearch.trim().toLowerCase();
+          const filteredItems = query
+            ? allItems.filter((item) => item.label.toLowerCase().includes(query))
+            : allItems;
+          const filteredWorkspaces = isTeam
+            ? (query
+                ? userWorkspaces.filter((w) => (w.name || '').toLowerCase().includes(query))
+                : userWorkspaces)
+            : [];
+          const activeWorkspaceId = userWorkspaces[0]?.id || window.sessionStorage.getItem('nexoclip_workspace_id');
+
+          return (
+            <aside className="bs-tree nx-ext-sidebar" aria-label={`${title} navigation`}>
+              <div className="bs-tree-header">
+                <button
+                  type="button"
+                  className="bs-tree-back"
+                  onClick={() => setExtSidebar(null)}
+                  aria-label={`Collapse ${title} sidebar`}
+                  title={`Collapse ${title} sidebar`}
+                >
+                  <ArrowLeft size={14} strokeWidth={2} />
+                </button>
+                <h2 className="bs-tree-title">{title}</h2>
+              </div>
+
+              <div className="bs-tree-search-wrap">
+                <span className="bs-tree-search-icon" aria-hidden="true">
+                  <Search size={13.5} strokeWidth={2} />
+                </span>
+                <input
+                  type="search"
+                  value={extSidebarSearch}
+                  onChange={(event) => setExtSidebarSearch(event.target.value)}
+                  placeholder={placeholder}
+                  aria-label={placeholder}
+                  className="bs-tree-search"
+                />
+                {extSidebarSearch && (
+                  <button
+                    type="button"
+                    className="bs-tree-search-clear"
+                    onClick={() => setExtSidebarSearch('')}
+                    aria-label="Clear search"
+                  >
+                    <CloseIcon size={12} />
                   </button>
                 )}
-                {activeTab !== 'home' && <h1 aria-live="polite">{TAB_TITLES[activeTab] || TABS.find(tab => tab.id === activeTab)?.label || 'Home'}</h1>}
               </div>
 
-              <div className="nx-actions">
-                <div className="nx-search-wrap">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                  <input type="search" value={featureSearch} onChange={(event) => setFeatureSearch(event.target.value)} placeholder="Search projects, media, or features…" aria-label="Search projects, media, or features" onKeyDown={(event) => { if (event.key === 'Escape') { setFeatureSearch(''); event.currentTarget.blur(); } }} />
-                  {featureSearch.trim() && <div className="nx-search-results" aria-label="Search results">{TABS.filter((tab) => !tab.hidden && `${tab.label} ${tab.id}`.toLowerCase().includes(featureSearch.toLowerCase())).slice(0, 6).map((tab) => <button type="button" key={tab.id} onClick={() => { setFeatureSearch(''); handleTabChange(tab.id); }}><span>{tab.icon}</span>{tab.label}</button>)}{!TABS.some((tab) => !tab.hidden && `${tab.label} ${tab.id}`.toLowerCase().includes(featureSearch.toLowerCase())) && <span className="nx-search-empty">No matching feature</span>}{authStatus === 'authenticated' && <><small className="nx-search-empty">Projects & media</small>{dashboardData.loading ? <span className="nx-search-empty" role="status">Searching…</span> : <>{[...dashboardData.projects.map((p) => ({ id: p.id, name: p.name, kind: 'projects' })), ...dashboardData.assets.map((a) => ({ id: a.id, name: a.filename, url: a.url, kind: 'media' }))].filter((item) => item.name.toLowerCase().includes(featureSearch.trim().toLowerCase())).slice(0, 6).map((item) => item.url ? <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer">{item.name}<small>Media ↗</small></a> : <button type="button" key={item.id} onClick={() => { setFeatureSearch(''); handleTabChange(item.kind, item.id); }}>{item.name}<small>Project</small></button>)}{(dashboardData.errors.projects || dashboardData.errors.assets) && <button type="button" onClick={dashboardData.retry}>Some results unavailable. Retry</button>}</>}</>}</div>}
-                </div>
-                <button type="button" data-tour="tour-button" className="nx-round nx-hide-sm" aria-label="Take the Studio tour" title="Take the Studio tour" onClick={() => setTourOpen(true)}>?</button>
-                {authStatus !== 'authenticated' ? <>
-                  <button type="button" className="nx-text-link" onClick={() => setPricingOpen(true)}>Pricing</button>
-                  <a className="nx-text-link" href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Enterprise</a>
-                  <button type="button" className="nx-text-link" onClick={() => openAuth('login')}>Log in</button>
-                  <button type="button" className="nx-cta" onClick={() => openAuth('register')}>Start creating <span aria-hidden="true">↗</span></button>
-                </> : <>
-                  <button type="button" data-tour="credit-balance" onClick={() => setPricingOpen(true)}
-                    className={`nx-credits${creditLevel ? ` is-${creditLevel}` : ''}`}
-                    aria-label={creditLevel ? 'Credits are running low, top up' : 'View plans and credits'}
-                    title={creditLevel === 'empty' ? 'You are out of credits. Click to top up.' : creditLevel === 'low' ? 'Your credits are running low. Click to top up.' : undefined}>
-                    <i aria-hidden="true">✦</i>
-                    <strong>{balance !== null ? Number(balance).toLocaleString() : '—'}</strong>
-                    <small>credits</small>
+              <nav className="bs-tree-nav" aria-label={`${title} pages`}>
+                {filteredItems.length === 0 && filteredWorkspaces.length === 0 ? (
+                  <p className="nx-ext-sidebar-empty">No matching items</p>
+                ) : (
+                  <>
+                    {filteredItems.map((item, idx) => {
+                      const ItemIcon = item.icon;
+                      const prevGroup = idx > 0 ? filteredItems[idx - 1].group : item.group;
+                      const showDivider = idx > 0 && item.group !== prevGroup;
+                      const isActive = isTeam
+                        ? currentTab === 'team' && teamSubView === item.view
+                        : currentTab === item.id;
+                      return (
+                        <div key={item.id}>
+                          {showDivider && <div className="bs-tree-divider" role="separator" />}
+                          <a
+                            href={`/studio/${item.id}`}
+                            onClick={(event) => handleNavigationItemClick(event, item.id)}
+                            aria-current={isActive ? 'page' : undefined}
+                            className={`bs-tree-item${isActive ? ' is-active' : ''}`}
+                          >
+                            <ItemIcon size={15} strokeWidth={1.85} aria-hidden="true" />
+                            <span className="bs-tree-item-label">{item.label}</span>
+                          </a>
+                        </div>
+                      );
+                    })}
+
+                    {isTeam && filteredWorkspaces.length > 0 && (
+                      <>
+                        {filteredItems.length > 0 && <div className="bs-tree-divider" role="separator" />}
+                        <div className="nx-ext-sidebar-section-label">Your Workspaces</div>
+                        {filteredWorkspaces.map((ws) => {
+                          const isCurrent = ws.id === activeWorkspaceId;
+                          const isSwitching = switchingWorkspaceId === ws.id;
+                          return (
+                            <button
+                              key={ws.id}
+                              type="button"
+                              disabled={Boolean(switchingWorkspaceId)}
+                              onClick={() => handleQuickSwitchWorkspace(ws)}
+                              className={`bs-tree-item${isCurrent ? ' is-active' : ''}`}
+                              title={`${ws.name} (${ws.role})`}
+                            >
+                              <span className="nx-ext-ws-avatar" aria-hidden="true">
+                                {(ws.name || 'W').slice(0, 1).toUpperCase()}
+                              </span>
+                              <span className="bs-tree-item-label">
+                                {isSwitching ? 'Switching…' : ws.name}
+                              </span>
+                              {isCurrent && (
+                                <Check size={13.5} strokeWidth={2.2} className="shrink-0 text-[#5b45f2]" aria-hidden="true" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </>
+                )}
+              </nav>
+            </aside>
+          );
+        })()}
+
+        <div className="nx-main">
+          {(showSidebar || currentTab === 'home') && (
+            <div className={`nx-reference-top nx-page-actions${!showGlobalTopBar ? ' is-subpage' : ''}`}>
+              {showSidebar && (
+                <button type="button" className="nx-burger" onClick={() => setIsMobileOpen(true)} aria-label="Open navigation" aria-expanded={isMobileOpen}>
+                  <NxIcon name="menu" size={20} />
+                </button>
+              )}
+              {showGlobalTopBar ? (
+                <div className="nx-top-cta-bar">
+                  <button
+                    type="button"
+                    data-get-started-trigger
+                    onClick={() => setGetStartedOpen((v) => !v)}
+                    className={`nx-top-pill nx-top-pill--starter${getStartedOpen ? ' is-active' : ''}`}
+                    aria-expanded={getStartedOpen}
+                    aria-label="Get started checklist"
+                  >
+                    <CircleDot size={15} strokeWidth={2.1} className="nx-top-pill-icon is-accent" aria-hidden="true" />
+                    <span>Get started</span>
                   </button>
-                  <div data-tour="jobs" className="flex"><JobListPanel /></div>
-                  <AccountMenu showAdminLink />
-                </>}
-              </div>
-            </header>
-          )}
 
+                  <a
+                    href={ENTERPRISE_WHATSAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="nx-top-pill"
+                    aria-label="Enterprise plans"
+                  >
+                    <Building2 size={15} strokeWidth={1.9} className="nx-top-pill-icon" aria-hidden="true" />
+                    <span>Enterprise</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => openPricingModal('plans')}
+                    className="nx-top-pill nx-top-pill--upgrade"
+                    aria-label="Upgrade plan"
+                  >
+                    <Crown size={15} strokeWidth={2} className="nx-top-pill-icon is-gold" aria-hidden="true" />
+                    <span>Upgrade</span>
+                  </button>
+
+                  {currentTab === 'home' && (
+                    <motion.button
+                      type="button"
+                      data-tour="tour-button"
+                      className="nx-top-pill nx-tips-trigger"
+                      whileHover={{ y: -1 }}
+                      whileTap={{ scale: 0.97 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 28 }}
+                      onClick={openFeatureTips}
+                      aria-label={`Tips for ${activeFeatureTip.title}`}
+                    >
+                      <Lightbulb size={15} strokeWidth={2} className="nx-top-pill-icon is-tips" aria-hidden="true" />
+                      <span>Tips</span>
+                    </motion.button>
+                  )}
+
+                  {currentTab === 'home' && authStatus === 'loading' && <NxProfileBadgeSkeleton />}
+                  {currentTab === 'home' && authStatus === 'guest' && (
+                    <motion.button
+                      className="nx-reference-login"
+                      type="button"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.96 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 28 }}
+                      onClick={() => openAuth('login')}
+                    >
+                      Log in
+                    </motion.button>
+                  )}
+                  {currentTab === 'home' && authStatus === 'authenticated' && (
+                    <AccountMenu showAdminLink onUpgrade={() => openPricingModal('plans')} onOpenSettings={() => handleTabChange('settings')} />
+                  )}
+                </div>
+              ) : currentTab === 'home' && authStatus === 'guest' ? (
+                <button
+                  type="button"
+                  className="nx-reference-login"
+                  onClick={() => openAuth('login')}
+                >
+                  Log in
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-tour="tour-button"
+                  className="nx-tips-trigger is-mobile-subpage md:hidden"
+                  onClick={openFeatureTips}
+                  aria-label={`Tips for ${activeFeatureTip.title}`}
+                >
+                  <Lightbulb size={15} strokeWidth={2} aria-hidden="true" />
+                  <span>Tips</span>
+                </button>
+              )}
+            </div>
+          )}
         {/* Studio Content */}
-        <div className={`suite-content min-w-0 relative overflow-hidden${activeTab !== 'home' && activeTab !== 'canvas' ? ' nx-studio-light' : ''}`}>
-        {activeTab === 'home' && <StudioHome onNavigate={handleTabChange} authStatus={authStatus} data={dashboardData} />}
-        {['projects', 'media'].includes(activeTab) && <WorkspaceLibrary kind={activeTab === 'projects' ? 'projects' : 'assets'} data={dashboardData} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
-        {authStatus !== 'loading' && <>
-        {['billing', 'usage'].includes(activeTab) && authStatus !== 'authenticated' && <div className="suite-private"><h2>Your creative workspace</h2><p>Sign in to access your workspace.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>}
-        {activeTab === 'director' && (authStatus === 'authenticated'
-          ? <div className="h-full w-full"><DirectorApp initialBrief={studioPrompt} /></div>
-          : <div className="suite-private"><h2>AI Director</h2><p>Sign in to plan and produce videos with the Director.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>)}
-        {activeTab === 'billing' && authStatus === 'authenticated' && <BillingContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} balance={balance} onCompleted={refreshBalance} />}
-        {activeTab === 'usage' && authStatus === 'authenticated' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} onTopUp={() => handleTabChange('billing')} /> : imageVisited && <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
-          <ImageStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
+        <div className={`suite-content min-w-0 relative overflow-hidden${currentTab !== 'home' && currentTab !== 'canvas' && currentTab !== 'director' && !isRedesignedStudioTab ? ' nx-studio-light' : ''}`}>
+        {authStatus === 'guest' && currentTab !== 'home' ? (
+          <main className="flex min-h-[70vh] flex-col items-center justify-center gap-4 bg-white px-6 text-center">
+            <h1 className="text-2xl font-semibold text-[#14141f]">Sign in to continue</h1>
+            <p className="max-w-md text-sm text-[#5e5e72]">Please sign in to your Nexoclip account to open this page.</p>
+            <button type="button" className="rounded-xl bg-[#5b45f2] px-5 py-2.5 text-sm font-semibold text-white" onClick={() => openAuth('login')}>Log in</button>
+          </main>
+        ) : <>
+        {currentTab === 'home' && <StudioHome onCreate={handleHomeCreate} onNavigate={handleTabChange} authStatus={authStatus} data={dashboardData} initialPrompt={studioPrompt} onPromptConsumed={() => setStudioPrompt('')} />}
+        {currentTab === 'team' && authStatus === 'authenticated' && <WorkspaceOnboarding onNavigate={handleNavigationItemClick} view={teamSubView} />}
+        {currentTab === 'apps' && <AppsHub onNavigate={handleTabChange} />}
+        {currentTab === 'projects' && <ProjectLibrary key={sessionVersion} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
+        {currentTab === 'templates' && <TemplatesHub onNavigate={handleTabChange} />}
+        {currentTab === 'products' && <ProductsLibrary authStatus={authStatus} onSignIn={() => openAuth('login')} onNavigate={handleTabChange} />}
+        {currentTab === 'media' && <WorkspaceLibrary kind="assets" data={dashboardData} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
+        {currentTab === 'director' && <div className="h-full w-full"><DirectorApp initialBrief={studioPrompt} onHeroChange={setDirectorHeroActive} /></div>}
+        {currentTab === 'billing' && (
+          <BillingContent
+            workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null}
+            balance={balance}
+            onCompleted={refreshBalance}
+            onNavigateUsage={() => handleTabChange('usage')}
+            onOpenPlans={() => openPricingModal('plans')}
+            onOpenTopUp={() => openPricingModal('topup')}
+          />
+        )}
+        {currentTab === 'settings' && (
+          <SettingsContent
+            onNewWorkspace={() => handleTabChange('team/new')}
+            authStatus={authStatus}
+            balance={balance}
+            onRequireAuth={() => openAuth('login')}
+            onBalanceChange={setBalance}
+            onWorkspaceChanged={() => {
+              window.location.assign('/studio/projects');
+            }}
+            onOpenPlans={() => openPricingModal('plans')}
+            onOpenTopUp={() => openPricingModal('topup')}
+            onNavigateUsage={() => handleTabChange('usage')}
+            onNavigateBilling={() => handleTabChange('billing')}
+          />
+        )}
+        {currentTab === 'brand-kit' && (
+          <BrandKitContent
+            onOpenDirector={(brief) => handleTabChange('director', brief)}
+            onBack={() => handleTabChange('home')}
+          />
+        )}
+        {currentTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} onTopUp={() => openPricingModal('topup')} onNavigateBilling={() => handleTabChange('billing')} /> : imageVisited && <div className={currentTab === 'image' ? "h-full w-full" : "hidden"}>
+          <GenerationProject key={sessionVersion} studio="image" component={ImageStudio} authStatus={authStatus} homeSelection={homeSelection?.tabId === 'image' ? homeSelection : null} initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={undefined} apiKey={apiKey} droppedFiles={currentTab === 'image' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
-        {activeTab === 'accounts' && (authStatus === 'authenticated' ? <TikTokAccountsPanel /> : <div className="suite-private"><h2>Connected accounts</h2><p>Sign in to connect TikTok.</p><button className="suite-primary" onClick={() => openAuth('login')}>Sign in</button></div>)}
-        {activeTab === 'publish' && (authStatus === 'authenticated' ? <SocialPublishing/> : <div className="suite-private"><h2>Social publishing</h2><p>Sign in to publish your workspace media.</p><button className="suite-primary" onClick={()=>openAuth('login')}>Sign in</button></div>)}
-        {activeTab === 'video' && (
+        {currentTab === 'ads' && <MetaAdsManager/>}
+        {currentTab === 'publish' && <SocialPublishing/>}
+        {currentTab === 'video' && (
           <div className="h-full w-full">
-            <VideoStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onPublish={(entry) => authStatus === 'authenticated' ? setTiktokVideo(entry) : openAuth('login')} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
+            <GenerationProject key={sessionVersion} studio="video" component={VideoStudio} authStatus={authStatus} homeSelection={homeSelection?.tabId === 'video' ? homeSelection : null} initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={undefined} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onPublish={(entry) => setTiktokVideo(entry)} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
           </div>
         )}
-        {activeTab === 'vibe-motion' && (
+        {currentTab === 'vibe-motion' && (
           <div className="h-full w-full">
             <VibeMotionStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('vibe-motion')} onGenerationEnd={makeGenerationEndCallback('vibe-motion')} onGenerationComplete={makeSuccessCallback('vibe-motion')} onGenerationError={makeErrorCallback('vibe-motion')} />
           </div>
         )}
-        {activeTab === 'motion' && (
+        {currentTab === 'motion' && (
           <div className="h-full w-full">
-            <MotionStudio authenticated={authStatus === 'authenticated'} beforeGenerate={requireAuth} onCreditsUsed={refreshBalance} />
+            <MotionStudio authenticated={authStatus === 'authenticated'} beforeGenerate={requireAuth} onCreditsUsed={refreshBalance} onHeroChange={setMotionHeroActive} />
           </div>
         )}
-        {activeTab === 'lipsync' && (
+        {currentTab === 'lipsync' && (
           <div className="h-full w-full">
             <ComingSoon title="Lip Sync" />
           </div>
         )}
-        {activeTab === 'body-swap' && (
+        {currentTab === 'body-swap' && (
           <div className="h-full w-full">
             <ComingSoon title="Body Swap" />
           </div>
         )}
-        {activeTab === 'cinema' && (
+        {currentTab === 'cinema' && (
           <div className="h-full w-full">
-            <CinemaStudio initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
+            <GenerationProject key={sessionVersion} studio="cinema" component={CinemaStudio} authStatus={authStatus} initialPrompt={studioPrompt} beforeGenerate={requireAuth} persistScope={undefined} apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
           </div>
         )}
-        {activeTab === 'audio' && (
+        {currentTab === 'audio' && (
           <div className="h-full w-full">
             <AudioStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('audio')} onGenerationEnd={makeGenerationEndCallback('audio')} onGenerationComplete={makeSuccessCallback('audio')} onGenerationError={makeErrorCallback('audio')} />
           </div>
         )}
-        {activeTab === 'marketing' && (
+        {currentTab === 'marketing' && (
           <div className="h-full w-full">
-            <MarketingStudio beforeGenerate={requireAuth} persistScope={authStatus === 'authenticated' ? undefined : 'public-guest'} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
+            <MarketingStudio beforeGenerate={requireAuth} persistScope={undefined} apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
           </div>
         )}
-        {activeTab === 'canvas' && (
-          <div className="h-full w-full bg-black">
+        {currentTab === 'canvas' && (
+          <div data-tour="canvas-frame" className="h-full w-full bg-black">
             <iframe
               title="Canvas"
               src="/canvas?embedded=canvas"
@@ -933,9 +1565,9 @@ export default function StandaloneShell({ initialTab, children }) {
             />
           </div>
         )}
-        {activeTab === 'ai-influencer' && (
+        {currentTab === 'ai-influencer' && (
           <div className="h-full w-full">
-            <AiInfluencerStudio
+            <GenerationProject key={sessionVersion} studio="ai-influencer" component={AiInfluencerStudio} authStatus={authStatus}
               beforeGenerate={requireAuth}
               apiKey={apiKey}
               onGenerationStart={makeGenerationStartCallback('ai-influencer')}
@@ -1072,16 +1704,42 @@ export default function StandaloneShell({ initialTab, children }) {
 
       {authOpen && <StudioAuthModal initialMode={authMode} initialError={authError} onClose={() => setAuthOpen(false)} onAuthenticated={finishAuthentication} />}
       {tiktokVideo && <TikTokPublishDialog video={tiktokVideo} onClose={() => setTiktokVideo(null)} />}
-      {pricingOpen && <PricingModal
+      <PricingModal
+        open={pricingOpen}
+        initialTab={pricingModalTab || 'plans'}
         workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null}
         balance={balance}
         onCompleted={refreshBalance}
         onRequireAuth={requestPricingAuth}
-        onClose={() => setPricingOpen(false)}
-      />}
+        onClose={closePricingModal}
+      />
+      {!showSidebar && currentTab !== 'home' && (
+        <motion.button
+          type="button"
+          data-tour="tour-button"
+          onClick={openFeatureTips}
+          aria-label={`Tips for ${activeFeatureTip.title}`}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.97 }}
+          transition={{ duration: 0.16, ease: 'easeOut' }}
+          className={`nx-floating-tips-pill${currentTab === 'canvas' ? ' is-canvas' : ''}`}
+        >
+          <span className="nx-floating-tips-icon" aria-hidden="true">
+            <Lightbulb size={15} strokeWidth={2.1} />
+          </span>
+          <span className="nx-floating-tips-text">
+            <span className="nx-floating-tips-kicker">Tips</span>
+            <span className="nx-floating-tips-sep" aria-hidden="true">·</span>
+            <span className="nx-floating-tips-feature">{activeFeatureTip.shortTitle}</span>
+          </span>
+        </motion.button>
+      )}
+
       {lowBalanceOpen && creditLevel && <LowBalanceDialog level={creditLevel} balance={balance}
-        onTopUp={() => { setLowBalanceOpen(false); setPricingOpen(true); }} onClose={() => setLowBalanceOpen(false)} />}
-      <StudioTour open={tourOpen} onClose={() => setTourOpen(false)} activeTab={activeTab} onTabChange={handleTabChange} />
+        onTopUp={() => { setLowBalanceOpen(false); openPricingModal('topup'); }} onClose={() => setLowBalanceOpen(false)} />}
+      <CreateQuickModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} onSelect={handleTabChange} />
+      <GetStartedPopover open={getStartedOpen} onClose={() => setGetStartedOpen(false)} onNavigate={handleTabChange} />
+      <StudioTour open={tourOpen} mode={tourMode} onClose={() => setTourOpen(false)} activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 }

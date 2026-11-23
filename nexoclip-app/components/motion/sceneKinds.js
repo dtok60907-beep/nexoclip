@@ -20,31 +20,31 @@ export const MAX_PRICE = 1e10;
 export const MAX_COUNT = 10;
 
 export const KINDS = [
-  { id: 'text', label: 'Teks' },
-  { id: 'layers', label: 'Layer' },
+  { id: 'text', label: 'Text' },
+  { id: 'layers', label: 'Layers' },
 ];
 
 // Each layer type: the fields it uses (with max lengths) and the entrance it gets when none is picked.
 export const LAYER_TYPES = {
-  kicker: { label: 'Label kecil', fields: { text: 40 }, entrance: 'fade' },
-  heading: { label: 'Judul', fields: { text: 60 }, entrance: 'words' },
-  text: { label: 'Teks', fields: { text: 110 }, entrance: 'slide-up' },
-  number: { label: 'Angka', fields: { value: 16, text: 40 }, entrance: 'scale' },
-  list: { label: 'Daftar', fields: { items: 40 }, entrance: 'slide-up' },
-  price: { label: 'Harga coret', fields: { was: 0, now: 0 }, entrance: 'scale' },
-  code: { label: 'Kode promo', fields: { text: 16 }, entrance: 'elastic' },
-  timer: { label: 'Hitung mundur', fields: { value: 8, text: 40 }, entrance: 'fade' },
-  quote: { label: 'Testimoni', fields: { text: 110, author: 40, role: 40, rating: 0 }, entrance: 'fade' },
-  button: { label: 'Tombol', fields: { text: 28 }, entrance: 'spring' },
-  badge: { label: 'Stiker', fields: { text: 16 }, entrance: 'elastic' },
-  progress: { label: 'Bar persen', fields: { value: 3, text: 40 }, entrance: 'fade' },
-  bars: { label: 'Grafik batang', fields: { values: 0, text: 40 }, entrance: 'fade' },
-  line: { label: 'Grafik garis', fields: { values: 0, value: 16, text: 40 }, entrance: 'fade' },
-  flow: { label: 'Diagram alur', fields: { items: 28 }, entrance: 'fade' },
+  kicker: { label: 'Kicker', fields: { text: 40 }, entrance: 'fade' },
+  heading: { label: 'Heading', fields: { text: 60 }, entrance: 'words' },
+  text: { label: 'Text', fields: { text: 110 }, entrance: 'slide-up' },
+  number: { label: 'Number', fields: { value: 16, text: 40 }, entrance: 'scale' },
+  list: { label: 'List', fields: { items: 40 }, entrance: 'slide-up' },
+  price: { label: 'Price drop', fields: { was: 0, now: 0 }, entrance: 'scale' },
+  code: { label: 'Promo code', fields: { text: 16 }, entrance: 'elastic' },
+  timer: { label: 'Countdown', fields: { value: 8, text: 40 }, entrance: 'fade' },
+  quote: { label: 'Testimonial', fields: { text: 110, author: 40, role: 40, rating: 0 }, entrance: 'fade' },
+  button: { label: 'Button', fields: { text: 28 }, entrance: 'spring' },
+  badge: { label: 'Badge', fields: { text: 16 }, entrance: 'elastic' },
+  progress: { label: 'Progress bar', fields: { value: 3, text: 40 }, entrance: 'fade' },
+  bars: { label: 'Bar chart', fields: { values: 0, text: 40 }, entrance: 'fade' },
+  line: { label: 'Line chart', fields: { values: 0, value: 16, text: 40 }, entrance: 'fade' },
+  flow: { label: 'Flowchart', fields: { items: 28 }, entrance: 'fade' },
   chat: { label: 'Chat', fields: { text: 30, messages: 90 }, entrance: 'slide-up' },
-  lottie: { label: 'Animasi Lottie', fields: { src: 0, size: 0, text: 40 }, entrance: 'scale' },
+  lottie: { label: 'Lottie animation', fields: { src: 0, size: 0, text: 40 }, entrance: 'scale' },
 };
-export const LOTTIE_SIZES = { s: { label: 'Kecil', px: 260 }, m: { label: 'Sedang', px: 420 }, l: { label: 'Besar', px: 620 } };
+export const LOTTIE_SIZES = { s: { label: 'Small', px: 260 }, m: { label: 'Medium', px: 420 }, l: { label: 'Large', px: 620 } };
 export const MAX_ITEMS = 4;
 export const MAX_BARS = 6;
 export const MAX_POINTS = 12;
@@ -52,41 +52,41 @@ export const MAX_MESSAGES = 6;
 
 // How a scene comes in over the end of the one before it (none for the first scene).
 export const TRANSITIONS = {
-  cut: { label: 'Potong langsung' },
-  fade: { label: 'Pudar' },
-  wipe: { label: 'Sapuan' },
-  slide: { label: 'Geser' },
+  cut: { label: 'Hard cut' },
+  fade: { label: 'Fade' },
+  wipe: { label: 'Wipe' },
+  slide: { label: 'Slide' },
   zoom: { label: 'Zoom' },
-  circle: { label: 'Lingkaran' },
-  paper: { label: 'Kertas sobek' },
+  circle: { label: 'Circle' },
+  paper: { label: 'Torn paper' },
 };
 export const TRANSITION_SECONDS = 0.5;
 
 // How a layers scene is arranged: everything stacked in the middle, the visual beside (or above) the words, or
 // the visual large behind them.
 export const LAYOUTS = {
-  center: { label: 'Tengah' },
-  split: { label: 'Berdampingan' },
-  hero: { label: 'Visual besar' },
+  center: { label: 'Centered' },
+  split: { label: 'Split' },
+  hero: { label: 'Hero visual' },
 };
 // The layer types that count as "the visual" of a split or hero layout.
 export const VISUAL_TYPES = new Set(['lottie', 'number', 'bars', 'line', 'progress', 'timer', 'price', 'flow', 'chat', 'quote']);
 // A slow camera move over the whole scene, so a long hold never sits still.
 export const CAMERAS = {
-  push: { label: 'Zoom masuk pelan' },
-  pull: { label: 'Zoom keluar pelan' },
-  drift: { label: 'Geser pelan' },
-  still: { label: 'Diam' },
+  push: { label: 'Slow zoom in' },
+  pull: { label: 'Slow zoom out' },
+  drift: { label: 'Slow drift' },
+  still: { label: 'Still' },
 };
 
 // How the voiceover captions look (MotionScene Captions).
 export const CAPTION_STYLES = {
-  karaoke: { label: 'Karaoke', hint: 'Kata yang diucapkan menyala' },
-  box: { label: 'Kotak', hint: 'Kata aktif di kotak warna' },
-  one: { label: 'Satu kata', hint: 'Satu kata besar per ketukan' },
-  paper: { label: 'Kertas', hint: 'Label kertas dengan selotip' },
-  neon: { label: 'Neon', hint: 'Teks bercahaya' },
-  subtitle: { label: 'Subtitle', hint: 'Rapi di bar gelap' },
+  karaoke: { label: 'Karaoke', hint: 'Spoken word lights up' },
+  box: { label: 'Box', hint: 'Active word in a colored box' },
+  one: { label: 'One word', hint: 'One bold word per beat' },
+  paper: { label: 'Paper', hint: 'Paper label with tape' },
+  neon: { label: 'Neon', hint: 'Glowing text' },
+  subtitle: { label: 'Subtitle', hint: 'Clean dark bar' },
 };
 
 const text = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);

@@ -3,7 +3,7 @@ import { requireAdminPage } from '../../../../src/lib/auth/adminPageAccess.js';
 import { revenueShareService } from '../../../../src/services/revenueShareService.js';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Dokumen project | NexoClip Admin', robots: { index: false, follow: false } };
+export const metadata = { title: 'Project Documents | NexoClip Admin', robots: { index: false, follow: false } };
 
 export default async function Page({ params, searchParams }) {
   const session = await requireAdminPage();
@@ -13,6 +13,6 @@ export default async function Page({ params, searchParams }) {
   try {
     return <ProjectDocument type={type} data={await revenueShareService.documentData(session.user_id, projectId)} />;
   } catch (error) {
-    return <p style={{ padding: 24 }}>{error.status && error.status < 500 ? error.message : 'Dokumen tidak dapat dibuat'}</p>;
+    return <p style={{ padding: 24 }}>{error.status && error.status < 500 ? error.message : 'Unable to generate document'}</p>;
   }
 }

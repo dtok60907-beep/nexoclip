@@ -53,10 +53,9 @@ export function createGoogleCallbackHandler({ authenticate = loginWithGoogle, fe
       if (!email || profile.email_verified === false) throw new Error('Email not available or unverified');
       const displayName = profile.name || profile.given_name || null;
 
-      const { user, token, expiresAt, isNew } = await authenticate({ email, displayName });
+      const { user, token, expiresAt } = await authenticate({ email, displayName });
 
-      // New regular accounts continue into onboarding.
-      const destination = isPlatformOperator(user.id, env) ? '/admin/economics' : isNew ? '/onboarding' : '/studio';
+      const destination = isPlatformOperator(user.id, env) ? '/admin/economics' : '/studio/home';
       const response = NextResponse.redirect(new URL(destination, origin));
       response.cookies.set(SESSION_COOKIE, token, { ...sessionCookieOptions(request), expires: new Date(expiresAt) });
       response.cookies.set('g_oauth_state', '', { path: '/', maxAge: 0 });

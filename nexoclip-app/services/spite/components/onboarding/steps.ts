@@ -134,11 +134,6 @@ export const TOURS: Record<TourSurface, TourStep[]> = {
       body: 'Pick Comment (C) and click anywhere to drop a pin for feedback. The check button next to it shows or hides resolved comments.',
     },
     {
-      target: '[data-tour="project-chat"]',
-      title: 'Project chat',
-      body: 'Talk with everyone on this project without leaving the board. Collaborators’ cursors and names show live on the canvas.',
-    },
-    {
       target: '[data-tour="tools-board"]',
       title: 'Notes, text and tables',
       body: 'Sticky notes (N), text labels (T) and tables for shot lists or briefs. Select two or more nodes and press Ctrl+G to group them in a frame; Ctrl+Shift+G ungroups.',
@@ -168,16 +163,6 @@ export const TOURS: Record<TourSurface, TourStep[]> = {
       target: '[data-tour="zoom-controls"]',
       title: 'Zoom and fit',
       body: 'Zoom in and out, or fit everything in view. The minimap above it gives you an overview of large boards.',
-    },
-    {
-      target: '[data-tour="canvas-credits"]',
-      title: 'Your credits',
-      body: 'Your balance, shared with every studio in Nexoclip. Each Generate button shows its cost before you run it.',
-    },
-    {
-      target: '[data-tour="canvas-tour-button"]',
-      title: 'Replay anytime',
-      body: 'Open this tour again from here whenever you need a refresher.',
     },
     {
       title: 'You’re ready',

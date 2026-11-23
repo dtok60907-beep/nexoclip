@@ -14,7 +14,7 @@ export async function queueTikTokPostSync(pool, { accountId, workspaceId, userId
 export async function listTikTokPosts(pool, { workspaceId, userId, offset=0 }) {
   const result = await pool.query(`SELECT p.id,p.social_account_id,p.provider_post_id,p.title,p.caption,p.cover_url,p.share_url,p.duration,p.published_at,p.metrics,
       a.display_name AS account_name FROM social_posts p JOIN social_accounts a ON a.id=p.social_account_id
-    WHERE p.workspace_id=$1 AND p.user_id=$2 AND p.is_available AND a.status='connected'
+    WHERE p.workspace_id=$1 AND p.user_id=$2 AND p.provider='tiktok' AND p.is_available AND a.status='connected'
     ORDER BY p.published_at DESC,p.id DESC LIMIT 51 OFFSET $3`, [workspaceId,userId,offset]);
   return { posts:result.rows.slice(0,50), nextOffset:result.rows.length>50?offset+50:null };
 }

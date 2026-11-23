@@ -1,3 +1,4 @@
+import { ensureProjectsOrigin } from '@/lib/projects-origin'
 import { getDb } from '@/lib/db'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import {
@@ -43,8 +44,9 @@ export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
         return projectNotFoundResponse()
       }
 
+      await ensureProjectsOrigin(sql)
       const original = await sql`
-        SELECT name, description, thumbnail, COALESCE(origin, 'canvas') AS origin
+        SELECT library_workspace_id, name, description, thumbnail, COALESCE(origin, 'canvas') AS origin
         FROM projects
         WHERE id = ${projectId}
       `
@@ -61,7 +63,7 @@ export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
       })
 
       const inserted = await sql`
-        INSERT INTO projects (id, userid, name, description, thumbnail, origin, createdat, updatedat)
+        INSERT INTO projects (id, userid, name, description, thumbnail, origin, library_workspace_id, createdat, updatedat)
         VALUES (
           ${newId},
           ${user.id},
@@ -69,6 +71,7 @@ export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
           ${original[0].description || ''},
           ${original[0].thumbnail || null},
           ${original[0].origin},
+          ${user.workspaceId ?? original[0].library_workspace_id ?? null},
           NOW(),
           NOW()
         )

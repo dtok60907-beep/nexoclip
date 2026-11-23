@@ -97,7 +97,7 @@ async function submitSaasGeneration({ kind, model, params }, { maxAttempts = 180
     const response = await fetch('/api/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-workspace-id': workspaceId, 'Idempotency-Key': params.idempotencyKey },
-        body: JSON.stringify({ kind, prompt: params.prompt || '', model, parameters, idempotencyKey: params.idempotencyKey }),
+        body: JSON.stringify({ kind, studioWork: params.studioWork, prompt: params.prompt || '', model, parameters, idempotencyKey: params.idempotencyKey }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -107,6 +107,15 @@ async function submitSaasGeneration({ kind, model, params }, { maxAttempts = 180
     const submitted = await response.json();
     const generationId = submitted.generation?.id;
     if (!generationId) throw new Error('Generation request did not return a job');
+    if (params.studioWork && typeof window !== 'undefined') window.dispatchEvent(new Event('nexoclip:project-changed'));
+    if (params.studioWork && typeof window !== 'undefined' && window.location.pathname === '/studio/'+params.studioWork.studio) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('draft') === params.studioWork.id) {
+            url.searchParams.delete('draft');
+            url.searchParams.set('project', params.studioWork.id);
+            window.history.replaceState(window.history.state, '', url);
+        }
+    }
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, interval));
         const poll = await fetch(`/api/generations/${encodeURIComponent(generationId)}`, { headers: { 'x-workspace-id': workspaceId } });

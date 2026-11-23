@@ -38,6 +38,17 @@ export function createAssetDownloadGetHandler({ resolveContext = resolveTenantCo
       // local:// is a signed server-side storage capability, not a browser URL.
       // Read only after session, membership and workspace-scoped asset lookup.
       if (new URL(target).protocol === 'local:') {
+        if(!attachment&&/^video\//i.test(result.asset?.content_type||'')&&typeof storage.getRange==='function') {
+          const object=await storage.getRange(target,request.headers.get('range'));
+          const {range,size}=object;
+          if(request.method==='HEAD')await object.body.cancel();
+          return new Response(request.method==='HEAD'?null:object.body,{status:range?206:200,headers:{
+            'Content-Type':object.contentType||'video/mp4','Content-Length':String(range?range.end-range.start+1:size),
+            'Accept-Ranges':'bytes',...(range?{'Content-Range':`bytes ${range.start}-${range.end}/${size}`} : {}),
+            'Cache-Control':'private, max-age=600','Vary':'Cookie','X-Content-Type-Options':'nosniff',
+            'Content-Security-Policy':"sandbox; default-src 'none'",
+          }});
+        }
         const object = await storage.get(target);
         const contentType = object.contentType || 'application/octet-stream';
         const inline = /^(image\/(png|jpeg|webp|gif|avif|bmp)|video\/|audio\/)/i.test(contentType);
@@ -53,6 +64,7 @@ export function createAssetDownloadGetHandler({ resolveContext = resolveTenantCo
       }
       return new Response(null, { status: 302, headers: { Location: target, 'Cache-Control': 'private, max-age=600', Vary: 'Cookie' } });
     } catch (error) {
+      if(error.status===416)return new Response(null,{status:416,headers:{'Content-Range':`bytes */${error.size}`,'Cache-Control':'private,no-store'}});
       const status = error.code === 'ENOENT' ? 404 : error.status || (error.message === 'Authentication required' ? 401 : error.message === 'Workspace access denied' ? 403 : 500);
       return Response.json({ error: status >= 500 ? 'Asset download unavailable' : status === 404 ? 'Asset not found' : error.message }, { status, headers: { 'Cache-Control': 'private, no-store' } });
     }

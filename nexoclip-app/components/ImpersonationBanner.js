@@ -19,9 +19,9 @@ export default function ImpersonationBanner() {
   return (
     <div role="status" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 2147483000, display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', padding: '6px 12px', background: '#7c2d12', color: '#fff7ed', fontSize: 13, fontFamily: 'system-ui, sans-serif' }}>
       <span>{state.active
-        ? <>Kamu sedang sebagai <b>{state.email}</b> · {state.readOnly ? 'lihat saja' : 'boleh beraksi'}</>
-        : 'Sesi impersonate sudah berakhir.'}</span>
-      <button type="button" onClick={leave} style={{ border: '1px solid #fed7aa', borderRadius: 6, padding: '2px 10px', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>Kembali ke admin</button>
+        ? <>Viewing as <b>{state.email}</b> · {state.readOnly ? 'read-only' : 'interactive'}</>
+        : 'Impersonation session has ended.'}</span>
+      <button type="button" onClick={leave} style={{ border: '1px solid #fed7aa', borderRadius: 6, padding: '2px 10px', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>Return to admin</button>
     </div>
   );
 }

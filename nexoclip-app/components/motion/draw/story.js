@@ -12,31 +12,31 @@ const num = (value, min, max, fallback) => {
 // The feel of a video. Each pace changes the words per scene, the narrator, the cuts, the camera and the music.
 export const PACES = [
   {
-    id: 'santai', label: 'Santai', hint: 'Pelan dan tenang, seperti ngobrol malam',
+    id: 'santai', label: 'Relaxed', hint: 'Slow and calm, like a late-night chat',
     words: [6, 14], sceneSeconds: [2.5, 5.5], transition: 0.45, camera: 0.6, hardCamerasPerScene: 0,
-    tone: 'tenang dan hangat, seperti ngobrol malam dengan teman', voiceTag: '[calm]', stability: 0.5,
-    entrance: 'objek utama masuk pelan dalam 0.2-0.6 detik, gerak lembut dan mengalir, tanpa hentakan keras',
+    tone: 'calm and warm, like a late-night chat with a friend', voiceTag: '[calm]', stability: 0.5,
+    entrance: 'main subject enters gently over 0.2-0.6s with soft, flowing motion and no hard hits',
     music: 'lo-fi piano ballad, 72 BPM, in F major, calm and warm late-night mood, felted upright piano and soft tape-saturated pads, dusty vinyl crackle, start with just piano then bring in a soft brushed beat, instrumental only, no vocals, no lead melody, background bed under a voiceover',
   },
   {
-    id: 'normal', label: 'Normal', hint: 'Enak diikuti, ritme sedang',
+    id: 'normal', label: 'Normal', hint: 'Easy to follow, steady rhythm',
     words: [4, 12], sceneSeconds: [1.8, 4.5], transition: 0.3, camera: 1, hardCamerasPerScene: 0.25,
-    tone: 'santai tapi jelas, seperti kakak yang ngasih tahu', voiceTag: '', stability: 0.5,
-    entrance: 'objek utama sudah masuk dalam 0.0-0.35 detik (membal, jatuh dari atas, atau terbang dari samping)',
+    tone: 'casual yet clear, like a friendly explainer', voiceTag: '', stability: 0.5,
+    entrance: 'main subject enters within 0.0-0.35s (bouncing, dropping in, or flying in from the side)',
     music: 'acoustic pop, 100 BPM, in G major, light and hopeful, fingerpicked guitar, soft claps and a warm bass, close-mic\'d and dry, start with just guitar then bring in the claps, instrumental only, no vocals, no lead melody, background bed under a voiceover',
   },
   {
-    id: 'semangat', label: 'Semangat', hint: 'Energik, membakar semangat',
+    id: 'semangat', label: 'Energetic', hint: 'Upbeat and motivating',
     words: [3, 10], sceneSeconds: [1.5, 4], transition: 0.25, camera: 1.2, hardCamerasPerScene: 0.33,
-    tone: 'tegas dan membakar semangat, seperti pelatih', voiceTag: '[determined]', stability: 0.5,
-    entrance: 'objek utama sudah masuk dalam 0.0-0.3 detik dengan hentakan, banyak gerak, aksen kuat di kata penting',
+    tone: 'confident and motivating, like a coach', voiceTag: '[determined]', stability: 0.5,
+    entrance: 'main subject enters within 0.0-0.3s with punch, active motion, and strong accents on key words',
     music: 'motivational electronic, 124 BPM, in A minor, determined and rising, sidechained synth bass, punchy four-on-the-floor kick, wide analog pads, modern clean production, start with just pads and a ticking hi-hat then bring in the kick and build to a lift, instrumental only, no vocals, no lead melody, background bed under a voiceover',
   },
   {
-    id: 'heboh', label: 'Heboh', hint: 'Excited, cepat, penuh kejutan',
+    id: 'heboh', label: 'Hype', hint: 'Excited, fast-paced, full of surprises',
     words: [2, 8], sceneSeconds: [1.2, 3.2], transition: 0.2, camera: 1.45, hardCamerasPerScene: 0.4,
-    tone: 'excited dan heboh, seperti teman yang baru dapat kabar luar biasa', voiceTag: '[excited]', stability: 0,
-    entrance: 'objek utama meledak masuk dalam 0.0-0.2 detik, gerak cepat dan lebay, banyak pop, burst, dan kejutan',
+    tone: 'excited and hyped, like a friend sharing amazing news', voiceTag: '[excited]', stability: 0,
+    entrance: 'main subject bursts in within 0.0-0.2s with snappy, exaggerated motion, pops, bursts, and surprises',
     music: 'hyperpop-flavoured dance pop, 140 BPM, in C major, playful and hype, bouncy 808 bass, crisp claps, glossy synth stabs, bright modern mix, start with just claps then hit a bass drop, short breaks before big moments, instrumental only, no vocals, no lead melody, background bed under a voiceover',
   },
 ];
@@ -67,29 +67,29 @@ export function paceOf(spec) {
 // Drawing styles: how the kit draws (sketch.js options) and the sentence that tells the animator the look.
 export const DRAW_STYLES = [
   {
-    id: 'flat', label: 'Flat modern', hint: 'Vektor flat bersih tanpa garis tepi, warna blok, bentuk geometris',
-    look: 'ilustrasi vektor flat modern (tanpa outline, blok warna rata, bentuk geometris membulat, bayangan datar sederhana)',
+    id: 'flat', label: 'Modern Flat', hint: 'Clean flat vector with no outlines, solid colors, geometric shapes',
+    look: 'modern flat vector illustration (no outlines, flat color blocks, rounded geometric shapes, simple flat shadows)',
     sketch: { wobble: 0, hatch: false, outline: 0 },
   },
   {
-    id: 'garis', label: 'Line art bersih', hint: 'Garis tipis rapi dan warna rata, gaya explainer',
-    look: 'ilustrasi explainer bersih (garis tepi tipis rapi tanpa goyang, warna rata, banyak ruang kosong)',
+    id: 'garis', label: 'Clean Line Art', hint: 'Crisp thin lines and flat colors, explainer style',
+    look: 'clean explainer illustration (crisp thin steady outlines, flat colors, generous whitespace)',
     sketch: { wobble: 0, hatch: false, outline: 0.7 },
   },
   {
-    id: 'spidol', label: 'Spidol', hint: 'Garis tegas dan bersih, warna rata',
-    look: 'ilustrasi spidol yang bersih (outline tebal yang rapi, warna rata tanpa tekstur, bentuk membulat)',
+    id: 'spidol', label: 'Marker', hint: 'Bold clean outlines and flat colors',
+    look: 'clean marker illustration (bold neat outlines, flat untextured fills, rounded shapes)',
     sketch: { wobble: 0.35, hatch: false, outline: 1.35 },
   },
   {
-    id: 'kapur', label: 'Kapur', hint: 'Coretan kapur di papan tulis gelap',
-    look: 'gambar kapur di papan tulis (garis kapur putih bergoyang, isian kapur tipis bertekstur, warna kapur pastel)',
+    id: 'kapur', label: 'Chalk', hint: 'Chalk sketches on a dark chalkboard',
+    look: 'chalkboard drawing (wobbly white chalk outlines, light textured chalk fills, pastel chalk colors)',
     sketch: { wobble: 1.3, hatch: true, outline: 0.9, chalk: true },
     themes: ['night'],
   },
   {
-    id: 'krayon', label: 'Krayon', hint: 'Gambar tangan, isian krayon bertekstur (hanya kalau diminta)',
-    look: 'ilustrasi krayon gambar tangan (outline tinta bergoyang, isian krayon bertekstur)',
+    id: 'krayon', label: 'Crayon', hint: 'Hand-drawn with textured crayon fills (when requested)',
+    look: 'hand-drawn crayon illustration (wobbly ink outlines, textured crayon fills)',
     sketch: { wobble: 1, hatch: true, outline: 1 },
   },
 ];

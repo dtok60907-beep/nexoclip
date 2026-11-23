@@ -89,7 +89,7 @@ export async function createVideoWorker({
     provider: 'openrouter', persistResult, onError, timeoutMs: config.timeoutMs, recordCost:(pool,input)=>recordCost(pool,{...input,env}),
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
-  const tiktokWorker = env.TIKTOK_CLIENT_KEY && env.TIKTOK_TOKEN_ENCRYPTION_KEY
+  const tiktokWorker = (env.TIKTOK_CLIENT_KEY && env.TIKTOK_TOKEN_ENCRYPTION_KEY || env.META_APP_ID && env.META_TOKEN_ENCRYPTION_KEY)
     ? createTikTokPublishWorker({ Queue, Worker, connection, pool, storage, env, onError })
     : null;
   let closed = false;

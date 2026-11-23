@@ -1,0 +1,2 @@
+CREATE TABLE workspace_products (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, name text NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 160), data jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE (workspace_id,id));
+CREATE INDEX workspace_products_owner_updated_idx ON workspace_products(workspace_id,owner_id,updated_at DESC);

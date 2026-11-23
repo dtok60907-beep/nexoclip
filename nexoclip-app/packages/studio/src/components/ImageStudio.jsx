@@ -290,30 +290,30 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
 
   // Trigger icon content
   const triggerContent = uploading ? (
-    <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
+    <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-white/90 z-20 backdrop-blur-[2px]">
       <svg className="w-8 h-8 -rotate-90">
         <circle
           cx="16"
           cy="16"
           r="14"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="2.2"
           fill="transparent"
-          className="text-white/10"
+          className="text-[#e6e7f0]"
         />
         <circle
           cx="16"
           cy="16"
           r="14"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="2.2"
           fill="transparent"
           strokeDasharray={88}
           strokeDashoffset={88 - (88 * lastUploadProgress) / 100}
-          className="text-[#d4ff64] transition-all duration-300"
+          className="text-[#5b45f2] transition-all duration-300"
         />
       </svg>
-      <span className="absolute text-[9px] font-black text-[#d4ff64] leading-none">
+      <span className="absolute text-[9px] font-bold text-[#5b45f2] leading-none">
         {lastUploadProgress}%
       </span>
     </div>
@@ -321,7 +321,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
     hasSelection ? (
       <img src={assetPreviewUrl(selectedEntries[0].url)} alt="" className="w-full h-full object-cover" />
     ) : (
-      <span className="text-[10px] font-bold text-white/50">Face</span>
+      <span className="text-[10.5px] font-semibold text-[#5e5e72]">Face</span>
     )
   ) : (
     <svg
@@ -330,8 +330,9 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.5"
-      className="text-white/40 group-hover:text-[#d4ff64] transition-colors"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      className="text-current transition-colors"
     >
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
@@ -383,13 +384,13 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
           className="w-96 max-w-[calc(100vw-2rem)]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-1 pb-3 mb-2 border-b border-white/5">
+          <div className="flex items-center justify-between px-1 pb-3 mb-2.5 border-b border-[#efeff5]">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-bold text-secondary">
+              <span className="text-[13px] font-semibold text-[#14141f]">
                 Reference Images
               </span>
               {isMulti && (
-                <span className="text-[9px] text-muted">
+                <span className="text-[11px] text-[#7a7b90]">
                   Select up to {maxImages} images
                 </span>
               )}
@@ -399,7 +400,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
                 <button
                   type="button"
                   onClick={handleDone}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:scale-105"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-[#5b45f2] hover:bg-[#4731d8] text-white rounded-xl text-[12px] font-semibold transition-all"
                 >
                   ✓ Done ({count})
                 </button>
@@ -411,15 +412,17 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
                   setPanelOpen(false);
                   fileInputRef.current?.click();
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-full text-xs font-bold transition-all border border-primary/20"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f2f0ff] hover:bg-[#e7e3ff] text-[#4c38d6] rounded-full text-[12px] font-semibold transition-all border border-[#ddd7fe]"
               >
                 <svg
-                  width="11"
-                  height="11"
+                  width="12"
+                  height="12"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="3"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
@@ -432,21 +435,20 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
 
           {/* Grid or empty state */}
           {uploadHistory.length === 0 ? (
-            <div className="py-6 flex flex-col items-center gap-2 opacity-40">
+            <div className="py-8 flex flex-col items-center gap-2 text-[#7a7b90]">
               <svg
-                width="28"
-                height="28"
+                width="26"
+                height="26"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.5"
-                className="text-secondary"
+                strokeWidth="1.6"
               >
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              <span className="text-xs text-secondary">No uploads yet</span>
+              <span className="text-[12.5px] font-medium">No uploads yet</span>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-0.5">
@@ -463,10 +465,10 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
                     key={entry.id}
                     title={entry.name}
                     onClick={() => entry.url && handleCellClick(entry)}
-                    className={`relative rounded-xl overflow-hidden border-2 cursor-pointer group/cell aspect-square transition-all ${
+                    className={`relative rounded-xl overflow-hidden border-2 cursor-pointer group/cell aspect-square transition-all bg-[#f3f4f8] ${
                       isSelected
-                        ? "border-primary shadow-glow"
-                        : "border-white/10 hover:border-white/30"
+                        ? "border-[#5b45f2] shadow-[0_4px_14px_rgba(91,69,242,0.2)]"
+                        : "border-[#e6e7f0] hover:border-[#c8bffb]"
                     } ${atMax ? "opacity-40 cursor-not-allowed" : ""} ${!entry.url ? "cursor-wait" : ""}`}
                   >
                     {entry.url ? (
@@ -476,9 +478,9 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-white/5 flex flex-col items-center justify-center">
-                        <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin mb-1" />
-                        <span className="text-[10px] font-black text-primary">
+                      <div className="w-full h-full bg-[#f6f6fa] flex flex-col items-center justify-center">
+                        <div className="w-7 h-7 rounded-full border-2 border-[#ddd7fe] border-t-[#5b45f2] animate-spin mb-1" />
+                        <span className="text-[10px] font-bold text-[#5b45f2]">
                           {entry.progress}%
                         </span>
                       </div>
@@ -486,16 +488,16 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
 
                     {/* Hover overlay with delete */}
                     {entry.url && (
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/cell:opacity-100 transition-opacity flex items-end justify-end p-1">
+                      <div className="absolute inset-0 bg-[#14141f]/45 opacity-0 group-hover/cell:opacity-100 transition-opacity flex items-end justify-end p-1.5">
                         <button
                           type="button"
                           title="Remove from history"
                           onClick={(e) => handleRemoveFromHistory(e, entry)}
-                          className="w-5 h-5 bg-red-500/80 hover:bg-red-500 rounded-md flex items-center justify-center transition-colors"
+                          className="w-5 h-5 bg-[#e11d48] hover:bg-[#be123c] rounded-md flex items-center justify-center transition-colors"
                         >
                           <svg
-                            width="8"
-                            height="8"
+                            width="9"
+                            height="9"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="white"
@@ -510,19 +512,19 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
 
                     {/* Selection badge */}
                     {isSelected && (
-                      <div className="absolute top-1 left-1 min-w-[20px] h-5 bg-primary rounded-full flex items-center justify-center px-1">
+                      <div className="absolute top-1.5 left-1.5 min-w-[20px] h-5 bg-[#5b45f2] rounded-full flex items-center justify-center px-1 shadow-sm ring-2 ring-white">
                         {isMulti ? (
-                          <span className="text-[10px] font-black text-black">
+                          <span className="text-[10px] font-bold text-white">
                             {selIdx + 1}
                           </span>
                         ) : (
                           <svg
-                            width="9"
-                            height="9"
+                            width="10"
+                            height="10"
                             viewBox="0 0 24 24"
                             fill="none"
-                            stroke="black"
-                            strokeWidth="4"
+                            stroke="white"
+                            strokeWidth="3.5"
                           >
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
@@ -537,14 +539,14 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
 
           {/* Bottom bar for multi-select */}
           {isMulti && hasSelection && (
-            <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-              <span className="text-xs text-secondary">
+            <div className="mt-3 pt-3 border-t border-[#efeff5] flex items-center justify-between">
+              <span className="text-[12px] text-[#5e5e72]">
                 {count} of {maxImages} selected
               </span>
               <button
                 type="button"
                 onClick={handleDone}
-                className="px-4 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:scale-105"
+                className="px-4 py-1.5 bg-[#5b45f2] hover:bg-[#4731d8] text-white rounded-xl text-[12px] font-semibold transition-all"
               >
                 Use Selected
               </button>
@@ -693,20 +695,20 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
   const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
   return (
-    <div className="flex gap-4 h-full max-h-[60vh] min-h-[350px] overflow-x-hidden">
+    <div className="flex gap-3.5 h-full max-h-[60vh] min-h-[340px] overflow-x-hidden">
       {/* Left Sidebar: Provider tabs */}
-      <div className="flex flex-col gap-2.5 items-center pr-2 border-r border-white/5 shrink-0 select-none overflow-y-auto custom-scrollbar w-14 pt-0.5">
+      <div className="flex flex-col gap-2 items-center pr-2.5 border-r border-[#efeff5] shrink-0 select-none overflow-y-auto custom-scrollbar w-12 pt-0.5">
         <button
           type="button"
           onClick={() => setSelectedProvider("all")}
           className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 cursor-pointer ${
             selectedProvider === "all"
-              ? "bg-white/10 text-yellow-400 border-yellow-500/30 shadow-md scale-105"
-              : "bg-white/[0.02] text-white/50 border-white/[0.03] hover:bg-white/5 hover:text-white"
+              ? "bg-[#f2f0ff] text-[#5b45f2] border-[#c8bffb] shadow-xs scale-105"
+              : "bg-[#f6f6fa] text-[#7a7b90] border-[#e6e7f0] hover:bg-[#efeff6] hover:text-[#14141f]"
           }`}
           title="All Providers"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill={selectedProvider === "all" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill={selectedProvider === "all" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
         </button>
@@ -719,10 +721,10 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
               key={p.id}
               type="button"
               onClick={() => setSelectedProvider(p.id)}
-              className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center font-black text-[10px] border transition-all flex-shrink-0 cursor-pointer overflow-hidden ${
+              className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center font-bold text-[10px] border transition-all cursor-pointer overflow-hidden ${
                 isSelected
-                  ? `${style.bg} border-white/25 scale-105 shadow-md`
-                  : "bg-white/[0.02] text-white/40 border-white/[0.02] hover:bg-white/5 hover:text-white/80"
+                  ? "bg-[#f2f0ff] border-[#5b45f2] ring-2 ring-[#5b45f2]/20 scale-105"
+                  : "bg-white text-[#5e5e72] border-[#e6e7f0] hover:border-[#c8bffb]"
               }`}
               title={p.name}
             >
@@ -730,7 +732,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                 <img
                   src={PROVIDER_LOGOS[p.id]}
                   alt={p.name}
-                  className={`w-full h-full rounded-full object-contain ${invertLogos.includes(p.id) ? "invert" : ""}`}
+                  className="w-full h-full rounded-full object-contain p-1"
                 />
               ) : (
                 style.text
@@ -742,7 +744,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
 
       {/* Right Pane: Search input + Models list */}
       <div className="flex-1 flex flex-col gap-2 min-w-0">
-        <div className="border-b border-white/5 shrink-0 pb-2 space-y-2">
+        <div className="border-b border-[#efeff5] shrink-0 pb-2.5 space-y-2">
           <div className="flex gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
             {modelCategories.map((category) => (
               <button
@@ -752,25 +754,25 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                   setSelectedCategory(category.id);
                   setSelectedProvider("all");
                 }}
-                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors border ${
+                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors border ${
                   selectedCategory === category.id
-                    ? "bg-primary/15 text-primary border-primary/30"
-                    : "bg-white/[0.02] text-white/50 border-white/[0.04] hover:bg-white/5 hover:text-white"
+                    ? "bg-[#f2f0ff] text-[#4c38d6] border-[#c8bffb]"
+                    : "bg-[#f6f6fa] text-[#5e5e72] border-[#e6e7f0] hover:bg-[#efeff6] hover:text-[#14141f]"
                 }`}
               >
                 {category.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/5 focus-within:border-primary/50 transition-colors">
+          <div className="flex items-center gap-2.5 bg-[#f6f6fa] rounded-xl px-3 py-2 border border-[#e6e7f0] focus-within:border-[#5b45f2] focus-within:bg-white transition-colors">
             <svg
               width="14"
               height="14"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="3"
-              className="text-muted"
+              strokeWidth="2.4"
+              className="text-[#7a7b90]"
             >
               <circle cx="11" cy="11" r="8" />
               <path d="M21 21l-4.35-4.35" />
@@ -781,23 +783,23 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
               value={search}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-transparent border-none text-xs text-white focus:ring-0 w-full p-0 focus:outline-none"
+              className="bg-transparent border-none text-[12.5px] text-[#14141f] placeholder:text-[#8a8b9e] focus:ring-0 w-full p-0 focus:outline-none"
             />
           </div>
         </div>
         
-        <div className="text-xs font-semibold text-secondary py-1 shrink-0 flex items-center justify-between">
+        <div className="text-[11.5px] font-semibold text-[#5e5e72] py-0.5 shrink-0 flex items-center justify-between">
           <span>{activeCategory.label} models</span>
           {selectedProvider !== "all" && (
-            <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60">
+            <span className="text-[10.5px] bg-[#f2f0ff] text-[#4c38d6] px-2 py-0.5 rounded-md font-medium">
               {availableProviders.find(p => p.id === selectedProvider)?.name || selectedProvider}
             </span>
           )}
         </div>
         
-        <div className="flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1 pb-2 flex-1">
+        <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1 pb-2 flex-1">
           {filtered.length === 0 ? (
-            <div className="text-xs text-white/30 text-center py-6">
+            <div className="text-[12.5px] text-[#7a7b90] text-center py-6">
               No models found
             </div>
           ) : (
@@ -810,38 +812,32 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                   onSelect(m, category);
                   onClose();
                 }}
-                className={`flex items-center justify-between p-3 hover:bg-white/5 rounded-lg cursor-pointer transition-all border border-transparent hover:border-white/5 ${
-                  selectedModel === m.id ? "bg-white/5 border-white/5" : ""
+                className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
+                  selectedModel === m.id
+                    ? "bg-[#f2f0ff] border-[#ddd7fe]"
+                    : "border-transparent hover:bg-[#f6f6fa]"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   {PROVIDER_LOGOS[m.provider] ? (
-                    <div className="w-8 h-8 rounded-full border border-white/5 overflow-hidden shrink-0 flex items-center justify-center bg-white/[0.02]">
+                    <div className="w-8 h-8 rounded-xl border border-[#e6e7f0] overflow-hidden shrink-0 flex items-center justify-center bg-white">
                       <img
                         src={PROVIDER_LOGOS[m.provider]}
                         alt={m.provider_name}
-                        className={`w-full h-full object-contain p-1 ${invertLogos.includes(m.provider) ? "invert" : ""}`}
+                        className="w-full h-full object-contain p-1"
                       />
                     </div>
                   ) : (
-                    <div
-                      className={`w-8 h-8 ${
-                        m.family === "kontext"
-                          ? "bg-blue-500/10 text-blue-400 border-blue-500/10"
-                          : m.family === "effects"
-                            ? "bg-purple-500/10 text-purple-400 border-purple-500/10"
-                            : "bg-primary/10 text-primary border-primary/10"
-                      } border rounded-full flex items-center justify-center font-bold text-xs shadow-inner uppercase`}
-                    >
+                    <div className="w-8 h-8 bg-[#f2f0ff] text-[#4c38d6] border border-[#ddd7fe] rounded-xl flex items-center justify-center font-bold text-xs uppercase shrink-0">
                       {m.name.charAt(0)}
                     </div>
                   )}
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-xs font-bold text-white tracking-tight truncate">
+                    <span className={`text-[12.5px] font-semibold tracking-tight truncate ${selectedModel === m.id ? "text-[#4c38d6]" : "text-[#14141f]"}`}>
                       {m.name}
                     </span>
                     {selectedProvider === "all" && m.provider_name && (
-                      <span className="text-[9px] text-white/40">
+                      <span className="text-[10.5px] text-[#7a7b90] truncate">
                         {m.provider_name}
                       </span>
                     )}
@@ -849,12 +845,15 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                 </div>
                 {selectedModel === m.id && (
                   <svg
-                    width="14"
-                    height="14"
+                    width="15"
+                    height="15"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#d4ff64"
-                    strokeWidth="4"
+                    stroke="#5b45f2"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="shrink-0"
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
@@ -896,6 +895,8 @@ function SimpleDropdown({ title, options, selected, onSelect, onClose }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ImageStudio({
+  studioWork, restoredWork, projectWorkspace,
+  homeSelection,
   initialPrompt = '',
   apiKey,
   beforeGenerate,
@@ -1007,6 +1008,34 @@ export default function ImageStudio({
       console.warn("Failed to load ImageStudio persistence:", err);
     }
   }, []);
+
+  useEffect(() => {
+    if (!restoredWork) return;
+    const { settings, jobs } = restoredWork;
+    const model = [...openRouterT2IModels, ...openRouterI2IModels].find(item => item.id === settings.selectedModelId);
+    const mode = settings.mode || (model && openRouterI2IModels.some(item => item.id === model.id) ? 'i2i' : 't2i');
+    if (model) {
+      setImageMode(mode === 'i2i');
+      setSelectedModelId(model.id);
+      setSelectedModelName(model.name);
+    }
+    setPrompt(settings.prompt || jobs[0]?.prompt || '');
+    setSelectedAr(settings.selectedAr || jobs[0]?.parameters?.aspectRatio || '9:16');
+    if (settings.selectedQuality) setSelectedQuality(settings.selectedQuality);
+    if (settings.selectedEffect) setSelectedEffect(settings.selectedEffect);
+    setUploadedImageUrls(jobs[0]?.parameters?.referenceImages || []);
+    const entries = jobs.filter(job => job.asset_id).map(job => ({
+      id: job.id,
+      url: '/api/assets/' + job.asset_id + '/download?workspace_id=' + projectWorkspace,
+      prompt: job.prompt,
+      model: job.model,
+      aspect_ratio: job.parameters?.aspectRatio,
+      timestamp: job.created_at,
+    }));
+    setLocalHistory(entries);
+    setCurrentImageUrl(entries[0]?.url || null);
+    setActiveHistoryIdx(0);
+  }, [restoredWork, projectWorkspace]);
 
   // ── Adjust height on load ────────────────────────────────────────────────
   // ── Persistence: Save ────────────────────────────────────────────────────
@@ -1247,6 +1276,14 @@ export default function ImageStudio({
   };
 
   // ── History helpers ──────────────────────────────────────────────────────
+  const appliedSelection = useRef(null);
+  useEffect(() => {
+    if (!homeSelection || appliedSelection.current === homeSelection) return;
+    appliedSelection.current = homeSelection;
+    const model = openRouterT2IModels.find(item => item.id === homeSelection.modelId);
+    if (model) handleModelSelect(model, 't2i');
+  }, [homeSelection, handleModelSelect]);
+
   const addToHistory = useCallback(
     (entry) => {
       if (!historyItems) {
@@ -1341,6 +1378,7 @@ export default function ImageStudio({
           if (showEffectBtn && selectedEffect) parameters.name = selectedEffect;
           return generateSaasImage({
             workspace_id: workspaceId,
+            studioWork: studioWork?.({ prompt: prompt.trim(), selectedModelId, selectedAr, mode: imageMode ? 'i2i' : 't2i', selectedQuality: selectedQuality || '', selectedEffect }),
             model: selectedModelId,
             prompt: prompt.trim(),
             parameters,
@@ -1389,33 +1427,57 @@ export default function ImageStudio({
         ? "Describe how to transform this image (optional)"
         : "Describe the image you want to create";
 
+  const IMAGE_STARTERS = [
+    "Editorial studio product photo of an iced matcha bottle on frosted glass, morning sunlight",
+    "Minimalist skincare campaign portrait, soft diffused lighting, crisp 85mm lens",
+    "Architectural modern coffee bar interior with warm oak and brushed steel",
+    "Isometric 3D luxury perfume packaging floating on clean alabaster backdrop",
+  ];
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-app-bg relative p-4 md:p-6 overflow-hidden">
+    <div className="w-full h-full flex flex-col items-center justify-center bg-transparent relative px-4 md:px-6 overflow-hidden">
       
       {/* ── CENTRAL GALLERY AREA ── */}
-      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
-        {history.length === 0 && (
+      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 lg:pb-44 px-1">
+        {history.length === 0 && !serverHistory.loading && (
           <div className="pt-4">
             <DurableJobHistory kind="image" onSelect={(it) => setFullscreenUrl(it.url)} />
           </div>
         )}
-        {history.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full pt-4 animate-fade-in-up">
+        {history.length === 0 && serverHistory.loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 w-full pt-6" role="status" aria-label="Loading generated images">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <div key={idx} className="rounded-2xl overflow-hidden border border-[#e6e7f0] bg-white shadow-[0_2px_10px_rgba(20,20,31,0.03)]">
+                <div className="w-full aspect-square nx-skel" style={{ borderRadius: 0 }} />
+                <div className="p-3.5 space-y-2.5">
+                  <div className="nx-skel h-3.5 w-4/5" />
+                  <div className="flex items-center gap-2">
+                    <div className="nx-skel nx-skel--pill h-5 w-20" />
+                    <div className="nx-skel h-3 w-10" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : history.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 w-full pt-6 animate-fade-in-up">
             {history.map((entry, idx) => (
               <div
                 key={entry.id || idx}
-                className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
+                className="relative group rounded-2xl overflow-hidden border border-[#e6e7f0] bg-white shadow-[0_2px_10px_rgba(20,20,31,0.04)] hover:border-[#c8bffb] hover:shadow-[0_14px_30px_rgba(20,20,31,0.08)] transition-all duration-200 flex flex-col cursor-pointer"
                 onClick={() => setFullscreenUrl(entry.url)}
               >
-                <img
-                  src={assetPreviewUrl(entry.url)}
-                  alt={entry.prompt?.substring(0, 30) || "Generated image"}
-                  className="w-full aspect-square object-cover bg-black/40 hover:opacity-80 transition-opacity"
-                />
+                <div className="relative w-full aspect-square bg-[#f3f4f8] overflow-hidden">
+                  <img
+                    src={assetPreviewUrl(entry.url)}
+                    alt={entry.prompt?.substring(0, 30) || "Generated image"}
+                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                  />
+                </div>
                 
                 {/* Overlay actions */}
-                <div className="absolute top-2 right-2 hidden md:flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-2.5 right-2.5 hidden md:flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <GenerationCopyButtons
                     prompt={entry.prompt}
                     imageUrl={entry.url}
@@ -1428,9 +1490,9 @@ export default function ImageStudio({
                       e.stopPropagation();
                       downloadImage(entry.url, `muapi-${entry.id || idx}.jpg`);
                     }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-primary hover:text-black transition-all border border-white/10"
+                    className="w-8 h-8 flex items-center justify-center bg-[#14141f]/75 backdrop-blur-md rounded-full text-white hover:bg-[#5b45f2] hover:border-[#5b45f2] transition-all border border-white/15"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                     </svg>
                   </button>
@@ -1443,9 +1505,9 @@ export default function ImageStudio({
                         removeHistoryEntry(entry);
                       }
                     }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
+                    className="w-8 h-8 flex items-center justify-center bg-[#14141f]/75 backdrop-blur-md rounded-full text-rose-300 hover:bg-[#e11d48] hover:border-[#e11d48] hover:text-white transition-all border border-white/15"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />
                       <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
                       <line x1="10" y1="11" x2="10" y2="17" />
@@ -1478,16 +1540,18 @@ export default function ImageStudio({
                 />
 
                 {/* Prompt & Details */}
-                <div className="p-3 bg-black/80 backdrop-blur-sm border-t border-white/5 flex-1 flex flex-col justify-between gap-2">
-                  <p className="text-white/70 text-xs line-clamp-3 leading-relaxed" title={entry.prompt}>
+                <div className="p-3.5 bg-white border-t border-[#efeff5] flex-1 flex flex-col justify-between gap-2.5">
+                  <p className="text-[#2d2e3f] text-[12.5px] line-clamp-2 leading-relaxed" title={entry.prompt}>
                     {entry.prompt || "No prompt provided"}
                   </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded border border-primary/20 capitalize">
-                        {entry.model?.replace("-", " ") || "Image Studio"}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] font-semibold text-[#4c38d6] px-2 py-0.5 bg-[#f2f0ff] rounded-md border border-[#ddd7fe] capitalize truncate">
+                        {entry.model?.replace(/-/g, " ") || "Image Studio"}
                       </span>
-                      <span className="text-[10px] text-white/40">{entry.aspect_ratio}</span>
+                      {entry.aspect_ratio && (
+                        <span className="text-[11px] font-medium text-[#7a7b90] shrink-0">{entry.aspect_ratio}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1495,16 +1559,32 @@ export default function ImageStudio({
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh]">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
-              <span className="text-white/60 font-medium uppercase text-xs tracking-widest mb-3">NEXOCLIP STUDIO</span>
-              <span className="text-white font-semibold text-2xl sm:text-4xl sm:mt-1 tracking-tight">
-                {selectedModelName}
-              </span>
+          <div className="flex flex-col items-center justify-center h-full animate-fade-in-up min-h-[56vh] px-4 py-10">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e4e2f0] bg-white/90 px-3.5 py-1 text-[11.5px] font-semibold text-[#5b45f2] shadow-[0_2px_8px_rgba(20,20,31,0.04)] mb-4">
+              Image Studio · {imageMode ? "Image to Image" : "Text to Image"}
+            </span>
+            <h1 className="text-[30px] sm:text-[40px] font-semibold tracking-[-0.03em] text-[#14141f] text-center leading-tight mb-3">
+              {selectedModelName}
             </h1>
-            <p className="text-white/60 text-sm text-center max-w-lg leading-relaxed px-4">
-              Describe a scene, character, mood, or style — and watch it come to life
+            <p className="text-[#5e5e72] text-[14.5px] text-center max-w-lg leading-relaxed mb-7">
+              Describe a scene, product shot, portrait, or visual concept — and render high-resolution frames in seconds.
             </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 max-w-2xl">
+              {IMAGE_STARTERS.map((idea) => (
+                <button
+                  key={idea}
+                  type="button"
+                  onClick={() => {
+                    setPrompt(idea);
+                    setTimeout(() => textareaRef.current?.focus(), 30);
+                  }}
+                  className="rounded-full border border-[#e6e7f0] bg-white/90 hover:bg-[#f2f0ff] hover:border-[#c8bffb] px-3.5 py-2 text-[12px] font-medium text-[#2d2e3f] hover:text-[#4c38d6] shadow-[0_1px_4px_rgba(20,20,31,0.03)] transition-all text-left max-w-[300px] truncate"
+                  title={idea}
+                >
+                  {idea}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1525,7 +1605,7 @@ export default function ImageStudio({
                       setUploadedImageUrls(next);
                       if (next.length === 0) handleUploadClear();
                     }}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 hover:text-white text-[8px] border border-white/5"
+                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#14141f]/75 hover:bg-[#14141f] rounded-full flex items-center justify-center text-white text-[9px]"
                   >
                     ×
                   </button>
@@ -1583,7 +1663,7 @@ export default function ImageStudio({
                     active: dropdownOpen === "model",
                   })}
                 >
-                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white/5">
+                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white border border-[#e6e7f0]">
                     {(() => {
                       const selectedModelObj = currentModels.find(m => m.id === selectedModelId);
                       const selectedModelProvider = selectedModelObj?.provider || 'muapi';
@@ -1591,10 +1671,10 @@ export default function ImageStudio({
                         <img 
                           src={PROVIDER_LOGOS[selectedModelProvider]} 
                           alt="" 
-                          className={`w-full h-full object-contain ${invertLogos.includes(selectedModelProvider) ? "invert" : ""}`} 
+                          className="w-full h-full object-contain p-0.5" 
                         />
                       ) : (
-                        <span className="text-[9px] font-bold text-black uppercase">G</span>
+                        <span className="text-[9px] font-bold text-[#4c38d6] uppercase">G</span>
                       );
                     })()}
                   </div>
@@ -1652,7 +1732,7 @@ export default function ImageStudio({
                 )}
               </div>
 
-              {/* Quality/resolution button (represented as Diamond icon) */}
+              {/* Quality/resolution button */}
               {showQualityBtn && (
                 <div className="relative">
                   <button
@@ -1700,7 +1780,7 @@ export default function ImageStudio({
                       active: dropdownOpen === "effect",
                     })}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40 text-white">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-65">
                       <path d="M5 3l14 9-14 9V3z" />
                     </svg>
                     <span className={`${PROMPT_CONTROL_LABEL_CLASS} max-w-[140px] truncate`}>
@@ -1739,7 +1819,7 @@ export default function ImageStudio({
                   })}
                   title={seedLocked ? `Seed locked: ${seed}` : "Seed: random each generation"}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70 text-white shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70 shrink-0">
                     {seedLocked ? (
                       <>
                         <rect x="5" y="11" width="14" height="9" rx="2" />
@@ -1764,36 +1844,36 @@ export default function ImageStudio({
                 {dropdownOpen === "seed" && (
                   <PromptPopover
                     onClick={(e) => e.stopPropagation()}
-                    className="min-w-[220px]"
+                    className="min-w-[240px]"
                   >
                     <PromptPopoverHeader>Seed</PromptPopoverHeader>
                     <div className="flex flex-col gap-2.5 px-1 pb-1">
-                      <p className="text-[10px] text-white/40 leading-relaxed">
+                      <p className="text-[11.5px] text-[#5e5e72] leading-relaxed">
                         Lock a seed to reproduce the exact same result, or reuse the
-                        last one generated. Unlocked = a new random seed every time.
+                        last one generated. Unlocked uses a new random seed every time.
                       </p>
                       <input
                         type="number"
                         value={seed ?? ""}
                         onChange={(e) => setSeed(e.target.value === "" ? null : Number(e.target.value))}
                         placeholder="Random"
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 focus:outline-none focus:border-[#d4ff64]/40"
+                        className="w-full bg-[#f6f6fa] border border-[#e6e7f0] rounded-xl px-3 py-2 text-[12.5px] text-[#14141f] focus:outline-none focus:border-[#5b45f2] focus:bg-white"
                       />
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setSeed(randomSeed())}
-                          className="flex-1 text-[11px] font-semibold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg py-1.5 transition-colors"
+                          className="flex-1 text-[12px] font-semibold text-[#2d2e3f] hover:text-[#14141f] bg-[#f6f6fa] hover:bg-[#efeff6] border border-[#e6e7f0] rounded-xl py-1.5 transition-colors"
                         >
                           Randomize
                         </button>
                         <button
                           type="button"
                           onClick={() => setSeedLocked((v) => !v)}
-                          className={`flex-1 text-[11px] font-semibold rounded-lg py-1.5 border transition-colors ${
+                          className={`flex-1 text-[12px] font-semibold rounded-xl py-1.5 border transition-colors ${
                             seedLocked
-                              ? "text-[#d4ff64] bg-[#d4ff64]/10 border-[#d4ff64]/30"
-                              : "text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border-white/10"
+                              ? "text-[#4c38d6] bg-[#f2f0ff] border-[#c8bffb]"
+                              : "text-[#2d2e3f] hover:text-[#14141f] bg-[#f6f6fa] hover:bg-[#efeff6] border-[#e6e7f0]"
                           }`}
                         >
                           {seedLocked ? "Locked" : "Lock seed"}
@@ -1809,17 +1889,17 @@ export default function ImageStudio({
                 <button
                   type="button"
                   onClick={() => setBatchSize(prev => Math.max(1, prev - 1))}
-                  className="text-white/40 hover:text-white/80 font-extrabold text-xs transition-colors px-1"
+                  className="text-[#5e5e72] hover:text-[#14141f] font-bold text-xs transition-colors px-1"
                 >
-                  -
+                  −
                 </button>
-                <span className="text-xs font-semibold text-white/70 min-w-[24px] text-center">
+                <span className="text-[12px] font-semibold text-[#14141f] min-w-[24px] text-center">
                   {batchSize}/4
                 </span>
                 <button
                   type="button"
                   onClick={() => setBatchSize(prev => Math.min(4, prev + 1))}
-                  className="text-white/40 hover:text-white/80 font-extrabold text-xs transition-colors px-1"
+                  className="text-[#5e5e72] hover:text-[#14141f] font-bold text-xs transition-colors px-1"
                 >
                   +
                 </button>
@@ -1831,7 +1911,7 @@ export default function ImageStudio({
                 className={promptControlClassName()}
                 onClick={() => setIsDrawModalOpen(true)}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-40 text-white group-hover:text-[#d4ff64] transition-colors">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="opacity-65 transition-colors">
                   <path d="M12 20h9" />
                   <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
                 </svg>
@@ -1848,12 +1928,12 @@ export default function ImageStudio({
             >
               {generating ? (
                 <>
-                  <span className="animate-spin inline-block text-black">◌</span>
-                  Generating...
+                  <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Generating…
                 </>
               ) : (
                 <>
-                  <span>{batchCredits !== null ? `Generate · ${formatCredits(batchCredits)} credits ✦` : 'Generate ✦'}</span>
+                  <span>{batchCredits !== null ? `Generate · ${formatCredits(batchCredits)} credits` : 'Generate'}</span>
                 </>
               )}
             </PromptAction>
@@ -1863,18 +1943,18 @@ export default function ImageStudio({
       {/* ── FULLSCREEN IMAGE MODAL ── */}
       {fullscreenUrl && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f1117]/92 backdrop-blur-md animate-fade-in p-4"
           onClick={() => setFullscreenUrl(null)}
         >
           <button
             type="button"
-            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
+            className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/15"
             onClick={(e) => {
               e.stopPropagation();
               setFullscreenUrl(null);
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -1882,7 +1962,7 @@ export default function ImageStudio({
           <img 
             src={assetPreviewUrl(fullscreenUrl)}
             alt="Fullscreen Preview" 
-            className="max-w-[95vw] max-h-[95vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
+            className="max-w-[94vw] max-h-[92vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -1896,7 +1976,7 @@ export default function ImageStudio({
         batchSize={1}
         onAddHistoryItem={addToHistory}
       />
-      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#ffffff', color: '#292733', border: '1px solid #e5e3ed', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(39,35,58,0.12)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
+      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#ffffff', color: '#14141f', border: '1px solid #e6e7f0', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(20,20,31,0.12)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
     </div>
   );
 }

@@ -28,15 +28,16 @@ export async function GET(request) {
   } catch (error) { return errorResponse(error); }
 }
 
-// Starts a Pakasir payment for one period of a plan.
+// Starts a MeldaPay invoice for one period of a plan.
 export async function POST(request) {
   try {
     const tenant = await context(request);
     requireCanSpend(tenant);
+    if (tenant.workspace.role !== 'owner') return NextResponse.json({error:'Hanya Owner yang bisa melakukan pembayaran.'},{status:403});
     const body = await request.json().catch(() => ({}));
     const order = await subscriptionService().createOrder({
       workspaceId: tenant.workspace.id, userId: tenant.user.id, planCode: body.planCode,
-      returnUrl: `${publicOrigin(request)}/studio/billing`,
+      webhookUrl: `${publicOrigin(request)}/api/billing/webhooks/meldapay`,
     });
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) { return errorResponse(error); }

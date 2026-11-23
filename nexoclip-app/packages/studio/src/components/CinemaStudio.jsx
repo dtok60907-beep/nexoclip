@@ -337,6 +337,7 @@ function CameraControlsOverlay({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CinemaStudio({
+  studioWork, restoredWork, projectWorkspace,
   initialPrompt = '',
   apiKey,
   beforeGenerate,
@@ -471,6 +472,17 @@ export default function CinemaStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyItems]);
 
+  useEffect(() => {
+    if (!restoredWork) return;
+    const {settings,jobs}=restoredWork;
+    setSettings(previous=>({...previous,...settings,focal:Number(settings.focal) || previous.focal}));
+    if (settings.resolution || jobs[0]?.parameters?.resolution) setResolution(settings.resolution || jobs[0].parameters.resolution);
+    setUploadedImage(jobs[0]?.parameters?.referenceImages?.[0] || null);
+    const entries=jobs.filter(j=>j.asset_id).map(j=>({url:'/api/assets/'+j.asset_id+'/download?workspace_id='+projectWorkspace,settings:{prompt:j.prompt},timestamp:Date.parse(j.created_at)}));
+    setInternalHistory(entries);
+    setCanvasUrl(entries[0]?.url || null);
+  },[restoredWork,projectWorkspace]);
+
   const formatSummaryValue = () =>
     `${settings.lens}, ${settings.focal}mm, ${settings.aperture}`;
 
@@ -496,6 +508,7 @@ export default function CinemaStudio({
       const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const res = await generateSaasImage({
         model: CINEMA_MODEL,
+        studioWork: studioWork?.({...settings,focal:String(settings.focal),resolution}),
         prompt: finalPrompt,
         workspace_id: workspaceId,
         idempotencyKey: crypto.randomUUID(),

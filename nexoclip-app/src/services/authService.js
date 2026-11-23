@@ -1,3 +1,4 @@
+import { acceptInvitation } from './workspaceTeam.js';
 import { getPool } from '../db/pool.js';
 import { createHash } from 'node:crypto';
 import {
@@ -13,6 +14,7 @@ import {
 import {
   createUserWithWorkspace,
   findUserByEmail,
+  updateUserDisplayName,
 } from '../repositories/userRepository.js';
 import { resendService } from './resendService.js';
 
@@ -133,11 +135,30 @@ export async function changePassword(userId, currentPassword, password) {
   } finally { client.release(); }
 }
 
-export async function registerUser({ email, password, displayName, workspaceName, marketingOptIn = false }) {
+export async function updateUserProfile(userId, { displayName }) {
+  const trimmed = String(displayName ?? '').trim();
+  if (trimmed.length < 2) {
+    throw Object.assign(new Error('Display name must be at least 2 characters.'), { status: 400 });
+  }
+  if (trimmed.length > 80) {
+    throw Object.assign(new Error('Display name must be 80 characters or fewer.'), { status: 400 });
+  }
+  const updated = await updateUserDisplayName(getPool(), userId, trimmed);
+  if (!updated) {
+    throw Object.assign(new Error('Account not found.'), { status: 404 });
+  }
+  return {
+    id: updated.id,
+    email: updated.email,
+    displayName: updated.display_name,
+  };
+}
+
+export async function registerUser({ email, password, displayName, workspaceName, inviteToken, marketingOptIn = false }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail || !normalizedEmail.includes('@')) throw new Error('Valid email is required');
   const passwordHash = await hashPassword(password);
-  const name = String(workspaceName || `${displayName || 'Personal'} workspace`).trim();
+  const name = String(workspaceName || `Workspace Pribadi`).trim();
   const pool = getPool();
   const client = await pool.connect();
 
@@ -151,6 +172,7 @@ export async function registerUser({ email, password, displayName, workspaceName
       passwordHash,
       displayName: String(displayName || '').trim() || null,
       marketingOptIn,
+      joinWorkspace: inviteToken ? (db,user) => acceptInvitation(db,inviteToken,user) : undefined,
       workspaceName: name,
       workspaceSlug: `${slugify(name)}-${cryptoRandomSuffix()}`,
     });
@@ -201,7 +223,7 @@ export async function loginWithGoogle({ email, displayName }) {
     const isNew = !user;
     if (!user) {
       const passwordHash = await hashPassword(createSessionToken());
-      const name = `${displayName || 'Personal'} workspace`;
+      const name = `Workspace Pribadi`;
       const created = await createUserWithWorkspace(client, {
         email: normalizedEmail,
         passwordHash,

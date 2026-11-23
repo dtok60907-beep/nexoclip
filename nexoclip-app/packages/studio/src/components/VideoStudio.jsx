@@ -80,12 +80,14 @@ async function downloadFile(url, filename) {
 
 const CheckSvg = () => (
   <svg
-    width="16"
-    height="16"
+    width="15"
+    height="15"
     viewBox="0 0 24 24"
     fill="none"
-    stroke="#d4ff64"
-    strokeWidth="4"
+    stroke="#5b45f2"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
   >
     <polyline points="20 6 9 17 4 12" />
   </svg>
@@ -114,11 +116,11 @@ const VideoReadySvg = () => (
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
-    className="text-primary"
+    className="text-[#5b45f2]"
   >
     <polygon points="23 7 16 12 23 17 23 7" />
     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    <polyline points="7 10 10 13 15 8" stroke="#d4ff64" strokeWidth="2.5" />
+    <polyline points="7 10 10 13 15 8" stroke="#5b45f2" strokeWidth="2.5" />
   </svg>
 );
 
@@ -286,44 +288,45 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
     const isV2V = category === "v2v";
     const durations = isV2V ? [] : category === "i2v" ? getDurationsForI2VModel(m.id) : getDurationsForModel(m.id);
     const maxDuration = durations.length ? Math.max(...durations) : null;
+    const isActive = selectedModel === m.id;
     return (
     <div
       key={`${category}:${m.id}`}
-      ref={selectedModel === m.id ? activeItemRef : null}
-      className={`flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-white/5 ${selectedModel === m.id ? "bg-white/5 border-white/5" : ""}`}
+      ref={isActive ? activeItemRef : null}
+      className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${isActive ? "bg-[#f2f0ff] border-[#ddd7fe]" : "border-transparent hover:bg-[#f6f6fa]"}`}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(m, category);
         onClose();
       }}
     >
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-center gap-3 min-w-0">
         {PROVIDER_LOGOS[m.provider] ? (
-          <div className="w-8 h-8 rounded-xl border border-white/5 overflow-hidden shrink-0 flex items-center justify-center bg-white/[0.02]">
+          <div className="w-8 h-8 rounded-xl border border-[#e6e7f0] overflow-hidden shrink-0 flex items-center justify-center bg-white">
             <img
               src={PROVIDER_LOGOS[m.provider]}
               alt={m.provider_name}
-              className={`w-full h-full object-contain p-1 ${invertLogos.includes(m.provider) ? "invert" : ""}`}
+              className="w-full h-full object-contain p-1"
             />
           </div>
         ) : (
           <div
-            className={`w-9 h-9 ${getIconColor(m, isV2V)} border rounded-xl flex items-center justify-center font-black text-xs shadow-inner uppercase`}
+            className="w-8 h-8 bg-[#f2f0ff] text-[#4c38d6] border border-[#ddd7fe] rounded-xl flex items-center justify-center font-bold text-xs uppercase shrink-0"
           >
             {m.name.charAt(0)}
           </div>
         )}
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-xs font-bold text-white tracking-tight truncate">
+          <span className={`text-[12.5px] font-semibold tracking-tight truncate ${isActive ? "text-[#4c38d6]" : "text-[#14141f]"}`}>
             {m.name}
           </span>
           {isV2V ? (
-            <span className="text-[9px] text-orange-400/70">
+            <span className="text-[10.5px] text-[#a05c07] truncate">
               {m.imageOptional ? "Reference video · optional image" : m.imageField ? "Upload a video and image" : "Upload a video to use"}
             </span>
           ) : (
             selectedProvider === "all" && m.provider_name && (
-              <span className="text-[9px] text-white/40">
+              <span className="text-[10.5px] text-[#7a7b90] truncate">
                 {m.provider_name}
               </span>
             )
@@ -331,30 +334,28 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {maxDuration && <span className="rounded-full bg-lime-400/10 px-2 py-1 text-[10px] font-semibold text-lime-300">Up to {maxDuration}s</span>}
-        {selectedModel === m.id && <CheckSvg />}
+        {maxDuration && <span className="rounded-full bg-[#f2f0ff] border border-[#ddd7fe] px-2 py-0.5 text-[10.5px] font-semibold text-[#4c38d6]">Up to {maxDuration}s</span>}
+        {isActive && <CheckSvg />}
       </div>
     </div>
     );
   };
 
-  const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
-
   return (
-    <div className="flex gap-4 h-full max-h-[70vh] min-h-[350px]">
+    <div className="flex gap-3.5 h-full max-h-[68vh] min-h-[340px]">
       {/* Left Sidebar: Provider tabs */}
-      <div className="flex flex-col gap-2.5 items-center pr-2 border-r border-white/5 shrink-0 select-none overflow-y-auto custom-scrollbar w-14 pt-0.5">
+      <div className="flex flex-col gap-2 items-center pr-2.5 border-r border-[#efeff5] shrink-0 select-none overflow-y-auto custom-scrollbar w-12 pt-0.5">
         <button
           type="button"
           onClick={() => setSelectedProvider("all")}
           className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 cursor-pointer ${
             selectedProvider === "all"
-              ? "bg-white/10 text-yellow-400 border-yellow-500/30 shadow-md scale-105"
-              : "bg-white/[0.02] text-white/50 border-white/[0.03] hover:bg-white/5 hover:text-white"
+              ? "bg-[#f2f0ff] text-[#5b45f2] border-[#c8bffb] shadow-xs scale-105"
+              : "bg-[#f6f6fa] text-[#7a7b90] border-[#e6e7f0] hover:bg-[#efeff6] hover:text-[#14141f]"
           }`}
           title="All Providers"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill={selectedProvider === "all" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill={selectedProvider === "all" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
         </button>
@@ -367,10 +368,10 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
               key={p.id}
               type="button"
               onClick={() => setSelectedProvider(p.id)}
-              className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center font-black text-[10px] border transition-all flex-shrink-0 cursor-pointer overflow-hidden ${
+              className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center font-bold text-[10px] border transition-all cursor-pointer overflow-hidden ${
                 isSelected
-                  ? `${style.bg} border-white/25 scale-105 shadow-md`
-                  : "bg-white/[0.02] text-white/40 border-white/[0.02] hover:bg-white/5 hover:text-white/80"
+                  ? "bg-[#f2f0ff] border-[#5b45f2] ring-2 ring-[#5b45f2]/20 scale-105"
+                  : "bg-white text-[#5e5e72] border-[#e6e7f0] hover:border-[#c8bffb]"
               }`}
               title={p.name}
             >
@@ -378,7 +379,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                 <img
                   src={PROVIDER_LOGOS[p.id]}
                   alt={p.name}
-                  className={`w-full h-full rounded-full object-contain ${invertLogos.includes(p.id) ? "invert" : ""}`}
+                  className="w-full h-full rounded-full object-contain p-1"
                 />
               ) : (
                 style.text
@@ -390,7 +391,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
 
       {/* Right Pane: Search + Lists */}
       <div className="flex-1 flex flex-col gap-2 min-w-0">
-        <div className="px-1 pb-2 border-b border-white/5 shrink-0 space-y-2">
+        <div className="pb-2.5 border-b border-[#efeff5] shrink-0 space-y-2">
           <div className="flex gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
             {modelCategories.map((category) => (
               <button
@@ -400,25 +401,25 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                   setSelectedCategory(category.id);
                   setSelectedProvider("all");
                 }}
-                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors border ${
+                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors border ${
                   selectedCategory === category.id
-                    ? "bg-primary/15 text-primary border-primary/30"
-                    : "bg-white/[0.02] text-white/50 border-white/[0.04] hover:bg-white/5 hover:text-white"
+                    ? "bg-[#f2f0ff] text-[#4c38d6] border-[#c8bffb]"
+                    : "bg-[#f6f6fa] text-[#5e5e72] border-[#e6e7f0] hover:bg-[#efeff6] hover:text-[#14141f]"
                 }`}
               >
                 {category.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/5 focus-within:border-primary/50 transition-colors">
+          <div className="flex items-center gap-2.5 bg-[#f6f6fa] rounded-xl px-3 py-2 border border-[#e6e7f0] focus-within:border-[#5b45f2] focus-within:bg-white transition-colors">
             <svg
               width="14"
               height="14"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="3"
-              className="text-muted"
+              strokeWidth="2.4"
+              className="text-[#7a7b90]"
             >
               <circle cx="11" cy="11" r="8" />
               <path d="M21 21l-4.35-4.35" />
@@ -429,23 +430,23 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="bg-transparent border-none text-xs text-white focus:ring-0 w-full p-0 outline-none"
+              className="bg-transparent border-none text-[12.5px] text-[#14141f] placeholder:text-[#8a8b9e] focus:ring-0 w-full p-0 outline-none"
             />
           </div>
         </div>
         
-        <div className="text-xs font-bold text-secondary px-2 py-1 shrink-0 flex items-center justify-between">
+        <div className="text-[11.5px] font-semibold text-[#5e5e72] px-1 py-0.5 shrink-0 flex items-center justify-between">
           <span>{activeCategory.label} models</span>
           {selectedProvider !== "all" && (
-            <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60">
+            <span className="text-[10.5px] bg-[#f2f0ff] text-[#4c38d6] px-2 py-0.5 rounded-md font-medium">
               {availableProviders.find(p => p.id === selectedProvider)?.name || selectedProvider}
             </span>
           )}
         </div>
         
-        <div className="flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1 pb-2 flex-1">
+        <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1 pb-2 flex-1">
           {filteredMain.length === 0 && filteredV2V.length === 0 ? (
-            <div className="text-xs text-white/30 text-center py-6">
+            <div className="text-[12.5px] text-[#7a7b90] text-center py-6">
               No models found
             </div>
           ) : (
@@ -453,7 +454,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
               {filteredMain.map((entry) => renderItem(entry))}
               {filteredV2V.length > 0 && (
                 <>
-                  <div className="text-xs font-bold text-orange-400/70 px-3 py-2 mt-1 border-t border-white/5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-[#a05c07] px-2.5 py-2 mt-1 border-t border-[#efeff5]">
                     Video Tools
                   </div>
                   {filteredV2V.map((entry) => renderItem(entry))}
@@ -475,6 +476,8 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function VideoStudio({
+  studioWork, restoredWork, projectWorkspace,
+  homeSelection,
   initialPrompt = '',
   apiKey,
   beforeGenerate,
@@ -1172,6 +1175,14 @@ export default function VideoStudio({
   );
 
   // ── add to local history ──────────────────────────────────────────────────
+  const appliedSelection = useRef(null);
+  useEffect(() => {
+    if (!homeSelection || appliedSelection.current === homeSelection) return;
+    appliedSelection.current = homeSelection;
+    const model = openRouterT2VModels.find(item => item.id === homeSelection.modelId);
+    if (model) handleModelSelect(model, 't2v');
+  }, [homeSelection, handleModelSelect]);
+
   const addToLocalHistory = useCallback((entry) => {
     setLocalHistory((prev) => [entry, ...prev].slice(0, 30));
     setActiveHistoryIdx(0);
@@ -1184,6 +1195,33 @@ export default function VideoStudio({
     setCanvasModel(model);
     setShowCanvas(true);
   }, []);
+
+  useEffect(() => {
+    if (!restoredWork) return;
+    const {settings,jobs} = restoredWork;
+    const params = jobs[0]?.parameters || {};
+    const mode=settings.mode || (params.referenceVideos?.length?'v2v':params.frameImages?.length || params.referenceImages?.length?'i2v':'t2v');
+    const models=mode==='v2v'?openRouterV2VModels:mode==='i2v'?openRouterI2VModels:openRouterT2VModels;
+    const model=models.find(m=>m.id===settings.selectedModel || (!settings.selectedModel && (OPENROUTER_VIDEO_MODEL_MAP[m.id] || OPENROUTER_V2V_MODEL_MAP[m.id] || m.id)===jobs[0]?.model));
+    if (model) {
+      setImageMode(mode==='i2v');
+      setV2vMode(mode==='v2v');
+      setSelectedModel(model.id);
+      setSelectedModelName(model.name);
+      applyControlsForModel(model.id,mode==='i2v',mode==='v2v');
+    }
+    setPrompt(settings.prompt);
+    if (params.aspectRatio) setSelectedAr(params.aspectRatio);
+    if (params.duration) setSelectedDuration(params.duration);
+    if (params.resolution) setSelectedResolution(params.resolution);
+    const images=params.referenceImages || params.frameImages?.map(frame=>frame.url) || [];
+    setUploadedImageUrls(images);
+    setUploadedImageUrl(images[0] || null);
+    setUploadedVideoUrl(params.referenceVideos?.[0] || null);
+    const entries=jobs.filter(j=>j.asset_id).map(j=>({...j,url:'/api/assets/'+j.asset_id+'/download?workspace_id='+projectWorkspace}));
+    setLocalHistory(entries);
+    if (entries.length) showVideoInCanvas(entries[0].url,model?.id || entries[0].model);
+  },[restoredWork,projectWorkspace]);
 
   // ── generate ──────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
@@ -1264,6 +1302,7 @@ export default function VideoStudio({
         if (currentModel?.hasPrompt && trimmedPrompt) {
           v2vParams.prompt = trimmedPrompt;
         }
+        v2vParams.studioWork = studioWork?.({ prompt: trimmedPrompt, selectedModel, selectedModelName, mode: "v2v" });
         res = await generateSaasVideo(v2vParams);
         const outputUrl = res?.outputs?.[0]?.url;
         if (!outputUrl) throw new Error("No video URL returned by API");
@@ -1313,6 +1352,7 @@ export default function VideoStudio({
         if (selectedMode) i2vParams.mode = selectedMode;
         if (showEffect && selectedEffect) i2vParams.name = selectedEffect;
 
+        i2vParams.studioWork = studioWork?.({ prompt: trimmedPrompt, selectedModel, selectedModelName, mode: "i2v" });
         res = await generateSaasVideo(i2vParams);
         const outputUrl = res?.outputs?.[0]?.url;
         if (!outputUrl) throw new Error("No video URL returned by API");
@@ -1371,6 +1411,7 @@ export default function VideoStudio({
         if (selectedQuality) params.quality = selectedQuality;
         if (selectedMode) params.mode = selectedMode;
 
+        params.studioWork = studioWork?.({ prompt: trimmedPrompt, selectedModel, selectedModelName, mode: "t2v" });
         res = await generateSaasVideo(params);
         const outputUrl = res?.outputs?.[0]?.url;
         if (!outputUrl) throw new Error("No video URL returned by API");
@@ -1504,40 +1545,81 @@ export default function VideoStudio({
     setOpenDropdown((prev) => (prev === type ? null : type));
   };
 
+  const VIDEO_STARTERS = [
+    "Slow-motion macro pour of iced espresso over crystal ice cubes, golden morning light",
+    "Smooth handheld tracking shot walking through a rain-lit neon Tokyo alley at dusk",
+    "Orbiting studio commercial shot of wireless earbuds levitating with soft reflections",
+    "Warm cinematic sunrise over misty Bali rice terraces, slow aerial drone push-in",
+  ];
+
+  const modeBadgeLabel = v2vMode
+    ? "Video Tools"
+    : imageMode
+      ? "Image to Video"
+      : isExtendMode
+        ? "Extend Video"
+        : "Text to Video";
+
   // ── render ────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex flex-col items-center justify-center bg-app-bg relative overflow-hidden"
+      className="w-full h-full flex flex-col items-center justify-center bg-transparent relative px-4 md:px-6 overflow-hidden"
     >
       {/* ── CENTRAL GALLERY AREA ── */}
-      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
-        {history.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full pt-4 animate-fade-in-up">
+      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 lg:pb-44 px-1">
+        {history.length === 0 && serverHistory.loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full pt-6" role="status" aria-label="Loading generated videos">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div key={idx} className="rounded-2xl overflow-hidden border border-[#e6e7f0] bg-white shadow-[0_2px_10px_rgba(20,20,31,0.03)]">
+                <div className="w-full aspect-video nx-skel" style={{ borderRadius: 0 }} />
+                <div className="p-3.5 space-y-2.5">
+                  <div className="nx-skel h-3.5 w-4/5" />
+                  <div className="flex items-center gap-2">
+                    <div className="nx-skel nx-skel--pill h-5 w-24" />
+                    <div className="nx-skel h-3 w-12" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : history.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full pt-6 animate-fade-in-up">
             {history.map((entry, idx) => {
               const isSeedance2 = entry.model === "seedance-v2.0-t2v" || entry.model === "seedance-v2.0-i2v";
               return (
                 <div
                   key={entry.id || idx}
-                  className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
+                  className="relative group rounded-2xl overflow-hidden border border-[#e6e7f0] bg-white shadow-[0_2px_10px_rgba(20,20,31,0.04)] hover:border-[#c8bffb] hover:shadow-[0_14px_30px_rgba(20,20,31,0.08)] transition-all duration-200 flex flex-col cursor-pointer"
                   onClick={() => setFullscreenUrl(entry.url)}
                 >
-                  <video
-                    src={entry.url}
-                    className="w-full aspect-video object-cover bg-black/40 hover:opacity-80 transition-opacity"
-                    controls={false}
-                    loop
-                    muted
-                    playsInline
-                    onMouseOver={(e) => e.target.play()}
-                    onMouseOut={(e) => {
-                      e.target.pause();
-                      e.target.currentTime = 0;
-                    }}
-                  />
+                  <div className="relative w-full aspect-video bg-[#0f1117] overflow-hidden">
+                    <video
+                      src={entry.url}
+                      className="w-full h-full object-cover group-hover:opacity-95 transition-opacity"
+                      controls={false}
+                      loop
+                      muted
+                      playsInline
+                      onMouseEnter={(e) => {
+                        const v = e.currentTarget;
+                        const p = v.play();
+                        if (p && typeof p.catch === "function") p.catch(() => {});
+                      }}
+                      onMouseLeave={(e) => {
+                        const v = e.currentTarget;
+                        try {
+                          v.pause();
+                          v.currentTime = 0;
+                        } catch {
+                          /* ignore media reset error */
+                        }
+                      }}
+                    />
+                  </div>
                   
                   {/* Overlay actions */}
-                  <div className="absolute top-2 right-2 hidden md:flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-2.5 right-2.5 hidden md:flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <GenerationCopyButtons
                       prompt={entry.prompt}
                       onCopyError={onGenerationError}
@@ -1546,9 +1628,9 @@ export default function VideoStudio({
                       type="button"
                       title="Publish to TikTok"
                       onClick={(e) => { e.stopPropagation(); onPublish?.(entry); }}
-                      className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-primary hover:text-black transition-all border border-white/10"
+                      className="w-8 h-8 flex items-center justify-center bg-[#14141f]/75 backdrop-blur-md rounded-full text-white hover:bg-[#5b45f2] hover:border-[#5b45f2] transition-all border border-white/15"
                     >
-                      <span className="text-xs font-bold">TT</span>
+                      <span className="text-[11px] font-bold">TT</span>
                     </button>
                     <button
                       type="button"
@@ -1557,9 +1639,9 @@ export default function VideoStudio({
                         e.stopPropagation();
                         downloadFile(entry.url, `video-${entry.id || idx}.mp4`);
                       }}
-                      className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-primary hover:text-black transition-all border border-white/10"
+                      className="w-8 h-8 flex items-center justify-center bg-[#14141f]/75 backdrop-blur-md rounded-full text-white hover:bg-[#5b45f2] hover:border-[#5b45f2] transition-all border border-white/15"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                       </svg>
                     </button>
@@ -1572,9 +1654,9 @@ export default function VideoStudio({
                           setLastGenerationId(entry.id);
                           handleExtend();
                         }}
-                        className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-primary hover:text-black transition-all border border-white/10"
+                        className="w-8 h-8 flex items-center justify-center bg-[#14141f]/75 backdrop-blur-md rounded-full text-white hover:bg-[#5b45f2] hover:border-[#5b45f2] transition-all border border-white/15"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                           <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                       </button>
@@ -1588,9 +1670,9 @@ export default function VideoStudio({
                           removeHistoryEntry(entry);
                         }
                       }}
-                      className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
+                      className="w-8 h-8 flex items-center justify-center bg-[#14141f]/75 backdrop-blur-md rounded-full text-rose-300 hover:bg-[#e11d48] hover:border-[#e11d48] hover:text-white transition-all border border-white/15"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
                         <line x1="10" y1="11" x2="10" y2="17" />
@@ -1635,22 +1717,19 @@ export default function VideoStudio({
                   />
 
                   {/* Prompt & Details */}
-                  <div className="p-3 bg-black/80 backdrop-blur-sm border-t border-white/5 flex-1 flex flex-col justify-between gap-2">
-                    <p className="text-white/70 text-xs line-clamp-3 leading-relaxed" title={entry.prompt}>
+                  <div className="p-3.5 bg-white border-t border-[#efeff5] flex-1 flex flex-col justify-between gap-2.5">
+                    <p className="text-[#2d2e3f] text-[12.5px] line-clamp-2 leading-relaxed" title={entry.prompt}>
                       {entry.prompt || "No prompt provided"}
                     </p>
-                    <div className="flex items-center justify-between mt-1 flex-wrap gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded border border-primary/20 whitespace-nowrap capitalize">
-                          {entry.model?.replace("-", " ") || "Video Studio"}
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-semibold text-[#4c38d6] px-2 py-0.5 bg-[#f2f0ff] rounded-md border border-[#ddd7fe] whitespace-nowrap capitalize truncate">
+                          {entry.model?.replace(/-/g, " ") || "Video Studio"}
                         </span>
-                        <div className="flex gap-2">
-                          {entry.resolution && (
-                            <span className="text-[10px] text-white/40">{entry.resolution}</span>
-                          )}
-                          {entry.duration && (
-                            <span className="text-[10px] text-white/40">{entry.duration}s</span>
-                          )}
+                        <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#7a7b90]">
+                          {entry.resolution && <span>{entry.resolution}</span>}
+                          {entry.resolution && entry.duration && <span>·</span>}
+                          {entry.duration && <span>{entry.duration}s</span>}
                         </div>
                       </div>
                     </div>
@@ -1660,16 +1739,38 @@ export default function VideoStudio({
             })}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh]">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
-              <span className="text-white/60 font-medium uppercase text-xs tracking-widest mb-3">NEXOCLIP STUDIO</span>
-              <span className="text-white font-semibold text-2xl sm:text-4xl sm:mt-1 tracking-tight">
-                {selectedModelName}
-              </span>
+          <div className="flex flex-col items-center justify-center h-full animate-fade-in-up min-h-[56vh] px-4 py-10">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e4e2f0] bg-white/90 px-3.5 py-1 text-[11.5px] font-semibold text-[#5b45f2] shadow-[0_2px_8px_rgba(20,20,31,0.04)] mb-4">
+              Video Studio · {modeBadgeLabel}
+            </span>
+            <h1 className="text-[30px] sm:text-[40px] font-semibold tracking-[-0.03em] text-[#14141f] text-center leading-tight mb-3">
+              {selectedModelName}
             </h1>
-            <p className="text-white/60 text-sm text-center max-w-lg leading-relaxed px-4">
-              Animate images into stunning AI videos with motion effects
+            <p className="text-[#5e5e72] text-[14.5px] text-center max-w-lg leading-relaxed mb-7">
+              {v2vMode
+                ? "Transform, extend, or refine existing clips with precision video tools."
+                : imageMode
+                  ? "Bring reference images to life with controlled camera motion and cinematic timing."
+                  : "Turn text prompts or reference frames into cinematic AI video clips."}
             </p>
+            {!v2vMode && (
+              <div className="flex flex-wrap items-center justify-center gap-2 max-w-2xl">
+                {VIDEO_STARTERS.map((idea) => (
+                  <button
+                    key={idea}
+                    type="button"
+                    onClick={() => {
+                      setPrompt(idea);
+                      setTimeout(() => textareaRef.current?.focus(), 30);
+                    }}
+                    className="rounded-full border border-[#e6e7f0] bg-white/90 hover:bg-[#f2f0ff] hover:border-[#c8bffb] px-3.5 py-2 text-[12px] font-medium text-[#2d2e3f] hover:text-[#4c38d6] shadow-[0_1px_4px_rgba(20,20,31,0.03)] transition-all text-left max-w-[300px] truncate"
+                    title={idea}
+                  >
+                    {idea}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1679,17 +1780,13 @@ export default function VideoStudio({
           <div className="flex flex-col gap-3">
             {/* Inline list of uploaded media files */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              {/* Main image preview — hidden for multi-image models (Seedance Extend, etc.):
-                  applyImageReferenceUrl always sets both uploadedImageUrl and uploadedImageUrls
-                  to the same image, and the multi-image list below already renders it, so
-                  showing both here would duplicate the same reference image. */}
               {uploadedImageUrl && !(imageMode && getMaxImagesForI2VModel(selectedModel) > 2) && (
                 <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <img src={uploadedImageUrl} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={clearImageUpload}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 hover:text-white text-[8px] border border-white/5"
+                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#14141f]/75 hover:bg-[#14141f] rounded-full flex items-center justify-center text-white text-[9px]"
                   >
                     ×
                   </button>
@@ -1703,11 +1800,11 @@ export default function VideoStudio({
                   <button
                     type="button"
                     onClick={clearEndImage}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 hover:text-white text-[8px] border border-white/5"
+                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#14141f]/75 hover:bg-[#14141f] rounded-full flex items-center justify-center text-white text-[9px]"
                   >
                     ×
                   </button>
-                  <span className="absolute bottom-0.5 left-0.5 px-1 h-3.5 bg-black/60 rounded-md text-[7px] font-black text-[#d4ff64] leading-none flex items-center justify-center pointer-events-none">
+                  <span className="absolute bottom-0.5 left-0.5 px-1 h-3.5 bg-[#5b45f2] rounded text-[7px] font-bold text-white leading-none flex items-center justify-center pointer-events-none">
                     END
                   </span>
                 </div>
@@ -1720,7 +1817,7 @@ export default function VideoStudio({
                   <button
                     type="button"
                     onClick={clearVideoUpload}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 hover:text-white text-[8px] border border-white/5"
+                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#14141f]/75 hover:bg-[#14141f] rounded-full flex items-center justify-center text-white text-[9px]"
                   >
                     ×
                   </button>
@@ -1736,11 +1833,11 @@ export default function VideoStudio({
                       <button
                         type="button"
                         onClick={() => removeImageAtIndex(idx)}
-                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 hover:text-white text-[8px] border border-white/5"
+                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#14141f]/75 hover:bg-[#14141f] rounded-full flex items-center justify-center text-white text-[9px]"
                       >
                         ×
                       </button>
-                      <span className="absolute bottom-0.5 right-0.5 px-1 h-3.5 bg-black/60 rounded-full text-[8px] font-black text-[#d4ff64] leading-none flex items-center justify-center pointer-events-none">
+                      <span className="absolute bottom-0.5 right-0.5 px-1 h-3.5 bg-[#5b45f2] rounded-full text-[8px] font-bold text-white leading-none flex items-center justify-center pointer-events-none">
                         {idx + 1}
                       </span>
                     </div>
@@ -1748,14 +1845,7 @@ export default function VideoStudio({
                 </>
               )}
 
-              {/* Upload trigger buttons */}
-              {/* Image upload button — shown when the model accepts image input:
-                  • T2V mode: uploading an image auto-switches to the sibling I2V model
-                  • I2V mode: uploading the start-frame (multi-image logic applies)
-                  • V2V motion-control: reference image is required alongside the video
-                  • T2V with inputs.images_list: optional reference images (e.g. Seedance 2.0 Extend)
-                  • Hidden in regular V2V mode (watermark remover etc. needs no image)
-                  • Hidden for extend-type models without inputs.images_list */}
+              {/* Image upload trigger */}
               {canUploadImageReference && (
                 getMaxImagesForI2VModel(selectedModel) > 2 ? (
                   uploadedImageUrls.length < getMaxImagesForI2VModel(selectedModel) && (
@@ -1774,25 +1864,25 @@ export default function VideoStudio({
                         className={promptMediaButtonClassName()}
                       >
                         {imageUploading ? (
-                          <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
+                          <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-white/90 z-20 backdrop-blur-[2px]">
                             <svg className="w-8 h-8 -rotate-90">
-                              <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/10" />
+                              <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2.2" fill="transparent" className="text-[#e6e7f0]" />
                               <circle
                                 cx="16"
                                 cy="16"
                                 r="14"
                                 stroke="currentColor"
-                                strokeWidth="2"
+                                strokeWidth="2.2"
                                 fill="transparent"
                                 strokeDasharray={88}
                                 strokeDashoffset={88 - (88 * imageProgress) / 100}
-                                className="text-[#d4ff64] transition-all duration-300"
+                                className="text-[#5b45f2] transition-all duration-300"
                               />
                             </svg>
-                            <span className="absolute text-[9px] font-black text-[#d4ff64] leading-none">{imageProgress}%</span>
+                            <span className="absolute text-[9px] font-bold text-[#5b45f2] leading-none">{imageProgress}%</span>
                           </div>
                         ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-[#d4ff64] transition-colors">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" className="text-current transition-colors">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                           </svg>
@@ -1817,25 +1907,25 @@ export default function VideoStudio({
                         className={promptMediaButtonClassName()}
                       >
                         {imageUploading ? (
-                          <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
+                          <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-white/90 z-20 backdrop-blur-[2px]">
                             <svg className="w-8 h-8 -rotate-90">
-                              <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/10" />
+                              <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2.2" fill="transparent" className="text-[#e6e7f0]" />
                               <circle
                                 cx="16"
                                 cy="16"
                                 r="14"
                                 stroke="currentColor"
-                                strokeWidth="2"
+                                strokeWidth="2.2"
                                 fill="transparent"
                                 strokeDasharray={88}
                                 strokeDashoffset={88 - (88 * imageProgress) / 100}
-                                className="text-[#d4ff64] transition-all duration-300"
+                                className="text-[#5b45f2] transition-all duration-300"
                               />
                             </svg>
-                            <span className="absolute text-[9px] font-black text-[#d4ff64] leading-none">{imageProgress}%</span>
+                            <span className="absolute text-[9px] font-bold text-[#5b45f2] leading-none">{imageProgress}%</span>
                           </div>
                         ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-[#d4ff64] transition-colors">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" className="text-current transition-colors">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                           </svg>
@@ -1863,25 +1953,25 @@ export default function VideoStudio({
                     className={promptMediaButtonClassName()}
                   >
                     {endImageUploading ? (
-                      <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
+                      <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-white/90 z-20 backdrop-blur-[2px]">
                         <svg className="w-8 h-8 -rotate-90">
-                          <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/10" />
+                          <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2.2" fill="transparent" className="text-[#e6e7f0]" />
                           <circle
                             cx="16"
                             cy="16"
                             r="14"
                             stroke="currentColor"
-                            strokeWidth="2"
+                            strokeWidth="2.2"
                             fill="transparent"
                             strokeDasharray={88}
                             strokeDashoffset={88 - (88 * endImageProgress) / 100}
-                            className="text-[#d4ff64] transition-all duration-300"
+                            className="text-[#5b45f2] transition-all duration-300"
                           />
                         </svg>
-                        <span className="absolute text-[9px] font-black text-[#d4ff64] leading-none">{endImageProgress}%</span>
+                        <span className="absolute text-[9px] font-bold text-[#5b45f2] leading-none">{endImageProgress}%</span>
                       </div>
                     ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-[#d4ff64] transition-colors">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" className="text-current transition-colors">
                         <line x1="12" y1="5" x2="12" y2="19" />
                         <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
@@ -1890,8 +1980,7 @@ export default function VideoStudio({
                 </div>
               )}
 
-              {/* Video upload button — shown when a V2V model is active, OR when
-                  the current model has inputs.video_files (e.g. Seedance 2.0 Extend). */}
+              {/* Video upload button */}
               {!uploadedVideoUrl && (v2vMode || currentModelObj?.inputs?.video_files) && (
                 <div className="relative">
                   <input
@@ -1903,27 +1992,27 @@ export default function VideoStudio({
                   />
                   <button
                     type="button"
-                    title="Upload video to remove watermark"
+                    title="Upload reference video"
                     onClick={() => videoFileInputRef.current?.click()}
                     className={promptMediaButtonClassName()}
                   >
                     {videoUploading ? (
-                      <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
+                      <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-white/90 z-20 backdrop-blur-[2px]">
                         <svg className="w-8 h-8 -rotate-90">
-                          <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/10" />
+                          <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2.2" fill="transparent" className="text-[#e6e7f0]" />
                           <circle
                             cx="16"
                             cy="16"
                             r="14"
                             stroke="currentColor"
-                            strokeWidth="2"
+                            strokeWidth="2.2"
                             fill="transparent"
                             strokeDasharray={88}
                             strokeDashoffset={88 - (88 * videoProgress) / 100}
-                            className="text-[#d4ff64] transition-all duration-300"
+                            className="text-[#5b45f2] transition-all duration-300"
                           />
                         </svg>
-                        <span className="absolute text-[9px] font-black text-[#d4ff64] leading-none">{videoProgress}%</span>
+                        <span className="absolute text-[9px] font-bold text-[#5b45f2] leading-none">{videoProgress}%</span>
                       </div>
                     ) : (
                       <svg
@@ -1932,8 +2021,8 @@ export default function VideoStudio({
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth="2.5"
-                        className="text-white/40 group-hover:text-[#d4ff64] transition-colors"
+                        strokeWidth="2"
+                        className="text-current transition-colors"
                       >
                         <polygon points="23 7 16 12 23 17 23 7" fill="currentColor" />
                         <rect x="1" y="5" width="15" height="14" rx="2" ry="2" fill="currentColor" />
@@ -1958,14 +2047,14 @@ export default function VideoStudio({
 
           {/* Extend banner */}
           {isExtendMode && (
-            <div className="flex items-center gap-2 px-3 py-1.5 mx-3 bg-primary/5 border border-primary/10 rounded-lg text-[10px] text-primary/80 font-medium tracking-tight">
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#f2f0ff] border border-[#ddd7fe] rounded-xl text-[12px] text-[#4c38d6] font-medium">
               <svg
                 width="13"
                 height="13"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2.4"
               >
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
@@ -1985,7 +2074,7 @@ export default function VideoStudio({
                     active: openDropdown === "model",
                   })}
                 >
-                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white/5">
+                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white border border-[#e6e7f0]">
                     {(() => {
                       const allCurrentModels = [...t2vModels, ...i2vModels, ...v2vModels];
                       const selectedModelObj = allCurrentModels.find(m => m.id === selectedModel);
@@ -1994,14 +2083,14 @@ export default function VideoStudio({
                         <img 
                           src={PROVIDER_LOGOS[selectedModelProvider]} 
                           alt="" 
-                          className={`w-full h-full object-contain ${invertLogos.includes(selectedModelProvider) ? "invert" : ""}`} 
+                          className="w-full h-full object-contain p-0.5" 
                         />
                       ) : (
-                        <span className="text-[9px] font-bold text-black uppercase">V</span>
+                        <span className="text-[9px] font-bold text-[#4c38d6] uppercase">V</span>
                       );
                     })()}
                   </div>
-                <span className={PROMPT_CONTROL_LABEL_CLASS}>
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {selectedModelName}
                   </span>
                   <PromptChevronIcon />
@@ -2074,13 +2163,13 @@ export default function VideoStudio({
                     })}
                   >
                     <svg
-                      width="16"
-                      height="16"
+                      width="15"
+                      height="15"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2"
-                      className="opacity-40 text-white"
+                      className="opacity-65"
                     >
                       <path d="M5 3l14 9-14 9V3z" />
                     </svg>
@@ -2116,7 +2205,11 @@ export default function VideoStudio({
                 </div>
               )}
 
-              {imageMode && <span className="text-xs text-white/50">Images: up to {getMaxImagesForI2VModel(selectedModel)}{currentModelObj?.lastImageField ? ' (first / last frame)' : ''}</span>}
+              {imageMode && (
+                <span className="text-[11.5px] font-medium text-[#7a7b90]">
+                  Images: up to {getMaxImagesForI2VModel(selectedModel)}{currentModelObj?.lastImageField ? ' (first / last frame)' : ''}
+                </span>
+              )}
 
               {/* Duration btn */}
               {showDuration && (
@@ -2140,12 +2233,23 @@ export default function VideoStudio({
                       <PromptPopoverHeader>
                         Duration
                       </PromptPopoverHeader>
-                      <div className="p-3 min-w-56">
-                        <input type="range" aria-label="Video duration" aria-valuetext={`${selectedDuration} seconds`} min={0} max={getCurrentDurations(selectedModel).length - 1} step={1}
+                      <div className="p-2.5 min-w-56">
+                        <input
+                          type="range"
+                          aria-label="Video duration"
+                          aria-valuetext={`${selectedDuration} seconds`}
+                          min={0}
+                          max={getCurrentDurations(selectedModel).length - 1}
+                          step={1}
                           value={Math.max(0, getCurrentDurations(selectedModel).indexOf(selectedDuration))}
                           onChange={(event) => setSelectedDuration(getCurrentDurations(selectedModel)[Number(event.target.value)])}
-                          className="w-full accent-lime-400" />
-                        <div className="flex justify-between text-xs"><span>{getCurrentDurations(selectedModel)[0]}s</span><strong>{selectedDuration}s</strong><span>{getCurrentDurations(selectedModel).at(-1)}s</span></div>
+                          className="w-full accent-[#5b45f2]"
+                        />
+                        <div className="flex justify-between text-[12px] text-[#5e5e72] mt-1.5">
+                          <span>{getCurrentDurations(selectedModel)[0]}s</span>
+                          <strong className="text-[#4c38d6] font-semibold">{selectedDuration}s</strong>
+                          <span>{getCurrentDurations(selectedModel).at(-1)}s</span>
+                        </div>
                       </div>
                     </PromptPopover>
                   )}
@@ -2201,13 +2305,13 @@ export default function VideoStudio({
                   onClick={() => setIsDrawModalOpen(true)}
                 >
                   <svg
-                    width="16"
-                    height="16"
+                    width="15"
+                    height="15"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.5"
-                    className="opacity-40 text-white group-hover:text-[#d4ff64] transition-colors"
+                    strokeWidth="2.2"
+                    className="opacity-65 transition-colors"
                   >
                     <path d="M12 20h9" />
                     <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
@@ -2224,10 +2328,8 @@ export default function VideoStudio({
             >
               {generating ? (
                 <>
-                  <span className="animate-spin inline-block text-black">
-                    ◌
-                  </span>{" "}
-                  Generating...
+                  <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Generating…
                 </>
               ) : (
                 <>
@@ -2241,18 +2343,18 @@ export default function VideoStudio({
       {/* ── FULLSCREEN VIDEO MODAL ── */}
       {fullscreenUrl && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f1117]/92 backdrop-blur-md animate-fade-in p-4"
           onClick={() => setFullscreenUrl(null)}
         >
           <button
             type="button"
-            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
+            className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/15"
             onClick={(e) => {
               e.stopPropagation();
               setFullscreenUrl(null);
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -2262,7 +2364,7 @@ export default function VideoStudio({
             controls 
             autoPlay 
             loop 
-            className="max-w-[95vw] max-h-[95vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
+            className="max-w-[94vw] max-h-[92vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -2275,7 +2377,7 @@ export default function VideoStudio({
         batchSize={1}
         onAddHistoryItem={handleDrawReference}
       />
-      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#ffffff', color: '#292733', border: '1px solid #e5e3ed', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(39,35,58,0.12)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
+      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#ffffff', color: '#14141f', border: '1px solid #e6e7f0', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(20,20,31,0.12)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
     </div>
   );
 }

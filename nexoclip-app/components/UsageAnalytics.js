@@ -8,7 +8,7 @@ import { saasFetch } from '../src/lib/saas/api.js';
 import { getStoredWorkspaceId } from '../src/lib/saas/storage.js';
 
 const idr = (value) => (value === null || value === undefined ? '—' : `Rp${Math.round(value).toLocaleString('id-ID')}`);
-const num = (value, digits = 2) => Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: digits });
+const num = (value, digits = 2) => Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
 
 function Card({ label, value, detail, tone }) {
   return (
@@ -46,41 +46,41 @@ export default function UsageAnalytics({ initialRange }) {
 
   const t = data?.totals;
   return (
-    <AdminShell active="/admin/analytics" title="Analytics pemakaian"
-      description="Semua pemakaian berbayar di seluruh workspace: gambar, video, LLM, voiceover, musik dan analisis video, per sumber (AI Director, Canvas, Studio).">
+    <AdminShell active="/admin/analytics" title="Usage Analytics"
+      description="All paid usage across workspaces: images, videos, LLMs, voiceovers, music, and video analysis, grouped by source (AI Director, Canvas, Studio).">
       <div className={adminStyles.filters}>
-        <label className={adminStyles.label}>Dari (UTC)<input type="date" className={adminStyles.field} value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
-        <label className={adminStyles.label}>Sampai (UTC)<input type="date" className={adminStyles.field} value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
-        <button className={`${adminStyles.button} self-end`} type="button" onClick={() => setRevision((v) => v + 1)}>Muat ulang</button>
+        <label className={adminStyles.label}>From (UTC)<input type="date" className={adminStyles.field} value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
+        <label className={adminStyles.label}>To (UTC)<input type="date" className={adminStyles.field} value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
+        <button className={`${adminStyles.button} self-end`} type="button" onClick={() => setRevision((v) => v + 1)}>Refresh</button>
       </div>
       {error && <div role="alert" className={adminStyles.error}>{error}</div>}
-      {!data && !error && <p role="status" className={adminStyles.loading}>Memuat analytics…</p>}
+      {!data && !error && <p role="status" className={adminStyles.loading}>Loading analytics…</p>}
       {data?.providerAlerts?.length > 0 && (
         <div role="alert" className="mt-4 rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-sm text-red-100">
-          <p className="font-semibold">Provider menolak job karena akun kita (tagihan / kuota) dalam 24 jam terakhir</p>
+          <p className="font-semibold">Providers rejected jobs due to our account (billing / quota) in the last 24 hours</p>
           <ul className="mt-2 space-y-1 text-xs">
             {data.providerAlerts.map((alert) => (
-              <li key={alert.provider || 'unknown'}>{alert.provider || 'provider'}: {alert.failed} job gagal, terakhir {new Date(alert.last_at).toLocaleString('id-ID')}</li>
+              <li key={alert.provider || 'unknown'}>{alert.provider || 'provider'}: {alert.failed} failed jobs, last at {new Date(alert.last_at).toLocaleString('en-US')}</li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-red-100/80">Bayar tagihan / tambah kuota di konsol provider. User melihat pesan "layanan sedang tidak tersedia" dan kreditnya tidak terpotong. Kegagalan audio ElevenLabs tercatat di log (event provider_billing_blocked).</p>
+          <p className="mt-2 text-xs text-red-100/80">Pay invoices or increase quota in the provider console. Users see a "service temporarily unavailable" message and are not charged credits. ElevenLabs audio failures are recorded in logs (event provider_billing_blocked).</p>
         </div>
       )}
       {data && (
         <>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Card label="Kredit terpakai" value={num(t.credits)} detail={`${num(t.count, 0)} job/panggilan`} />
-            <Card label="Biaya provider" value={idr(t.costIdr)} detail={`$${num(t.costUsd, 4)} · kurs Rp${num(data.usdIdr, 0)}/USD`} />
-            <Card label="Pendapatan (paket termurah)" value={idr(t.revenueIdrWorst)} detail={`Rp${num(data.idrPerCredit.lowest)}/kredit`} />
-            <Card label="Selisih (kasus terburuk)" value={idr(t.marginIdrWorst)} tone={t.marginIdrWorst < 0 ? 'bad' : 'good'}
-              detail={data.idrPerCredit.average ? `Rata-rata harga jual nyata Rp${num(data.idrPerCredit.average)}/kredit → pendapatan ${idr(t.revenueIdrAverage)}` : 'Belum ada top-up berbayar untuk menghitung harga rata-rata'} />
+            <Card label="Credits used" value={num(t.credits)} detail={`${num(t.count, 0)} jobs/calls`} />
+            <Card label="Provider cost" value={idr(t.costIdr)} detail={`$${num(t.costUsd, 4)} · rate Rp${num(data.usdIdr, 0)}/USD`} />
+            <Card label="Revenue (cheapest pack)" value={idr(t.revenueIdrWorst)} detail={`Rp${num(data.idrPerCredit.lowest)}/credit`} />
+            <Card label="Margin (worst case)" value={idr(t.marginIdrWorst)} tone={t.marginIdrWorst < 0 ? 'bad' : 'good'}
+              detail={data.idrPerCredit.average ? `Actual average selling price Rp${num(data.idrPerCredit.average)}/credit → revenue ${idr(t.revenueIdrAverage)}` : 'No paid top-ups yet to calculate average price'} />
           </div>
-          {data.freeCredits > 0 && <p className="mt-3 text-xs text-amber-100">{num(data.freeCredits)} kredit gratis (bonus daftar) dibagikan di periode ini: dipakai seperti kredit berbayar, tanpa pendapatan.</p>}
-          {t.unknownCost > 0 && <p className="mt-2 text-xs text-amber-100">{t.unknownCost} job berhasil belum punya biaya provider (job lama); biayanya tidak dihitung nol, tetapi belum masuk total.</p>}
+          {data.freeCredits > 0 && <p className="mt-3 text-xs text-amber-100">{num(data.freeCredits)} free credits (signup bonus) were granted in this period: consumed like paid credits with zero revenue.</p>}
+          {t.unknownCost > 0 && <p className="mt-2 text-xs text-amber-100">{t.unknownCost} succeeded jobs do not have a recorded provider cost (legacy jobs); their cost is not treated as zero, but is excluded from totals.</p>}
           <section className={`${adminStyles.panel} mt-6 overflow-x-auto p-4`}>
             <table className="w-full min-w-[860px] text-left text-xs">
               <thead className="text-white/50">
-                <tr>{['Jenis', 'Sumber', 'Jumlah', 'Gagal', 'Kredit', 'Biaya provider', 'Pendapatan terburuk', 'Selisih terburuk', 'Kelipatan'].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}</tr>
+                <tr>{['Type', 'Source', 'Count', 'Failed', 'Credits', 'Provider cost', 'Worst-case revenue', 'Worst-case margin', 'Multiple'].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
                 {data.items.map((row) => (
@@ -90,7 +90,7 @@ export default function UsageAnalytics({ initialRange }) {
                     <td className="px-2 py-2">{num(row.count, 0)}</td>
                     <td className="px-2 py-2">{row.failed || ''}</td>
                     <td className="px-2 py-2">{num(row.credits)}</td>
-                    <td className="px-2 py-2">{idr(row.costIdr)}{row.unknownCost > 0 && <span className="ml-1 text-amber-200" title="Sebagian job belum punya biaya provider">*</span>}</td>
+                    <td className="px-2 py-2">{idr(row.costIdr)}{row.unknownCost > 0 && <span className="ml-1 text-amber-200" title="Some jobs do not have a recorded provider cost">*</span>}</td>
                     <td className="px-2 py-2">{idr(row.revenueIdrWorst)}</td>
                     <td className={`px-2 py-2 ${row.marginIdrWorst < 0 ? 'text-red-300' : 'text-emerald-300'}`}>{idr(row.marginIdrWorst)}</td>
                     <td className="px-2 py-2">{row.marginRatioWorst ? `${num(row.marginRatioWorst)}×` : '—'}</td>
@@ -99,9 +99,9 @@ export default function UsageAnalytics({ initialRange }) {
               </tbody>
             </table>
             <p className="mt-3 text-xs leading-5 text-white/45">
-              Pendapatan terburuk = kredit × harga per kredit paket termurah. Baris merah rugi di kasus itu. Belum termasuk biaya
-              pembayaran, pajak, hosting dan langganan tetap (mis. ElevenLabs Starter $6/bulan). Biaya video/gambar adalah estimasi
-              provider saat job dibuat, disesuaikan dengan kredit yang akhirnya terpotong; rincian per request ada di Economics.
+              Worst-case revenue = credits × price per credit of the cheapest package. Red rows lose money under that scenario. Excludes payment
+              fees, taxes, hosting, and fixed subscriptions (e.g. ElevenLabs Starter $6/month). Video/image costs are provider estimates
+              at job creation, adjusted for final credits charged; see Economics for per-request details.
             </p>
           </section>
         </>

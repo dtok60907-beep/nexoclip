@@ -1,3 +1,4 @@
+import { listSocialPublishJobs } from '../../../../src/repositories/socialPublishRepository.mjs';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext, requireCanSpend } from '../../../../src/services/tenantContext.js';
 import { getPool } from '../../../../src/db/pool.js';
@@ -9,8 +10,8 @@ export async function GET(request) {
   try {
     const url=new URL(request.url),workspaceId=request.headers.get('x-workspace-id')||url.searchParams.get('workspace_id');
     const tenant=await resolveTenantContext({token:request.cookies.get(SESSION_COOKIE)?.value,workspaceId});
-    const result=await getPool().query(`SELECT j.id,j.mode,j.media_type,j.status,j.caption,j.privacy_level,j.public_post_ids,j.provider_status,j.provider_error,j.created_at,j.updated_at,a.display_name AS account_name FROM social_publish_jobs j JOIN social_accounts a ON a.id=j.social_account_id AND a.workspace_id=j.workspace_id WHERE j.workspace_id=$1 AND j.user_id=$2 ORDER BY j.created_at DESC LIMIT 30`,[tenant.workspace.id,tenant.user.id]);
-    return Response.json({jobs:result.rows,photoEnabled:photoPublishingReady()},{headers:{'Cache-Control':'private,no-store'}});
+    const jobs=await listSocialPublishJobs(getPool(),{workspaceId:tenant.workspace.id,userId:tenant.user.id});
+    return Response.json({jobs,photoEnabled:photoPublishingReady()},{headers:{'Cache-Control':'private,no-store'}});
   } catch(error) { const status=error.status||(error.message==='Authentication required'?401:error.message==='Workspace access denied'?403:500); return Response.json({error:status>=500?'TikTok publishing history unavailable':error.message},{status}); }
 }
 export async function POST(request) {
@@ -19,7 +20,7 @@ export async function POST(request) {
     const body=await request.json(),workspaceId=request.headers.get('x-workspace-id')||body.workspaceId;
     const tenant=await resolveTenantContext({token:request.cookies.get(SESSION_COOKIE)?.value,workspaceId}); requireCanSpend(tenant);
     if(body.mediaType!==undefined&&!['photo','video'].includes(body.mediaType))return Response.json({error:'Unsupported media type'},{status:400});
-    const input={workspaceId:tenant.workspace.id,userId:tenant.user.id,accountId:body.accountId,generationId:body.generationId,mode:body.mode,caption:body.caption,privacyLevel:body.privacyLevel,disableComment:body.disableComment,disableDuet:body.disableDuet,disableStitch:body.disableStitch,brandContentToggle:body.brandContentToggle,brandOrganicToggle:body.brandOrganicToggle,confirm:body.confirm,idempotencyKey:body.idempotencyKey};
+    const input={workspaceId:tenant.workspace.id,userId:tenant.user.id,accountId:body.accountId,generationId:body.generationId,mode:body.mode,caption:body.caption,privacyLevel:body.privacyLevel,disableComment:body.disableComment,disableDuet:body.disableDuet,disableStitch:body.disableStitch,brandContentToggle:body.brandContentToggle,brandOrganicToggle:body.brandOrganicToggle,confirm:body.confirm,idempotencyKey:body.idempotencyKey,scheduledAt:body.scheduledAt,timeZone:body.timeZone};
     const job=body.mediaType==='photo'
       ?await createPhotoPublishJob(getPool(),{...input,assetIds:body.assetIds,photoTitle:body.photoTitle,photoCoverIndex:body.photoCoverIndex,autoAddMusic:body.autoAddMusic,isAigc:body.isAigc})
       :await createPublishJob(getPool(),input);

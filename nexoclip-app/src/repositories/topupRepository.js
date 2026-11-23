@@ -1,11 +1,11 @@
 const topupColumns = 'id, workspace_id, user_id, package_code, amount_idr, credits, provider_key, order_id, provider_txn_id, payment_url, status, is_sandbox, credit_ledger_id, failure_reason, completed_at, created_at, updated_at';
 
-export async function insertTopup(db, { workspaceId, userId, packageCode, amountIdr, credits, orderId }) {
+export async function insertTopup(db, { workspaceId, userId, packageCode, amountIdr, credits, orderId, providerKey = 'pakasir' }) {
   const result = await db.query(
-    `INSERT INTO credit_topups (workspace_id, user_id, package_code, amount_idr, credits, order_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO credit_topups (workspace_id, user_id, package_code, amount_idr, credits, order_id, provider_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${topupColumns}`,
-    [workspaceId, userId, packageCode, amountIdr, credits, orderId],
+    [workspaceId, userId, packageCode, amountIdr, credits, orderId, providerKey],
   );
   return result.rows[0];
 }

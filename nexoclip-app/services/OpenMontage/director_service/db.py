@@ -99,6 +99,7 @@ MIGRATIONS: list[str] = [
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS title_by text NOT NULL DEFAULT 'auto';
     UPDATE projects SET title_by = 'user' WHERE NOT title_auto;
     """,
+    "ALTER TABLE projects ADD COLUMN library_workspace_id text;",
 ]
 
 

@@ -3,10 +3,10 @@ import { STAMP_DUTY_THRESHOLD_IDR } from '../src/services/businessDocumentsServi
 import { terbilang } from '../src/lib/terbilang.js';
 
 export const idr = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
-export const num = (v, digits = 0) => Number(v || 0).toLocaleString('id-ID', { maximumFractionDigits: digits });
-export const date = (v) => (v ? new Date(v).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : '—');
+export const num = (v, digits = 0) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
+export const date = (v) => (v ? new Date(v).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : '—');
 const addDays = (v, days) => new Date(new Date(v).getTime() + days * 86_400_000);
-export const missing = (value, label) => value || <span className="missing">[{label} belum diisi di profil perusahaan]</span>;
+export const missing = (value, label) => value || <span className="missing">[{label} not set in company profile]</span>;
 
 export const documentStyles = `
   .doc-page { background: #e5e7eb; min-height: 100vh; padding: 24px 12px; color: #111827; font-family: 'Helvetica Neue', Arial, sans-serif; }
@@ -43,81 +43,81 @@ export default function BusinessDocument({ data }) {
       <article className="doc">
         <header className="head">
           <div>
-            <h1>{missing(c.legal_name, 'Nama badan usaha')}</h1>
-            <div className="muted">{missing(c.address, 'Alamat')}</div>
+            <h1>{missing(c.legal_name, 'Legal entity name')}</h1>
+            <div className="muted">{missing(c.address, 'Address')}</div>
             {/* NPWP, email and phone are optional: shown when filled in. */}
             <div className="muted">{[c.npwp && `NPWP ${c.npwp}`, c.email, c.phone].filter(Boolean).join(' · ')}</div>
           </div>
           <div className="right">
             <h1>{title.toUpperCase()}</h1>
             <div>No. {number}</div>
-            <div className="muted">Tanggal {date(issued)}</div>
+            <div className="muted">Date {date(issued)}</div>
           </div>
         </header>
 
-        <h2>{type === 'receipt' ? 'Telah terima dari' : 'Kepada'}</h2>
+        <h2>{type === 'receipt' ? 'Received From' : 'To'}</h2>
         <div><b>{order.company_name}</b></div>
-        <div className="muted">{order.customer_name ? `${order.customer_name} · ` : ''}{order.customer_email} · Workspace NexoClip “{order.workspace_name}”</div>
+        <div className="muted">{order.customer_name ? `${order.customer_name} · ` : ''}{order.customer_email} · NexoClip Workspace “{order.workspace_name}”</div>
 
         {type === 'receipt' ? (
           <>
             <table><tbody>
-              <tr><td style={{ width: 180 }}>Uang sejumlah</td><td><b>{idr(order.amount_idr)}</b></td></tr>
-              <tr><td>Terbilang</td><td><i>{terbilang(order.amount_idr)}</i></td></tr>
-              <tr><td>Untuk pembayaran</td><td>Paket kredit NexoClip {num(total)} kredit (invoice {number})</td></tr>
-              <tr><td>Referensi pembayaran</td><td>{order.payment_reference}</td></tr>
-              <tr><td>Tanggal pembayaran</td><td>{date(order.paid_at)}</td></tr>
+              <tr><td style={{ width: 180 }}>Amount received</td><td><b>{idr(order.amount_idr)}</b></td></tr>
+              <tr><td>Amount in words</td><td><i>{terbilang(order.amount_idr)}</i></td></tr>
+              <tr><td>In payment for</td><td>NexoClip credit package of {num(total)} credits (invoice {number})</td></tr>
+              <tr><td>Payment reference</td><td>{order.payment_reference}</td></tr>
+              <tr><td>Payment date</td><td>{date(order.paid_at)}</td></tr>
             </tbody></table>
           </>
         ) : type === 'activation' ? (
           <>
-            <p>Dengan ini kami konfirmasi bahwa kredit berikut telah ditambahkan ke workspace NexoClip <b>“{order.workspace_name}”</b> pada {date(order.paid_at)}, setelah pembayaran invoice {number} kami terima.</p>
+            <p>We hereby confirm that the following credits have been added to NexoClip workspace <b>“{order.workspace_name}”</b> on {date(order.paid_at)}, following receipt of payment for invoice {number}.</p>
             <table><tbody>
-              <tr><td style={{ width: 220 }}>Kredit dibeli</td><td>{num(credits)} kredit</td></tr>
-              {bonus > 0 && <tr><td>Bonus kredit</td><td>{num(bonus)} kredit</td></tr>}
-              <tr className="total"><td>Total kredit aktif</td><td>{num(total)} kredit</td></tr>
+              <tr><td style={{ width: 220 }}>Purchased credits</td><td>{num(credits)} credits</td></tr>
+              {bonus > 0 && <tr><td>Bonus credits</td><td>{num(bonus)} credits</td></tr>}
+              <tr className="total"><td>Total active credits</td><td>{num(total)} credits</td></tr>
             </tbody></table>
             <BalanceBreakdown before={before} added={total} />
             <Estimates pricing={pricing} total={overall} />
-            <p className="muted">Kredit dipakai bersama oleh anggota workspace dan saat ini tidak memiliki masa kedaluwarsa. Sisa kredit dapat dilihat di menu Billing aplikasi.</p>
+            <p className="muted">Credits are shared among workspace members and currently do not expire. Remaining credits can be viewed in the Billing menu of the app.</p>
           </>
         ) : (
           <>
             <table>
-              <thead><tr><th>Deskripsi</th><th className="right">Kredit</th><th className="right">Jumlah</th></tr></thead>
+              <thead><tr><th>Description</th><th className="right">Credits</th><th className="right">Amount</th></tr></thead>
               <tbody>
-                <tr><td>Paket kredit NexoClip (generate gambar, video, audio){bonus > 0 ? ` termasuk bonus ${num(bonus)} kredit` : ''}</td><td className="right">{num(total)}</td><td className="right">{idr(order.amount_idr)}</td></tr>
+                <tr><td>NexoClip credit package (image, video, audio generation){bonus > 0 ? ` including ${num(bonus)} bonus credits` : ''}</td><td className="right">{num(total)}</td><td className="right">{idr(order.amount_idr)}</td></tr>
                 <tr className="total"><td colSpan={2}>Total</td><td className="right">{idr(order.amount_idr)}</td></tr>
               </tbody>
             </table>
             {type === 'quotation' && <><BalanceBreakdown before={before} added={total} /><Estimates pricing={pricing} total={overall} /></>}
             {type === 'invoice' ? (
               <>
-                <h2>Pembayaran</h2>
-                <div>Mohon transfer {idr(order.amount_idr)} paling lambat <b>{date(addDays(order.created_at, 7))}</b> ke:</div>
-                <div><b>{missing(c.bank_name, 'Bank')}</b> · {missing(c.bank_account_number, 'Nomor rekening')} · a.n. {missing(c.bank_account_name, 'Atas nama rekening')}</div>
-                <div className="muted">Cantumkan nomor {number} di berita transfer. Kredit masuk setelah pembayaran kami verifikasi.</div>
+                <h2>Payment</h2>
+                <div>Please transfer {idr(order.amount_idr)} no later than <b>{date(addDays(order.created_at, 7))}</b> to:</div>
+                <div><b>{missing(c.bank_name, 'Bank')}</b> · {missing(c.bank_account_number, 'Account number')} · Account name: {missing(c.bank_account_name, 'Account holder name')}</div>
+                <div className="muted">Include reference {number} in your transfer memo. Credits will be added once payment is verified.</div>
               </>
             ) : (
               <>
-                <h2>Ketentuan</h2>
+                <h2>Terms</h2>
                 <ul>
-                  <li>Kredit ditambahkan ke workspace setelah pembayaran diterima, dan tidak dapat diuangkan atau dikembalikan.</li>
-                  <li>Estimasi durasi di atas mengikuti kurs USD/IDR dan pemakaian sebenarnya, belum termasuk generate yang diulang.</li>
-                  <li>Penggunaan tunduk pada Syarat & Ketentuan NexoClip.</li>
-                  <li>Pajak mengikuti ketentuan yang berlaku.</li>
+                  <li>Credits are added to the workspace once payment is received and are non-refundable and non-exchangeable for cash.</li>
+                  <li>Estimated durations above depend on USD/IDR exchange rates and actual usage, and exclude retried generations.</li>
+                  <li>Usage is subject to the NexoClip Terms & Conditions.</li>
+                  <li>Taxes apply per applicable regulations.</li>
                 </ul>
               </>
             )}
-            {order.notes && <><h2>Catatan</h2><div>{order.notes}</div></>}
+            {order.notes && <><h2>Notes</h2><div>{order.notes}</div></>}
           </>
         )}
 
         <div className="sign"><div>
           <div>{date(issued)}</div>
-          {type === 'receipt' && Number(order.amount_idr) > STAMP_DUTY_THRESHOLD_IDR ? <div className="stamp">e-meterai Rp10.000</div> : <div className="space" />}
-          <div><b>{missing(c.signer_name, 'Nama penanda tangan')}</b></div>
-          <div className="muted">{missing(c.signer_title, 'Jabatan')}</div>
+          {type === 'receipt' && Number(order.amount_idr) > STAMP_DUTY_THRESHOLD_IDR ? <div className="stamp">e-Meterai Rp10.000</div> : <div className="space" />}
+          <div><b>{missing(c.signer_name, 'Signatory name')}</b></div>
+          <div className="muted">{missing(c.signer_title, 'Title')}</div>
         </div></div>
       </article>
     </div>
@@ -128,27 +128,27 @@ export default function BusinessDocument({ data }) {
 function BalanceBreakdown({ before, added }) {
   if (!(before > 0)) return null;
   return <>
-    <h2>Saldo kredit</h2>
+    <h2>Credit Balance</h2>
     <table><tbody>
-      <tr><td>Sisa saldo sebelumnya</td><td className="right">{num(before, 1)} kredit</td></tr>
-      <tr><td>Tambahan dari dokumen ini</td><td className="right">{num(added, 1)} kredit</td></tr>
-      <tr className="total"><td>Total kredit</td><td className="right">{num(before + added, 1)} kredit</td></tr>
+      <tr><td>Previous remaining balance</td><td className="right">{num(before, 1)} credits</td></tr>
+      <tr><td>Added from this document</td><td className="right">{num(added, 1)} credits</td></tr>
+      <tr className="total"><td>Total credits</td><td className="right">{num(before + added, 1)} credits</td></tr>
     </tbody></table>
   </>;
 }
 
 // What the credits buy, model by model: video duration and image count.
 function Estimates({ pricing, total }) {
-  const duration = (seconds) => `± ${num(seconds / 60, 1)} menit (${num(seconds)} detik)`;
+  const duration = (seconds) => `± ${num(seconds / 60, 1)} min (${num(seconds)} sec)`;
   return <>
-    <h2>Perkiraan hasil dari {num(total, 1)} kredit</h2>
+    <h2>Estimated Output from {num(total, 1)} Credits</h2>
     <table>
-      <thead><tr><th>Model</th><th className="right">Jika dipakai seluruhnya</th></tr></thead>
+      <thead><tr><th>Model</th><th className="right">If used exclusively</th></tr></thead>
       <tbody>
         {pricing.videos.map((v) => <tr key={v.label}><td>Video {v.label}</td><td className="right">{duration(total / v.creditsPerSecond)}</td></tr>)}
-        {pricing.images.map((i) => <tr key={i.label}><td>Gambar {i.label}</td><td className="right">± {num(Math.floor(total / i.creditsPerImage))} gambar</td></tr>)}
+        {pricing.images.map((i) => <tr key={i.label}><td>Image {i.label}</td><td className="right">± {num(Math.floor(total / i.creditsPerImage))} images</td></tr>)}
       </tbody>
     </table>
-    <p className="muted">Masing-masing jika seluruh kredit dipakai untuk satu model saja; pemakaian campuran dibagi sesuai porsinya.</p>
+    <p className="muted">Each estimate assumes all credits are spent on a single model; mixed usage scales proportionally.</p>
   </>;
 }

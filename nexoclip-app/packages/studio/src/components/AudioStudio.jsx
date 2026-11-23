@@ -276,11 +276,18 @@ function PremiumAudioPlayer({ url, title }) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.error("Audio playback error:", err);
-      });
+      const playPromise = audioRef.current.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch((err) => {
+            if (err?.name !== "AbortError") {
+              console.error("Audio playback error:", err);
+            }
+          });
+      }
     }
   };
 

@@ -15,7 +15,7 @@ function req(url, { method = 'GET', body } = {}) {
   return request;
 }
 
-function fakePool({ owned = 0 } = {}) {
+function fakePool({ owned = 0, role = 'owner' } = {}) {
   const calls = [];
   const client = {
     async query(text, values) {
@@ -23,7 +23,7 @@ function fakePool({ owned = 0 } = {}) {
       if (/count\(\*\)/.test(text)) return { rows: [{ count: owned }] };
       if (/INSERT INTO workspaces/.test(text)) return { rows: [{ id: 'ws-new', name: values[0], slug: values[1] }] };
       if (/FROM workspace_memberships wm JOIN workspaces/.test(text.replace(/\s+/g, ' '))) {
-        return { rows: values[0] === '11111111-2222-3333-4444-555555555555' ? [{ id: values[0], name: 'Studio', role: 'owner' }] : [] };
+        return { rows: values[0] === '11111111-2222-3333-4444-555555555555' ? [{ id: values[0], name: 'Studio', role }] : [] };
       }
       return { rows: [] };
     },
@@ -34,7 +34,7 @@ function fakePool({ owned = 0 } = {}) {
 
 test('creates an owned workspace with its own credit wallet and switches to it', async () => {
   const { pool, calls } = fakePool();
-  const workspace = await createWorkspace({ userId: 'u1', name: '  Klien   Kopi ', pool });
+  const workspace = await createWorkspace({ activeWorkspaceId: '11111111-2222-3333-4444-555555555555', userId: 'u1', name: '  Klien   Kopi ', pool });
   assert.equal(workspace.name, 'Klien Kopi');
   assert.match(workspace.slug, /^klien-kopi-[0-9a-f]{6}$/);
   const texts = calls.map((c) => c.text);
@@ -46,9 +46,9 @@ test('creates an owned workspace with its own credit wallet and switches to it',
 });
 
 test('rejects bad names and too many workspaces, rolling back', async () => {
-  await assert.rejects(createWorkspace({ userId: 'u1', name: 'x', pool: fakePool().pool }), WorkspaceError);
+  await assert.rejects(createWorkspace({ activeWorkspaceId: '11111111-2222-3333-4444-555555555555', userId: 'u1', name: 'x', pool: fakePool().pool }), WorkspaceError);
   const { pool, calls } = fakePool({ owned: MAX_OWNED_WORKSPACES });
-  await assert.rejects(createWorkspace({ userId: 'u1', name: 'Satu lagi', pool }), /Maksimal/);
+  await assert.rejects(createWorkspace({ activeWorkspaceId: '11111111-2222-3333-4444-555555555555', userId: 'u1', name: 'Satu lagi', pool }), /Maksimal/);
   assert.ok(calls.some((c) => c.text === 'ROLLBACK'));
   assert.ok(!calls.some((c) => c.text.startsWith('INSERT INTO workspaces')));
 });
@@ -82,4 +82,16 @@ test('workspace routes require a session and map errors', async () => {
   assert.equal((await put(req('http://app/api/workspaces/current', { method: 'PUT', body: { workspaceId: 'ws-2' } }))).status, 200);
   assert.equal((await put(req('http://app/api/workspaces/current', { method: 'PUT', body: { workspaceId: 'ws-x' } }))).status, 404);
   assert.equal((await put(req('http://app/api/workspaces/current', { method: 'PUT', body: {} }))).status, 400);
+});
+
+test('active membership controls creation, including direct requests from members', async () => {
+  for (const role of ['member', 'admin']) {
+    const {pool,calls}=fakePool({role});
+    const create=createWorkspace({userId:'u1',activeWorkspaceId:'11111111-2222-3333-4444-555555555555',name:'Tim baru',pool});
+    if(role==='admin') assert.equal((await create).role,'owner');
+    else {
+      await assert.rejects(create,{status:403});
+      assert.ok(!calls.some(c=>c.text.startsWith('INSERT')));
+    }
+  }
 });

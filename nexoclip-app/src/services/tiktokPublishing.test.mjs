@@ -15,7 +15,7 @@ test('video job insert binds the persisted output asset ID before the mode',asyn
     inserted=args;return {rows:[{id,status:'queued',request_hash:args[7]}]};
   }};
   await createPublishJob(pool,{workspaceId:id,userId:id,accountId:id,generationId:id,mode:'upload',confirm:true,idempotencyKey:'once'});
-  assert.equal(inserted[4],imageId);assert.equal(inserted[5],'upload');assert.equal(inserted.length,15);
+  assert.equal(inserted[4],imageId);assert.equal(inserted[5],'upload');assert.equal(inserted.length,18);assert.equal(inserted[15],'queued');assert.equal(inserted[16],null);
 });
 
 test('chunk plans merge trailing bytes into the final chunk and match TikTok floor count',()=>{

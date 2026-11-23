@@ -29,6 +29,7 @@ module.exports = {
                 display: ['var(--font-display)', 'var(--font-sans)', 'system-ui', 'sans-serif'],
             },
             borderRadius: {
+                'card': '0.875rem',
                 'xl': '1rem',
                 '2xl': '1.5rem',
                 '3xl': '2rem',

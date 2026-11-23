@@ -174,7 +174,7 @@ export default function MotionPlayerPage() {
           numberOfSharedAudioTags={32}
           style={{ width: '100%', height: '100%', maxHeight: '100vh', maxWidth: '100vw' }}
         />
-      ) : <p style={{ color: '#888', font: '14px system-ui' }}>Memuat pratinjau…</p>}
+      ) : <p style={{ color: '#888', font: '14px system-ui' }}>Loading preview…</p>}
     </main>
   );
 }

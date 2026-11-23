@@ -1,3 +1,4 @@
+import { validateSocialSchedule } from '../lib/socialSchedule.mjs';
 import { hashTikTokValue } from './tiktokCrypto.mjs';
 import { creatorInfo } from './tiktokService.mjs';
 import { tikTokJson } from './tiktokApi.mjs';
@@ -12,6 +13,7 @@ export function photoPublishingReady(env=process.env) {
   }catch{return false;}
 }
 export async function createPhotoPublishJob(pool,input,env=process.env) {
+  const schedule=validateSocialSchedule(input.scheduledAt,input.timeZone);
   const {workspaceId,userId,accountId,assetIds,mode,caption='',photoTitle='',photoCoverIndex=0,autoAddMusic=false,isAigc=true,privacyLevel,disableComment=true,brandContentToggle=false,brandOrganicToggle=false,confirm,idempotencyKey}=input;
   if(confirm!==true||!['upload','direct'].includes(mode))throw Object.assign(new Error('Choose a publishing mode and confirm your post'),{status:400});
   if(!Array.isArray(assetIds)||assetIds.length<1||assetIds.length>35||new Set(assetIds).size!==assetIds.length||[accountId,...assetIds].some(id=>! /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(String(id))))throw Object.assign(new Error('Select 1–35 distinct workspace photos'),{status:400});
@@ -28,16 +30,16 @@ export async function createPhotoPublishJob(pool,input,env=process.env) {
     const info=await creatorInfo(pool,accountId,env);
     if(!info.privacy_level_options?.includes(privacyLevel))throw Object.assign(new Error('TikTok does not allow this visibility'),{status:400});
   }
-  const hash=hashTikTokValue(JSON.stringify({accountId,assetIds,mode,caption,photoTitle,photoCoverIndex,autoAddMusic,isAigc,privacyLevel:privacyLevel||null,disableComment,brandContentToggle,brandOrganicToggle}));
+  const hash=hashTikTokValue(JSON.stringify({accountId,assetIds,mode,caption,photoTitle,photoCoverIndex,autoAddMusic,isAigc,privacyLevel:privacyLevel||null,disableComment,brandContentToggle,brandOrganicToggle,scheduledAt:schedule.scheduledAt,timeZone:schedule.timeZone}));
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
     const assets=await client.query('SELECT id,content_type,size_bytes,EXISTS(SELECT 1 FROM generation_outputs o WHERE o.workspace_id=assets.workspace_id AND o.asset_id=assets.id) AS generated FROM assets WHERE workspace_id=$1 AND id=ANY($2::uuid[]) FOR SHARE',[workspaceId,assetIds]);
     if(assets.rowCount!==assetIds.length||assets.rows.some(a=>!['image/png','image/jpeg','image/webp'].includes(a.content_type)||Number(a.size_bytes)>20*1024*1024))throw Object.assign(new Error('Photos must be workspace PNG, JPEG, or WebP images under 20 MB'),{status:400});
     if(!isAigc&&assets.rows.some(a=>a.generated))throw Object.assign(new Error('Generated photos must keep AI-generated disclosure enabled'),{status:400});
-    const result=await client.query(`INSERT INTO social_publish_jobs(workspace_id,user_id,social_account_id,asset_id,provider,media_type,mode,idempotency_key,request_hash,caption,privacy_level,disable_comment,brand_content_toggle,brand_organic_toggle,photo_title,photo_cover_index,auto_add_music,is_aigc,status)
-      VALUES($1,$2,$3,$4,'tiktok','photo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'queued')
-      ON CONFLICT(workspace_id,user_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING id,status,request_hash`,[workspaceId,userId,accountId,assetIds[0],mode,idempotencyKey,hash,caption,privacyLevel||null,disableComment,brandContentToggle,brandOrganicToggle,photoTitle,photoCoverIndex,autoAddMusic,isAigc]);
+    const result=await client.query(`INSERT INTO social_publish_jobs(workspace_id,user_id,social_account_id,asset_id,provider,media_type,mode,idempotency_key,request_hash,caption,privacy_level,disable_comment,brand_content_toggle,brand_organic_toggle,photo_title,photo_cover_index,auto_add_music,is_aigc,status,scheduled_at,schedule_timezone)
+      VALUES($1,$2,$3,$4,'tiktok','photo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ON CONFLICT(workspace_id,user_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING id,status,request_hash`,[workspaceId,userId,accountId,assetIds[0],mode,idempotencyKey,hash,caption,privacyLevel||null,disableComment,brandContentToggle,brandOrganicToggle,photoTitle,photoCoverIndex,autoAddMusic,isAigc,schedule.scheduledAt?'scheduled':'queued',schedule.scheduledAt,schedule.timeZone]);
     const job=result.rows[0];
     if(job.request_hash!==hash)throw Object.assign(new Error('Idempotency key was already used for different content'),{status:409});
     for(const [position,assetId] of assetIds.entries())await client.query(`INSERT INTO social_publish_media(workspace_id,social_publish_job_id,asset_id,position) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[workspaceId,job.id,assetId,position]);

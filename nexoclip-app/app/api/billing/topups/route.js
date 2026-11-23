@@ -42,6 +42,7 @@ export async function POST(request) {
   try {
     const tenant = await context(request);
     requireCanSpend(tenant);
+    if (tenant.workspace.role !== 'owner') return NextResponse.json({error:'Hanya Owner yang bisa melakukan pembayaran.'},{status:403});
     // With subscriptions on, top-ups are an add-on for subscribers.
     if (subscriptionsEnabled() && !(await subscriptionService().hasActiveSubscription(tenant.workspace.id))) {
       throw Object.assign(new Error('Top-up is available to subscribers. Choose a plan first.'), { status: 403, code: 'SUBSCRIPTION_REQUIRED' });
@@ -51,7 +52,7 @@ export async function POST(request) {
       workspaceId: tenant.workspace.id,
       userId: tenant.user.id,
       packageCode: body.packageCode,
-      returnUrl: `${publicOrigin(request)}/studio/billing`,
+      webhookUrl: `${publicOrigin(request)}/api/billing/webhooks/meldapay`,
     });
     return NextResponse.json({ topup }, { status: 201 });
   } catch (error) { return errorResponse(error); }

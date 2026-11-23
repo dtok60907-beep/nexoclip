@@ -3,37 +3,66 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  CATEGORIES, EXPERIENCE, GOALS, PLATFORMS, ROLES, SOURCES, TEAM_SIZES, TOOLS, recommendTool,
+  ArrowLeft,
+  ArrowRight,
+  Briefcase,
+  Building2,
+  Camera,
+  Check,
+  Clapperboard,
+  Clock,
+  Coins,
+  Compass,
+  Image as ImageIcon,
+  MessageSquare,
+  QrCode,
+  Sparkles,
+  Store,
+  UserRound,
+  Users,
+  Video,
+  Workflow,
+} from 'lucide-react';
+import {
+  CATEGORIES,
+  EXPERIENCE,
+  GOALS,
+  PLATFORMS,
+  ROLES,
+  SOURCES,
+  TEAM_SIZES,
+  TOOLS,
+  recommendTool,
 } from '../../src/lib/onboarding/options.js';
 
 // ---------------------------------------------------------------- icons ----
 
-const svg = (paths) => function Icon({ className = 'h-5 w-5' }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      {paths}
-    </svg>
-  );
+const ROLE_ICONS = {
+  seller: Store,
+  creator: Video,
+  smb: Building2,
+  agency: Briefcase,
+  brand: Users,
+  exploring: Compass,
 };
 
-const Icons = {
-  check: svg(<path d="M5 12.5l4.5 4.5L19 7.5" />),
-  back: svg(<path d="M15 6l-6 6 6 6" />),
-  arrow: svg(<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>),
-  sparkle: svg(<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />),
-  video: svg(<><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3" /></>),
-  image: svg(<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-9 9" /></>),
-  user: svg(<><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></>),
-  camera: svg(<><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>),
-  board: svg(<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="8.5" y="14" width="7" height="7" rx="1.5" /><path d="M6.5 10v2h11v-2M12 12v2" /></>),
-  chat: svg(<path d="M4 5h16v11H9l-5 4z" />),
-  coins: svg(<><ellipse cx="9" cy="7" rx="6" ry="3" /><path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7" /><path d="M9 15v2c0 1.7 2.7 3 6 3s6-1.3 6-3v-5c0-1.7-2.7-3-6-3" /></>),
-  qr: svg(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v7h-4M14 21v-3" /></>),
-  clock: svg(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
+const GOAL_ICONS = {
+  'product-video': Video,
+  'product-photo': ImageIcon,
+  influencer: UserRound,
+  cinematic: Camera,
+  campaign: Workflow,
+  ugc: MessageSquare,
 };
 
-const GOAL_ICONS = { 'product-video': Icons.video, 'product-photo': Icons.image, influencer: Icons.user, cinematic: Icons.camera, campaign: Icons.board, ugc: Icons.chat };
-const TOOL_ICONS = { canvas: Icons.board, video: Icons.video, image: Icons.image, cinema: Icons.camera, 'ai-influencer': Icons.user };
+const TOOL_ICONS = {
+  canvas: Workflow,
+  video: Video,
+  image: ImageIcon,
+  cinema: Camera,
+  'ai-influencer': UserRound,
+  director: Clapperboard,
+};
 
 // ---------------------------------------------------------------- steps ----
 
@@ -53,7 +82,16 @@ const STEPS = [
 ];
 const QUESTION_COUNT = STEPS.filter((step) => step.question).length;
 
-const EMPTY = { role: null, brandName: '', category: null, goals: [], platforms: [], experience: null, teamSize: null, source: null };
+const EMPTY = {
+  role: null,
+  brandName: '',
+  category: null,
+  goals: [],
+  platforms: [],
+  experience: null,
+  teamSize: null,
+  source: null,
+};
 
 function canContinue(stepId, answers) {
   switch (stepId) {
@@ -74,23 +112,37 @@ function OptionCard({ selected, onClick, label, hint, icon: Icon, multi }) {
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`group relative flex w-full items-start gap-3.5 rounded-[20px] border p-4 text-left transition duration-150 ${
+      className={`group relative flex w-full items-start gap-3.5 rounded-2xl border p-4 text-left transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2 ${
         selected
-          ? 'border-[#d4ff64] bg-[#d4ff64]/10 shadow-[0_0_0_4px_rgba(212,255,100,0.12)]'
-          : 'border-white/10 bg-white/[.04] hover:-translate-y-0.5 hover:border-[#d4ff64]/50 hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,0.5)]'
+          ? 'border-[#5b45f2] bg-[#f6f4ff] shadow-[0_0_0_3px_rgba(91,69,242,0.12),0_10px_24px_-16px_rgba(91,69,242,0.28)]'
+          : 'border-[#e7e6f0] bg-white hover:-translate-y-0.5 hover:border-[#c8bffb] hover:shadow-[0_12px_28px_-16px_rgba(20,20,38,0.16)]'
       }`}
     >
       {Icon && (
-        <span className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] transition ${selected ? 'bg-[#d4ff64] text-[#0b0c0a]' : 'bg-white/[.08] text-white/65 group-hover:text-[#d4ff64]'}`}>
-          <Icon />
+        <span
+          className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl transition ${
+            selected
+              ? 'bg-[#5b45f2] text-white shadow-[0_6px_16px_-6px_rgba(91,69,242,0.55)]'
+              : 'bg-[#f4f3f9] text-[#525263] group-hover:bg-[#f0edff] group-hover:text-[#5b45f2]'
+          }`}
+        >
+          <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} aria-hidden="true" />
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-bold text-white">{label}</span>
-        {hint && <span className="mt-0.5 block text-[13px] leading-snug text-white/50">{hint}</span>}
+        <span className="block text-[15px] font-semibold leading-snug text-[#14141f]">{label}</span>
+        {hint && <span className="mt-0.5 block text-[13px] leading-snug text-[#636377]">{hint}</span>}
       </span>
-      <span className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center border transition ${multi ? 'rounded-[6px]' : 'rounded-full'} ${selected ? 'border-[#d4ff64] bg-[#d4ff64] text-[#0b0c0a]' : 'border-white/20 bg-white/[.04]'}`}>
-        {selected && <Icons.check className="h-3.5 w-3.5" />}
+      <span
+        className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center border transition ${
+          multi ? 'rounded-[6px]' : 'rounded-full'
+        } ${
+          selected
+            ? 'border-[#5b45f2] bg-[#5b45f2] text-white'
+            : 'border-[#d4d2e0] bg-white group-hover:border-[#9e91f7]'
+        }`}
+      >
+        {selected && <Check className="h-3 w-3" strokeWidth={2.75} aria-hidden="true" />}
       </span>
     </button>
   );
@@ -102,12 +154,14 @@ function Chip({ selected, onClick, children }) {
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
-        selected ? 'border-[#d4ff64] bg-[#d4ff64] text-[#0b0c0a]' : 'border-white/12 bg-white/[.04] text-white/75 hover:border-[#d4ff64]/60 hover:text-white'
+      className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13.5px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2 ${
+        selected
+          ? 'border-[#5b45f2] bg-[#5b45f2] text-white shadow-[0_6px_16px_-8px_rgba(91,69,242,0.6)]'
+          : 'border-[#e5e3ef] bg-white text-[#3f3f4e] hover:border-[#c3b8fa] hover:bg-[#f8f7ff] hover:text-[#14141f]'
       }`}
     >
-      {selected && <Icons.check className="h-3.5 w-3.5" />}
-      {children}
+      {selected && <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />}
+      <span>{children}</span>
     </button>
   );
 }
@@ -115,14 +169,28 @@ function Chip({ selected, onClick, children }) {
 function StepHeader({ eyebrow, title, subtitle }) {
   return (
     <header className="mb-7">
-      {eyebrow && <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#d4ff64]">{eyebrow}</p>}
-      <h1 className="text-[28px] font-black leading-tight tracking-tight text-white sm:text-[34px]">{title}</h1>
-      {subtitle && <p className="mt-2.5 text-[15px] leading-relaxed text-white/55">{subtitle}</p>}
+      {eyebrow && (
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#5b45f2]">
+          {eyebrow}
+        </p>
+      )}
+      <h1 className="text-[28px] font-semibold leading-[1.16] tracking-[-0.03em] text-[#14141f] sm:text-[34px]">
+        {title}
+      </h1>
+      {subtitle && (
+        <p className="mt-2.5 max-w-2xl text-[15px] leading-relaxed text-[#5e5e72]">{subtitle}</p>
+      )}
     </header>
   );
 }
 
-const SectionLabel = ({ children }) => <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-white/45">{children}</p>;
+function SectionLabel({ children }) {
+  return (
+    <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#6d6d80]">
+      {children}
+    </p>
+  );
+}
 
 // ---------------------------------------------------------------- flow -----
 
@@ -138,6 +206,8 @@ export default function OnboardingFlow() {
   const step = STEPS[stepIndex];
   const firstName = name.split(/\s+/)[0] || 'there';
   const recommended = useMemo(() => recommendTool(answers.goals), [answers.goals]);
+  const recommendedTool = TOOLS[recommended] || TOOLS.video;
+  const RecommendedIcon = TOOL_ICONS[recommended] || Sparkles;
   const questionNumber = STEPS.slice(0, stepIndex + 1).filter((item) => item.question).length;
 
   // Only signed-in users who have not finished onboarding belong here.
@@ -183,8 +253,7 @@ export default function OnboardingFlow() {
   }, [answers, step.id]);
   const back = () => setStepIndex((index) => Math.max(index - 1, 0));
 
-  // Enter moves forward (except while typing in the brand name, where it
-  // still advances, and on the final screen, which has explicit buttons).
+  // Enter moves forward (except on the final screen, which has explicit actions).
   useEffect(() => {
     const onKey = (event) => {
       if (event.key !== 'Enter' || event.shiftKey || step.id === 'done' || saving) return;
@@ -203,66 +272,141 @@ export default function OnboardingFlow() {
 
   if (!ready) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0b0c0a]">
-        <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-[#d4ff64]" aria-label="Loading" />
+      <main className="grid min-h-screen place-items-center bg-[#fafafa] text-[#14141f]">
+        <div className="flex flex-col items-center gap-3">
+          <span
+            className="h-8 w-8 animate-spin rounded-full border-[2.5px] border-[#e7e6f0] border-t-[#5b45f2]"
+            aria-label="Loading"
+          />
+          <p className="text-[13px] font-medium text-[#71717a]">Preparing your studio setup…</p>
+        </div>
       </main>
     );
   }
 
   const progress = Math.round((stepIndex / (STEPS.length - 1)) * 100);
-  const nextLabel = step.id === 'welcome' ? "Let's go" : step.id === 'source' && !answers.source ? 'Skip this one' : step.id === 'credits' ? 'Finish setup' : 'Continue';
+  const nextLabel =
+    step.id === 'welcome'
+      ? "Let's get started"
+      : step.id === 'source' && !answers.source
+        ? 'Skip this step'
+        : step.id === 'credits'
+          ? 'Finish setup'
+          : 'Continue';
 
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#0b0c0a] text-[#f5f7ef]">
+    <main
+      className="relative flex min-h-screen flex-col overflow-x-hidden bg-[#fafafa] text-[#14141f]"
+      style={{
+        backgroundImage: 'radial-gradient(rgba(91,69,242,0.065) 0.75px, transparent 0.75px)',
+        backgroundSize: '16px 16px',
+      }}
+    >
       <style>{`
-        @keyframes nxo-step-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-        .nxo-step { animation: nxo-step-in 380ms cubic-bezier(.2,.8,.2,1) both; }
-        @media (prefers-reduced-motion: reduce) { .nxo-step { animation: none; } }
+        @keyframes nxo-step-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .nxo-step { animation: nxo-step-in 260ms cubic-bezier(.22,1,.36,1) both; }
+        @media (prefers-reduced-motion: reduce) {
+          .nxo-step { animation: none; }
+        }
       `}</style>
-      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#d4ff64]/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-[#2d827a]/20 blur-3xl" />
+
+      {/* Subtle top-edge web-kit atmosphere */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-56"
+        style={{
+          background:
+            'radial-gradient(ellipse 68% 70% at 50% -18%, rgba(91,69,242,0.11) 0%, rgba(124,107,247,0.04) 55%, transparent 100%)',
+        }}
+      />
 
       {/* Top bar */}
-      <div className="relative z-10 mx-auto flex w-full max-w-3xl items-center gap-4 px-5 pt-6 sm:px-8">
-        <div className="flex-shrink-0 text-xl font-black tracking-[-.08em] text-white">nexo<span className="text-white/45">clip</span><span className="text-[#d4ff64]">.</span></div>
-        <div className="flex-1">
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full rounded-full bg-gradient-to-r from-[#d4ff64] to-[#9dbd3c] transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
+      <header className="sticky top-0 z-20 border-b border-[#eceaf5] bg-white/85 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-4 px-5 py-3.5 sm:px-8">
+          <div className="flex-shrink-0">
+            <img
+              src="/brand/nexoclip-lockup.png"
+              alt="nexoclip"
+              className="h-[23px] w-auto select-none"
+            />
           </div>
-          <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
-            {step.question ? `Step ${questionNumber} of ${QUESTION_COUNT}` : step.id === 'done' ? 'All set' : 'Getting started'}
-          </p>
+
+          <div className="flex-1 px-1 sm:px-3">
+            <div className="flex items-center justify-between text-[11.5px] font-medium text-[#6d6d80]">
+              <span>
+                {step.question
+                  ? `Step ${questionNumber} of ${QUESTION_COUNT}`
+                  : step.id === 'done'
+                    ? 'Ready to create'
+                    : step.id === 'welcome'
+                      ? 'Studio setup'
+                      : 'Studio overview'}
+              </span>
+              <span className="tabular-nums text-[#818193]">{progress}%</span>
+            </div>
+            <div
+              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#eceaf5]"
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full bg-[#5b45f2] transition-[width] duration-300 ease-out"
+                style={{ width: `${Math.max(progress, 6)}%` }}
+              />
+            </div>
+          </div>
+
+          {step.id !== 'done' && (
+            <button
+              type="button"
+              onClick={() => save('skipped', '/studio')}
+              disabled={saving}
+              className="flex-shrink-0 rounded-xl px-3 py-1.5 text-[13px] font-medium text-[#5e5e72] transition hover:bg-[#f2f0ff] hover:text-[#14141f] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2]"
+            >
+              Skip for now
+            </button>
+          )}
         </div>
-        {step.id !== 'done' && (
-          <button type="button" onClick={() => save('skipped', '/studio')} disabled={saving} className="flex-shrink-0 rounded-full px-3 py-2 text-sm font-semibold text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-50">
-            Skip for now
-          </button>
-        )}
-      </div>
+      </header>
 
       {/* Step body */}
-      <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-5 pb-36 pt-10 sm:px-8 sm:pt-14">
+      <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-5 pb-32 pt-9 sm:px-8 sm:pt-12">
         <div key={step.id} className="nxo-step">
           {step.id === 'welcome' && (
-            <div className="text-center sm:pt-6">
-              <div className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-[28px] bg-[#d4ff64] text-[#0b0c0a] shadow-[0_20px_50px_-15px_rgba(212,255,100,0.45)]">
-                <Icons.sparkle className="h-9 w-9" />
+            <div className="text-center sm:pt-4">
+              <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-[20px] border border-[#dcd6fe] bg-[#f4f2ff] text-[#5b45f2] shadow-[0_14px_34px_-14px_rgba(91,69,242,0.4)]">
+                <Sparkles className="h-7 w-7" strokeWidth={1.9} aria-hidden="true" />
               </div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#d4ff64]">Welcome to Nexoclip</p>
-              <h1 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl">Hi {firstName}, let&apos;s set up<br className="hidden sm:block" /> your studio.</h1>
-              <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-white/55">
-                A few quick questions so we can point you to the right tools. It takes about two minutes, and you can change your mind anytime.
+              <p className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.16em] text-[#5b45f2]">
+                Welcome to Nexoclip Studio
               </p>
-              <div className="mx-auto mt-10 grid max-w-xl gap-3 text-left sm:grid-cols-3">
+              <h1 className="mx-auto max-w-xl text-[34px] font-semibold leading-[1.1] tracking-[-0.035em] text-[#14141f] sm:text-[44px]">
+                Hi {firstName}, let&apos;s set up your studio.
+              </h1>
+              <p className="mx-auto mt-4 max-w-lg text-[15.5px] leading-relaxed text-[#5e5e72]">
+                Answer a few quick questions so we can tailor your starting studio. It takes about two minutes, and you can switch tools anytime.
+              </p>
+
+              <div className="mx-auto mt-9 grid max-w-2xl gap-3 text-left sm:grid-cols-3">
                 {[
-                  [Icons.clock, 'About 2 minutes', `${QUESTION_COUNT} short questions`],
-                  [Icons.coins, 'One balance', 'Credits work in every studio'],
-                  [Icons.sparkle, 'A tailored start', 'We suggest where to begin'],
+                  [Clock, 'About 2 minutes', `${QUESTION_COUNT} quick questions to personalize your flow`],
+                  [Coins, 'One credit balance', 'Use the same credits across every creative studio'],
+                  [Sparkles, 'Tailored starting point', 'We match your goals to the best first tool'],
                 ].map(([Icon, title, body]) => (
-                  <div key={title} className="rounded-[20px] border border-white/10 bg-white/[.04] p-4 text-left backdrop-blur">
-                    <Icon className="h-5 w-5 text-[#d4ff64]" />
-                    <p className="mt-3 text-sm font-bold">{title}</p>
-                    <p className="mt-0.5 text-[13px] text-white/50">{body}</p>
+                  <div
+                    key={title}
+                    className="rounded-2xl border border-[#e7e6f0] bg-white p-4 shadow-[0_4px_16px_-10px_rgba(20,20,38,0.08)]"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f4f2ff] text-[#5b45f2]">
+                      <Icon className="h-4.5 w-4.5" strokeWidth={1.9} aria-hidden="true" />
+                    </span>
+                    <p className="mt-3 text-[14.5px] font-semibold text-[#14141f]">{title}</p>
+                    <p className="mt-1 text-[13px] leading-snug text-[#636377]">{body}</p>
                   </div>
                 ))}
               </div>
@@ -271,29 +415,65 @@ export default function OnboardingFlow() {
 
           {step.id === 'role' && (
             <>
-              <StepHeader eyebrow="About you" title="What best describes you?" subtitle="This helps us point you to the tools that fit how you work." />
+              <StepHeader
+                eyebrow="About you"
+                title="What best describes you?"
+                subtitle="This helps us point you to the studios and workflows that fit how you create."
+              />
               <div className="grid gap-3 sm:grid-cols-2">
-                {ROLES.map((role) => <OptionCard key={role.id} label={role.label} hint={role.hint} selected={answers.role === role.id} onClick={() => choose('role', role.id)} />)}
+                {ROLES.map((role) => (
+                  <OptionCard
+                    key={role.id}
+                    icon={ROLE_ICONS[role.id]}
+                    label={role.label}
+                    hint={role.hint}
+                    selected={answers.role === role.id}
+                    onClick={() => choose('role', role.id)}
+                  />
+                ))}
               </div>
             </>
           )}
 
           {step.id === 'brand' && (
             <>
-              <StepHeader eyebrow="Your brand" title="Tell us about what you sell" subtitle="Your brand name is optional. The category helps us understand what you make." />
-              <label htmlFor="brandName" className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-white/45">Brand or shop name <span className="font-semibold normal-case tracking-normal text-white/30">(optional)</span></label>
-              <input
-                id="brandName"
-                value={answers.brandName}
-                onChange={(event) => setAnswers((current) => ({ ...current, brandName: event.target.value }))}
-                maxLength={80}
-                placeholder="e.g. Kopi Senja, Glow Lab"
-                className="w-full rounded-[18px] border border-white/10 bg-white/[.05] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-[#d4ff64] focus:ring-4 focus:ring-[#d4ff64]/15"
+              <StepHeader
+                eyebrow="Your brand"
+                title="Tell us about what you create or sell"
+                subtitle="Your brand name is optional. Picking a category helps us understand your content focus."
               />
-              <div className="mt-8">
-                <SectionLabel>Product category</SectionLabel>
-                <div className="flex flex-wrap gap-2.5">
-                  {CATEGORIES.map((category) => <Chip key={category.id} selected={answers.category === category.id} onClick={() => choose('category', category.id)}>{category.label}</Chip>)}
+              <div className="rounded-2xl border border-[#e7e6f0] bg-white p-5 shadow-[0_4px_18px_-12px_rgba(20,20,38,0.08)] sm:p-6">
+                <label
+                  htmlFor="brandName"
+                  className="mb-2 block text-[13px] font-semibold text-[#292736]"
+                >
+                  Brand or shop name{' '}
+                  <span className="font-normal text-[#818193]">(optional)</span>
+                </label>
+                <input
+                  id="brandName"
+                  value={answers.brandName}
+                  onChange={(event) =>
+                    setAnswers((current) => ({ ...current, brandName: event.target.value }))
+                  }
+                  maxLength={80}
+                  placeholder="e.g. Kopi Senja, Glow Lab"
+                  className="w-full rounded-xl border border-[#dfdce8] bg-[#fafafa] px-4 py-3 text-[15px] text-[#14141f] outline-none transition placeholder:text-[#8e8da0] focus:border-[#5b45f2] focus:bg-white focus:ring-4 focus:ring-[#5b45f2]/12"
+                />
+
+                <div className="mt-7 border-t border-[#efedf7] pt-6">
+                  <SectionLabel>Product category</SectionLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {CATEGORIES.map((category) => (
+                      <Chip
+                        key={category.id}
+                        selected={answers.category === category.id}
+                        onClick={() => choose('category', category.id)}
+                      >
+                        {category.label}
+                      </Chip>
+                    ))}
+                  </div>
                 </div>
               </div>
             </>
@@ -301,28 +481,79 @@ export default function OnboardingFlow() {
 
           {step.id === 'goals' && (
             <>
-              <StepHeader eyebrow="Your goals" title="What do you want to create?" subtitle="Pick everything that applies. Your first suggestion comes from these." />
+              <StepHeader
+                eyebrow="Your goals"
+                title="What do you want to create?"
+                subtitle="Pick everything that applies. Your recommended starting studio comes from these."
+              />
               <div className="grid gap-3 sm:grid-cols-2">
-                {GOALS.map((goal) => <OptionCard key={goal.id} multi icon={GOAL_ICONS[goal.id]} label={goal.label} hint={goal.hint} selected={answers.goals.includes(goal.id)} onClick={() => toggle('goals', goal.id)} />)}
+                {GOALS.map((goal) => (
+                  <OptionCard
+                    key={goal.id}
+                    multi
+                    icon={GOAL_ICONS[goal.id]}
+                    label={goal.label}
+                    hint={goal.hint}
+                    selected={answers.goals.includes(goal.id)}
+                    onClick={() => toggle('goals', goal.id)}
+                  />
+                ))}
               </div>
-              <p className="mt-4 text-[13px] text-white/45">{answers.goals.length ? `${answers.goals.length} selected` : 'Choose at least one'}</p>
+              <p className="mt-4 text-[13px] font-medium text-[#6d6d80]">
+                {answers.goals.length
+                  ? `${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''} selected`
+                  : 'Choose at least one to continue'}
+              </p>
             </>
           )}
 
           {step.id === 'platforms' && (
             <>
-              <StepHeader eyebrow="Where you post" title="Where will your content go?" subtitle="Pick all that apply. Every tool lets you choose the aspect ratio per generation." />
+              <StepHeader
+                eyebrow="Where you publish"
+                title="Where will your content go?"
+                subtitle="Pick all that apply. Every studio lets you switch aspect ratios per generation."
+              />
               <div className="flex flex-wrap gap-2.5">
-                {PLATFORMS.map((platform) => <Chip key={platform.id} selected={answers.platforms.includes(platform.id)} onClick={() => toggle('platforms', platform.id)}>{platform.label}</Chip>)}
+                {PLATFORMS.map((platform) => (
+                  <Chip
+                    key={platform.id}
+                    selected={answers.platforms.includes(platform.id)}
+                    onClick={() => toggle('platforms', platform.id)}
+                  >
+                    {platform.label}
+                  </Chip>
+                ))}
               </div>
-              <div className="mt-8 rounded-[20px] border border-white/10 bg-white/[.04] p-5 backdrop-blur">
-                <p className="text-sm font-bold">Formats Nexoclip supports</p>
-                <div className="mt-4 flex items-end gap-5">
-                  {[['9:16', 'h-16 w-9', 'TikTok, Reels, Shorts'], ['1:1', 'h-12 w-12', 'Feed and marketplace'], ['16:9', 'h-9 w-16', 'YouTube and web']].map(([ratio, size, use]) => (
-                    <div key={ratio} className="flex flex-col items-start gap-2">
-                      <span className={`${size} rounded-md border-2 border-[#d4ff64] bg-[#d4ff64]/10`} />
-                      <span className="text-xs font-bold">{ratio}</span>
-                      <span className="text-[11px] leading-tight text-white/45">{use}</span>
+
+              <div className="mt-7 rounded-2xl border border-[#e7e6f0] bg-white p-5 shadow-[0_4px_18px_-12px_rgba(20,20,38,0.08)]">
+                <p className="text-[14px] font-semibold text-[#14141f]">
+                  Formats Nexoclip supports out of the box
+                </p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  {[
+                    ['9:16', 'h-14 w-8', 'TikTok, Reels & Shorts'],
+                    ['1:1', 'h-11 w-11', 'Feeds & marketplaces'],
+                    ['16:9', 'h-8 w-14', 'YouTube & web hero'],
+                  ].map(([ratio, size, use]) => (
+                    <div
+                      key={ratio}
+                      className="flex items-center gap-3.5 rounded-xl border border-[#efedf7] bg-[#fafafe] p-3.5"
+                    >
+                      <div className="grid h-14 w-14 flex-shrink-0 place-items-center">
+                        <span
+                          className={`${size} rounded-md border-2 border-[#7c6bf7] bg-[#f2f0ff]`}
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-[14px] font-semibold tabular-nums text-[#14141f]">
+                          {ratio}
+                        </span>
+                        <span className="mt-0.5 block text-[12px] leading-snug text-[#636377]">
+                          {use}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -332,14 +563,34 @@ export default function OnboardingFlow() {
 
           {step.id === 'experience' && (
             <>
-              <StepHeader eyebrow="Your setup" title="How familiar are you with AI tools?" subtitle="No wrong answers. It helps us understand who we are building for." />
+              <StepHeader
+                eyebrow="Your setup"
+                title="How familiar are you with AI tools?"
+                subtitle="No wrong answers. It helps us calibrate tips and guidance inside the Studio."
+              />
               <div className="grid gap-3">
-                {EXPERIENCE.map((level) => <OptionCard key={level.id} label={level.label} hint={level.hint} selected={answers.experience === level.id} onClick={() => choose('experience', level.id)} />)}
+                {EXPERIENCE.map((level) => (
+                  <OptionCard
+                    key={level.id}
+                    label={level.label}
+                    hint={level.hint}
+                    selected={answers.experience === level.id}
+                    onClick={() => choose('experience', level.id)}
+                  />
+                ))}
               </div>
-              <div className="mt-9">
+              <div className="mt-8 rounded-2xl border border-[#e7e6f0] bg-white p-5 shadow-[0_4px_18px_-12px_rgba(20,20,38,0.08)]">
                 <SectionLabel>How many people will use Nexoclip?</SectionLabel>
-                <div className="flex flex-wrap gap-2.5">
-                  {TEAM_SIZES.map((size) => <Chip key={size.id} selected={answers.teamSize === size.id} onClick={() => choose('teamSize', size.id)}>{size.label}</Chip>)}
+                <div className="flex flex-wrap gap-2">
+                  {TEAM_SIZES.map((size) => (
+                    <Chip
+                      key={size.id}
+                      selected={answers.teamSize === size.id}
+                      onClick={() => choose('teamSize', size.id)}
+                    >
+                      {size.label}
+                    </Chip>
+                  ))}
                 </div>
               </div>
             </>
@@ -347,112 +598,227 @@ export default function OnboardingFlow() {
 
           {step.id === 'source' && (
             <>
-              <StepHeader eyebrow="One last thing" title="How did you hear about us?" subtitle="Optional, but it really helps a small team like ours." />
-              <div className="flex flex-wrap gap-2.5">
-                {SOURCES.map((source) => <Chip key={source.id} selected={answers.source === source.id} onClick={() => choose('source', source.id)}>{source.label}</Chip>)}
+              <StepHeader
+                eyebrow="One last thing"
+                title="How did you hear about us?"
+                subtitle="Optional, but it really helps a small team like ours grow."
+              />
+              <div className="rounded-2xl border border-[#e7e6f0] bg-white p-5 shadow-[0_4px_18px_-12px_rgba(20,20,38,0.08)] sm:p-6">
+                <div className="flex flex-wrap gap-2.5">
+                  {SOURCES.map((source) => (
+                    <Chip
+                      key={source.id}
+                      selected={answers.source === source.id}
+                      onClick={() => choose('source', source.id)}
+                    >
+                      {source.label}
+                    </Chip>
+                  ))}
+                </div>
               </div>
             </>
           )}
 
           {step.id === 'tools' && (
             <>
-              <StepHeader eyebrow="Your toolkit" title="Here is what you can use" subtitle="Every tool draws from the same credit balance. Based on your goals, we would start here:" />
+              <StepHeader
+                eyebrow="Your toolkit"
+                title="Here is what you can use"
+                subtitle="Every studio draws from one shared credit balance. Based on your goals, we recommend starting here:"
+              />
               <div className="grid gap-3">
-                {Object.entries(TOOLS).sort(([a], [b]) => (a === recommended ? -1 : b === recommended ? 1 : 0)).map(([id, tool]) => {
-                  const Icon = TOOL_ICONS[id];
-                  const isPick = id === recommended;
-                  return (
-                    <div key={id} className={`flex items-start gap-4 rounded-[20px] border p-4 ${isPick ? 'border-[#d4ff64]/50 bg-[#d4ff64]/10 text-white shadow-[0_20px_50px_-20px_rgba(212,255,100,0.25)]' : 'border-white/10 bg-white/[.04]'}`}>
-                      <span className={`grid h-11 w-11 flex-shrink-0 place-items-center rounded-[14px] ${isPick ? 'bg-[#d4ff64] text-[#0b0c0a]' : 'bg-white/[.08] text-[#d4ff64]'}`}><Icon /></span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-2">
-                          <span className="text-[15px] font-bold">{tool.label}</span>
-                          {isPick && <span className="rounded-full bg-[#d4ff64] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#0b0c0a]">Recommended for you</span>}
+                {Object.entries(TOOLS)
+                  .sort(([a], [b]) => (a === recommended ? -1 : b === recommended ? 1 : 0))
+                  .map(([id, tool]) => {
+                    const Icon = TOOL_ICONS[id] || Sparkles;
+                    const isPick = id === recommended;
+                    return (
+                      <div
+                        key={id}
+                        className={`flex items-start gap-4 rounded-2xl border p-4 transition ${
+                          isPick
+                            ? 'border-[#5b45f2] bg-[#f6f4ff] shadow-[0_12px_28px_-18px_rgba(91,69,242,0.35)]'
+                            : 'border-[#e7e6f0] bg-white'
+                        }`}
+                      >
+                        <span
+                          className={`grid h-11 w-11 flex-shrink-0 place-items-center rounded-xl ${
+                            isPick
+                              ? 'bg-[#5b45f2] text-white'
+                              : 'bg-[#f4f3f9] text-[#5b45f2]'
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
                         </span>
-                        <span className="mt-1 block text-[13px] leading-relaxed text-white/55">{tool.summary}</span>
-                      </span>
-                    </div>
-                  );
-                })}
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="text-[15px] font-semibold text-[#14141f]">
+                              {tool.label}
+                            </span>
+                            {isPick && (
+                              <span className="rounded-full bg-[#5b45f2] px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white">
+                                Recommended for you
+                              </span>
+                            )}
+                          </span>
+                          <span className="mt-1 block text-[13.5px] leading-relaxed text-[#5e5e72]">
+                            {tool.summary}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
             </>
           )}
 
           {step.id === 'credits' && (
             <>
-              <StepHeader eyebrow="How credits work" title="One balance for every studio" subtitle="Each generation uses credits based on the model, resolution and length. You always see the cost before you press Generate." />
+              <StepHeader
+                eyebrow="How credits work"
+                title="One balance for every studio"
+                subtitle="Each run uses credits based on model, resolution, and duration. You always see the exact price before clicking Generate."
+              />
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
                   ['± 6', 'credits per image', 'With Nano Banana'],
                   ['± 101', 'credits per video', '5 seconds with Kling 3'],
                   ['0', 'expiry', 'Credits never expire'],
                 ].map(([value, unit, note]) => (
-                    <div key={unit} className="rounded-[20px] border border-white/10 bg-white/[.04] p-5 backdrop-blur">
-                    <p className="text-3xl font-black tracking-tight text-[#d4ff64]">{value}</p>
-                    <p className="text-sm font-bold">{unit}</p>
-                    <p className="mt-1.5 text-[12px] leading-snug text-white/45">{note}</p>
+                  <div
+                    key={unit}
+                    className="rounded-2xl border border-[#e7e6f0] bg-white p-5 shadow-[0_4px_16px_-12px_rgba(20,20,38,0.08)]"
+                  >
+                    <p className="text-[30px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[#5b45f2]">
+                      {value}
+                    </p>
+                    <p className="mt-2 text-[14px] font-semibold text-[#14141f]">{unit}</p>
+                    <p className="mt-1 text-[12.5px] leading-snug text-[#6d6d80]">{note}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 rounded-[20px] border border-white/10 bg-white/[.04] p-5 backdrop-blur">
-                <p className="text-sm font-bold">Tips to make credits go further</p>
-                <ul className="mt-3 space-y-2.5 text-[13px] leading-relaxed text-white/60">
+
+              <div className="mt-4 rounded-2xl border border-[#e7e6f0] bg-white p-5">
+                <p className="text-[14px] font-semibold text-[#14141f]">
+                  Tips to make credits go further
+                </p>
+                <ul className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed text-[#525263]">
                   {[
-                    'Start with a Draft at 480p, then render 1080p only for the take you like.',
-                    'Try ideas as images first; they cost a fraction of a video.',
-                    'Use Regenerate on a result instead of rebuilding the whole setup.',
+                    'Start with a draft at 480p, then render 1080p only for the take you love.',
+                    'Explore ideas as images first; they cost a small fraction of a video.',
+                    'Use Regenerate on a result instead of rebuilding your whole setup.',
                   ].map((tip) => (
-                    <li key={tip} className="flex gap-2.5"><Icons.check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" />{tip}</li>
+                    <li key={tip} className="flex items-start gap-2.5">
+                      <span className="mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center rounded-full bg-[#ecfdf3] text-[#16794c]">
+                        <Check className="h-3 w-3" strokeWidth={2.75} aria-hidden="true" />
+                      </span>
+                      <span>{tip}</span>
+                    </li>
                   ))}
                 </ul>
               </div>
-              <div className="mt-4 flex items-start gap-4 rounded-[20px] bg-[#d4ff64] p-5 text-[#0b0c0a]">
-                <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[14px] bg-[#0b0c0a] text-[#d4ff64]"><Icons.qr /></span>
-                <span>
-                  <span className="block text-sm font-bold">Top up to start creating</span>
-                  <span className="mt-1 block text-[13px] leading-relaxed text-[#0b0c0a]/65">Packages from Rp 229.000 for 1.200 credits, paid with QRIS or a bank virtual account. Find it under Credits → Top Up.</span>
+
+              <div className="mt-4 flex items-start gap-4 rounded-2xl border border-[#dcd6fe] bg-[#f6f4ff] p-5">
+                <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-[#5b45f2] text-white">
+                  <QrCode className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
                 </span>
+                <div>
+                  <span className="block text-[14.5px] font-semibold text-[#14141f]">
+                    Top up anytime with QRIS or Virtual Account
+                  </span>
+                  <span className="mt-1 block text-[13px] leading-relaxed text-[#525263]">
+                    Packages start from Rp 229.000 for 1.200 credits, paid seamlessly via QRIS or bank VA. Find it anytime under Usage &amp; Billing → Top Up.
+                  </span>
+                </div>
               </div>
             </>
           )}
 
           {step.id === 'done' && (
             <div className="text-center sm:pt-4">
-              <div className="mx-auto mb-7 grid h-20 w-20 place-items-center rounded-full bg-[#d4ff64] text-[#0b0c0a] shadow-[0_20px_50px_-15px_rgba(212,255,100,0.45)]">
-                <Icons.check className="h-10 w-10" />
+              <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-full bg-[#5b45f2] text-white shadow-[0_18px_40px_-14px_rgba(91,69,242,0.55)]">
+                <Check className="h-8 w-8" strokeWidth={2.5} aria-hidden="true" />
               </div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#d4ff64]">You&apos;re all set</p>
-              <h1 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl">Your studio is ready{answers.brandName.trim() ? `, ${answers.brandName.trim()}` : ''}.</h1>
-              <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-white/55">
-                We picked a starting point from your answers. Everything else is one click away in the sidebar.
+              <p className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.16em] text-[#5b45f2]">
+                You&apos;re all set
               </p>
-              <div className="mx-auto mt-9 max-w-md rounded-[24px] border border-[#d4ff64]/30 bg-white/[.05] p-6 text-left text-white">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#d4ff64]">Start here</p>
-                <div className="mt-3 flex items-start gap-4">
-                  {(() => { const Icon = TOOL_ICONS[recommended]; return <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-[16px] bg-[#d4ff64] text-[#0b0c0a]"><Icon /></span>; })()}
-                  <span>
-                    <span className="block text-lg font-bold">{TOOLS[recommended].label}</span>
-                    <span className="mt-1 block text-[13px] leading-relaxed text-white/60">{TOOLS[recommended].summary}</span>
+              <h1 className="mx-auto max-w-xl text-[34px] font-semibold leading-[1.1] tracking-[-0.035em] text-[#14141f] sm:text-[42px]">
+                Your studio is ready{answers.brandName.trim() ? `, ${answers.brandName.trim()}` : ''}.
+              </h1>
+              <p className="mx-auto mt-3.5 max-w-md text-[15px] leading-relaxed text-[#5e5e72]">
+                We picked a starting studio based on your answers. Every other tool is one click away in the sidebar.
+              </p>
+
+              <div className="mx-auto mt-8 max-w-md rounded-2xl border border-[#dcd6fe] bg-white p-5 text-left shadow-[0_18px_42px_-20px_rgba(24,18,66,0.18)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5b45f2]">
+                  Recommended starting point
+                </p>
+                <div className="mt-3 flex items-start gap-3.5">
+                  <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-xl bg-[#5b45f2] text-white shadow-[0_8px_20px_-8px_rgba(91,69,242,0.55)]">
+                    <RecommendedIcon className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
                   </span>
+                  <div className="min-w-0">
+                    <span className="block text-[17px] font-semibold text-[#14141f]">
+                      {recommendedTool.label}
+                    </span>
+                    <span className="mt-1 block text-[13px] leading-relaxed text-[#5e5e72]">
+                      {recommendedTool.summary}
+                    </span>
+                  </div>
                 </div>
               </div>
+
               {(answers.role || answers.goals.length > 0 || answers.platforms.length > 0) && (
-                <div className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-2">
+                <div className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-1.5">
                   {[
                     ROLES.find((role) => role.id === answers.role)?.label,
                     ...answers.goals.map((id) => GOALS.find((goal) => goal.id === id)?.label),
                     ...answers.platforms.map((id) => PLATFORMS.find((platform) => platform.id === id)?.label),
-                  ].filter(Boolean).map((label) => (
-                    <span key={label} className="rounded-full border border-white/10 bg-white/[.05] px-3 py-1 text-xs font-semibold text-white/65">{label}</span>
-                  ))}
+                  ]
+                    .filter(Boolean)
+                    .map((label) => (
+                      <span
+                        key={label}
+                        className="rounded-full border border-[#e7e6f0] bg-white px-3 py-1 text-[12px] font-medium text-[#525263]"
+                      >
+                        {label}
+                      </span>
+                    ))}
                 </div>
               )}
-              {error && <p role="alert" className="mx-auto mt-5 max-w-md rounded-[14px] border border-red-300 bg-red-50 px-3.5 py-2.5 text-sm text-red-600">{error}</p>}
-              <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
-                <button type="button" onClick={() => save('completed', TOOLS[recommended].path.startsWith('/studio') ? `${TOOLS[recommended].path}?tour=1` : TOOLS[recommended].path)} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-[#d4ff64] px-5 py-3.5 text-sm font-bold text-[#0b0c0a] shadow-lg shadow-[#d4ff64]/20 transition hover:-translate-y-0.5 hover:bg-[#e1ff91] disabled:translate-y-0 disabled:opacity-60">
-                  {saving ? 'Opening…' : `Open ${TOOLS[recommended].label}`}<Icons.arrow className="h-4 w-4" />
+
+              {error && (
+                <p
+                  role="alert"
+                  className="mx-auto mt-5 max-w-md rounded-xl border border-[#f2cbd4] bg-[#fff4f6] px-4 py-2.5 text-[13.5px] font-medium text-[#9c243f]"
+                >
+                  {error}
+                </p>
+              )}
+
+              <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    save(
+                      'completed',
+                      recommendedTool.path.startsWith('/studio')
+                        ? `${recommendedTool.path}?tour=1`
+                        : recommendedTool.path,
+                    )
+                  }
+                  disabled={saving}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#5b45f2] px-5 py-3 text-[14px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(91,69,242,0.55)] transition hover:bg-[#4731d8] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2"
+                >
+                  {saving ? 'Opening…' : `Open ${recommendedTool.label}`}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => save('completed', '/studio?tour=1')} disabled={saving} className="flex-1 rounded-[18px] border border-white/15 bg-white/[.04] px-5 py-3.5 text-sm font-bold text-white transition hover:border-white/30 disabled:opacity-60">
+                <button
+                  type="button"
+                  onClick={() => save('completed', '/studio?tour=1')}
+                  disabled={saving}
+                  className="flex-1 rounded-xl border border-[#e3e1ee] bg-white px-5 py-3 text-[14px] font-semibold text-[#14141f] transition hover:border-[#c8bffb] hover:bg-[#f8f7ff] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2"
+                >
                   Explore the Studio
                 </button>
               </div>
@@ -463,29 +829,32 @@ export default function OnboardingFlow() {
 
       {/* Footer navigation */}
       {step.id !== 'done' && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-[#0b0c0a]/85 backdrop-blur-xl">
-          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
+        <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[#eceaf5] bg-white/90 backdrop-blur-md">
+          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-5 py-3.5 sm:px-8">
             <button
               type="button"
               onClick={back}
               disabled={stepIndex === 0}
-              className="flex items-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-semibold text-white/55 transition hover:bg-white/10 hover:text-white disabled:invisible"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-[#5e5e72] transition hover:bg-[#f4f3f9] hover:text-[#14141f] disabled:invisible focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2]"
             >
-              <Icons.back className="h-4 w-4" />Back
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back
             </button>
+
             <div className="flex items-center gap-3">
-              <span className="hidden text-xs text-white/35 sm:inline">Press Enter ↵</span>
+              <span className="hidden text-[12px] text-[#818193] sm:inline">Press Enter ↵</span>
               <button
                 type="button"
                 onClick={next}
                 disabled={!canContinue(step.id, answers)}
-                className="flex items-center gap-2 rounded-[18px] bg-[#d4ff64] px-6 py-3 text-sm font-bold text-[#0b0c0a] transition hover:-translate-y-0.5 hover:bg-[#e1ff91] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#5b45f2] px-5 py-2.5 text-[14px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(91,69,242,0.5)] transition hover:bg-[#4731d8] disabled:cursor-not-allowed disabled:bg-[#eceaf5] disabled:text-[#9898aa] disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2"
               >
-                {nextLabel}<Icons.arrow className="h-4 w-4" />
+                {nextLabel}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>
-        </div>
+        </footer>
       )}
     </main>
   );

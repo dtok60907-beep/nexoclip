@@ -1,0 +1,118 @@
+/* ==========================================================================
+   Nexoclip Studio — Redesigned Studios (Native Light Editorial Web Kit)
+   Covers: AI Influencer, Image Studio, Video Studio, AI Motion, Motion Studio,
+   and Vibe Motion Studio.
+   Tokens match Studio Home, Brand Setup, and AI Director (#5B45F2 + Inter).
+   ========================================================================== */
+
+:root {
+  --st-canvas: #f7f8fa;
+  --st-hero-base: #fafafa;
+  --st-surface: #ffffff;
+  --st-surface-soft: #fafafd;
+  --st-surface-muted: #f3f4f8;
+  --st-surface-hover: #efeff6;
+
+  --st-stage: #0f1117;
+  --st-stage-border: #232838;
+
+  --st-border: #e6e7f0;
+  --st-border-subtle: #efeff5;
+  --st-border-strong: #d5d7e4;
+
+  --st-ink: #14141f;
+  --st-body: #2d2e3f;
+  --st-secondary: #5e5e72;
+  --st-muted: #7a7b90;
+
+  --st-accent: #5b45f2;
+  --st-accent-hover: #4731d8;
+  --st-accent-soft: #f2f0ff;
+  --st-accent-soft-hover: #e7e3ff;
+  --st-accent-border: #d5ccfe;
+  --st-accent-ink: #4c38d6;
+
+  --st-font: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --st-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Base shell surface for the redesigned studio tabs */
+.nx-shell.is-studio-redesign {
+  background: var(--st-canvas);
+  color: var(--st-ink);
+  color-scheme: light;
+}
+
+.nx-shell.is-studio-redesign .suite-content {
+  background: var(--st-canvas);
+  color: var(--st-ink);
+  font-family: var(--st-font);
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Full-bleed interactive DotGrid behind the sidebar (Image, Video, Vibe Motion) */
+.nx-shell.is-studio-dotgrid {
+  background: var(--st-hero-base);
+}
+
+.nx-shell.is-studio-dotgrid .nx-frame {
+  position: relative;
+  background-color: var(--st-hero-base);
+  background-image: none;
+}
+
+.nx-shell.is-studio-dotgrid .nx-side,
+.nx-shell.is-studio-dotgrid .nx-main {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.nx-shell.is-studio-dotgrid .suite-content {
+  background: transparent;
+}
+
+.nx-shell.is-studio-dotgrid .nx-side.nx-icon-rail {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: #e4e4e7;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.035);
+}
+
+/* Clean scrollbars inside redesigned studios */
+.nx-shell.is-studio-redesign .custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.nx-shell.is-studio-redesign .custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nx-shell.is-studio-redesign .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(20, 20, 31, 0.14);
+  border-radius: 999px;
+}
+
+.nx-shell.is-studio-redesign .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(91, 69, 242, 0.35);
+}
+
+/* Native light range input polish */
+.nx-shell.is-studio-redesign input[type='range'] {
+  accent-color: var(--st-accent);
+}
+
+/* Respect reduced motion across redesigned studio transitions */
+@media (prefers-reduced-motion: reduce) {
+  .nx-shell.is-studio-redesign *,
+  .nx-shell.is-studio-redesign *::before,
+  .nx-shell.is-studio-redesign *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

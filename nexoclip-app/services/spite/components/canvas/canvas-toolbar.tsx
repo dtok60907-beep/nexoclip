@@ -1,15 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { Sparkle, ChatCircleDots, Question } from '@phosphor-icons/react'
-import { startTour } from '@/lib/onboarding'
-import { useState } from 'react'
+import { Sparkle } from '@phosphor-icons/react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
 import type { RemotePresencePeer } from '@/lib/realtime/presence'
 import { CanvasGuestList } from './canvas-guest-list'
-import { CreditBalanceBadge } from './credit-balance-badge'
 
 interface CanvasToolbarProps {
+  children: ReactNode
   projectName: string
   onProjectNameChange: (name: string) => void
   persistenceStatus: ProjectRuntimeState
@@ -23,12 +22,29 @@ interface CanvasToolbarProps {
   activeJobCount?: number
   guests?: RemotePresencePeer[]
   onFollowGuest?: (peer: RemotePresencePeer) => void
-  chatOpen?: boolean
-  chatUnread?: number
-  onToggleChat?: () => void
 }
 
-export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = false, guests = [], onFollowGuest, chatOpen = false, chatUnread = 0, onToggleChat }: CanvasToolbarProps) {
+export function CanvasToolbar({ children, projectName, onProjectNameChange, readOnly = false, guests = [], onFollowGuest }: CanvasToolbarProps) {
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (window.parent === window) return
+    const main = window.parent.document.querySelector('.nx-main')
+    const actions = main?.querySelector('.nx-top .nx-actions')
+    const menu = main?.querySelector('.nx-top .nx-burger')
+    if (!main || !actions || !menu) return
+    main.classList.add('nx-canvas-editor')
+    const resize = () => {
+      if (!toolbarRef.current) return
+      toolbarRef.current.style.paddingRight = `${actions.getBoundingClientRect().width + 24}px`
+      const menuWidth = menu.getBoundingClientRect().width
+      toolbarRef.current.style.paddingLeft = `${menuWidth ? menuWidth + 24 : 16}px`
+    }
+    const observer = new ResizeObserver(resize)
+    observer.observe(actions)
+    observer.observe(menu)
+    resize()
+    return () => { observer.disconnect(); main.classList.remove('nx-canvas-editor') }
+  }, [])
   const [editing, setEditing] = useState(false)
   // Typing edits a local draft; the name is saved on Enter or blur. Saving
   // every keystroke turned an emptied field into "Untitled Project" (the
@@ -46,12 +62,12 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
   }
 
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0b0c11]/85 px-4 backdrop-blur-md relative z-30">
+    <div ref={toolbarRef} className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-[#0b0c11]/85 px-2 sm:px-4 relative z-30">
       {/* Left */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-amber-400 via-lime-400 to-emerald-400 text-slate-950 shadow-lg shadow-lime-500/10"><Sparkle size={16} weight="fill" /></div>
-        <Link href="/" className="text-xs font-medium text-slate-400 transition-colors hover:text-slate-100">Projects</Link>
-        <div className="w-px h-4 bg-border" />
+      <div className="flex shrink-0 items-center gap-3">
+        <div className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-amber-400 via-lime-400 to-emerald-400 text-slate-950 shadow-lg shadow-lime-500/10"><Sparkle size={16} weight="fill" /></div>
+        <Link href="/" className="hidden lg:block text-xs font-medium text-slate-400 transition-colors hover:text-slate-100">Projects</Link>
+        <div className="hidden lg:block w-px h-4 bg-border" />
         {editing ? (
           <input
             autoFocus
@@ -65,14 +81,14 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
               if (e.key === 'Enter') commit()
               if (e.key === 'Escape') { setDraft(projectName); setEditing(false) }
             }}
-            className="bg-transparent border-none outline-none text-foreground text-base tracking-tight"
+            className="w-24 sm:w-40 bg-transparent border-none outline-none text-foreground text-base tracking-tight"
             style={{ fontFamily: 'var(--font-montserrat)' }}
           />
         ) : (
           <button
             type="button"
             onClick={startEditing}
-            className="text-sm font-semibold tracking-tight text-slate-200 transition-colors hover:text-sky-300 cursor-text"
+            className="max-w-24 truncate sm:max-w-40 text-sm font-semibold tracking-tight text-slate-200 transition-colors hover:text-sky-300 cursor-text"
             style={{ fontFamily: 'var(--font-montserrat)' }}
           >
             {projectName}
@@ -80,35 +96,10 @@ export function CanvasToolbar({ projectName, onProjectNameChange, readOnly = fal
         )}
       </div>
 
+      <div className="min-w-0 flex-1">{children}</div>
+
       {/* Right */}
-      <div className="flex items-center gap-1">
-        <span data-tour="canvas-credits" className="flex"><CreditBalanceBadge /></span>
-        <button
-          type="button"
-          data-tour="project-chat"
-          onClick={onToggleChat}
-          aria-pressed={chatOpen}
-          className={`relative flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${chatOpen ? 'border-white/20 bg-white/[0.14] text-white' : 'border-white/[0.08] bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]'}`}
-          title="Project chat"
-        >
-          <ChatCircleDots size={14} /> <span className="hidden sm:inline">Mengobrol</span>
-          {chatUnread > 0 ? (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white" aria-label={`${chatUnread} unread`}>
-              {chatUnread > 99 ? '99+' : chatUnread}
-            </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          data-tour="canvas-tour-button"
-          onClick={() => startTour('canvas')}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.06] text-slate-300 transition-colors hover:bg-white/[0.1] hover:text-white"
-          title="Take the Canvas tour"
-          aria-label="Take the Canvas tour"
-        >
-          <Question size={14} />
-        </button>
-        <div className="mx-1 h-4 w-px bg-white/10" />
+      <div className="flex shrink-0 items-center gap-1">
         {onFollowGuest && <CanvasGuestList peers={guests} onFollow={onFollowGuest} />}
 
       </div>

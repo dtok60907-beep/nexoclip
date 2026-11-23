@@ -1,24 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { ArrowRight, Plus, Receipt, Sparkles } from 'lucide-react';
 import { saasFetch } from '../src/lib/saas/api.js';
-import SubscriptionSection from './SubscriptionSection';
-import { usualRows, useModelPrices } from './publicPricing';
+import UsageBillingHeader from './UsageBillingHeader';
+import { NxBillingHistoryRowsSkeleton, NxBillingSummarySkeleton } from './ui/nx-loading';
+import { SlidingNumber } from './animate-ui/primitives/texts/sliding-number';
 
 const POLL_INTERVAL_MS = 5000;
-const POLL_LIMIT = 36; // About three minutes after returning from checkout.
+const POLL_LIMIT = 36;
+const DAY_MS = 86_400_000;
 
-const STATUS_STYLES = {
-  pending: ['Waiting for payment', 'bg-amber-400/10 text-amber-200'],
-  completed: ['Paid', 'bg-emerald-400/10 text-emerald-200'],
-  canceled: ['Canceled', 'bg-white/[.06] text-white/50'],
-  failed: ['Failed', 'bg-red-400/10 text-red-200'],
-};
-
-const NOTICE_STYLES = {
-  info: 'border-lime-400/20 bg-lime-400/10 text-lime-200',
-  success: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
-  error: 'border-red-400/20 bg-red-400/10 text-red-200',
+const STATUS_BADGES = {
+  pending: ['Waiting for payment', 'is-pending'],
+  completed: ['Paid', 'is-complete'],
+  canceled: ['Canceled', 'is-canceled'],
+  failed: ['Failed', 'is-failed'],
 };
 
 export { ENTERPRISE_WHATSAPP_URL } from './publicPricing';
@@ -31,27 +29,59 @@ function formatNumber(value) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(value) || 0);
 }
 
-export default function BillingContent({ workspaceId, balance, onCompleted, onRequireAuth, embedded = false }) {
+function formatDay(value) {
+  return value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+}
+
+export default function BillingContent({
+  workspaceId,
+  balance,
+  onCompleted,
+  onRequireAuth,
+  onNavigateUsage,
+  onOpenPlans,
+  onOpenTopUp,
+}) {
+  const prefersReducedMotion = useReducedMotion();
   const [packages, setPackages] = useState(null);
   const [topups, setTopups] = useState([]);
-  const [buying, setBuying] = useState(null);
+  const [subData, setSubData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const rows = usualRows(useModelPrices());
-  const models = [...rows.video, ...rows.image];
 
   const load = useCallback(async () => {
-    const data = await saasFetch('/api/billing/topups', { headers: workspaceId ? { 'x-workspace-id': workspaceId } : {} });
-    setPackages(data.packages);
-    setTopups(data.topups);
+    const headers = workspaceId ? { 'x-workspace-id': workspaceId } : {};
+    const [topupRes, subRes] = await Promise.all([
+      saasFetch('/api/billing/topups', { headers }),
+      workspaceId
+        ? saasFetch('/api/billing/subscription', { headers }).catch(() => null)
+        : saasFetch('/api/public/plans')
+            .then((p) => ({ enabled: p.subscriptionsEnabled, plans: p.plans || [], subscription: null, orders: [] }))
+            .catch(() => null),
+    ]);
+    setPackages(topupRes.packages || []);
+    setTopups(topupRes.topups || []);
+    setSubData(subRes);
   }, [workspaceId]);
 
-  // Package prices are public, so signed-out visitors see them too.
   useEffect(() => {
-    load().catch((reason) => setError(reason.message));
+    let active = true;
+    setLoading(true);
+    setError(null);
+    load()
+      .catch((reason) => {
+        if (active) setError(reason.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [load]);
 
-  // After checkout Pakasir redirects back with ?topup=<id>; poll until settled.
+  // After Pakasir checkout redirects back with ?topup=<id>; poll until settled.
   useEffect(() => {
     if (!workspaceId) return undefined;
     const topupId = new URLSearchParams(window.location.search).get('topup');
@@ -70,7 +100,9 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
     const poll = async () => {
       attempts += 1;
       try {
-        const { topup } = await saasFetch(`/api/billing/topups/${encodeURIComponent(topupId)}`, { headers: { 'x-workspace-id': workspaceId } });
+        const { topup } = await saasFetch(`/api/billing/topups/${encodeURIComponent(topupId)}`, {
+          headers: { 'x-workspace-id': workspaceId },
+        });
         if (cancelled) return;
         if (topup.status === 'completed') {
           setNotice({ tone: 'success', text: `Payment received. ${formatNumber(topup.credits)} credits were added to your balance.` });
@@ -100,122 +132,342 @@ export default function BillingContent({ workspaceId, balance, onCompleted, onRe
       timer = window.setTimeout(poll, POLL_INTERVAL_MS);
     };
     poll();
-    return () => { cancelled = true; window.clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [workspaceId, load, onCompleted]);
 
-  const buy = async (packageCode) => {
-    if (!workspaceId) {
-      onRequireAuth?.();
+  // After Pakasir checkout redirects back with ?subscription=<order>; poll until settled.
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    const orderId = new URLSearchParams(window.location.search).get('subscription');
+    if (!orderId) return undefined;
+    let attempts = 0;
+    let timer;
+    let cancelled = false;
+    setNotice({ tone: 'info', text: 'Confirming your subscription payment…' });
+
+    const done = (text, tone) => {
+      setNotice({ tone, text });
+      const url = new URL(window.location.href);
+      url.searchParams.delete('subscription');
+      window.history.replaceState(null, '', url.pathname + url.search);
+      load().catch(() => {});
+      onCompleted?.();
+    };
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const { order } = await saasFetch(`/api/billing/subscription/${encodeURIComponent(orderId)}`, {
+          headers: { 'x-workspace-id': workspaceId },
+        });
+        if (cancelled) return;
+        if (order.status === 'completed') {
+          return done("Payment received. Your plan is active and this month's credits are in your balance.", 'success');
+        }
+        if (order.status !== 'pending') {
+          return done(`This payment was ${order.status}. You were not charged.`, 'error');
+        }
+      } catch {
+        /* retry */
+      }
+      if (attempts < 20) timer = window.setTimeout(poll, 3000);
+      else setNotice({ tone: 'info', text: 'Payment not confirmed yet. Your plan starts automatically once it clears.' });
+    };
+    poll();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [workspaceId, load, onCompleted]);
+
+  const handleSwitchTab = useCallback(
+    (nextTab) => {
+      if (nextTab === 'usage') onNavigateUsage?.();
+    },
+    [onNavigateUsage],
+  );
+
+  const handleTriggerPlans = useCallback(() => {
+    if (!workspaceId && onRequireAuth) {
+      onRequireAuth('plans');
       return;
     }
-    setBuying(packageCode);
-    setError(null);
-    try {
-      const { topup } = await saasFetch('/api/billing/topups', {
-        method: 'POST',
-        headers: { 'x-workspace-id': workspaceId, 'content-type': 'application/json' },
-        body: JSON.stringify({ packageCode }),
-      });
-      window.location.assign(topup.paymentUrl);
-    } catch (reason) {
-      setError(reason.message);
-      setBuying(null);
+    onOpenPlans?.();
+  }, [workspaceId, onRequireAuth, onOpenPlans]);
+
+  const handleTriggerTopUp = useCallback(() => {
+    if (!workspaceId && onRequireAuth) {
+      onRequireAuth('topup');
+      return;
     }
-  };
+    onOpenTopUp?.();
+  }, [workspaceId, onRequireAuth, onOpenTopUp]);
 
-  return <main className={`nx-content-page ${embedded ? 'h-full overflow-auto p-4 sm:p-6' : 'h-full overflow-auto p-5 md:p-8'}`}>
-    <div className={`mx-auto ${embedded ? 'max-w-[1280px]' : 'max-w-5xl'}`}>
-      <SubscriptionSection workspaceId={workspaceId} onCompleted={onCompleted} onRequireAuth={onRequireAuth} />
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#d4ff64]">Add-on</p>
-          <h1 className="mt-1 text-2xl font-bold">Top up credits</h1>
-          <p className="mt-1 max-w-2xl text-sm text-white/45">Kredit tambahan di luar paket bulanan. Sekali bayar, tidak memperpanjang langganan, tidak auto-debit, dan tidak kedaluwarsa.</p>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,#1a1f17,#10120f)] px-4 py-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#d4ff64]/15 text-lg text-[#d4ff64]">◈</span>
-          <div>
-            <p className="text-[10px] uppercase tracking-[.14em] text-white/40">Current balance</p>
-            <p className="text-xl font-bold leading-tight">{balance !== null && balance !== undefined ? formatNumber(balance) : '—'} <span className="text-xs font-medium text-white/45">credits</span></p>
-          </div>
-        </div>
-      </div>
+  const sub = subData?.subscription || null;
+  const subEnabled = subData === null ? true : Boolean(subData.enabled);
+  const subActive = Boolean(sub && sub.status === 'active' && new Date(sub.currentPeriodEnd) > new Date());
+  const daysLeft = subActive ? Math.max(0, Math.ceil((new Date(sub.currentPeriodEnd) - new Date()) / DAY_MS)) : null;
 
-      {notice && <p className={`mt-6 rounded-lg border px-4 py-3 text-sm ${NOTICE_STYLES[notice.tone]}`}>{notice.text}</p>}
-      {error && <p className="mt-6 rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{error}</p>}
+  // Merge top-up and subscription orders into one unified payment history table
+  const historyRows = useMemo(() => {
+    const planMap = new Map((subData?.plans || []).map((p) => [p.code, p]));
+    const pkgMap = new Map((packages || []).map((p) => [p.code, p]));
 
-      <div className="mt-6 grid items-start gap-4 md:grid-cols-3">
-        {packages === null && !error && [0, 1, 2].map((key) => <div key={key} className="h-80 animate-pulse rounded-[22px] border border-white/10 bg-white/[.03]" />)}
-        {packages?.map((pkg) => {
-          const base = Math.round(pkg.credits / (1 + pkg.bonusPercent / 100));
-          const smallest = packages[0];
-          const saving = smallest ? Math.round((1 - (pkg.priceIdr / pkg.credits) / (smallest.priceIdr / smallest.credits)) * 100) : 0;
-          return <article
-            key={pkg.code}
-            className={`relative flex flex-col overflow-hidden rounded-[22px] border ${pkg.popular ? 'border-[#d4ff64]/60 bg-[linear-gradient(165deg,#26301b_0%,#141812_45%,#0f120e_100%)] shadow-[0_24px_70px_-30px_rgba(212,255,100,.45)]' : 'border-white/10 bg-[linear-gradient(165deg,#1a1d19_0%,#121411_50%,#0f110e_100%)]'}`}
+    const topupRows = (topups || []).map((item) => {
+      const pkg = pkgMap.get(item.packageCode);
+      return {
+        id: `topup-${item.id}`,
+        createdAt: item.createdAt,
+        title: pkg?.name ? `${pkg.name} top-up` : item.packageCode,
+        kindLabel: 'Top-up',
+        amountIdr: item.amountIdr,
+        detail: `${formatNumber(item.credits)} cr`,
+        status: item.status,
+        isSandbox: item.isSandbox,
+        paymentUrl: item.paymentUrl,
+      };
+    });
+
+    const subRows = (subData?.orders || []).map((item) => {
+      const plan = planMap.get(item.planCode);
+      const interval = plan?.interval ? ` · ${plan.interval}` : '';
+      return {
+        id: `sub-${item.id}`,
+        createdAt: item.createdAt,
+        title: plan?.name ? `${plan.name} plan${interval}` : item.planCode,
+        kindLabel: item.kind === 'upgrade' ? 'Upgrade' : item.kind === 'renew' ? 'Renewal' : 'Plan',
+        amountIdr: item.amountIdr,
+        detail: plan?.monthlyCredits ? `${formatNumber(plan.monthlyCredits)} cr/mo` : '—',
+        status: item.status,
+        isSandbox: false,
+        paymentUrl: item.paymentUrl,
+      };
+    });
+
+    return [...topupRows, ...subRows].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [topups, packages, subData]);
+
+  return (
+    <main className="nx-ub-page">
+      <div className="nx-ub-container">
+        <UsageBillingHeader
+          activeTab="billing"
+          balance={balance}
+          onSwitchTab={onNavigateUsage ? handleSwitchTab : undefined}
+          onTopUpClick={handleTriggerTopUp}
+        />
+
+        {notice && <p className={`nx-bill-notice tone-${notice.tone}`}>{notice.text}</p>}
+        {error && <p className="nx-bill-notice tone-error">{error}</p>}
+
+        {/* Streamlined Active Plan & Credit Balance Summary */}
+        {loading && packages === null ? (
+          <NxBillingSummarySkeleton />
+        ) : (
+          <motion.section
+            data-tour="billing-summary"
+            className={`nx-ub-card nx-bill-summary-card${subActive && daysLeft <= 7 ? ' is-soon' : ''}`}
+            aria-label="Active plan and credit balance"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="p-5 pb-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-lg font-bold tracking-tight">{pkg.name} pack</p>
-                <div className="flex gap-1.5">
-                  {pkg.bonusPercent > 0 && <span className="rounded-full bg-[#d4ff64]/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#d4ff64]">+{pkg.bonusPercent}% bonus</span>}
-                  {pkg.popular && <span className="rounded-full bg-[#d4ff64] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Best value</span>}
-                </div>
+            <div className="nx-bill-summary-cell">
+              <p className="nx-bill-summary-kicker">Active plan</p>
+              <div className="nx-bill-summary-val">
+                {subActive ? (
+                  <>
+                    <span>{sub.name}</span>
+                    {sub.interval && (
+                      <span className="nx-bill-badge is-soft" style={{ textTransform: 'capitalize' }}>
+                        {sub.interval}
+                      </span>
+                    )}
+                  </>
+                ) : sub ? (
+                  <>
+                    <span>{sub.name}</span>
+                    <span className="nx-bill-badge is-neutral">Ended</span>
+                  </>
+                ) : (
+                  <span>Pay-as-you-go</span>
+                )}
               </div>
-                <p className="mt-1.5 min-h-[34px] text-xs leading-relaxed text-white/45">{pkg.description} <span className="text-[#d4ff64]">· sekali bayar</span></p>
-
-              <div className="mt-4 flex items-baseline gap-1.5"><span className="text-[34px] font-bold leading-none tracking-tight">{formatNumber(pkg.credits)}</span><span className="text-sm text-white/45">credits</span></div>
-              <p className="mt-1.5 text-xs text-white/45">{pkg.bonusPercent > 0 ? <>{formatNumber(base)} + <b className="text-[#d4ff64]">{formatNumber(pkg.credits - base)} bonus</b> · one-time payment</> : 'one-time payment'}</p>
-
-              <button
-                type="button"
-                disabled={buying !== null}
-                onClick={() => buy(pkg.code)}
-                className={`mt-4 flex w-full items-center justify-between rounded-full px-5 py-3 text-sm font-bold transition disabled:opacity-50 ${pkg.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e2ff91]' : 'border border-white/15 bg-white/[.06] text-white hover:border-[#d4ff64]/60 hover:text-[#d4ff64]'}`}
-              >
-                <span>{buying === pkg.code ? 'Opening checkout…' : `Buy ${pkg.label || `Extra ${formatNumber(pkg.credits)} credits`}`}</span>
-                <span>{formatRupiah(pkg.priceIdr)} →</span>
-              </button>
-
-              <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-white/[.08] bg-black/20 text-center">
-                <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{formatNumber(pkg.credits)}</p><p className="text-[10px] text-white/40">credits added</p></div>
-                <div className="border-x border-white/[.08] px-2 py-2.5"><p className={`text-[15px] font-bold ${saving > 0 ? 'text-[#d4ff64]' : 'text-white/50'}`}>{saving > 0 ? `-${saving}%` : 'Base'}</p><p className="text-[10px] text-white/40">best value</p></div>
-                <div className="px-2 py-2.5"><p className="text-[15px] font-bold">∞</p><p className="text-[10px] text-white/40">never expire</p></div>
-              </div>
+              <p className={`nx-bill-summary-meta${subActive && daysLeft <= 7 ? ' is-warn' : ''}`}>
+                {subActive
+                  ? `Renews manually by ${formatDay(sub.currentPeriodEnd)} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
+                  : sub
+                    ? `Ended on ${formatDay(sub.currentPeriodEnd)} · choose a plan to resume monthly credits`
+                    : subEnabled
+                      ? 'Choose a monthly plan or buy one-time credit packs anytime'
+                      : 'Top up credits anytime · never expire'}
+              </p>
             </div>
 
-            {models.length > 0 && <div className="border-t border-white/[.08] bg-black/15 px-5 pb-5 pt-3">
-              <p className="mb-2 text-[10px] uppercase tracking-[.14em] text-white/30">Akses semua {models.length} model</p>
-              <div className="flex flex-wrap gap-1.5">{models.map((row) => <span key={row.id} className="rounded-full border border-white/10 bg-white/[.04] px-2 py-1 text-[11px] text-white/65">{row.name}</span>)}</div>
-            </div>}
-          </article>;
-        })}
+            <div className="nx-bill-summary-cell">
+              <p className="nx-bill-summary-kicker">Available balance</p>
+              <div className="nx-bill-summary-val">
+                {balance !== null && balance !== undefined ? (
+                  <SlidingNumber value={Number(balance)} formatter={formatNumber} />
+                ) : (
+                  '—'
+                )}
+                <span className="nx-bill-summary-unit">credits</span>
+              </div>
+              <p className="nx-bill-summary-meta">
+                {subActive && subData?.expiringCredits?.credits > 0
+                  ? `${formatNumber(subData.expiringCredits.credits)} monthly credits expire ${formatDay(sub.monthEndsAt)}`
+                  : 'Top-up credits never expire'}
+              </p>
+            </div>
+
+            <div data-tour="billing-actions" className="nx-bill-summary-actions">
+              {subEnabled && (
+                <motion.button
+                  type="button"
+                  onClick={handleTriggerPlans}
+                  className="nx-bill-summary-btn-ghost"
+                  whileHover={prefersReducedMotion ? undefined : { y: -1 }}
+                  whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 460, damping: 28 }}
+                >
+                  <Sparkles size={14} aria-hidden="true" />
+                  <span>{subActive ? 'Manage plan' : 'View plans'}</span>
+                </motion.button>
+              )}
+              <motion.button
+                type="button"
+                onClick={handleTriggerTopUp}
+                className="nx-ub-cta-btn"
+                whileHover={prefersReducedMotion ? undefined : { y: -1 }}
+                whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 460, damping: 28 }}
+              >
+                <span className="nx-ub-cta-icon" aria-hidden="true">
+                  <Plus size={13} strokeWidth={2.5} />
+                </span>
+                <span>Top up credits</span>
+              </motion.button>
+            </div>
+
+            {sub?.pendingPlan && (
+              <div className="nx-bill-summary-pending">
+                From {formatDay(sub.pendingPlan.startsAt)} your plan becomes{' '}
+                <strong style={{ color: 'var(--nx-ub-ink)' }}>
+                  {sub.pendingPlan.name} ({sub.pendingPlan.interval})
+                </strong>
+                .
+              </div>
+            )}
+          </motion.section>
+        )}
+
+        {/* Payment History */}
+        <motion.section
+          data-tour="billing-history"
+          className="nx-ub-card nx-ub-log-card"
+          aria-label="Payment history"
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="nx-ub-log-toolbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <span className="nx-ub-kpi-icon tone-violet" style={{ width: 30, height: 30, borderRadius: 8 }}>
+                <Receipt size={15} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="nx-ub-card-title">Payment history</h2>
+                <p className="nx-ub-card-sub">Your subscription and credit top-up receipts</p>
+              </div>
+            </div>
+            {historyRows.length > 0 && (
+              <span className="nx-bill-badge is-neutral">
+                {historyRows.length} {historyRows.length === 1 ? 'order' : 'orders'}
+              </span>
+            )}
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table className="nx-ub-table" style={{ minWidth: 620 }}>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Item</th>
+                  <th>Amount</th>
+                  <th>Credits</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && packages === null && !error ? (
+                  <NxBillingHistoryRowsSkeleton rows={3} />
+                ) : historyRows.length > 0 ? (
+                  historyRows.map((row) => {
+                    const [label, statusCls] = STATUS_BADGES[row.status] || [row.status, 'is-canceled'];
+                    return (
+                      <tr key={row.id}>
+                        <td style={{ color: 'var(--nx-ub-muted)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                          {new Date(row.createdAt).toLocaleString('id-ID')}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 600, color: 'var(--nx-ub-ink)' }}>{row.title}</span>
+                            <span className="nx-bill-badge is-neutral" style={{ padding: '2px 7px', fontSize: 10 }}>
+                              {row.kindLabel}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 550, whiteSpace: 'nowrap' }}>
+                          {formatRupiah(row.amountIdr)}
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 650, color: 'var(--nx-ub-ink)', whiteSpace: 'nowrap' }}>
+                          {row.detail}
+                        </td>
+                        <td>
+                          <span className={`nx-ub-status ${statusCls}`}>
+                            {label}
+                            {row.isSandbox ? ' · sandbox' : ''}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {row.paymentUrl ? (
+                            <a
+                              href={row.paymentUrl}
+                              className="nx-ub-link-btn"
+                              style={{ textDecoration: 'none', display: 'inline-flex' }}
+                            >
+                              <span>Pay now</span>
+                              <ArrowRight size={13} aria-hidden="true" />
+                            </a>
+                          ) : (
+                            <span style={{ color: 'var(--nx-ub-muted)', fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--nx-ub-muted)' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <Sparkles size={15} aria-hidden="true" />
+                        <span>No payments yet. Your plan and credit top-up receipts will appear here.</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </motion.section>
       </div>
-
-      <p className="mt-4 text-xs text-white/40">Pay with QRIS (any e-wallet or mobile banking) or a bank virtual account. Payments are processed by Pakasir; credits arrive within a minute of payment.</p>
-
-      {!embedded && <section className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-white/[.03]">
-        <h2 className="border-b border-white/10 p-3 text-sm font-bold">Payment history</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-sm">
-            <thead className="text-xs text-white/45"><tr><th className="p-3">Date</th><th>Package</th><th>Amount</th><th>Credits</th><th>Status</th><th /></tr></thead>
-            <tbody>
-              {topups.length ? topups.map((topup) => {
-                const [label, style] = STATUS_STYLES[topup.status] || [topup.status, 'bg-white/[.06] text-white/60'];
-                const pkg = packages?.find((item) => item.code === topup.packageCode);
-                return <tr key={topup.id} className="border-t border-white/10">
-                  <td className="p-3 text-white/60">{new Date(topup.createdAt).toLocaleString('id-ID')}</td>
-                  <td>{pkg?.name || topup.packageCode}</td>
-                  <td>{formatRupiah(topup.amountIdr)}</td>
-                  <td>{formatNumber(topup.credits)}</td>
-                  <td><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{label}{topup.isSandbox ? ' · sandbox' : ''}</span></td>
-                  <td className="pr-3 text-right">{topup.paymentUrl && <a className="font-semibold text-lime-300 hover:underline" href={topup.paymentUrl}>Pay now</a>}</td>
-                </tr>;
-              }) : <tr><td colSpan="6" className="p-5 text-center text-white/45">No payments yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>}
-    </div>
-  </main>;
+    </main>
+  );
 }

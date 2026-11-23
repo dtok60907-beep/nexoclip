@@ -230,10 +230,11 @@ async def voices() -> dict:
 
 
 @app.post("/api/director/projects", status_code=201)
-async def create_project(body: CreateProjectBody, x_nexoclip_user_id: Optional[str] = Header(default=None)) -> dict:
+async def create_project(body: CreateProjectBody, x_nexoclip_user_id: Optional[str] = Header(default=None),
+                         x_nexoclip_workspace_id: Optional[str] = Header(default=None)) -> dict:
     project_id = await asyncio.to_thread(_call, lambda: session.create_project(
         _owner(x_nexoclip_user_id), body.brief, run_mode=body.run_mode, meta=_message_meta(body.attachments, body.mentions),
-        llm_choice=body.llm))
+        llm_choice=body.llm, library_workspace_id=x_nexoclip_workspace_id))
     return {"project_id": project_id}
 
 
@@ -244,6 +245,9 @@ async def projects(x_nexoclip_user_id: Optional[str] = Header(default=None)) -> 
         "project_id": r["id"],
         "title": r["title"],
         "created_at": r["created_at"],
+        "updated_at": r.get("activity_at") or r["updated_at"],
+        "library_workspace_id": r.get("library_workspace_id"),
+        "thumbnail_asset": r.get("thumbnail_asset"),
         "busy": "running" in ((r["agent"] or {}).get("status"), (r["generation"] or {}).get("status")),
         "needs_approval": r["needs_approval"],
     } for r in rows]

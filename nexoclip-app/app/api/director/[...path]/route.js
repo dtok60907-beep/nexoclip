@@ -33,6 +33,7 @@ export function createDirectorProxyHandler({
       'X-Nexoclip-User-Id': String(session.user_id),
       Accept: request.headers.get('accept') || '*/*',
     };
+    if (session.workspace_id) headers['X-Nexoclip-Workspace-Id'] = session.workspace_id;
     if (env.DIRECTOR_PROXY_SECRET) headers['X-Director-Proxy-Secret'] = env.DIRECTOR_PROXY_SECRET;
     let body;
     if (request.method !== 'GET' && request.method !== 'HEAD') {

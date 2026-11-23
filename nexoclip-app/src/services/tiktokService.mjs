@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { encryptTikTokSecret, decryptTikTokSecret, hashTikTokValue } from './tiktokCrypto.mjs';
 import { exchangeTikTokCode, refreshTikTokToken, revokeTikTokToken, tikTokJson, tikTokUserInfo } from './tiktokApi.mjs';
 import { MAX_TIKTOK_VIDEO_BYTES,videoUploadPlan,uploadChunkEnd,readTikTokAsset,publishState,publicPostIds,publishingError } from './tiktokPublishMedia.mjs';
+import { validateSocialSchedule } from '../lib/socialSchedule.mjs';
 import { executePhotoPublishJob } from './tiktokPhotoPublishing.mjs';
 
 export const TIKTOK_SCOPE = 'user.info.basic,user.info.profile,user.info.stats,video.upload,video.publish,video.list';
@@ -97,7 +98,8 @@ export async function creatorInfo(pool, accountId, env = process.env, fetcher = 
   return tikTokJson('/post/publish/creator_info/query/',token,{},fetcher);
 }
 
-export async function createPublishJob(pool, { workspaceId,userId,accountId,generationId,mode,caption='',privacyLevel,disableComment=true,disableDuet=true,disableStitch=true,brandContentToggle=false,brandOrganicToggle=false,confirm=false,idempotencyKey,env=process.env }) {
+export async function createPublishJob(pool, { workspaceId,userId,accountId,generationId,mode,caption='',privacyLevel,disableComment=true,disableDuet=true,disableStitch=true,brandContentToggle=false,brandOrganicToggle=false,confirm=false,idempotencyKey,scheduledAt=null,timeZone=null,env=process.env }) {
+  const schedule=validateSocialSchedule(scheduledAt,timeZone);
   if (confirm!==true) throw Object.assign(new Error('Explicit publish confirmation is required'),{status:400});
   if (!['upload','direct'].includes(mode)) throw Object.assign(new Error('Unsupported TikTok publishing mode'),{status:400});
   if (typeof caption !== 'string' || [disableComment,disableDuet,disableStitch,brandContentToggle,brandOrganicToggle].some(value=>typeof value!=='boolean')) throw Object.assign(new Error('TikTok publishing options are invalid'),{status:400});
@@ -125,22 +127,29 @@ export async function createPublishJob(pool, { workspaceId,userId,accountId,gene
     const duration = Number(asset.parameters?.duration);
     if (Number.isFinite(duration) && duration > Number(info.max_video_post_duration_sec || 0)) throw Object.assign(new Error('Video exceeds this TikTok account’s duration limit'),{status:400});
   }
-  const request = {accountId,generationId,mode,caption,privacyLevel,disableComment,disableDuet,disableStitch,brandContentToggle,brandOrganicToggle};
+  const request = {accountId,generationId,mode,caption,privacyLevel,disableComment,disableDuet,disableStitch,brandContentToggle,brandOrganicToggle,scheduledAt:schedule.scheduledAt,timeZone:schedule.timeZone};
   const hash = hashTikTokValue(JSON.stringify(request));
   const inserted = await pool.query(
-    `INSERT INTO social_publish_jobs (workspace_id,user_id,social_account_id,generation_job_id,asset_id,provider,mode,idempotency_key,request_hash,caption,privacy_level,disable_comment,disable_duet,disable_stitch,brand_content_toggle,brand_organic_toggle,status)
-     VALUES ($1,$2,$3,$4,$5,'tiktok',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'queued')
+    `INSERT INTO social_publish_jobs (workspace_id,user_id,social_account_id,generation_job_id,asset_id,provider,mode,idempotency_key,request_hash,caption,privacy_level,disable_comment,disable_duet,disable_stitch,brand_content_toggle,brand_organic_toggle,status,scheduled_at,schedule_timezone)
+     VALUES ($1,$2,$3,$4,$5,'tiktok',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      ON CONFLICT (workspace_id,user_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
-     RETURNING id,status,provider_publish_id,request_hash`,[workspaceId,userId,accountId,generationId,asset.asset_id,mode,idempotencyKey,hash,caption,privacyLevel || null,disableComment,disableDuet,disableStitch,brandContentToggle,brandOrganicToggle]);
+     RETURNING id,status,provider_publish_id,request_hash`,[workspaceId,userId,accountId,generationId,asset.asset_id,mode,idempotencyKey,hash,caption,privacyLevel || null,disableComment,disableDuet,disableStitch,brandContentToggle,brandOrganicToggle,schedule.scheduledAt?'scheduled':'queued',schedule.scheduledAt,schedule.timeZone]);
   if (inserted.rows[0].request_hash !== hash) throw Object.assign(new Error('Idempotency key was used for a different request'),{status:409});
   return inserted.rows[0];
 }
 
 export async function executePublishJob(pool, storage, jobId, env = process.env, fetcher = fetch, getToken = getTikTokAccessToken) {
-  const claimed = await pool.query(`UPDATE social_publish_jobs SET status='uploading',attempts=attempts+1,updated_at=now() WHERE id=$1 AND status='queued' AND (next_poll_at IS NULL OR next_poll_at<=now()) AND (scheduled_at IS NULL OR scheduled_at<=now()) RETURNING *`,[jobId]);
+  const claimed = await pool.query(`UPDATE social_publish_jobs SET status='uploading',attempts=attempts+1,updated_at=now() WHERE id=$1 AND provider='tiktok' AND status IN ('queued','scheduled') AND (next_poll_at IS NULL OR next_poll_at<=now()) AND (scheduled_at IS NULL OR scheduled_at<=now()) RETURNING *`,[jobId]);
   const job = claimed.rows[0];
   if (!job) return;
   try {
+    if(!job.provider_publish_id){
+      const authorization=await pool.query(`SELECT a.granted_scopes FROM social_accounts a
+        JOIN workspace_memberships m ON m.workspace_id=a.workspace_id AND m.user_id=a.user_id
+        JOIN users u ON u.id=a.user_id AND u.suspended_at IS NULL
+        WHERE a.id=$1 AND a.workspace_id=$2 AND a.user_id=$3 AND a.status='connected'`,[job.social_account_id,job.workspace_id,job.user_id]);
+      if(!authorization.rows[0]?.granted_scopes.includes(job.mode==='direct'?'video.publish':'video.upload'))throw Object.assign(new Error('Reconnect TikTok and review this post before publishing'),{status:403});
+    }
     const token = await getToken(pool,job.social_account_id,env,fetcher);
     if(job.media_type==='photo')return await executePhotoPublishJob(pool,storage,job,token,env,fetcher);
     if(job.provider_publish_id&&!job.upload_url_encrypted){
@@ -149,7 +158,7 @@ export async function executePublishJob(pool, storage, jobId, env = process.env,
       await pool.query(`UPDATE social_publish_jobs SET status=$2,provider_status=$3,provider_error=$4,public_post_ids=$5,next_poll_at=now()+interval '30 seconds',updated_at=now() WHERE id=$1`,[job.id,status,result.status,result.fail_reason||null,publicPostIds(result)]);
       return;
     }
-    const video = await pool.query(`SELECT a.storage_key,a.content_type,a.size_bytes FROM assets a JOIN generation_outputs o ON o.workspace_id=a.workspace_id AND o.asset_id=a.id WHERE a.workspace_id=$1 AND a.id=$2 AND o.generation_job_id=$3`,[job.workspace_id,job.asset_id,job.generation_job_id]);
+    const video = await pool.query(`SELECT a.storage_key,a.content_type,a.size_bytes FROM assets a JOIN generation_outputs o ON o.workspace_id=a.workspace_id AND o.asset_id=a.id WHERE a.workspace_id=$1 AND a.id=$2 AND o.generation_job_id=$3 AND EXISTS (SELECT 1 FROM generation_jobs g WHERE g.id=o.generation_job_id AND g.workspace_id=a.workspace_id AND g.created_by_user_id=$4 AND g.status='succeeded')`,[job.workspace_id,job.asset_id,job.generation_job_id,job.user_id]);
     const asset = video.rows[0];
     if (!asset) throw new Error('TikTok video asset is no longer available');
     if(Number(asset.size_bytes)>MAX_TIKTOK_VIDEO_BYTES)throw Object.assign(new Error('Video exceeds the 250 MB publishing limit'),{status:400});
@@ -210,7 +219,7 @@ export async function executePublishJob(pool, storage, jobId, env = process.env,
 }
 
 export async function pollTikTokPublishJobs(pool, env = process.env, fetcher = fetch, getToken = getTikTokAccessToken) {
-  const due = await pool.query(`WITH due AS (SELECT id FROM social_publish_jobs WHERE status IN ('processing','awaiting_creator') AND provider_publish_id IS NOT NULL AND (next_poll_at IS NULL OR next_poll_at<=now()) ORDER BY next_poll_at NULLS FIRST LIMIT 4 FOR UPDATE SKIP LOCKED) UPDATE social_publish_jobs j SET next_poll_at=now()+interval '30 seconds' FROM due WHERE j.id=due.id RETURNING j.id,j.social_account_id,j.provider_publish_id,j.mode`);
+  const due = await pool.query(`WITH due AS (SELECT id FROM social_publish_jobs WHERE provider='tiktok' AND status IN ('processing','awaiting_creator') AND provider_publish_id IS NOT NULL AND (next_poll_at IS NULL OR next_poll_at<=now()) ORDER BY next_poll_at NULLS FIRST LIMIT 4 FOR UPDATE SKIP LOCKED) UPDATE social_publish_jobs j SET next_poll_at=now()+interval '30 seconds' FROM due WHERE j.id=due.id RETURNING j.id,j.social_account_id,j.provider_publish_id,j.mode`);
   for (const job of due.rows) {
     try {
       const token = await getToken(pool,job.social_account_id,env,fetcher);
@@ -234,7 +243,7 @@ export async function processTikTokWebhook(pool,event,raw) {
     if(duplicate.rowCount){await client.query('COMMIT');return {duplicate:true};}
     const account=event.user_openid?await client.query("SELECT id FROM social_accounts WHERE provider='tiktok' AND provider_account_id=$1 AND status<>'disconnected' LIMIT 1",[event.user_openid]):{rows:[]};
     const publishId=event.content?.publish_id;
-    const job=publishId?await client.query('SELECT id,social_account_id FROM social_publish_jobs WHERE provider_publish_id=$1 LIMIT 1',[publishId]):{rows:[]};
+    const job=publishId?await client.query("SELECT id,social_account_id FROM social_publish_jobs WHERE provider='tiktok' AND provider_publish_id=$1 LIMIT 1",[publishId]):{rows:[]};
     await client.query(`INSERT INTO social_publish_events(social_publish_job_id,social_account_id,provider,event_type,event_fingerprint,payload) VALUES($1,$2,'tiktok',$3,$4,$5::jsonb)`,[job.rows[0]?.id||null,account.rows[0]?.id||job.rows[0]?.social_account_id||null,event.event,fingerprint,JSON.stringify(event)]);
     if(event.event==='authorization.removed'&&account.rows[0]){
       await client.query("UPDATE social_accounts SET status='disconnected',updated_at=now() WHERE provider='tiktok' AND provider_account_id=$1",[event.user_openid]);

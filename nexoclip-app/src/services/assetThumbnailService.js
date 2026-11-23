@@ -28,9 +28,11 @@ export async function ensureAssetThumbnail(storage, asset, { resize = defaultRes
   if (inFlight.has(key)) return inFlight.get(key);
   const work = (async () => {
     if (await storage.exists(key)) return key;
-    const original = await storage.get(asset.storage_key);
+    const download=typeof storage.createUploadUrl==='function'?await storage.createDownloadUrl({key:asset.storage_key}):null;
+    const original = await storage.get(download?(download.url||download):asset.storage_key);
     const body = await resize(Buffer.from(original.body));
-    await storage.put(key, body, 'image/webp');
+    const upload=typeof storage.createUploadUrl==='function'?await storage.createUploadUrl({key,contentType:'image/webp'}):null;
+    await storage.put(upload?(upload.url||upload):key, body, 'image/webp');
     return key;
   })().finally(() => inFlight.delete(key));
   inFlight.set(key, work);

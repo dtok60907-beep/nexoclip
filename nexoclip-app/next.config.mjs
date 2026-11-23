@@ -24,7 +24,7 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    const spiteUrl = process.env.SPITE_INTERNAL_URL || 'http://spite:3005';
+    const spiteUrl = new URL(process.env.SPITE_INTERNAL_URL || 'http://spite:3005').origin;
     // Keep the public URL as /canvas while forwarding to the same basePath
     // that the Spite service was built with. Do not redirect or iframe it.
     return {

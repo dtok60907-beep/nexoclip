@@ -65,7 +65,7 @@ function googleRequest(state = 'trusted-state') {
 
 test('Google sign-in uses the same operator destination and preserves ordinary onboarding', async () => {
   const profile = Buffer.from(JSON.stringify({ email: 'test@example.com', email_verified: true, name: 'Test' })).toString('base64url');
-  for (const [userId, isNew, expected] of [['operator-a', false, '/admin/economics'], ['normal-user', false, '/studio'], ['normal-user', true, '/onboarding']]) {
+  for (const [userId, isNew, expected] of [['operator-a', false, '/admin/economics'], ['normal-user', false, '/studio/home'], ['normal-user', true, '/studio/home']]) {
     const handler = createGoogleCallbackHandler({ env, fetchImpl: async () => Response.json({ id_token: `header.${profile}.signature` }), authenticate: async () => ({ user: { id: userId }, isNew, token: 'opaque-session', expiresAt: new Date(Date.now() + 600000) }) });
     const response = await handler(googleRequest());
     assert.equal(response.headers.get('location'), `https://app.example${expected}`);

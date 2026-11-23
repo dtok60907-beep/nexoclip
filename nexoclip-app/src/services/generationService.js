@@ -1,3 +1,4 @@
+import { saveStudioWork } from '../repositories/studioWork.js';
 import { getPool } from '../db/pool.js';
 import { createImageGeneration, createVimaxGeneration, findGeneration, findGenerationByIdempotencyKey } from '../repositories/generationRepository.js';
 import { createCreditAccount, insertCreditEntry, lockCreditAccount, updateCreditBalance } from '../repositories/creditRepository.js';
@@ -221,8 +222,11 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
       idempotencyKey: `generation:${input.idempotencyKey}`,
       metadata: { generationIdempotencyKey: input.idempotencyKey, pricingVersionId: estimate.pricingVersionId },
     });
+    const projectId = input.studioWork
+      ? await saveStudioWork(client, workspaceId, userId, input.studioWork, validated)
+      : input.projectId || null;
     const job = await createImageGeneration(client, {
-      workspaceId, createdByUserId: userId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
+      workspaceId, createdByUserId: userId, projectId, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
       estimatedProviderCostUsd: modelPrice.usd ?? null,
       pricingSnapshot: modelPrice.pricingSnapshot ? {

@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import path from 'node:path';
+import { parseByteRange } from '../lib/httpByteRange.mjs';
 
 function encode(value) {
   return Buffer.from(String(value)).toString('base64url');
@@ -84,5 +86,24 @@ export class LocalObjectStorage {
       body: await readFile(target),
       contentType: JSON.parse(await readFile(`${target}.metadata`, 'utf8')).contentType,
     };
+  }
+
+  async exists(key) {
+    const root=path.resolve(this.root),target=path.resolve(root,key);
+    if(!target.startsWith(`${root}${path.sep}`))throw new Error('Invalid storage key');
+    try{return (await stat(target)).isFile();}catch(error){if(error.code==='ENOENT')return false;throw error;}
+  }
+
+  async getRange(url,rangeHeader) {
+    const {key}=this.#authorize(url,'download');
+    const root=path.resolve(this.root),target=path.resolve(root,key);
+    if(!target.startsWith(`${root}${path.sep}`))throw new Error('Invalid storage key');
+    const handle=await open(target,'r');
+    try {
+      const {size}=await handle.stat(),range=parseByteRange(rangeHeader,size);
+      const contentType=JSON.parse(await readFile(`${target}.metadata`,'utf8')).contentType;
+      const stream=handle.createReadStream(range?{start:range.start,end:range.end}:{});
+      return {body:Readable.toWeb(stream),contentType,size,range};
+    }catch(error){await handle.close();throw error;}
   }
 }

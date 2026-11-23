@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from director_service.db import Jsonb, notify, tx
 
-PROJECT_FIELDS = ("owner", "title", "title_auto", "title_by", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render",
+PROJECT_FIELDS = ("library_workspace_id", "owner", "title", "title_auto", "title_by", "llm_model", "llm_cost_usd", "llm_credits", "agent", "generation", "render",
                   "run_mode")
 JSON_FIELDS = {"agent", "generation", "render"}
 
@@ -53,10 +53,15 @@ def find_project(project_id: str) -> Optional[dict[str, Any]]:
 def list_projects(owner: str) -> list[dict[str, Any]]:
     with tx() as conn:
         rows = conn.execute(
-            """SELECT p.*, EXISTS (
-                   SELECT 1 FROM boards b, jsonb_array_elements(b.runtime->'requests') r
-                   WHERE b.project_id = p.id AND r->>'status' = 'pending') AS needs_approval
-               FROM projects p WHERE owner = %s ORDER BY created_at DESC""",
+            """SELECT p.*, greatest(p.updated_at, b.updated_at) AS activity_at,
+                      (SELECT m.value->>'asset_id' FROM jsonb_each(b.runtime->'media') m
+                       WHERE (starts_with(m.key,'frame:') OR starts_with(m.key,'element:'))
+                       AND m.value->>'asset_id' IS NOT NULL
+                       ORDER BY starts_with(m.key,'frame:') DESC,m.key LIMIT 1) AS thumbnail_asset,
+                      EXISTS (SELECT 1 FROM jsonb_array_elements(b.runtime->'requests') r
+                              WHERE r->>'status' = 'pending') AS needs_approval
+               FROM projects p LEFT JOIN boards b ON b.project_id=p.id
+               WHERE p.owner = %s ORDER BY p.created_at DESC""",
             (owner,),
         ).fetchall()
     return [_project(r) for r in rows]

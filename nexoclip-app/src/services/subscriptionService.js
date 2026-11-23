@@ -1,11 +1,12 @@
 import { getPool } from '../db/pool.js';
+import { meldapayClient } from '../lib/billing/meldapayClient.js';
 import { pakasirClient } from '../lib/billing/pakasirClient.js';
 import { appendCreditEntryInTransaction } from './creditService.js';
 import { findSubscriptionPlan, firstPaymentPromo, promoPrice, SUBSCRIPTION_PLANS, subscriptionsEnabled } from './subscriptionPlans.js';
-import { newOrderId, withQuery } from './topupService.js';
+import { newOrderId } from './topupService.js';
 import { sendSubscriptionReminders } from './subscriptionReminderService.js';
 
-const PROVIDER_KEY = 'pakasir';
+const PROVIDER_KEY = 'meldapay';
 const fail = (message, status, code) => Object.assign(new Error(message), { status, code });
 const roundUpThousand = (idr) => Math.max(1000, Math.ceil(idr / 1000) * 1000);
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -91,7 +92,7 @@ const toPublicOrder = (row) => ({
   paymentUrl: row.status === 'pending' ? row.payment_url : null, completedAt: row.completed_at, createdAt: row.created_at,
 });
 
-export function createSubscriptionService({ pool = null, gateway = pakasirClient, env = process.env, now = () => new Date() } = {}) {
+export function createSubscriptionService({ pool = null, gateway = meldapayClient, env = process.env, now = () => new Date() } = {}) {
   const db = () => pool || getPool();
   const allowSandbox = () => env.PAKASIR_ALLOW_SANDBOX === '1';
 
@@ -134,7 +135,7 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     };
   }
 
-  async function createOrder({ workspaceId, userId, planCode, returnUrl }) {
+  async function createOrder({ workspaceId, userId, planCode, webhookUrl }) {
     if (!subscriptionsEnabled(env)) throw fail('Subscriptions are not available yet', 404, 'SUBSCRIPTIONS_DISABLED');
     const plan = findSubscriptionPlan(planCode);
     if (!plan) throw fail('Unknown plan', 400, 'INVALID_PLAN');
@@ -144,20 +145,20 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     const quote = quotePlan(plan, sub, at, sub ? null : firstPaymentPromo(env, at));
     if (quote.kind === 'scheduled') throw fail(`${plan.name} already starts when your current plan ends`, 409, 'PLAN_ALREADY_SCHEDULED');
     const order = (await db().query(
-      `INSERT INTO subscription_orders (workspace_id, user_id, plan_code, months, monthly_credits, amount_idr, order_id, kind, from_plan_code, prorated_credits)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO subscription_orders (workspace_id, user_id, plan_code, months, monthly_credits, amount_idr, order_id, kind, from_plan_code, prorated_credits, provider_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [workspaceId, userId, plan.code, plan.months, plan.monthlyCredits, quote.amountIdr, newOrderId().replace(/^NXC/, 'NXS'),
-        quote.kind, sub?.plan_code || null, quote.kind === 'upgrade' ? quote.creditsNow : 0],
+        quote.kind, sub?.plan_code || null, quote.kind === 'upgrade' ? quote.creditsNow : 0, PROVIDER_KEY],
     )).rows[0];
     let remote;
     try {
-      remote = await gateway.createTransaction({ orderId: order.order_id, amount: quote.amountIdr, method: 'payment_link' });
+      remote = await gateway.createTransaction({ orderId: order.order_id, amount: quote.amountIdr, callbackUrl: webhookUrl });
       if (!remote.txn_id || !remote.payment_link) throw fail('Payment gateway returned no payment link', 502, 'PAYMENT_GATEWAY_ERROR');
     } catch (error) {
       await db().query("UPDATE subscription_orders SET status = 'failed', failure_reason = $2, updated_at = now() WHERE id = $1", [order.id, String(error.message).slice(0, 500)]);
       throw error;
     }
-    const paymentUrl = withQuery(remote.payment_link, { redirect: returnUrl ? withQuery(returnUrl, { subscription: order.id }) : null });
+    const paymentUrl = remote.payment_link;
     const updated = (await db().query(
       'UPDATE subscription_orders SET provider_txn_id = $2, payment_url = $3, is_sandbox = $4, updated_at = now() WHERE id = $1 RETURNING *',
       [order.id, remote.txn_id, paymentUrl, Boolean(remote.is_sandbox)],
@@ -286,18 +287,18 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     await grantDueMonths(client, started, sandbox);
   }
 
-  // Only Pakasir's status API decides a payment, never the webhook body.
-  async function settleByTxnId(txnId) {
-    const order = (await db().query('SELECT * FROM subscription_orders WHERE provider_key = $1 AND provider_txn_id = $2', [PROVIDER_KEY, txnId])).rows[0];
+  // Only the provider's authenticated status API decides a payment, never the webhook body.
+  async function settleByTxnId(txnId, providerKey = PROVIDER_KEY) {
+    const order = (await db().query('SELECT * FROM subscription_orders WHERE provider_key = $1 AND provider_txn_id = $2', [providerKey, txnId])).rows[0];
     if (!order) return null;
     if (order.status !== 'pending') return toPublicOrder(order);
-    const remote = await gateway.getTransactionStatus(txnId);
+    const remote = await (providerKey === 'pakasir' ? pakasirClient : gateway).getTransactionStatus(txnId);
     return transaction(async (client) => {
       const locked = (await client.query('SELECT * FROM subscription_orders WHERE id = $1 FOR UPDATE', [order.id])).rows[0];
       if (locked.status !== 'pending') return toPublicOrder(locked);
       if (remote.status === 'canceled') return toPublicOrder((await client.query("UPDATE subscription_orders SET status = 'canceled', updated_at = now() WHERE id = $1 RETURNING *", [order.id])).rows[0]);
       if (remote.status !== 'completed') return toPublicOrder(locked);
-      if (remote.order_id !== locked.order_id || Number(remote.amount) !== Number(locked.amount_idr)) throw fail('Payment does not match the subscription order', 409, 'SUBSCRIPTION_MISMATCH');
+      if ((remote.order_id && remote.order_id !== locked.order_id) || Number(remote.amount) !== Number(locked.amount_idr)) throw fail('Payment does not match the subscription order', 409, 'SUBSCRIPTION_MISMATCH');
       if (remote.is_sandbox && !allowSandbox()) throw fail('Sandbox payments are not accepted', 409, 'SUBSCRIPTION_SANDBOX');
       await applyOrder(client, locked, Boolean(remote.is_sandbox));
       return toPublicOrder((await client.query(
@@ -311,7 +312,7 @@ export function createSubscriptionService({ pool = null, gateway = pakasirClient
     const order = (await db().query('SELECT * FROM subscription_orders WHERE workspace_id = $1 AND id = $2', [workspaceId, orderId])).rows[0];
     if (!order) throw fail('Order not found', 404, 'ORDER_NOT_FOUND');
     if (order.status !== 'pending' || !order.provider_txn_id) return toPublicOrder(order);
-    try { return (await settleByTxnId(order.provider_txn_id)) || toPublicOrder(order); } catch { return toPublicOrder(order); }
+    try { return (await settleByTxnId(order.provider_txn_id, order.provider_key)) || toPublicOrder(order); } catch { return toPublicOrder(order); }
   }
 
   // Periodic: grant the months now due, start paid downgrades when a period ends, end

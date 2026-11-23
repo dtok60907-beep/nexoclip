@@ -65,6 +65,20 @@ const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': '
 // The file's real type decides the extension (a generated image may be JPEG or WebP).
 export async function downloadAsset(url: string, suggestedName: string) {
   try {
+    const target = new URL(url, window.location.href)
+    if (target.origin === window.location.origin && /^\/api\/assets\/[^/]+\/download$/.test(target.pathname)) {
+      const workspaceId = target.searchParams.get('workspace_id') || window.sessionStorage.getItem('nexoclip_workspace_id')
+      if (!workspaceId) throw new Error('workspace_id is required')
+      target.searchParams.set('workspace_id', workspaceId)
+      target.searchParams.set('download', '1')
+      const a = document.createElement('a')
+      a.href = target.href
+      a.download = suggestedName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      return
+    }
     const res = await fetch(url)
     if (!res.ok) throw new Error(`status ${res.status}`)
     const blob = await res.blob()

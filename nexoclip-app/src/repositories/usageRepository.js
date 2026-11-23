@@ -101,3 +101,37 @@ export async function listUsageHistory(pool, { workspaceId, userId, scope, page,
   const count = await pool.query(`SELECT COUNT(*)::text AS count FROM (${usageRows(filter)}) u`, values);
   return { rows: data.rows, total: Number(count.rows[0]?.count || 0) };
 }
+
+export async function getUsageAnalytics(pool, { workspaceId, userId, scope, periodStart, trendStart }) {
+  const trendFilter = filters({ workspaceId, userId, scope, periodStart: trendStart });
+  const monthFilter = filters({ workspaceId, userId, scope, periodStart });
+
+  const [daily, byKindStatus] = await Promise.all([
+    pool.query(
+      `SELECT to_char(date_trunc('day', u.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+              COALESCE(SUM(u.credits), 0::numeric)::text AS credits,
+              COUNT(*)::int AS count
+       FROM (${usageRows(trendFilter)}) u
+       GROUP BY 1
+       ORDER BY 1 ASC`,
+      trendFilter.values,
+    ),
+    pool.query(
+      `SELECT u.kind,
+              u.source,
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE u.status IN ('succeeded', 'completed', 'complete'))::int AS succeeded,
+              COUNT(*) FILTER (WHERE u.status IN ('failed', 'error', 'canceled', 'cancelled'))::int AS failed,
+              COUNT(*) FILTER (WHERE u.status IN ('pending', 'queued', 'running', 'processing'))::int AS running,
+              COALESCE(SUM(u.credits), 0::numeric)::text AS credits
+       FROM (${usageRows(monthFilter)}) u
+       GROUP BY 1, 2`,
+      monthFilter.values,
+    ),
+  ]);
+
+  return {
+    daily: daily.rows || [],
+    byKindStatus: byKindStatus.rows || [],
+  };
+}

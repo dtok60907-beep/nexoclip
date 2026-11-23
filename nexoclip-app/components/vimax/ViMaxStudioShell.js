@@ -55,7 +55,7 @@ export default function ViMaxStudioShell() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3 md:px-6">
+        <header className="flex items-center justify-between bg-transparent px-4 py-3 md:px-6">
           <div>
             <p className="text-sm font-medium text-white/90">{activePanel === 'workspace' ? 'Workspace' : panels.find((panel) => panel.id === activePanel)?.label}</p>
             <p className="text-xs text-white/40">AI Storyboard engine integration</p>

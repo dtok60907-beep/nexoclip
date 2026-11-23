@@ -38,13 +38,16 @@
 .nx-studio-light [class~="bg-[#181b20]"],
 .nx-studio-light [class~="bg-[#1a1a1a]"],
 .nx-studio-light [class~="bg-[#1c1c22]"] { background-color:#fff!important; }
-.nx-shell .suite-content.nx-studio-light { color:#252532; background:#fafafd; color-scheme:light; }
-.nx-studio-light :is(.bg-app-bg,.bg-panel-bg,.bg-card-bg) { background:#fafafd!important; }
+.nx-shell .suite-content.nx-studio-light { color:#252532; background:#ffffff; color-scheme:light; }
+.nx-studio-light :is(.bg-app-bg,.bg-panel-bg,.bg-card-bg) { background:#ffffff!important; }
+.nx-studio-light header { background:transparent!important; background-image:none!important; }
 .nx-studio-light :is(.bg-zinc-900,.bg-zinc-950,.bg-neutral-900,.bg-neutral-950,.bg-gray-900,.bg-gray-950,.bg-black) { background:#fff!important; }
 .nx-studio-light [class*="bg-white/"] { background-color:#f4f3f9!important; }
 .nx-studio-light [class*="bg-black/"]:not(.absolute):not(.fixed):not(button) { background-color:#f6f5fa!important; }
 .nx-studio-light [class*="border-white/"], .nx-studio-light [class*="border-gray-"], .nx-studio-light [class*="border-zinc-"] { border-color:#e5e3ed!important; }
-.nx-studio-light :is(.text-white,.text-gray-100,.text-gray-200,.text-gray-300,.text-zinc-100,.text-zinc-200,.text-zinc-300) { color:#292733!important; }
+.nx-studio-light :is(.text-white,.text-gray-100,.text-gray-200,.text-gray-300,.text-zinc-100,.text-zinc-200,.text-zinc-300):not(.nx-btn-solid) { color:#292733!important; }
+.nx-studio-light .nx-btn-solid { color:#ffffff!important; }
+.nx-studio-light .nx-btn-solid :is(span,svg) { color:inherit!important; }
 .nx-studio-light [class*="text-white/"], .nx-studio-light :is(.text-gray-400,.text-gray-500,.text-gray-600,.text-zinc-400,.text-zinc-500,.text-secondary,.text-muted) { color:#716d7f!important; }
 .nx-studio-light :is(input,textarea,select) { color:#292733; border-color:#dfdce8; accent-color:#7554ee; color-scheme:light; }
 .nx-studio-light :is(input,textarea)::placeholder { color:#8a8597!important; }
@@ -64,7 +67,7 @@
 .nx-studio-light :is(.absolute,button)[class*="bg-black/"] :is(.text-white,[class*="text-white/"],.text-gray-300) { color:#fff!important; }
 .nx-studio-light .fixed[class*="bg-black/"] > [class*="bg-[#"] { color:#292733!important; }
 .nx-studio-light :focus-visible { outline-color:#7554ee; }
-.nx-shell .suite-private { background:#fafafd; }
+.nx-shell .suite-private { background:#ffffff; }
 .nx-shell .suite-private h2 { color:#292733; }
 .nx-shell .suite-private p { color:#716d7f; }
 

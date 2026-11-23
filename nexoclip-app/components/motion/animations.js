@@ -54,48 +54,48 @@ const anim = (label, seconds, easing, keyframes, extra = {}) => ({ label, second
 
 // Entrances: play once from the layer's start.
 export const ENTRANCES = {
-  fade: anim('Muncul pelan', 0.8, 'ease-out', [[0, { o: 0 }], [1, { o: 1 }]]),
-  'slide-up': anim('Naik', 0.7, 'ease-out-cubic', [[0, { y: 40, o: 0 }], [1, { y: 0, o: 1 }]]),
-  bounce: anim('Jatuh memantul', 0.9, 'bounce', [[0, { y: -120, o: 0 }], [0.6, { y: 12, o: 1 }], [1, { y: 0 }]]),
-  scale: anim('Membesar', 0.6, 'back', [[0, { s: 0, o: 0 }], [1, { s: 1, o: 1 }]]),
-  flip: anim('Putar 3D', 0.8, 'ease-out-cubic', [[0, { ry: 90, o: 0 }], [1, { ry: 0, o: 1 }]]),
-  spring: anim('Pegas', 1, 'spring', [[0, { s: 0.2, o: 0 }], [0.5, { s: 1.1, o: 1 }], [1, { s: 1 }]]),
-  elastic: anim('Karet', 0.8, 'elastic', [[0, { s: 0, o: 0 }], [0.2, { s: 1.2, o: 0.8 }], [0.35, { s: 0.9, o: 1 }], [0.5, { s: 1.08 }], [0.65, { s: 0.97 }], [0.8, { s: 1.02 }], [1, { s: 1, o: 1 }]]),
-  drop: anim('Jatuh gravitasi', 1.2, 'ease-in', [[0, { yp: -300, o: 0, s: 0.8 }], [0.15, { o: 1, s: 1 }], [0.4, { yp: 0, s: 1 }], [0.55, { yp: -15, s: 1.05 }], [0.7, { yp: 0, s: 0.98 }], [0.82, { yp: -5, s: 1.02 }], [0.92, { yp: 0, s: 0.99 }], [1, { yp: 0, s: 1 }]]),
-  anticipation: anim('Ancang-ancang', 0.85, 'spring', [[0, { s: 1, yp: 0, o: 0 }], [0.28, { s: 0.86, yp: 0, o: 1 }], [0.5, { s: 1.12, yp: -12, o: 1 }], [0.72, { s: 0.97, yp: 0, o: 1 }], [1, { s: 1, yp: 0, o: 1 }]]),
-  blur: anim('Fokus dari blur', 1.6, 'ease-out', [[0, { o: 0, blur: 20, s: 1.1 }], [0.4, { o: 0.4, blur: 10, s: 1.05 }], [0.7, { o: 0.8, blur: 4, s: 1.02 }], [1, { o: 1, blur: 0, s: 1 }]]),
-  wipe: anim('Sapuan', 1.4, 'ease-in-out', [[0, { clip: 100 }], [0.5, { clip: 50 }], [1, { clip: 0 }]]),
-  'reveal-3d': anim('Buka 3D', 1, 'ease-out', [[0, { ry: 90, s: 0.8, o: 0 }], [0.3, { ry: 45, s: 0.9, o: 0.5 }], [0.6, { ry: 15, s: 0.95, o: 0.8 }], [1, { ry: 0, s: 1, o: 1 }]]),
-  book: anim('Halaman buku', 1.4, 'ease-out-cubic', [[0, { ry: -170, s: 0.9, o: 0.3 }], [0.55, { ry: -20, s: 0.98, o: 1 }], [0.8, { ry: 3, s: 1, o: 1 }], [1, { ry: 0, s: 1, o: 1 }]], { origin: 'left center' }),
+  fade: anim('Fade in', 0.8, 'ease-out', [[0, { o: 0 }], [1, { o: 1 }]]),
+  'slide-up': anim('Slide up', 0.7, 'ease-out-cubic', [[0, { y: 40, o: 0 }], [1, { y: 0, o: 1 }]]),
+  bounce: anim('Bounce drop', 0.9, 'bounce', [[0, { y: -120, o: 0 }], [0.6, { y: 12, o: 1 }], [1, { y: 0 }]]),
+  scale: anim('Scale up', 0.6, 'back', [[0, { s: 0, o: 0 }], [1, { s: 1, o: 1 }]]),
+  flip: anim('3D flip', 0.8, 'ease-out-cubic', [[0, { ry: 90, o: 0 }], [1, { ry: 0, o: 1 }]]),
+  spring: anim('Spring', 1, 'spring', [[0, { s: 0.2, o: 0 }], [0.5, { s: 1.1, o: 1 }], [1, { s: 1 }]]),
+  elastic: anim('Elastic', 0.8, 'elastic', [[0, { s: 0, o: 0 }], [0.2, { s: 1.2, o: 0.8 }], [0.35, { s: 0.9, o: 1 }], [0.5, { s: 1.08 }], [0.65, { s: 0.97 }], [0.8, { s: 1.02 }], [1, { s: 1, o: 1 }]]),
+  drop: anim('Gravity drop', 1.2, 'ease-in', [[0, { yp: -300, o: 0, s: 0.8 }], [0.15, { o: 1, s: 1 }], [0.4, { yp: 0, s: 1 }], [0.55, { yp: -15, s: 1.05 }], [0.7, { yp: 0, s: 0.98 }], [0.82, { yp: -5, s: 1.02 }], [0.92, { yp: 0, s: 0.99 }], [1, { yp: 0, s: 1 }]]),
+  anticipation: anim('Anticipation', 0.85, 'spring', [[0, { s: 1, yp: 0, o: 0 }], [0.28, { s: 0.86, yp: 0, o: 1 }], [0.5, { s: 1.12, yp: -12, o: 1 }], [0.72, { s: 0.97, yp: 0, o: 1 }], [1, { s: 1, yp: 0, o: 1 }]]),
+  blur: anim('Blur focus', 1.6, 'ease-out', [[0, { o: 0, blur: 20, s: 1.1 }], [0.4, { o: 0.4, blur: 10, s: 1.05 }], [0.7, { o: 0.8, blur: 4, s: 1.02 }], [1, { o: 1, blur: 0, s: 1 }]]),
+  wipe: anim('Wipe', 1.4, 'ease-in-out', [[0, { clip: 100 }], [0.5, { clip: 50 }], [1, { clip: 0 }]]),
+  'reveal-3d': anim('3D reveal', 1, 'ease-out', [[0, { ry: 90, s: 0.8, o: 0 }], [0.3, { ry: 45, s: 0.9, o: 0.5 }], [0.6, { ry: 15, s: 0.95, o: 0.8 }], [1, { ry: 0, s: 1, o: 1 }]]),
+  book: anim('Book page', 1.4, 'ease-out-cubic', [[0, { ry: -170, s: 0.9, o: 0.3 }], [0.55, { ry: -20, s: 0.98, o: 1 }], [0.8, { ry: 3, s: 1, o: 1 }], [1, { ry: 0, s: 1, o: 1 }]], { origin: 'left center' }),
   // Per word / per character: the keyframes play on each word, one after another.
-  words: anim('Kata per kata', 0.6, 'snappy', [[0, { y: 40, o: 0 }], [1, { y: 0, o: 1 }]], { split: 'word', stagger: 0.08 }),
-  'words-pop': anim('Kata meletup', 0.9, 'ease-out', [[0, { s: 0.3, o: 0 }], [0.6, { s: 1.1, o: 1 }], [1, { s: 1, o: 1 }]], { split: 'word', stagger: 0.12 }),
-  type: anim('Mesin ketik', 1.5, 'linear', [], { split: 'type' }),
-  scramble: anim('Acak jadi teks', 1.8, 'linear', [], { split: 'scramble' }),
+  words: anim('Word by word', 0.6, 'snappy', [[0, { y: 40, o: 0 }], [1, { y: 0, o: 1 }]], { split: 'word', stagger: 0.08 }),
+  'words-pop': anim('Word pop', 0.9, 'ease-out', [[0, { s: 0.3, o: 0 }], [0.6, { s: 1.1, o: 1 }], [1, { s: 1, o: 1 }]], { split: 'word', stagger: 0.12 }),
+  type: anim('Typewriter', 1.5, 'linear', [], { split: 'type' }),
+  scramble: anim('Text scramble', 1.8, 'linear', [], { split: 'scramble' }),
 };
 
 // Emphasis loops: repeat from the end of the entrance until the scene ends.
 export const LOOPS = {
-  pulse: anim('Denyut', 1.2, 'ease-in-out', [[0, { s: 1, o: 0.85 }], [1, { s: 1.12, o: 1 }]], { alternate: true }),
-  heartbeat: anim('Detak jantung', 1.2, 'snappy', [[0, { s: 1 }], [0.05, { s: 0.88 }], [0.12, { s: 1.14 }], [0.18, { s: 1 }], [0.22, { s: 0.92 }], [0.28, { s: 1.08 }], [0.34, { s: 1 }], [1, { s: 1 }]]),
-  float: anim('Melayang', 3.2, 'smooth', [[0, { yp: 0 }], [0.5, { yp: -18 }], [1, { yp: 0 }]]),
+  pulse: anim('Pulse', 1.2, 'ease-in-out', [[0, { s: 1, o: 0.85 }], [1, { s: 1.12, o: 1 }]], { alternate: true }),
+  heartbeat: anim('Heartbeat', 1.2, 'snappy', [[0, { s: 1 }], [0.05, { s: 0.88 }], [0.12, { s: 1.14 }], [0.18, { s: 1 }], [0.22, { s: 0.92 }], [0.28, { s: 1.08 }], [0.34, { s: 1 }], [1, { s: 1 }]]),
+  float: anim('Float', 3.2, 'smooth', [[0, { yp: 0 }], [0.5, { yp: -18 }], [1, { yp: 0 }]]),
   glitch: anim('Glitch', 0.6, 'linear', [[0, { x: 0, o: 1, s: 1 }], [0.1, { x: -4, o: 0.8, s: 1.02 }], [0.15, { x: 3, o: 1, s: 0.98 }], [0.2, { x: -2, o: 0.6 }], [0.25, { x: 0, o: 1, s: 1 }], [0.5, { x: 0, o: 1 }], [0.55, { x: 5, o: 0.5, s: 1.05 }], [0.6, { x: -3, o: 1, s: 1 }], [0.65, { x: 2, o: 0.7 }], [0.7, { x: 0, o: 1, s: 1 }], [1, { x: 0, o: 1, s: 1 }]], { every: 2.4 }),
-  flicker: anim('Neon berkedip', 2.5, 'linear', [[0, { o: 1 }], [0.05, { o: 0.8 }], [0.07, { o: 0.2 }], [0.1, { o: 0.9 }], [0.12, { o: 0.3 }], [0.15, { o: 0.8 }], [0.22, { o: 0.95 }], [0.25, { o: 0.5 }], [0.3, { o: 0.9 }], [0.4, { o: 1 }], [1, { o: 1 }]], { every: 4 }),
-  beat: anim('Ketukan', 2, 'snappy', [[0, { s: 1, y: 0 }], [0.015, { s: 1.14, y: -6 }], [0.04, { s: 1, y: 0 }], [0.25, { s: 1 }], [0.265, { s: 1.06, y: -2 }], [0.29, { s: 1, y: 0 }], [0.5, { s: 1 }], [0.515, { s: 1.1, y: -4 }], [0.54, { s: 1, y: 0 }], [0.75, { s: 1 }], [0.765, { s: 1.06, y: -2 }], [0.79, { s: 1, y: 0 }], [1, { s: 1, y: 0 }]]),
-  shake: anim('Getar', 0.5, 'linear', [[0, { x: 0 }], [0.15, { x: -10 }], [0.3, { x: 9 }], [0.45, { x: -7 }], [0.6, { x: 5 }], [0.75, { x: -3 }], [1, { x: 0 }]], { every: 2 }),
-  wiggle: anim('Goyang', 0.5, 'spring', [[0, { s: 1 }], [0.3, { s: 1.15 }], [0.6, { s: 0.95 }], [1, { s: 1 }]], { every: 1.8 }),
+  flicker: anim('Neon flicker', 2.5, 'linear', [[0, { o: 1 }], [0.05, { o: 0.8 }], [0.07, { o: 0.2 }], [0.1, { o: 0.9 }], [0.12, { o: 0.3 }], [0.15, { o: 0.8 }], [0.22, { o: 0.95 }], [0.25, { o: 0.5 }], [0.3, { o: 0.9 }], [0.4, { o: 1 }], [1, { o: 1 }]], { every: 4 }),
+  beat: anim('Beat', 2, 'snappy', [[0, { s: 1, y: 0 }], [0.015, { s: 1.14, y: -6 }], [0.04, { s: 1, y: 0 }], [0.25, { s: 1 }], [0.265, { s: 1.06, y: -2 }], [0.29, { s: 1, y: 0 }], [0.5, { s: 1 }], [0.515, { s: 1.1, y: -4 }], [0.54, { s: 1, y: 0 }], [0.75, { s: 1 }], [0.765, { s: 1.06, y: -2 }], [0.79, { s: 1, y: 0 }], [1, { s: 1, y: 0 }]]),
+  shake: anim('Shake', 0.5, 'linear', [[0, { x: 0 }], [0.15, { x: -10 }], [0.3, { x: 9 }], [0.45, { x: -7 }], [0.6, { x: 5 }], [0.75, { x: -3 }], [1, { x: 0 }]], { every: 2 }),
+  wiggle: anim('Wiggle', 0.5, 'spring', [[0, { s: 1 }], [0.3, { s: 1.15 }], [0.6, { s: 0.95 }], [1, { s: 1 }]], { every: 1.8 }),
 };
 
 // Exits: end exactly at the end of the scene.
 export const EXITS = {
-  'fade-out': anim('Memudar', 0.6, 'ease-in', [[0, { o: 1 }], [1, { o: 0 }]]),
-  'slide-out': anim('Geser keluar', 0.5, 'ease-in-quad', [[0, { x: 0, o: 1 }], [1, { x: 120, o: 0 }]]),
-  'zoom-out': anim('Mengecil jauh', 0.7, 'ease-in-out', [[0, { s: 1, o: 1 }], [0.6, { s: 0.9, o: 0.7 }], [1, { s: 0.3, o: 0 }]]),
-  dissolve: anim('Larut blur', 0.8, 'smooth', [[0, { o: 1, blur: 0 }], [0.4, { o: 0.8, blur: 2 }], [0.7, { o: 0.4, blur: 6 }], [1, { o: 0, blur: 12 }]]),
-  sink: anim('Tenggelam', 0.52, 'ease-in-cubic', [[0, { y: 0, o: 1 }], [0.5, { y: 40, o: 0.85 }], [1, { y: 140, o: 0 }]]),
-  rise: anim('Naik keluar', 0.48, 'ease-in-quad', [[0, { y: 0, o: 1 }], [0.6, { y: -40, o: 0.6 }], [1, { y: -120, o: 0 }]]),
-  'spin-out': anim('Putar keluar', 0.6, 'ease-in-cubic', [[0, { r: 0, s: 1, o: 1 }], [0.5, { r: 45, s: 0.7, o: 0.6 }], [1, { r: 90, s: 0, o: 0 }]]),
-  collapse: anim('Kempis', 0.9, 'elastic', [[0, { s: 1, o: 1 }], [0.3, { s: 0.85, o: 0.9 }], [0.5, { s: 1.05, o: 0.8 }], [1, { s: 0, o: 0 }]]),
+  'fade-out': anim('Fade out', 0.6, 'ease-in', [[0, { o: 1 }], [1, { o: 0 }]]),
+  'slide-out': anim('Slide out', 0.5, 'ease-in-quad', [[0, { x: 0, o: 1 }], [1, { x: 120, o: 0 }]]),
+  'zoom-out': anim('Zoom out', 0.7, 'ease-in-out', [[0, { s: 1, o: 1 }], [0.6, { s: 0.9, o: 0.7 }], [1, { s: 0.3, o: 0 }]]),
+  dissolve: anim('Blur dissolve', 0.8, 'smooth', [[0, { o: 1, blur: 0 }], [0.4, { o: 0.8, blur: 2 }], [0.7, { o: 0.4, blur: 6 }], [1, { o: 0, blur: 12 }]]),
+  sink: anim('Sink', 0.52, 'ease-in-cubic', [[0, { y: 0, o: 1 }], [0.5, { y: 40, o: 0.85 }], [1, { y: 140, o: 0 }]]),
+  rise: anim('Rise out', 0.48, 'ease-in-quad', [[0, { y: 0, o: 1 }], [0.6, { y: -40, o: 0.6 }], [1, { y: -120, o: 0 }]]),
+  'spin-out': anim('Spin out', 0.6, 'ease-in-cubic', [[0, { r: 0, s: 1, o: 1 }], [0.5, { r: 45, s: 0.7, o: 0.6 }], [1, { r: 90, s: 0, o: 0 }]]),
+  collapse: anim('Collapse', 0.9, 'elastic', [[0, { s: 1, o: 1 }], [0.3, { s: 0.85, o: 0.9 }], [0.5, { s: 1.05, o: 0.8 }], [1, { s: 0, o: 0 }]]),
 };
 
 const DEFAULTS = { o: 1, x: 0, y: 0, yp: 0, s: 1, r: 0, ry: 0, blur: 0, clip: 0 };

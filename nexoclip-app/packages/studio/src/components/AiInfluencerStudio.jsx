@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateSaasImage } from "../generationClient.js";
 import { OPENROUTER_IMAGE_MODEL_MAP } from "../models.js";
@@ -319,11 +319,11 @@ function HoverPill({ label, img, onClick }) {
       {/* Image tooltip */}
       {hovered && img && (
         <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none"
-          style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.6))" }}
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 z-50 pointer-events-none"
+          style={{ filter: "drop-shadow(0 10px 24px rgba(20,20,31,0.18))" }}
         >
-          <div className="w-[72px] h-[72px] rounded-xl overflow-hidden border border-white/20 bg-[#1a1a1a]"
-            style={{ transform: "rotate(-3deg)" }}>
+          <div className="w-[76px] h-[76px] rounded-2xl overflow-hidden border-2 border-white bg-[#f3f4f8]"
+            style={{ transform: "rotate(-2deg)" }}>
             <img src={img} alt={label} className="w-full h-full object-cover" />
           </div>
         </div>
@@ -332,7 +332,7 @@ function HoverPill({ label, img, onClick }) {
       <button
         type="button"
         onClick={onClick}
-        className="h-[22px] px-2 rounded-md bg-white/[0.07] hover:bg-white/[0.13] border border-white/[0.10] text-[11px] font-medium text-gray-200 whitespace-nowrap transition-all cursor-pointer"
+        className="h-[28px] px-2.5 rounded-lg bg-white hover:bg-[#f2f0ff] border border-[#e6e7f0] hover:border-[#c8bffb] text-[12px] font-medium text-[#2d2e3f] hover:text-[#4c38d6] whitespace-nowrap transition-all cursor-pointer shadow-[0_1px_2px_rgba(20,20,31,0.03)]"
       >
         {label}
       </button>
@@ -342,6 +342,7 @@ function HoverPill({ label, img, onClick }) {
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function AiInfluencerStudio({
+  studioWork, restoredWork, projectWorkspace,
   apiKey,
   beforeGenerate,
   onGenerate,
@@ -379,6 +380,17 @@ export default function AiInfluencerStudio({
   const isGenerating = externalIsGenerating || isGeneratingInternal;
 
   // ── Build prompt from selections ──────────────────────────────────────────
+  useEffect(() => {
+    if (!restoredWork) return;
+    const {prompt,aspectRatio,...options}=restoredWork.settings;
+    setSelectedOptions(options);
+    setCustomPrompt(prompt);
+    setAspectRatio(aspectRatio || restoredWork.jobs[0]?.parameters?.aspectRatio || "3:4");
+    const entries=restoredWork.jobs.filter(j=>j.asset_id).map(j=>({url:'/api/assets/'+j.asset_id+'/download?workspace_id='+projectWorkspace,prompt:j.prompt,ts:Date.parse(j.created_at)}));
+    setHistory(entries);
+    setCurrentResult(entries[0]?.url || null);
+  },[restoredWork,projectWorkspace]);
+
   const buildPrompt = useCallback(() => {
     const parts = [];
     Object.values(TABS_CONFIG).forEach((tab) =>
@@ -426,6 +438,7 @@ export default function AiInfluencerStudio({
         const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
         res = await generateSaasImage({
           model: INFLUENCER_MODEL,
+          studioWork: studioWork?.({...selectedOptions,prompt:customPrompt,aspectRatio}),
           prompt,
           workspace_id: workspaceId,
           idempotencyKey: crypto.randomUUID(),
@@ -491,17 +504,20 @@ export default function AiInfluencerStudio({
   const TAGS_VISIBLE = 7; // how many pills to show before "show more"
 
   return (
-    <div className="flex flex-col lg:flex-row h-full bg-[#0a0a0a] text-white overflow-y-auto lg:overflow-hidden select-none font-sans">
+    <div className="flex flex-col lg:flex-row h-full bg-[#f7f8fa] text-[#14141f] overflow-y-auto lg:overflow-hidden select-none font-sans">
 
       {/* ════════════════════════════════════════════════════════════
           LEFT — Builder / Options Panel
       ════════════════════════════════════════════════════════════ */}
-      <div data-tour="influencer-builder" className="flex flex-col w-full lg:w-[320px] h-[360px] lg:h-auto shrink-0 border-r border-white/[0.07] bg-[#111111] overflow-hidden">
+      <div data-tour="influencer-builder" className="flex flex-col w-full lg:w-[340px] h-[400px] lg:h-auto shrink-0 border-b lg:border-b-0 lg:border-r border-[#e6e7f0] bg-white overflow-hidden">
 
         {/* Builder header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
-          <span className="text-[13px] font-bold text-white tracking-tight">Builder</span>
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-[#efeff5] shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] font-semibold text-[#14141f] tracking-tight">Character Builder</span>
+          </div>
           <button
+            type="button"
             onClick={() => setSelectedOptions((() => {
               const init = {};
               Object.values(TABS_CONFIG).forEach((tab) =>
@@ -511,63 +527,67 @@ export default function AiInfluencerStudio({
               );
               return init;
             })())}
-            className="text-[11px] text-gray-500 hover:text-white transition-colors font-medium"
+            className="text-[12px] text-[#5e5e72] hover:text-[#5b45f2] hover:bg-[#f2f0ff] px-2.5 py-1 rounded-lg transition-colors font-medium"
           >
             Reset
           </button>
         </div>
 
         {/* Tab pills */}
-        <div className="flex gap-1 px-3 py-2 border-b border-white/[0.07] shrink-0">
-          {Object.keys(TABS_CONFIG).map((key) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
-                activeTab === key
-                  ? "bg-white text-black shadow"
-                  : "text-gray-500 hover:text-white hover:bg-white/[0.06]"
-              }`}
-            >
-              {TABS_CONFIG[key].label}
-            </button>
-          ))}
+        <div className="px-4 py-2.5 border-b border-[#efeff5] shrink-0">
+          <div className="flex gap-1 bg-[#f3f4f8] p-1 rounded-xl border border-[#e6e7f0]/80">
+            {Object.keys(TABS_CONFIG).map((key) => (
+              <button
+                type="button"
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`flex-1 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all ${
+                  activeTab === key
+                    ? "bg-white text-[#14141f] shadow-[0_1px_4px_rgba(20,20,31,0.08)]"
+                    : "text-[#5e5e72] hover:text-[#14141f]"
+                }`}
+              >
+                {TABS_CONFIG[key].label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Subcategory options scroll area */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-5">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
           {TABS_CONFIG[activeTab]?.subcategories?.map((subcat) => (
             <div key={subcat.id}>
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-0.5">
+              <p className="text-[11px] font-semibold text-[#5e5e72] uppercase tracking-wider mb-2.5 px-0.5">
                 {subcat.label}
               </p>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-3 gap-2.5">
                 {subcat.options?.map((opt) => {
                   const sel = selectedOptions[subcat.id] === opt.id;
                   return (
                     <button
+                      type="button"
                       key={opt.id}
                       onClick={() => handleOptionSelect(subcat.id, opt.id)}
-                      className={`group relative aspect-square rounded-xl overflow-hidden border transition-all ${
+                      className={`group relative aspect-square rounded-xl overflow-hidden border transition-all bg-[#f3f4f8] ${
                         sel
-                          ? "border-white/80 ring-1 ring-white/30 shadow-lg"
-                          : "border-white/[0.08] hover:border-white/25"
+                          ? "border-[#5b45f2] ring-2 ring-[#5b45f2]/25 shadow-[0_6px_16px_rgba(91,69,242,0.16)]"
+                          : "border-[#e6e7f0] hover:border-[#c8bffb]"
                       }`}
                     >
                       <img
                         src={opt.img}
                         alt={opt.label}
                         loading="lazy"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-200"
                         onError={(e) => { e.target.onerror = null; e.target.src = `${CDN}/character_type_human.webp`; }}
                       />
                       {/* Label overlay */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-4 pb-1 px-1">
-                        <span className="text-[9px] font-semibold text-white leading-none">{opt.label}</span>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#14141f]/85 via-[#14141f]/45 to-transparent pt-5 pb-1.5 px-1.5">
+                        <span className="block truncate text-[11px] font-semibold text-white leading-tight">{opt.label}</span>
                       </div>
                       {/* Selected check badge */}
                       {sel && (
-                        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white text-black flex items-center justify-center">
+                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#5b45f2] text-white flex items-center justify-center shadow-sm ring-2 ring-white">
                           <CheckIcon />
                         </div>
                       )}
@@ -583,20 +603,21 @@ export default function AiInfluencerStudio({
       {/* ════════════════════════════════════════════════════════════
           CENTER — Current Character Preview
       ════════════════════════════════════════════════════════════ */}
-      <div className="order-first lg:order-none flex flex-col flex-1 shrink-0 min-h-[480px] lg:min-h-0 min-w-0 overflow-hidden bg-[#0a0a0a]">
+      <div className="order-first lg:order-none flex flex-col flex-1 shrink-0 min-h-[520px] lg:min-h-0 min-w-0 overflow-hidden bg-[#f7f8fa]">
 
         {/* Center top bar: aspect ratio + generate */}
-        <div className="flex flex-wrap gap-3 items-center justify-between px-3 lg:px-6 py-3 border-b border-white/[0.07] shrink-0">
+        <div className="flex flex-wrap gap-3 items-center justify-between px-4 lg:px-6 py-3 bg-white border-b border-[#e6e7f0] shrink-0">
           {/* Aspect ratio */}
-          <div className="flex gap-0.5 bg-white/[0.05] border border-white/[0.08] rounded-xl p-1">
+          <div className="flex gap-1 bg-[#f3f4f8] border border-[#e6e7f0] rounded-xl p-1">
             {["3:4", "1:1", "9:16", "16:9"].map((r) => (
               <button
+                type="button"
                 key={r}
                 onClick={() => setAspectRatio(r)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
                   aspectRatio === r
-                    ? "bg-violet-600 text-white shadow-md shadow-violet-600/40"
-                    : "text-gray-500 hover:text-white"
+                    ? "bg-[#5b45f2] text-white shadow-[0_2px_8px_rgba(91,69,242,0.28)]"
+                    : "text-[#5e5e72] hover:text-[#14141f] hover:bg-white/60"
                 }`}
               >
                 {r}
@@ -604,11 +625,12 @@ export default function AiInfluencerStudio({
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {/* Shuffle */}
             <button
+              type="button"
               onClick={handleShuffle}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/10 text-[12px] font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#e6e7f0] text-[#2d2e3f] hover:text-[#4c38d6] hover:border-[#c8bffb] hover:bg-[#f2f0ff] text-[12.5px] font-semibold transition-all"
             >
               <ShuffleIcon />
               Shuffle
@@ -616,13 +638,14 @@ export default function AiInfluencerStudio({
 
             {/* Generate */}
             <button
+              type="button"
               data-tour="influencer-generate"
               onClick={handleGenerate}
               disabled={isGenerating}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-bold transition-all shadow-lg ${
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold transition-all ${
                 isGenerating
-                  ? "bg-violet-600/40 text-white/60 cursor-not-allowed"
-                  : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-violet-600/30 hover:shadow-violet-500/40"
+                  ? "bg-[#5b45f2]/50 text-white cursor-not-allowed"
+                  : "bg-[#5b45f2] hover:bg-[#4731d8] text-white shadow-[0_6px_18px_rgba(91,69,242,0.28)] hover:shadow-[0_8px_22px_rgba(91,69,242,0.36)] active:scale-[0.98]"
               }`}
             >
               {isGenerating ? (
@@ -641,23 +664,31 @@ export default function AiInfluencerStudio({
         </div>
 
         {/* Preview area */}
-        <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center p-6 lg:p-8 overflow-hidden">
           <div
-            className="relative rounded-2xl overflow-hidden bg-[#141414] border border-white/[0.07] shadow-2xl flex items-center justify-center"
+            className={`relative rounded-[22px] overflow-hidden flex items-center justify-center transition-all ${
+              previewUrl || isGenerating
+                ? "bg-[#0f1117] border border-[#232838] shadow-[0_20px_50px_rgba(20,20,31,0.16)]"
+                : "bg-white border border-[#e6e7f0] shadow-[0_12px_36px_rgba(20,20,31,0.06)]"
+            }`}
             style={{ aspectRatio: arMap[aspectRatio] ?? "3/4", maxHeight: "100%", maxWidth: "100%" }}
           >
             {isGenerating ? (
               <div className="flex flex-col items-center gap-4 text-center px-8 py-12">
-                <div className="w-12 h-12 border-[3px] border-violet-500/20 border-t-violet-500 rounded-full animate-spin" />
-                <p className="text-sm text-gray-400 font-medium">Generating your AI influencer…</p>
+                <div className="w-11 h-11 border-[3px] border-white/15 border-t-[#5b45f2] rounded-full animate-spin" />
+                <div className="space-y-1">
+                  <p className="text-[14px] text-white font-semibold">Generating your AI influencer…</p>
+                  <p className="text-[12px] text-white/55">Crafting studio lighting and portrait details</p>
+                </div>
               </div>
             ) : previewUrl ? (
               <>
                 <img src={previewUrl} alt="Generated AI Character" className="w-full h-full object-cover" />
                 {/* Download overlay button */}
                 <button
+                  type="button"
                   onClick={() => downloadImg(previewUrl)}
-                  className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm border border-white/10 text-white text-[11px] font-semibold hover:bg-black/80 transition-all"
+                  className="absolute bottom-3.5 right-3.5 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#e6e7f0] text-[#14141f] text-[12px] font-semibold hover:bg-white hover:text-[#5b45f2] shadow-[0_8px_24px_rgba(20,20,31,0.22)] transition-all"
                 >
                   <DownloadIcon />
                   Save
@@ -665,11 +696,17 @@ export default function AiInfluencerStudio({
               </>
             ) : (
               <div className="flex flex-col items-center gap-3 text-center px-8 py-12">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.8" className="text-gray-700">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                </svg>
-                <p className="text-sm text-gray-600 font-medium">Your AI influencer lives here.</p>
-                <p className="text-xs text-gray-700">Design and build your AI influencer<br />from scratch</p>
+                <div className="w-14 h-14 rounded-2xl bg-[#f2f0ff] border border-[#ddd7fe] text-[#5b45f2] flex items-center justify-center">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                  </svg>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[15px] text-[#14141f] font-semibold tracking-tight">Your AI influencer lives here</p>
+                  <p className="text-[12.5px] text-[#5e5e72] leading-relaxed max-w-[240px]">
+                    Pick traits in the builder or click Shuffle, then generate your character.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -697,9 +734,9 @@ export default function AiInfluencerStudio({
                 <button
                   type="button"
                   onClick={() => setShowAllTags((v) => !v)}
-                  className="h-[22px] px-2 rounded-md bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] text-[11px] text-gray-500 hover:text-gray-300 whitespace-nowrap transition-all"
+                  className="h-[28px] px-2.5 rounded-lg bg-[#f3f4f8] hover:bg-[#e7e3ff] border border-[#e6e7f0] text-[12px] font-medium text-[#5e5e72] hover:text-[#4c38d6] whitespace-nowrap transition-all"
                 >
-                  {showAllTags ? "hide" : `show more`}
+                  {showAllTags ? "Show less" : `+${selectedTags.length - TAGS_VISIBLE} more`}
                 </button>
               )}
             </div>
@@ -708,19 +745,19 @@ export default function AiInfluencerStudio({
 
         {/* Error */}
         {errorMsg && (
-          <div className="mx-6 mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] shrink-0">
+          <div className="mx-6 mb-3 px-4 py-3 rounded-xl bg-[#fff1f3] border border-[#fccdd6] text-[#c01048] text-[12.5px] font-medium shrink-0">
             {errorMsg}
           </div>
         )}
 
         {/* Custom prompt bar at bottom */}
-        <div className="px-6 pb-4 shrink-0">
+        <div className="px-6 pb-5 shrink-0">
           <input
             type="text"
             value={customPrompt}
             onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder="Add extra details… e.g. neon cyberpunk lighting, dramatic shadows"
-            className="w-full h-9 bg-[#161616] border border-white/[0.07] rounded-xl px-3 text-[12px] text-gray-200 placeholder-gray-600 outline-none focus:border-violet-500/40 transition-colors"
+            placeholder="Add extra details… e.g. editorial studio lighting, minimalist wardrobe, warm rim light"
+            className="w-full h-11 bg-white border border-[#e4e2f0] rounded-2xl px-4 text-[13px] text-[#14141f] placeholder:text-[#8a8b9e] outline-none shadow-[0_2px_10px_rgba(20,20,31,0.03)] focus:border-[#5b45f2] focus:ring-2 focus:ring-[#5b45f2]/15 transition-all"
           />
         </div>
       </div>
@@ -728,22 +765,24 @@ export default function AiInfluencerStudio({
       {/* ════════════════════════════════════════════════════════════
           RIGHT — Generated Characters History Gallery
       ════════════════════════════════════════════════════════════ */}
-      <div data-tour="influencer-gallery" className="flex flex-col w-full lg:w-[160px] min-h-[160px] shrink-0 border-l border-white/[0.07] bg-[#111111] overflow-hidden">
+      <div data-tour="influencer-gallery" className="flex flex-col w-full lg:w-[200px] min-h-[180px] shrink-0 border-t lg:border-t-0 lg:border-l border-[#e6e7f0] bg-white overflow-hidden">
 
         {/* Gallery header */}
-        <div className="px-3 py-3 border-b border-white/[0.07] shrink-0">
-          <p className="text-[11px] font-bold text-white tracking-tight">Generated</p>
-          <p className="text-[9px] text-gray-600 mt-0.5">{history.length} characters</p>
+        <div className="px-4 py-3.5 border-b border-[#efeff5] shrink-0">
+          <p className="text-[13px] font-semibold text-[#14141f] tracking-tight">Generated</p>
+          <p className="text-[11.5px] text-[#7a7b90] mt-0.5">{history.length} {history.length === 1 ? "character" : "characters"}</p>
         </div>
 
         {/* Gallery scroll */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2.5">
           {history.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-center px-2">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-700 mb-2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-              </svg>
-              <p className="text-[9px] text-gray-700 leading-relaxed">Generated characters<br />appear here</p>
+            <div className="flex flex-col items-center justify-center h-40 text-center px-3">
+              <div className="w-10 h-10 rounded-xl bg-[#f6f6fa] border border-[#e6e7f0] text-[#7a7b90] flex items-center justify-center mb-2.5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+                </svg>
+              </div>
+              <p className="text-[11.5px] text-[#7a7b90] leading-relaxed">Generated characters<br />appear here</p>
             </div>
           ) : (
             history.map((item, idx) => (
@@ -753,16 +792,16 @@ export default function AiInfluencerStudio({
                 tabIndex={0}
                 onClick={() => setSelectedHistoryIdx(idx)}
                 onKeyDown={(e) => e.key === "Enter" && setSelectedHistoryIdx(idx)}
-                className={`group relative w-full aspect-[3/4] rounded-xl overflow-hidden border transition-all cursor-pointer ${
+                className={`group relative w-full aspect-[3/4] rounded-xl overflow-hidden border transition-all cursor-pointer bg-[#f3f4f8] ${
                   selectedHistoryIdx === idx
-                    ? "border-violet-500 ring-1 ring-violet-500/40"
-                    : "border-white/[0.08] hover:border-white/20"
+                    ? "border-[#5b45f2] ring-2 ring-[#5b45f2]/25 shadow-sm"
+                    : "border-[#e6e7f0] hover:border-[#c8bffb]"
                 }`}
               >
                 <img src={item.url} alt={`Character ${idx + 1}`} className="w-full h-full object-cover" />
                 {/* Download on hover */}
-                <div className="absolute inset-0 hidden md:flex bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity items-end justify-center pb-2">
-                  <div className="absolute right-2 top-2 flex flex-col gap-2">
+                <div className="absolute inset-0 hidden md:flex bg-[#14141f]/45 opacity-0 group-hover:opacity-100 transition-opacity items-end justify-center pb-2.5">
+                  <div className="absolute right-2 top-2 flex flex-col gap-1.5">
                     <GenerationCopyButtons
                       prompt={item.prompt}
                       imageUrl={item.url}
@@ -774,7 +813,7 @@ export default function AiInfluencerStudio({
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); downloadImg(item.url); }}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); downloadImg(item.url); } }}
-                    className="p-1.5 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all cursor-pointer"
+                    className="p-2 rounded-full bg-white/95 text-[#14141f] hover:bg-[#5b45f2] hover:text-white shadow-md transition-all cursor-pointer"
                   >
                     <DownloadIcon />
                   </div>
@@ -792,7 +831,7 @@ export default function AiInfluencerStudio({
                   ]}
                 />
                 {/* Index badge */}
-                <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[8px] text-gray-300 font-bold">
+                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-[#14141f]/75 backdrop-blur-sm text-[10px] text-white font-semibold">
                   #{history.length - idx}
                 </div>
               </div>
@@ -800,7 +839,7 @@ export default function AiInfluencerStudio({
           )}
         </div>
       </div>
-      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#ffffff', color: '#292733', border: '1px solid #e5e3ed', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(39,35,58,0.12)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
+      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#ffffff', color: '#14141f', border: '1px solid #e6e7f0', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(20,20,31,0.12)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
     </div>
   );
 }

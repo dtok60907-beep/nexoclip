@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 export interface AuthenticatedUser {
   id: string
+  workspaceId?: string
   sessionId?: string
 }
 
@@ -57,6 +58,7 @@ export function createAuthenticatedUserResolver(options: AuthenticatedUserResolv
       if (!response.ok) return null
 
       const body = await response.json() as {
+        workspaceId?: unknown
         sessionId?: unknown
         authenticated?: boolean
         user?: { id?: unknown }
@@ -66,7 +68,7 @@ export function createAuthenticatedUserResolver(options: AuthenticatedUserResolv
         return null
       }
 
-      return { id: body.user.id, ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}) }
+      return { id: body.user.id, ...(typeof body.workspaceId === 'string' ? { workspaceId: body.workspaceId } : {}), ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}) }
     } catch {
       return null
     }

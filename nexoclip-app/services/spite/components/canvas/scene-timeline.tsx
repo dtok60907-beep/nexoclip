@@ -129,26 +129,22 @@ export function SceneTimeline({
   }
 
   return (
-    <div data-tour="scene-timeline" className="flex flex-col shrink-0 border-b border-border/50 bg-[#0a0c0e]">
+    <div data-tour="scene-timeline" className="min-w-0 flex flex-col">
       {/* Scene tabs row with scroll controls */}
       <div className="relative flex items-center">
         {/* Scroll left button */}
         <button
           onClick={scrollLeft}
-          className="shrink-0 w-8 h-full flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-white/5 transition-colors"
+          className="shrink-0 w-5 h-10 flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-white/5 transition-colors"
           aria-label="Scroll left"
         >
           <CaretLeft size={16} weight="bold" />
         </button>
 
-        {/* Scrollable scene tabs — ~20% taller than before (h-20 → h-24).
-            Scrollbar is now visible + dark-themed (see globals.css) so the
-            user can drag the thumb instead of relying on the +/- arrows.
-            Without the hidden class the default browser scrollbar showed
-            up as bright white against the near-black canvas. */}
+        {/* Scene tabs scroll within the project toolbar. */}
         <div
           ref={scrollRef}
-          className="flex-1 flex items-stretch h-24 overflow-x-auto gap-1.5 px-1 py-2"
+          className="min-w-0 flex-1 flex items-stretch h-12 overflow-x-auto gap-1.5 px-1 py-1"
         >
           {scenes.map((scene) => {
             const isActive = scene.id === activeSceneId
@@ -172,7 +168,7 @@ export function SceneTimeline({
                 // of a scrollable strip). Collapsed tiles get a slightly
                 // larger min so even the compact form stays readable.
                 className={`
-                  group/scene relative flex items-center gap-2.5 px-4 shrink-0 ${isCollapsed ? 'min-w-[160px]' : 'min-w-[220px]'} rounded-lg cursor-pointer transition-all
+                  group/scene relative flex items-center gap-1.5 px-2 shrink-0 ${isCollapsed ? 'min-w-[140px]' : 'min-w-[180px]'} rounded-lg cursor-pointer transition-all
                   ${isActive
                     ? 'bg-accent/10 border border-accent/40'
                     : 'bg-card/30 border border-border/30 hover:bg-card/50 hover:border-border/50'}
@@ -208,7 +204,7 @@ export function SceneTimeline({
                         if (shot.nodeId) onShotClick?.(scene.id, shot.id)
                       }}
                       className={`
-                        relative shrink-0 w-[58px] h-[44px] rounded overflow-hidden transition-all duration-150
+                        relative shrink-0 w-[38px] h-7 rounded overflow-hidden transition-all duration-150
                         ${shot.nodeId && !isCollapsed ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
                         ${!shot.nodeId ? 'border border-dashed border-border/50 bg-card/20' : shot.thumbnail ? '' : 'bg-card border border-border/50'}
                         ${dropTarget?.sceneId === scene.id && dropTarget.index === index ? 'ring-2 ring-accent scale-105' : ''}
@@ -250,14 +246,14 @@ export function SceneTimeline({
                       a small "+N" pill so the user knows there's more
                       hidden in this scene. */}
                   {isCollapsed && sortedShots.length > 1 && (
-                    <div className="shrink-0 px-1.5 h-[44px] flex items-center text-[10px] font-mono text-muted-foreground/60">
+                    <div className="shrink-0 px-1.5 h-7 flex items-center text-[10px] font-mono text-muted-foreground/60">
                       +{sortedShots.length - 1}
                     </div>
                   )}
 
                   {/* Empty state when no shots tagged at all */}
                   {realShots.length === 0 && !isCollapsed && (
-                    <div className="w-[58px] h-[44px] rounded border border-dashed border-border/40 flex items-center justify-center">
+                    <div className="w-[38px] h-7 rounded border border-dashed border-border/40 flex items-center justify-center">
                       <span className="text-[10px] font-mono text-muted-foreground/30">Empty</span>
                     </div>
                   )}
@@ -322,7 +318,7 @@ export function SceneTimeline({
           {/* Add scene button */}
           <button
             onClick={onAddScene}
-            className="flex items-center justify-center px-7 min-w-[88px] rounded-lg border border-dashed border-border/40 hover:border-accent/30 hover:bg-accent/5 text-muted-foreground/40 hover:text-accent transition-all"
+            className="shrink-0 flex items-center justify-center px-3 min-w-10 rounded-lg border border-dashed border-border/40 hover:border-accent/30 hover:bg-accent/5 text-muted-foreground/40 hover:text-accent transition-all"
             aria-label="Add scene"
           >
             <Plus size={16} weight="bold" />
@@ -332,7 +328,7 @@ export function SceneTimeline({
         {/* Scroll right button */}
         <button
           onClick={scrollRight}
-          className="shrink-0 w-8 h-full flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-white/5 transition-colors"
+          className="shrink-0 w-5 h-10 flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-white/5 transition-colors"
           aria-label="Scroll right"
         >
           <CaretRight size={16} weight="bold" />

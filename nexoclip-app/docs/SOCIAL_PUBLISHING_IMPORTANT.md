@@ -1,6 +1,6 @@
 # Social Publishing — catatan penting
 
-Tanggal: 14 November 2026. Lingkungan aktif: Docker lokal, app `http://localhost`, publisher `/studio/publish`, TikTok Developer Sandbox.
+Tanggal: 15 November 2026. Lingkungan aktif: Docker lokal, app `http://localhost`, publisher `/studio/publish`, TikTok Developer Sandbox.
 
 ## Status yang sudah terbukti
 
@@ -17,7 +17,7 @@ Tanggal: 14 November 2026. Lingkungan aktif: Docker lokal, app `http://localhost
 - [x] Setelah verifikasi benar, user review dan konfirmasi ulang foto; job 3 foto mencapai `PUBLISH_COMPLETE` dan user mengonfirmasi berhasil. Job pertama tetap disimpan sebagai gagal; tidak di-requeue otomatis.
 - [ ] Uji carousel, urutan/cover, caption, AI disclosure, komentar, dan photo Upload-to-inbox sampai selesai di TikTok.
 - [ ] Uji video multipart nyata serta recovery setelah worker terputus. Pertahankan pemeriksaan publish ID sebelum retry agar tidak membuat posting ganda.
-- [ ] Buat alur operasional `needs_review`: tampilkan penyebab, periksa status TikTok, dan tawarkan langkah aman. Tidak boleh sekadar requeue semua job.
+- [x] Alur operasional `needs_review`: tombol **Check TikTok status** hanya memeriksa publish ID lama. **Resume existing upload** tersedia untuk video `PROCESSING_UPLOAD` yang masih memiliki upload URL terenkripsi; worker memvalidasi batas chunk. Tanpa publish ID tidak ada tombol resend. Pemeriksaan dibatasi lease 60 detik dan tidak menimpa webhook terminal yang datang bersamaan. Diuji mock; respons API nyata untuk alur recovery masih perlu diuji manual.
 - [ ] Uji webhook nyata pada URL HTTPS publik: signature, duplicate delivery, dan event terlambat. Localhost saat ini mengandalkan polling.
 - [ ] Siapkan konfigurasi production app/worker/database/Redis/R2 dan backup encryption key. Deployment dan perubahan secret production memerlukan persetujuan user.
 - [ ] Siapkan review/audit TikTok untuk public publishing. Sandbox/unaudited tetap private-only; jangan menonaktifkan pembatasan hanya untuk lolos uji.
@@ -25,11 +25,12 @@ Tanggal: 14 November 2026. Lingkungan aktif: Docker lokal, app `http://localhost
 
 ## P1 — alur kerja user
 
-- [ ] **Draft tersimpan:** media, urutan foto, caption, akun, disclosure dan pengaturan; bisa dilanjutkan setelah reload. Draft bukan posting yang sudah dikirim.
-- [ ] **Scheduling:** tanggal/jam + zona waktu, simpan waktu UTC, edit/batal sebelum pengiriman, dan konfirmasi eksplisit. Kolom `scheduled_at` sudah ada; API/composer scheduling belum dibuat.
-- [ ] Validasi ulang izin, koneksi akun, media, creator settings, dan visibility saat waktu publish tiba. Pastikan restart worker tidak mengirim jadwal dua kali.
+- [x] **Draft tersimpan:** PostgreSQL menyimpan ID media, urutan foto, caption, akun, disclosure dan pengaturan; **Save draft → Saved drafts → Continue editing**. Media diotorisasi ulang saat dibuka, edit memakai versi untuk mencegah saling timpa. Consent tidak disimpan; wajib review dan konfirmasi lagi. Draft yang berhasil dikirim dihapus dengan pemeriksaan versi.
+- [x] **Scheduling:** tanggal/jam lokal + zona waktu terlihat di composer, disimpan UTC, 1 menit–30 hari ke depan. Status `scheduled`, ubah waktu dan batal tersedia sebelum worker mengklaim job. Batalkan dan buat ulang dengan konfirmasi baru untuk mengganti isi/media post terjadwal. Jadwal merupakan antrean Nexoclip; waktu selesai tetap bergantung pada pemrosesan TikTok.
+- [x] Worker memvalidasi ulang membership, akun aktif/tidak disuspend, scope, media, creator settings dan visibility sebelum pengiriman. Klaim atomik mencegah dua worker menjalankan job yang sama; restart mengambil job due yang tersimpan. Tes PostgreSQL membuktikan idempotency, race dua worker, jadwal future tidak terklaim, serta cancel. **Posting terjadwal nyata setelah restart masih harus diuji manual.**
 - [ ] Upload media sendiri dari publisher. Saat ini video dipilih dari hasil generate milik user; foto dari aset workspace. Batas app: video MP4/MOV 250 MB, foto 1–35, source foto 20 MB dan 16 megapixel.
-- [ ] Pagination/search media melebihi 100 item dan filter riwayat publishing.
+- [x] Pagination media: 24 item per tab + Load more; pilihan dipertahankan lintas tab dan refresh.
+- [ ] Search media dan filter riwayat publishing.
 
 ## P2 — insights dan platform berikutnya
 
@@ -47,3 +48,28 @@ Tanggal: 14 November 2026. Lingkungan aktif: Docker lokal, app `http://localhost
 - Jangan membaca/menampilkan `.env.local`, memasukkan secret ke git, deploy production, submit app review, atau mengirim post nyata tanpa instruksi/konfirmasi yang sesuai.
 
 Panduan implementasi dan sandbox: [tiktok-publishing.md](./tiktok-publishing.md).
+
+## Verifikasi lanjutan 15 November
+
+- 43 tes Node mock/unit/route lulus (`node --test --test-isolation=none --test-reporter=spec src/services/socialPublishingRoutes.test.mjs src/services/socialPublishingWorkflow.test.mjs src/services/tiktokService.test.mjs src/services/tiktokPublishing.test.mjs src/services/tiktokPostSync.test.mjs src/services/tiktokProfileSync.test.mjs src/services/tiktokVideoQuery.test.mjs`). Termasuk CSRF, tanpa sesi, timezone, version conflict, status review, multipart resume, dan kehilangan scope.
+- Suite `socialPublishing.integration.test.mjs` lulus pada database PostgreSQL Docker terpisah: seluruh migrasi dari kosong/rerun, concurrent create, cross-tenant denial, scheduled cancel, race worker, draft persistence/ownership/version, serta jadwal foto. TikTok dan R2 tidak dipanggil oleh suite ini.
+- Delapan skenario PostgreSQL termasuk status-check lease/cooldown dan webhook terminal yang datang saat pemeriksaan berjalan. Database test sementara sudah dihapus; database aplikasi lokal hanya menerima migrasi `071`.
+- Verifikasi akhir 16 November: build Docker app/worker lulus, migrasi lokal diterapkan, kedua service diperbarui dan `/studio/publish` merespons HTTP 200. Tes browser Playwright dengan seluruh API dimock lulus untuk pilih foto → simpan draft → buka kembali → caption/jadwal pulih → consent tetap kosong → konfirmasi schedule. Desktop dan mobile 390px diperiksa; tidak ada horizontal overflow. Ini tidak membuktikan posting terjadwal nyata.
+- Tidak ada posting nyata baru yang dikirim oleh agent. Hasil nyata video/foto pada 14 November tetap terpisah dari tes mock di atas.
+- Notion MCP tidak tersedia pada sesi ini; task state Notion belum diverifikasi atau diperbarui.
+
+## Perbaikan loading media dan rotasi R2 — 17 November
+
+- Penyebab yang ditemukan: daftar awal mengambil sampai 100 video dan 100 foto; semua tile video memakai preload metadata. Route aset lokal mengabaikan Range dan mengembalikan file penuh. Database lokal memiliki 53 video, total sekitar 333 MB (bukan pengukuran byte transfer browser).
+- Daftar sekarang mengambil satu jenis media per permintaan, 24 item per halaman. Load more, cache per tab, pembatalan request saat pindah tab dan selection cache dipakai agar pilihan tidak hilang. Foto gallery memakai thumbnail 512px; original tetap digunakan saat review/publish.
+- LocalObjectStorage kini mendukung existence check, thumbnail lewat signed upload/download capabilities, dan streaming byte ranges. Respons video 206/Content-Range dan 416 diuji; HEAD membatalkan stream tanpa body. Otorisasi tenant tetap dijalankan sebelum akses storage. R2 redirect tetap dipertahankan.
+- 63 tes Node terkait aset/storage/publisher lulus. Tes browser dengan API dimock lulus: hanya satu permintaan metadata awal, 9 preview terlihat dari 24 item pada viewport test, pagination, pilihan lintas tab/refresh dan layout mobile. Tidak mengirim post nyata atau mengukur latensi produksi.
+- Pasangan R2 access key/secret terbaru dibaca dari Railway production (app, video worker, image worker, Spite cocok), diverifikasi dengan HeadBucket read-only, lalu disimpan ke `.env.r2.local` yang diabaikan git dengan permission 600. App, image/video/motion workers dan Spite lokal dimuat ulang; seluruh nilai environment lainnya dipertahankan. Bucket, URL publik dan mode storage tidak diganti. Railway tidak dimutasi/deploy; snapshot privat sementara dihapus.
+- Build Docker web lulus dan `/studio/publish` melalui domain dev merespons HTTP 200. Instagram posting tetap belum diimplementasikan: koneksi Meta saat ini hanya discovery akun dan laporan iklan.
+
+## Instagram follow-up (17 November 2026)
+
+- Local implementation adds owned-account post sync and confirmed single-photo/photo-carousel/Reels publishing through Unified Login. Setup and test steps: [meta-unified-login.md](meta-unified-login.md#instagram-publishing-and-post-sync-local-implementation).
+- Reconnect after adding instagram_content_publish to the existing Meta login configuration. Personal accounts are unsupported; use Creator/Business. Dev mode needs app test roles/assigned assets; customer rollout needs Meta approval.
+- No real Instagram publishing is triggered by automated verification. Confirm a real test post manually in /studio/publish → Instagram.
+- Mixed-media carousels, Stories, IG scheduling/cancellation, IG publishing webhooks, campaign creation, transcoding of incompatible videos and lifecycle cleanup of publication derivatives remain follow-ups. Existing TikTok scheduling stays separate.

@@ -1,0 +1,928 @@
+/* ==========================================================================
+   NexoClip Loading & Skeleton Design System
+   Editorial Light-Surface Minimalism + Automatic Dark-Surface Variant
+   ========================================================================== */
+
+:root {
+  --nx-load-bg: #ffffff;
+  --nx-load-surface: #fafafa;
+  --nx-load-surface-alt: #f5f4fa;
+  --nx-load-border: #e8e7f0;
+  --nx-load-ink: #14141f;
+  --nx-load-muted: #5e5e72;
+  --nx-load-accent: #5b45f2;
+  --nx-load-accent-soft: rgba(91, 69, 242, 0.14);
+  --nx-skel-base: #f0eff6;
+  --nx-skel-base-strong: #e6e4f0;
+  --nx-skel-sheen: rgba(255, 255, 255, 0.82);
+  --nx-skel-tint: rgba(91, 69, 242, 0.055);
+}
+
+.nx-surface-dark,
+[data-nx-surface="dark"] {
+  --nx-load-bg: #07090e;
+  --nx-load-surface: #0f1217;
+  --nx-load-surface-alt: #141821;
+  --nx-load-border: rgba(255, 255, 255, 0.08);
+  --nx-load-ink: #f4f5f7;
+  --nx-load-muted: rgba(255, 255, 255, 0.48);
+  --nx-load-accent: #d4ff64;
+  --nx-load-accent-soft: rgba(212, 255, 100, 0.16);
+  --nx-skel-base: rgba(255, 255, 255, 0.06);
+  --nx-skel-base-strong: rgba(255, 255, 255, 0.1);
+  --nx-skel-sheen: rgba(255, 255, 255, 0.09);
+  --nx-skel-tint: rgba(212, 255, 100, 0.04);
+}
+
+/* When a dark-default module is hosted inside the light studio shell, inherit light tokens */
+.nx-studio-light .nx-surface-dark,
+.nx-studio-light [data-nx-surface="dark"] {
+  --nx-load-bg: #ffffff;
+  --nx-load-surface: #fafafa;
+  --nx-load-surface-alt: #f5f4fa;
+  --nx-load-border: #e8e7f0;
+  --nx-load-ink: #14141f;
+  --nx-load-muted: #5e5e72;
+  --nx-load-accent: #5b45f2;
+  --nx-load-accent-soft: rgba(91, 69, 242, 0.14);
+  --nx-skel-base: #f0eff6;
+  --nx-skel-base-strong: #e6e4f0;
+  --nx-skel-sheen: rgba(255, 255, 255, 0.82);
+  --nx-skel-tint: rgba(91, 69, 242, 0.055);
+}
+
+/* ---------- Core Shimmer Primitive ---------- */
+.nx-skel {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: var(--nx-skel-base);
+}
+
+.nx-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--nx-skel-tint) 32%,
+    var(--nx-skel-sheen) 50%,
+    var(--nx-skel-tint) 68%,
+    transparent 100%
+  );
+  animation: nx-skel-sweep 1.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.nx-skel--strong {
+  background-color: var(--nx-skel-base-strong);
+}
+
+.nx-skel--pill {
+  border-radius: 999px;
+}
+
+.nx-skel--circle {
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.nx-skel--media {
+  border-radius: 12px;
+}
+
+@keyframes nx-skel-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes nx-fade-soft {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Branded Creative-Startup Loader ---------- */
+.nx-brand-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100%;
+  padding: 32px 24px;
+  background-color: var(--nx-load-bg);
+  color: var(--nx-load-ink);
+  animation: nx-fade-soft 220ms ease-out;
+}
+
+.nx-brand-loader.is-fullscreen {
+  min-height: 100vh;
+}
+
+.nx-brand-loader-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.nx-brand-gooey-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.nx-skel-gooey {
+  transform: scale(0.85);
+  transform-origin: left center;
+}
+
+.nx-brand-mark-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--nx-load-border);
+  background-color: var(--nx-load-surface);
+  box-shadow: 0 8px 24px -12px rgba(24, 24, 36, 0.12);
+}
+
+.nx-brand-aperture {
+  width: 26px;
+  height: 26px;
+  color: var(--nx-load-ink);
+}
+
+.nx-brand-aperture-core {
+  transform-origin: center;
+  animation: nx-aperture-breathe 2.2s ease-in-out infinite;
+}
+
+@keyframes nx-aperture-breathe {
+  0%, 100% {
+    transform: scale(0.86);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+.nx-brand-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.nx-brand-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--nx-load-ink);
+}
+
+.nx-brand-sub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--nx-load-muted);
+}
+
+.nx-hairline-track {
+  position: relative;
+  width: 164px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background-color: var(--nx-load-border);
+}
+
+.nx-hairline-bar {
+  position: absolute;
+  inset: 0;
+  width: 44%;
+  border-radius: 999px;
+  background-color: var(--nx-load-accent);
+  animation: nx-hairline-glide 1.4s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+@keyframes nx-hairline-glide {
+  0% {
+    transform: translateX(-115%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+/* ---------- Inline Precision Spinner ---------- */
+.nx-inline-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--nx-load-accent);
+  animation: nx-spin-smooth 850ms linear infinite;
+}
+
+@keyframes nx-spin-smooth {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Studio Workspace Lazy-Load Skeleton ---------- */
+.nx-studio-skel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 480px;
+  width: 100%;
+  background-color: var(--nx-load-bg);
+  color: var(--nx-load-ink);
+  animation: nx-fade-soft 200ms ease-out;
+}
+
+.nx-studio-skel.is-route {
+  min-height: 100vh;
+  flex-direction: row;
+  padding: 8px;
+  gap: 8px;
+  background-color: #fafafa;
+}
+
+.nx-studio-skel-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 66px;
+  flex-shrink: 0;
+  padding: 12px 6px;
+  border: 1px solid #eaeaef;
+  border-radius: 14px;
+  background-color: var(--nx-load-bg);
+}
+
+.nx-studio-skel-rail-divider {
+  width: 30px;
+  height: 1px;
+  background: #efeff2;
+}
+
+.nx-studio-skel-canvas-mode {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  background: #fafafa;
+}
+
+.nx-studio-skel-canvas-top {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nx-studio-skel-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e4e2f0;
+  background: rgba(255, 255, 255, 0.94);
+  color: #4c38d6;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.nx-studio-skel-canvas-center {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 12px;
+}
+
+.nx-studio-skel-canvas-composer {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid #e4e2f0;
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(20, 20, 31, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nx-studio-skel-body {
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-radius: 16px;
+  background-color: var(--nx-load-bg);
+  overflow: hidden;
+}
+
+.nx-studio-skel.is-route .nx-studio-skel-body {
+  border: 1px solid var(--nx-load-border);
+}
+
+.nx-studio-skel-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--nx-load-border);
+}
+
+.nx-studio-skel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nx-load-muted);
+}
+
+.nx-studio-skel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background-color: var(--nx-load-accent);
+  animation: nx-aperture-breathe 1.8s ease-in-out infinite;
+}
+
+.nx-studio-skel-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.nx-studio-skel-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-right: 1px solid var(--nx-load-border);
+  background-color: var(--nx-load-surface);
+}
+
+.nx-studio-skel-stage {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+  min-width: 0;
+}
+
+.nx-studio-skel-canvas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  flex: 1 1 0%;
+  align-content: start;
+}
+
+.nx-studio-skel-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--nx-load-border);
+  border-radius: 16px;
+  background-color: var(--nx-load-surface);
+}
+
+/* ---------- Page-Specific Skeleton Layouts ---------- */
+.nx-skel-panel {
+  border: 1px solid var(--nx-load-border);
+  border-radius: 16px;
+  background-color: var(--nx-load-surface);
+  padding: 20px;
+}
+
+.nx-skel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--nx-load-border);
+  border-radius: 14px;
+  background-color: var(--nx-load-bg);
+  padding: 16px;
+}
+
+.nx-skel-table {
+  border: 1px solid var(--nx-load-border);
+  border-radius: 14px;
+  background-color: var(--nx-load-bg);
+  overflow: hidden;
+}
+
+.nx-skel-table-row {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr 1.1fr 0.8fr 0.9fr 0.7fr;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--nx-load-border);
+}
+
+.nx-skel-table-row:first-child {
+  border-top: 0;
+}
+
+/* AI Director Skeleton — Full (Sidebar + Home-matching DotGrid Hero) & Project (Centered Chat) */
+.nx-director-skel {
+  display: flex;
+  height: 100%;
+  min-height: 520px;
+  width: 100%;
+  background-color: transparent;
+  color: var(--nx-load-ink);
+  overflow: hidden;
+  animation: nx-fade-soft 200ms ease-out;
+  --nx-load-accent: #5b45f2;
+  --nx-skel-base: #f0eff6;
+  --nx-skel-base-strong: #e6e4f0;
+  --nx-skel-tint: rgba(91, 69, 242, 0.055);
+}
+
+.nx-director-skel-side {
+  width: 236px;
+  flex-shrink: 0;
+  height: calc(100% - 16px);
+  margin: 8px 0;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #e4e4e7;
+  border-left: 0;
+  border-radius: 0 14px 14px 0;
+}
+
+.nx-director-skel-side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-director-skel-side-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.nx-director-skel-side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 2px 0;
+}
+
+.nx-director-skel-hero {
+  position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: transparent;
+}
+
+.nx-director-skel.nx-surface-dark .nx-director-skel-hero {
+  background-color: var(--nx-load-bg);
+}
+
+.nx-director-skel-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 14px 20px 0;
+}
+
+.nx-director-skel-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e4e2f0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4c38d6;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.nx-director-skel.nx-surface-dark .nx-director-skel-status-pill {
+  border-color: var(--nx-load-border);
+  background: var(--nx-load-surface);
+  color: var(--nx-load-muted);
+}
+
+.nx-director-skel-hero-inner {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+.nx-dir-skel-on-hero {
+  background-color: #ebe9f6;
+}
+
+.nx-director-skel.nx-surface-dark .nx-dir-skel-on-hero {
+  background-color: var(--nx-skel-base);
+}
+
+.nx-director-skel-composer-card {
+  width: 100%;
+  max-width: 704px;
+  margin-top: 28px;
+  padding: 20px 16px 16px;
+  border-radius: 24px;
+  border: 1px solid #e4e2f0;
+  background-color: #ffffff;
+  box-shadow: 0 20px 44px -22px rgba(24, 18, 66, 0.16);
+}
+
+.nx-director-skel.nx-surface-dark .nx-director-skel-composer-card {
+  border-color: var(--nx-load-border);
+  background-color: var(--nx-load-surface);
+  box-shadow: none;
+}
+
+.nx-director-skel-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.nx-director-skel-ideas {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-top: 48px;
+  overflow: hidden;
+}
+
+.nx-director-skel-idea-card {
+  flex: 0 0 148px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nx-director-skel.nx-surface-dark .nx-director-skel-idea-card {
+  background-color: transparent;
+}
+
+/* Project switching skeleton (centered conversation stream inside active workspace) */
+.nx-dir-skel-project {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 480px;
+  background-color: var(--nx-load-bg);
+  color: var(--nx-load-ink);
+  animation: nx-fade-soft 180ms ease-out;
+  --nx-load-accent: #5b45f2;
+  --nx-skel-base: #f0eff6;
+  --nx-skel-base-strong: #e6e4f0;
+  --nx-skel-tint: rgba(91, 69, 242, 0.055);
+}
+
+.nx-dir-skel-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.nx-dir-skel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nx-load-muted);
+}
+
+.nx-dir-skel-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-dir-skel-stream {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 12px 20px 24px;
+  overflow: hidden;
+}
+
+.nx-dir-skel-agent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.nx-dir-skel-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.nx-dir-skel-msg.is-user {
+  align-self: flex-end;
+  width: 62%;
+  background-color: #f2f0ff;
+}
+
+.nx-dir-skel-msg.is-assistant {
+  align-self: flex-start;
+  width: 82%;
+  background-color: #f1f1f4;
+}
+
+.nx-dir-skel-project.nx-surface-dark .nx-dir-skel-msg {
+  background-color: var(--nx-load-surface);
+}
+
+.nx-dir-skel-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.nx-dir-skel-card {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--nx-load-border);
+  background-color: var(--nx-load-bg);
+}
+
+.nx-dir-skel-composer-wrap {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 8px 20px 18px;
+  flex-shrink: 0;
+}
+
+.nx-dir-skel-pill-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 22px;
+  border: 1px solid var(--nx-load-border);
+  background-color: var(--nx-load-bg);
+  box-shadow: 0 6px 20px rgba(20, 20, 31, 0.04);
+}
+
+.nx-dir-skel-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 0 8px;
+}
+
+/* Profile Badge Skeleton */
+.nx-profile-skel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.nx-profile-skel.is-sidebar {
+  width: 100%;
+  border-color: var(--nx-load-border);
+  background-color: var(--nx-load-surface);
+  padding: 6px 10px;
+  border-radius: 12px;
+}
+
+/* Integration sync badge */
+.nx-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--nx-load-border);
+  background-color: var(--nx-load-surface);
+  color: var(--nx-load-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Brand Setup Skeleton */
+.nx-bs-skel {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: #fafafb;
+  overflow: hidden;
+  animation: nx-fade-soft 200ms ease-out;
+}
+.nx-bs-skel-tree {
+  width: 224px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+  border-right: 1px solid #efeff2;
+}
+.nx-bs-skel-main {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nx-bs-skel-top {
+  height: 52px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(250, 250, 251, 0.9);
+  border-bottom: 1px solid #efeff2;
+}
+.nx-bs-skel-feed {
+  flex: 1;
+  max-width: 740px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.nx-bs-skel-card {
+  border-radius: 16px;
+  border: 1px solid #eaeaef;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* Onboarding Skeleton */
+.nx-onb-skel {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #fafafb;
+  animation: nx-fade-soft 200ms ease-out;
+}
+.nx-onb-skel-card {
+  width: 100%;
+  max-width: 620px;
+  padding: 28px;
+  border-radius: 22px;
+  border: 1px solid #e6e7f0;
+  background: #ffffff;
+  box-shadow: 0 18px 46px rgba(20, 20, 31, 0.06);
+}
+
+/* Admin Console Skeleton */
+.nx-admin-skel {
+  min-height: 100vh;
+  display: flex;
+  background: #f7f8fa;
+  animation: nx-fade-soft 200ms ease-out;
+}
+.nx-admin-skel-side {
+  width: 240px;
+  flex-shrink: 0;
+  padding: 20px 14px;
+  background: #ffffff;
+  border-right: 1px solid #e6e7f0;
+}
+.nx-admin-skel-main {
+  flex: 1 1 0%;
+  min-width: 0;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 960px) {
+  .nx-admin-skel-side {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .nx-bs-skel-tree {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .nx-studio-skel-rail {
+    display: none;
+  }
+  .nx-studio-skel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nx-studio-skel-controls {
+    display: none;
+  }
+  .nx-director-skel-side {
+    width: 206px;
+  }
+}
+
+@media (max-width: 767px) {
+  .nx-director-skel-side {
+    display: none;
+  }
+  .nx-director-skel-ideas {
+    margin-top: 32px;
+  }
+  .nx-director-skel-hero-inner {
+    padding: 16px 16px 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-skel::after,
+  .nx-brand-aperture-core,
+  .nx-hairline-bar,
+  .nx-inline-spinner,
+  .nx-studio-skel-dot {
+    animation: none;
+  }
+  .nx-hairline-bar {
+    width: 100%;
+    transform: none;
+    opacity: 0.45;
+  }
+}

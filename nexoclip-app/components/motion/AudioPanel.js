@@ -16,7 +16,7 @@ export async function audioApi(body) {
     method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Audio tidak bisa dibuat sekarang.');
+  if (!response.ok) throw new Error(data.error || 'Unable to generate audio right now.');
   return data;
 }
 
@@ -35,12 +35,16 @@ function useEstimate(audio, enabled) {
   return credits;
 }
 
-const fmt = (credits) => (credits === null ? '' : ` · ≈ ${Number(credits).toLocaleString('id-ID', { maximumFractionDigits: 1 })} kredit`);
+const fmt = (credits) => (credits === null ? '' : ` · ≈ ${Number(credits).toLocaleString('en-US', { maximumFractionDigits: 1 })} credits`);
 const voiceReady = (scene, voiceId) => scene.voAudio && scene.voAudio.text === scene.vo && scene.voAudio.voiceId === voiceId;
 
 function Status({ tone, children }) {
-  const colors = { ok: 'bg-[#d4ff64]/15 text-[#d4ff64]', warn: 'bg-amber-400/15 text-amber-300', none: 'bg-white/[0.06] text-white/45' };
-  return <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${colors[tone]}`}>{children}</span>;
+  const colors = {
+    ok: 'bg-[#ecfdf3] text-[#147a49] border border-[#c5f0d6]',
+    warn: 'bg-[#fff8eb] text-[#a05c07] border border-[#fce0b0]',
+    none: 'bg-[#f3f4f8] text-[#5e5e72] border border-[#e6e7f0]',
+  };
+  return <span className={`rounded-lg px-2 py-0.5 text-[10.5px] font-semibold ${colors[tone]}`}>{children}</span>;
 }
 
 export default function AudioPanel({ scenes, audio, totalSeconds, authenticated, beforeGenerate, onScenes, onAudio, onGenerate, jobRunning, jobLabel }) {
@@ -80,105 +84,105 @@ export default function AudioPanel({ scenes, audio, totalSeconds, authenticated,
   }));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
       {!authenticated && (
-        <p className="rounded-2xl bg-white/[0.03] p-3 text-[12px] leading-relaxed text-white/50 ring-1 ring-white/[0.06]">
-          Musik dan suara dibuat dengan ElevenLabs dan memakai kredit. Masuk dulu untuk membuatnya.
+        <p className="rounded-2xl bg-[#fafafd] p-3.5 text-[12.5px] leading-relaxed text-[#5e5e72] ring-1 ring-[#e6e7f0]">
+          Music and voiceover are powered by ElevenLabs and use credits. Sign in to generate audio.
         </p>
       )}
 
-      <section className="flex flex-col gap-2.5 rounded-2xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
+      <section className="flex flex-col gap-2.5 rounded-2xl bg-[#fafafd] p-3.5 ring-1 ring-[#e6e7f0]">
         <div className="flex items-center justify-between">
-          <h3 className="text-[13px] font-bold text-white/85">Musik latar</h3>
-          {audio.music ? <Status tone={musicStale ? 'warn' : 'ok'}>{musicStale ? 'Perlu dibuat ulang' : `Siap · ${Math.round(audio.music.seconds)} dtk`}</Status> : <Status tone="none">Belum ada</Status>}
+          <h3 className="text-[13px] font-semibold text-[#14141f]">Background music</h3>
+          {audio.music ? <Status tone={musicStale ? 'warn' : 'ok'}>{musicStale ? 'Needs regeneration' : `Ready · ${Math.round(audio.music.seconds)}s`}</Status> : <Status tone="none">Not generated</Status>}
         </div>
         <label className="flex flex-col gap-1.5">
-          <span className="flex justify-between text-[12px] font-medium text-white/50">Gaya musik <span className="font-mono text-[11px] text-white/30">{audio.musicPrompt.length}/{SCENE_LIMITS.musicPrompt}</span></span>
+          <span className="flex justify-between text-[12px] font-medium text-[#5e5e72]">Music style <span className="font-mono text-[11px] text-[#7a7b90]">{audio.musicPrompt.length}/{SCENE_LIMITS.musicPrompt}</span></span>
           <textarea value={audio.musicPrompt} maxLength={SCENE_LIMITS.musicPrompt} rows={3} placeholder="upbeat lo-fi, 90 BPM, warm piano, cozy, no vocals"
             onChange={(event) => onAudio({ musicPrompt: event.target.value })}
-            className="w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-[#f2eee5] outline-none placeholder:text-white/25 focus:border-[#d4ff64]/60" />
+            className="w-full resize-none rounded-xl border border-[#e6e7f0] bg-white px-3 py-2 text-[13px] text-[#14141f] outline-none placeholder:text-[#8a8b9e] focus:border-[#5b45f2] focus:ring-2 focus:ring-[#5b45f2]/12" />
         </label>
         {audio.music && (
-          <label className="flex items-center gap-2 text-[12px] text-white/50">
+          <label className="flex items-center gap-2 text-[12px] text-[#5e5e72]">
             Volume
-            <input type="range" min="0" max="1" step="0.05" value={audio.musicVolume} onChange={(event) => onAudio({ musicVolume: Number(event.target.value) })} className="flex-1 accent-[#d4ff64]" aria-label="Volume musik" />
-            <button type="button" onClick={() => onAudio({ music: null })} className="text-white/40 hover:text-red-300">Hapus</button>
+            <input type="range" min="0" max="1" step="0.05" value={audio.musicVolume} onChange={(event) => onAudio({ musicVolume: Number(event.target.value) })} className="flex-1 accent-[#5b45f2]" aria-label="Music volume" />
+            <button type="button" onClick={() => onAudio({ music: null })} className="font-medium text-[#c01048] hover:underline">Remove</button>
           </label>
         )}
         <button type="button" disabled={!musicRequest || busy} onClick={makeMusic}
-          className="rounded-xl bg-[#d4ff64] px-3 py-2 text-[13px] font-bold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40">
-          {working === 'music' || (jobRunning && /musik/i.test(jobLabel || '')) ? (jobLabel || 'Membuat musik…') : `${audio.music ? 'Buat ulang' : 'Buat'} musik ${musicSeconds} dtk${fmt(musicCredits)}`}
+          className="rounded-xl bg-[#5b45f2] hover:bg-[#4731d8] px-3 py-2 text-[13px] font-semibold text-white shadow-xs transition disabled:cursor-not-allowed disabled:opacity-45">
+          {working === 'music' || (jobRunning && /music|musik/i.test(jobLabel || '')) ? (jobLabel || 'Generating music…') : `${audio.music ? 'Regenerate' : 'Generate'} ${musicSeconds}s music${fmt(musicCredits)}`}
         </button>
       </section>
 
-      <section className="flex flex-col gap-2.5 rounded-2xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
-        <h3 className="text-[13px] font-bold text-white/85">Voiceover</h3>
+      <section className="flex flex-col gap-2.5 rounded-2xl bg-[#fafafd] p-3.5 ring-1 ring-[#e6e7f0]">
+        <h3 className="text-[13px] font-semibold text-[#14141f]">Voiceover</h3>
         <label className="flex flex-col gap-1.5">
-          <span className="text-[12px] font-medium text-white/50">Suara</span>
+          <span className="text-[12px] font-medium text-[#5e5e72]">Voice</span>
           <select value={voiceId} onChange={(event) => onAudio({ voiceId: event.target.value })}
-            className="rounded-xl border border-white/[0.08] bg-[#161915] px-3 py-2 text-[13px] outline-none focus:border-[#d4ff64]/60">
-            {ELEVENLABS_VOICES.map((voice) => <option key={voice.id} value={voice.id}>{voice.name} · {voice.gender === 'male' ? 'pria' : 'wanita'} · {voice.description}</option>)}
+            className="rounded-xl border border-[#e6e7f0] bg-white px-3 py-2 text-[13px] text-[#14141f] outline-none focus:border-[#5b45f2]">
+            {ELEVENLABS_VOICES.map((voice) => <option key={voice.id} value={voice.id}>{voice.name} · {voice.gender === 'male' ? 'male' : 'female'} · {voice.description}</option>)}
           </select>
         </label>
         {scenes.map((scene, index) => {
           const ready = voiceReady(scene, voiceId);
           return (
-            <div key={index} className="flex flex-col gap-1.5 rounded-xl bg-black/20 p-2.5 ring-1 ring-white/[0.05]">
+            <div key={index} className="flex flex-col gap-1.5 rounded-xl bg-white p-2.5 ring-1 ring-[#e6e7f0]">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] font-semibold text-white/70">Adegan {index + 1}</span>
+                <span className="text-[12px] font-semibold text-[#14141f]">Scene {index + 1}</span>
                 <span className="flex items-center gap-1.5">
-                  {scene.voAudio ? <Status tone={ready ? 'ok' : 'warn'}>{ready ? `Siap · ${scene.voAudio.seconds.toFixed(1)} dtk` : 'Perlu dibuat ulang'}</Status> : scene.vo.trim() ? <Status tone="none">Belum dibuat</Status> : null}
-                  {scene.voAudio && <button type="button" aria-label={`Hapus suara adegan ${index + 1}`} onClick={() => removeLineAudio(index)} className="text-[11px] text-white/35 hover:text-red-300">×</button>}
+                  {scene.voAudio ? <Status tone={ready ? 'ok' : 'warn'}>{ready ? `Ready · ${scene.voAudio.seconds.toFixed(1)}s` : 'Needs regeneration'}</Status> : scene.vo.trim() ? <Status tone="none">Not generated</Status> : null}
+                  {scene.voAudio && <button type="button" aria-label={`Remove voiceover for scene ${index + 1}`} onClick={() => removeLineAudio(index)} className="text-[12px] text-[#7a7b90] hover:text-[#c01048]">×</button>}
                 </span>
               </div>
-              <textarea value={scene.vo} maxLength={SCENE_LIMITS.vo} rows={2} placeholder="Kalimat yang diucapkan di adegan ini (kosongkan kalau tanpa suara)"
-                onChange={(event) => setLine(index, event.target.value)} aria-label={`Voiceover adegan ${index + 1}`}
-                className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[13px] text-[#f2eee5] outline-none placeholder:text-white/25 focus:border-[#d4ff64]/60" />
+              <textarea value={scene.vo} maxLength={SCENE_LIMITS.vo} rows={2} placeholder="Spoken line for this scene (leave blank for no voiceover)"
+                onChange={(event) => setLine(index, event.target.value)} aria-label={`Scene ${index + 1} voiceover`}
+                className="w-full resize-none rounded-lg border border-[#e6e7f0] bg-[#fafafd] px-2.5 py-1.5 text-[13px] text-[#14141f] outline-none placeholder:text-[#8a8b9e] focus:border-[#5b45f2] focus:bg-white" />
               {scene.vo.trim() && !ready && (
                 <button type="button" disabled={busy} onClick={() => makeVoices([{ index }], index)}
-                  className="self-end text-[12px] font-semibold text-white/55 hover:text-[#d4ff64] disabled:opacity-40">
-                  {working === index ? 'Membuat suara…' : 'Buat suara adegan ini'}
+                  className="self-end text-[12px] font-semibold text-[#5b45f2] hover:text-[#4731d8] disabled:opacity-40">
+                  {working === index ? 'Generating voiceover…' : 'Generate voiceover'}
                 </button>
               )}
             </div>
           );
         })}
         <button type="button" disabled={!pending.length || busy} onClick={() => makeVoices(pending, 'all')}
-          className="rounded-xl bg-[#d4ff64] px-3 py-2 text-[13px] font-bold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40">
-          {working === 'all' || (jobRunning && /suara/i.test(jobLabel || '')) ? (jobLabel || 'Membuat suara…') : pending.length ? `Buat suara ${pending.length} adegan${fmt(voCredits)}` : 'Semua suara sudah siap'}
+          className="rounded-xl bg-[#5b45f2] hover:bg-[#4731d8] px-3 py-2 text-[13px] font-semibold text-white shadow-xs transition disabled:cursor-not-allowed disabled:opacity-45">
+          {working === 'all' || (jobRunning && /voice|suara/i.test(jobLabel || '')) ? (jobLabel || 'Generating voiceover…') : pending.length ? `Generate voiceover (${pending.length} ${pending.length === 1 ? 'scene' : 'scenes'})${fmt(voCredits)}` : 'All voiceovers ready'}
         </button>
       </section>
 
-      <section className="flex flex-col gap-2.5 rounded-2xl bg-white/[0.025] p-3 ring-1 ring-white/[0.06]">
-        <h3 className="text-[13px] font-bold text-white/85">Caption & efek suara</h3>
-        <label className="flex items-center justify-between gap-2 text-[12px] text-white/60">
-          <span>Caption karaoke dari voiceover<span className="block text-[11px] text-white/35">Kata yang diucapkan menyala; butuh suara yang dibuat setelah fitur ini ada.</span></span>
-          <input type="checkbox" checked={audio.captions !== false} onChange={(event) => onAudio({ captions: event.target.checked })} className="h-4 w-4 accent-[#d4ff64]" />
+      <section className="flex flex-col gap-2.5 rounded-2xl bg-[#fafafd] p-3.5 ring-1 ring-[#e6e7f0]">
+        <h3 className="text-[13px] font-semibold text-[#14141f]">Captions &amp; sound effects</h3>
+        <label className="flex items-center justify-between gap-2 text-[12.5px] text-[#2d2e3f]">
+          <span>Karaoke captions from voiceover<span className="block text-[11px] text-[#7a7b90]">Spoken words highlight as they play; requires voiceover generated with word timings.</span></span>
+          <input type="checkbox" checked={audio.captions !== false} onChange={(event) => onAudio({ captions: event.target.checked })} className="h-4 w-4 accent-[#5b45f2]" />
         </label>
         {audio.captions !== false && (
-          <div role="radiogroup" aria-label="Gaya caption" className="grid grid-cols-3 gap-1.5">
+          <div role="radiogroup" aria-label="Caption style" className="grid grid-cols-3 gap-1.5">
             {Object.entries(CAPTION_STYLES).map(([id, style]) => (
               <button key={id} type="button" role="radio" aria-checked={(audio.captionStyle || 'karaoke') === id} title={style.hint} onClick={() => onAudio({ captionStyle: id })}
-                className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold transition ${(audio.captionStyle || 'karaoke') === id ? 'bg-[#d4ff64] text-black' : 'bg-white/[0.05] text-white/60 hover:text-white'}`}>
+                className={`rounded-lg px-2 py-1.5 text-[11.5px] font-semibold transition ${(audio.captionStyle || 'karaoke') === id ? 'bg-[#5b45f2] text-white' : 'bg-white border border-[#e6e7f0] text-[#5e5e72] hover:text-[#14141f]'}`}>
                 {style.label}
               </button>
             ))}
           </div>
         )}
-        <label className="flex items-center justify-between gap-2 text-[12px] text-white/60">
-          <span>Efek suara otomatis<span className="block text-[11px] text-white/35">Whoosh di transisi, pop dan ping saat layer muncul. Gratis.</span></span>
-          <input type="checkbox" checked={audio.sfx !== false} onChange={(event) => onAudio({ sfx: event.target.checked })} className="h-4 w-4 accent-[#d4ff64]" />
+        <label className="flex items-center justify-between gap-2 text-[12.5px] text-[#2d2e3f]">
+          <span>Automatic sound effects<span className="block text-[11px] text-[#7a7b90]">Whooshes on transitions, pops and pings as layers appear. Free.</span></span>
+          <input type="checkbox" checked={audio.sfx !== false} onChange={(event) => onAudio({ sfx: event.target.checked })} className="h-4 w-4 accent-[#5b45f2]" />
         </label>
         {audio.sfx !== false && (
-          <label className="flex items-center gap-2 text-[12px] text-white/50">
-            Volume efek
-            <input type="range" min="0.05" max="1" step="0.05" value={audio.sfxVolume ?? 0.5} onChange={(event) => onAudio({ sfxVolume: Number(event.target.value) })} className="flex-1 accent-[#d4ff64]" aria-label="Volume efek suara" />
+          <label className="flex items-center gap-2 text-[12px] text-[#5e5e72]">
+            SFX volume
+            <input type="range" min="0.05" max="1" step="0.05" value={audio.sfxVolume ?? 0.5} onChange={(event) => onAudio({ sfxVolume: Number(event.target.value) })} className="flex-1 accent-[#5b45f2]" aria-label="Sound effects volume" />
           </label>
         )}
       </section>
 
-      {error && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-[12px] text-red-200">{error}</p>}
-      <p className="text-[11px] leading-relaxed text-white/35">Musik dan suara dibuat oleh ElevenLabs. Volume musik otomatis turun saat ada suara.</p>
+      {error && <p role="alert" className="rounded-xl border border-[#fccdd6] bg-[#fff1f3] px-3 py-2 text-[12px] text-[#c01048]">{error}</p>}
+      <p className="text-[11px] leading-relaxed text-[#7a7b90]">Music and voiceover are powered by ElevenLabs. Music volume automatically ducks during voiceover.</p>
     </div>
   );
 }

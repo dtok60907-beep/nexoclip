@@ -28,9 +28,10 @@ export function createWorkspacesHandlers({
   async function POST(request) {
     const current = await session(request);
     if (!current) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (current.impersonation_read_only) return Response.json({ error: 'Mode lihat saja.' }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     try {
-      const workspace = await createWorkspace({ userId: current.user_id, name: body?.name });
+      const workspace = await createWorkspace({ userId: current.user_id, activeWorkspaceId: current.workspace_id, name: body?.name });
       const workspaces = await listWorkspaces(current.user_id);
       return Response.json({ workspace, workspaces }, { status: 201 });
     } catch (error) {

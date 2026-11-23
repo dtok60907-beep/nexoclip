@@ -54,10 +54,14 @@ async function inTransaction(pool, work) {
 }
 
 /** Create a workspace owned by the user (own credit wallet, starts at 0) and switch to it. */
-export async function createWorkspace({ userId, name, pool = getPool() }) {
+export async function createWorkspace({ userId, activeWorkspaceId, name, pool = getPool() }) {
   const clean = String(name || '').trim().replace(/\s+/g, ' ');
   if (clean.length < 2 || clean.length > 60) throw new WorkspaceError('Nama workspace harus 2–60 karakter.');
   return inTransaction(pool, async (client) => {
+    const membership = activeWorkspaceId && await findWorkspaceMembership(client, activeWorkspaceId, userId);
+    if (!['owner', 'admin'].includes(membership?.role)) {
+      throw new WorkspaceError('Hanya Owner atau Admin workspace aktif yang bisa membuat workspace.', 403);
+    }
     if (await countOwnedWorkspaces(client, userId) >= MAX_OWNED_WORKSPACES) {
       throw new WorkspaceError(`Maksimal ${MAX_OWNED_WORKSPACES} workspace per akun.`);
     }

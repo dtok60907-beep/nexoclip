@@ -696,7 +696,8 @@ test('duplicate project clones authoritative document instead of copying project
         return [{ ok: 1 }]
       }
 
-      if (normalized.startsWith("select name, description, thumbnail, coalesce(origin, 'canvas') as origin from projects where id = ?")) {
+      if (normalized.startsWith('alter table projects add column if not exists origin')) return []
+      if (normalized.startsWith("select library_workspace_id, name, description, thumbnail, coalesce(origin, 'canvas') as origin from projects where id = ?")) {
         return [{ name: 'Storyboard', description: '', thumbnail: null, origin: 'canvas' }]
       }
 
@@ -757,7 +758,8 @@ test('duplicate exports before insert and deletes the inserted project when auth
         return [{ ok: 1 }]
       }
 
-      if (normalized.startsWith("select name, description, thumbnail, coalesce(origin, 'canvas') as origin from projects where id = ?")) {
+      if (normalized.startsWith('alter table projects add column if not exists origin')) return []
+      if (normalized.startsWith("select library_workspace_id, name, description, thumbnail, coalesce(origin, 'canvas') as origin from projects where id = ?")) {
         operations.push('load-source-project')
         return [{ name: 'Storyboard', description: '', thumbnail: null, origin: 'canvas' }]
       }

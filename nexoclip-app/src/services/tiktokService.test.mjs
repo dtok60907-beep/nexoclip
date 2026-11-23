@@ -57,6 +57,7 @@ test('publish worker retries a transient TikTok upload failure without exposing 
   const job={id:'j',workspace_id:'w',social_account_id:'s',generation_job_id:'g',asset_id:'a',mode:'upload',attempts:0,caption:'',provider_publish_id:null,upload_url_encrypted:null};
   const pool={async query(sql,values){
     if(sql.includes("SET status='uploading'"))return {rows:[job]};
+    if(sql.includes('SELECT a.granted_scopes'))return {rows:[{granted_scopes:['video.upload']}]};
     if(sql.includes('FROM assets'))return {rows:[{storage_key:'key',content_type:'video/mp4',size_bytes:52}]};
     if(sql.includes('SELECT provider_publish_id'))return {rows:[{provider_publish_id:'p'}]};
     updates.push([sql,values]);return {rows:[]};

@@ -128,7 +128,7 @@ def _check_start_credits(owner: str) -> None:
 
 
 def create_project(owner: str, first_message: str, *, run_mode: str = "guide", meta: Optional[dict] = None,
-                   llm_choice: str = "seed") -> str:
+                   llm_choice: str = "seed", library_workspace_id: Optional[str] = None) -> str:
     if run_mode not in RUN_MODES:
         raise InvalidAction("run_mode must be guide or auto")
     model = _llm_model(llm_choice)
@@ -136,7 +136,7 @@ def create_project(owner: str, first_message: str, *, run_mode: str = "guide", m
     title = first_message.strip().splitlines()[0][:80] or "Project baru"
     project_id = f"{_slug(title)}-{uuid.uuid4().hex[:6]}"
     idle = {"status": "idle", "error": None, "updated_at": now_iso()}
-    insert_project(project_id, {"owner": owner, "title": title, "title_auto": True, "llm_model": model,
+    insert_project(project_id, {"library_workspace_id": library_workspace_id, "owner": owner, "title": title, "title_auto": True, "llm_model": model,
                                 "agent": idle, "generation": idle, "run_mode": run_mode})
     create_board(project_id)
     append_chat(project_id, "user", first_message, kind="message", meta=meta or None)
@@ -169,7 +169,7 @@ def duplicate_project(project_id: str) -> str:
     title = f"{source['title'][:70]} (salinan)"
     copy_id = f"{_slug(title)}-{uuid.uuid4().hex[:6]}"
     idle = {"status": "idle", "error": None, "updated_at": now_iso()}
-    insert_project(copy_id, {"owner": source["owner"], "title": title, "title_auto": False, "title_by": "user", "llm_model": source["llm_model"],
+    insert_project(copy_id, {"library_workspace_id": source.get("library_workspace_id"), "owner": source["owner"], "title": title, "title_auto": False, "title_by": "user", "llm_model": source["llm_model"],
                              "agent": idle, "generation": idle, "run_mode": source.get("run_mode") or "guide"})
     create_board(copy_id)
 

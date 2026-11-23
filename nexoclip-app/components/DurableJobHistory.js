@@ -42,7 +42,7 @@ export default function DurableJobHistory({ kind, onSelect }) {
           key: it.id,
           type: 'button',
           onClick: () => onSelect?.(it),
-          className: 'overflow-hidden rounded-lg border border-white/10 hover:border-white/30',
+          className: 'overflow-hidden rounded-2xl border border-[#e6e7f0] bg-white shadow-xs transition-all hover:border-[#c8bffb] hover:shadow-md',
         },
         it.thumbnailUrl
           // eslint-disable-next-line @next/next/no-img-element

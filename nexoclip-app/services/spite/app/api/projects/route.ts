@@ -1,3 +1,4 @@
+import { ensureProjectsOrigin } from '@/lib/projects-origin'
 import { getDb } from '@/lib/db'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import { unauthorizedResponse } from '@/lib/project-ownership'
@@ -11,13 +12,6 @@ import { v4 as uuidv4 } from 'uuid'
 // instead of the canvas. Anything that isn't 'canvas' is treated as Flow, so
 // legacy 'mobile' rows keep working. Cached so the idempotent ALTER runs once
 // per serverless instance, not per request.
-let projectsOriginReady = false
-async function ensureProjectsOrigin(sql: ReturnType<typeof getDb>) {
-  if (projectsOriginReady) return
-  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS origin text NOT NULL DEFAULT 'canvas'`
-  projectsOriginReady = true
-}
-
 interface ProjectsRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
@@ -42,8 +36,8 @@ export function createProjectsRouteHandlers(deps: ProjectsRouteDeps = {}) {
         const safeOrigin = origin === 'flow' || origin === 'mobile' ? 'flow' : 'canvas'
 
         const result = await sql`
-          INSERT INTO projects (id, userid, name, description, origin, createdat, updatedat)
-          VALUES (${projectId}, ${user.id}, ${name || 'Untitled Project'}, ${description || ''}, ${safeOrigin}, NOW(), NOW())
+          INSERT INTO projects (id, userid, name, description, origin, library_workspace_id, createdat, updatedat)
+          VALUES (${projectId}, ${user.id}, ${name || 'Untitled Project'}, ${description || ''}, ${safeOrigin}, ${user.workspaceId ?? null}, NOW(), NOW())
           RETURNING id, name, description, thumbnail, origin, createdat, updatedat
         `
 
@@ -71,6 +65,7 @@ export function createProjectsRouteHandlers(deps: ProjectsRouteDeps = {}) {
         const projects = await sql`
           SELECT
             p.id,
+            p.library_workspace_id,
             p.name,
             p.description,
             COALESCE(shot1.thumb, p.thumbnail) AS thumbnail,

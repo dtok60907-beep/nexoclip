@@ -2,7 +2,7 @@ import { requireAdminPage } from '../../../src/lib/auth/adminPageAccess.js';
 import UsageAnalytics from '../../../components/UsageAnalytics.js';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Analytics pemakaian | NexoClip Admin', robots: { index: false, follow: false } };
+export const metadata = { title: 'Usage Analytics | NexoClip Admin', robots: { index: false, follow: false } };
 export default async function AnalyticsPage() {
   await requireAdminPage();
   const today = new Date();

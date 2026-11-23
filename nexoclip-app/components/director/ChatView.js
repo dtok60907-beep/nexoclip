@@ -1,17 +1,56 @@
 'use client';
 
-// The Director conversation: plain-text answers, user bubbles, collapsible
-// "what I did" step groups, and artifact / generation cards.
+// The Director conversation: centered agent identity header, soft neutral assistant bubbles,
+// quiet collapsible step traces, and spacious full-width artifact / generation cards.
 
 import { Fragment, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Clapperboard,
+  Download,
+  FileText,
+  Music,
+  Pencil,
+  Play,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Target,
+  Users,
+  Wand2,
+} from 'lucide-react';
 import { Badge, assetUrl, fmtCredits } from './BoardViews.js';
 import { groupShots } from './Workspace.js';
 
 export function Spinner() {
-  return <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-[#d4ff64]" aria-hidden="true" />;
+  return (
+    <span
+      className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#DDD7FE] border-t-[#5B45F2]"
+      aria-hidden="true"
+    />
+  );
 }
 
-const ACCENT = 'text-[#d4ff64]';
+const ACCENT = 'text-[#4C38D6]';
+
+export function AgentIdentityHeader({ title, statusLabel, modeLabel }) {
+  return (
+    <div className="mb-8 flex flex-col items-center text-center">
+      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#5B45F2] text-white shadow-[0_8px_20px_-6px_rgba(91,69,242,0.48)]">
+        <Clapperboard size={20} strokeWidth={2.1} aria-hidden="true" />
+      </div>
+      <div className="mt-2.5 text-[14.5px] font-semibold tracking-[-0.015em] text-[#14141F]">AI Director</div>
+      <div className="mt-0.5 text-[12px] text-[#6E6F82]">
+        {statusLabel}
+        {modeLabel ? ` · ${modeLabel}` : ''}
+      </div>
+      {title && <div className="mt-2 max-w-[460px] truncate text-[11.5px] text-[#8A8B9C]">{title}</div>}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- tiny markdown (answers only)
 
@@ -20,9 +59,22 @@ const INLINE = /(\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*?\*|(?<![\w])_[^_\s][^_\n]*?_(?!
 
 function inline(text) {
   return text.split(INLINE).map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
-    if ((part.startsWith('*') && part.endsWith('*') && part.length > 2) || (part.startsWith('_') && part.endsWith('_') && part.length > 2)) {
-      return <em key={i} className="italic">{part.slice(1, -1)}</em>;
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={i} className="font-semibold text-[#14141F]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (
+      (part.startsWith('*') && part.endsWith('*') && part.length > 2) ||
+      (part.startsWith('_') && part.endsWith('_') && part.length > 2)
+    ) {
+      return (
+        <em key={i} className="italic">
+          {part.slice(1, -1)}
+        </em>
+      );
     }
     return <Fragment key={i}>{part}</Fragment>;
   });
@@ -37,24 +89,47 @@ function Markdown({ text }) {
     const numbered = line.match(/^\s*(\d+)[.)]\s+(.*)$/);
     if (bullet || numbered) {
       const type = bullet ? 'ul' : 'ol';
-      if (!list || list.type !== type) { list = { type, items: [] }; blocks.push(list); }
+      if (!list || list.type !== type) {
+        list = { type, items: [] };
+        blocks.push(list);
+      }
       list.items.push(bullet ? bullet[1] : numbered[2]);
       continue;
     }
     list = null;
-    if (!line.trim()) { blocks.push({ type: 'gap' }); continue; }
+    if (!line.trim()) {
+      blocks.push({ type: 'gap' });
+      continue;
+    }
     const last = blocks[blocks.length - 1];
-    if (last?.type === 'p') last.lines.push(line); else blocks.push({ type: 'p', lines: [line] });
+    if (last?.type === 'p') last.lines.push(line);
+    else blocks.push({ type: 'p', lines: [line] });
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {blocks.map((block, i) => {
         if (block.type === 'gap') return null;
-        if (block.type === 'p') return <p key={i}>{block.lines.map((l, j) => <Fragment key={j}>{j > 0 && <br />}{inline(l)}</Fragment>)}</p>;
+        if (block.type === 'p') {
+          return (
+            <p key={i}>
+              {block.lines.map((l, j) => (
+                <Fragment key={j}>
+                  {j > 0 && <br />}
+                  {inline(l)}
+                </Fragment>
+              ))}
+            </p>
+          );
+        }
         const List = block.type;
         return (
-          <List key={i} className={`space-y-1 pl-5 ${block.type === 'ul' ? 'list-disc' : 'list-decimal'} marker:text-white/40`}>
-            {block.items.map((item, j) => <li key={j}>{inline(item)}</li>)}
+          <List
+            key={i}
+            className={`space-y-1.5 pl-5 ${block.type === 'ul' ? 'list-disc' : 'list-decimal'} marker:text-[#8A8B9F]`}
+          >
+            {block.items.map((item, j) => (
+              <li key={j}>{inline(item)}</li>
+            ))}
           </List>
         );
       })}
@@ -65,36 +140,46 @@ function Markdown({ text }) {
 // ---------------------------------------------------------------- step groups (reasoning)
 
 const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="flex-none text-white/50">
-    <circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" />
-  </svg>
+  <CheckCircle2 size={14} strokeWidth={2} aria-hidden="true" className="flex-none text-[#147A49]" />
 );
 
 function stepText(text) {
-  return text.startsWith('Membaca skill: ') ? `Membaca panduan ${text.slice('Membaca skill: '.length)}` : text;
+  return text.startsWith('Membaca skill: ') ? `Reading guide: ${text.slice('Membaca skill: '.length)}` : text;
 }
 
 function groupLabel(items) {
   const work = items.filter((e) => !e.text.startsWith('Membaca skill: '));
-  if (!work.length) return items.length > 1 ? 'Membaca panduan kreatif' : stepText(items[0].text);
+  if (!work.length) return items.length > 1 ? 'Reading creative guides' : stepText(items[0].text);
   const label = work[work.length - 1].text;
-  return work.length > 1 ? `${label} · ${work.length} langkah` : label;
+  return work.length > 1 ? `${label} · ${work.length} steps` : label;
 }
 
 function StepGroup({ items, live }) {
   const [open, setOpen] = useState(false);
   return (
-    <div>
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-        className="flex max-w-full items-center gap-1.5 text-left text-[10.5px] text-white/40 hover:text-white/65">
+    <div className="py-0.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="inline-flex max-w-full items-center gap-1.5 rounded-lg px-1 py-0.5 text-left text-[12.5px] font-medium text-[#8A8B9C] transition hover:text-[#2D2E3F]"
+      >
+        <ChevronRight
+          size={13}
+          strokeWidth={2}
+          className={`flex-none text-[#9A9BAC] transition-transform ${open ? 'rotate-90' : ''}`}
+          aria-hidden="true"
+        />
         {live && <Spinner />}
         <span className="truncate">{groupLabel(items)}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`flex-none transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
       </button>
       {open && (
-        <div className="mt-2 space-y-2.5 rounded-2xl border border-white/[0.08] bg-[#111418] px-3.5 py-3">
+        <div className="mt-2 ml-1 space-y-2 border-l border-[#EAEAEF] pl-3.5 py-0.5">
           {items.map((item, i) => (
-            <div key={i} className="flex items-center gap-2.5 text-[11px] text-white/70"><CheckIcon /><span>{stepText(item.text)}</span></div>
+            <div key={i} className="flex items-center gap-2 text-[12.5px] text-[#4C4D61]">
+              <CheckIcon />
+              <span>{stepText(item.text)}</span>
+            </div>
           ))}
         </div>
       )}
@@ -104,27 +189,55 @@ function StepGroup({ items, live }) {
 
 // ---------------------------------------------------------------- cards
 
-function CardShell({ icon, title, accent, children, action, onAction, actionDisabled, secondary }) {
+function CardShell({ icon, title, accent, badge, children, action, onAction, actionDisabled, actionTone = 'accent', secondary }) {
+  const actionStyles =
+    actionTone === 'accent'
+      ? 'border-[#5B45F2] bg-[#5B45F2] text-white shadow-[0_2px_8px_rgba(91,69,242,0.22)] hover:bg-[#4731D8]'
+      : 'border-[#DDD7FE] bg-[#F2F0FF] text-[#4C38D6] hover:border-[#C5BAFC] hover:bg-[#E6E2FF]';
+  const inlineHeaderAction = Boolean(action && !secondary);
+
   return (
-    <div className="w-full max-w-[380px]">
-      <div className="rounded-[18px] border border-white/[0.09] nx-ai-card-surface bg-white p-1.5 shadow-[0_10px_30px_#0006]">
-        <div className="flex min-w-0 items-center gap-2 px-2.5 pb-2 pt-1.5">
-          <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[#d4ff64]/15 text-[12px] text-[#d4ff64]">{icon}</span>
-          <span className="truncate text-[13px] font-semibold text-white">
-            {title}{accent && <span className={ACCENT}> — {accent}</span>}
+    <div className="w-full overflow-hidden rounded-2xl border border-[#E6E7F0] bg-white shadow-[0_2px_10px_rgba(20,20,31,0.035)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EFEFF5] bg-[#FAFAFD] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-8 w-8 flex-none place-items-center rounded-xl bg-[#F2F0FF] text-[#5B45F2]">
+            {icon}
           </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[13.5px] font-semibold tracking-[-0.01em] text-[#14141F]">{title}</span>
+              {badge}
+            </div>
+            {accent && <div className="truncate text-[12px] text-[#5E5E72]">{accent}</div>}
+          </div>
         </div>
-        <div className="rounded-[14px] border border-white/[0.06] nx-ai-card-body bg-[#f7f5fb] p-3">{children}</div>
+        {inlineHeaderAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={actionDisabled}
+            className={`flex-none rounded-xl border px-3.5 py-1.5 text-[12.5px] font-semibold transition disabled:pointer-events-none disabled:opacity-45 ${actionStyles}`}
+          >
+            {action}
+          </button>
+        )}
       </div>
-      {(action || secondary) && (
-        <div className="mt-2 flex gap-2">
+
+      <div className="px-4 py-3.5">{children}</div>
+
+      {!inlineHeaderAction && (action || secondary) && (
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#EFEFF5] bg-[#FAFAFD] px-4 py-3">
+          {secondary}
           {action && (
-            <button type="button" onClick={onAction} disabled={actionDisabled}
-              className="flex-1 rounded-full border border-white/[0.1] nx-ai-card-action bg-[#eee8fa] py-2 text-[12px] font-semibold text-white/90 hover:border-white/25 disabled:opacity-50">
+            <button
+              type="button"
+              onClick={onAction}
+              disabled={actionDisabled}
+              className={`rounded-xl border px-4 py-2 text-[12.5px] font-semibold transition disabled:pointer-events-none disabled:opacity-45 ${actionStyles}`}
+            >
               {action}
             </button>
           )}
-          {secondary}
         </div>
       )}
     </div>
@@ -140,57 +253,149 @@ function Stack({ items }) {
   return (
     <div className="relative h-[72px] w-[124px] flex-none">
       {(tiles.length ? tiles : [{ src: null, label: '—' }]).map((tile, i) => (
-        <div key={i} className={`absolute top-1 h-[64px] w-[64px] overflow-hidden rounded-lg border border-white/20 bg-[#0d0f12] shadow-lg ${rot[i]} ${pos[i]}`}>
+        <div
+          key={i}
+          className={`absolute top-1 h-[62px] w-[62px] overflow-hidden rounded-xl border-2 border-white bg-[#141722] shadow-[0_4px_14px_rgba(20,20,31,0.14)] ${rot[i]} ${pos[i]}`}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {tile.src ? <img src={tile.src} alt={tile.label} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-1 text-center text-[9px] leading-tight text-white/35">{tile.label}</div>}
+          {tile.src ? (
+            <img src={tile.src} alt={tile.label} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center px-1.5 text-center text-[10px] font-medium leading-tight text-white/75">
+              {tile.label}
+            </div>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-const CARD_NAMES = { brief: 'Brief', concepts: 'Arah kreatif', research: 'Riset', script: 'Naskah', assets: 'Aset', shots: 'Shot list', audio: 'Audio' };
+const CARD_NAMES = {
+  brief: 'Brief',
+  concepts: 'Creative direction',
+  research: 'Research',
+  script: 'Script',
+  assets: 'Assets',
+  shots: 'Shot list',
+  audio: 'Audio',
+};
 
-/** An older copy of a card (a newer one is further down) or a closed request: one quiet line, no repeat. */
+/** An older copy of a card (a newer one is further down) or a closed request: one quiet centered line. */
 function FoldedLine({ text, onOpen }) {
   return (
-    <button type="button" onClick={onOpen} disabled={!onOpen}
-      className="flex items-center gap-1.5 text-[10.5px] text-white/35 hover:text-white/70 disabled:hover:text-white/35">
-      <span className="text-[#d4ff64]/50">↺</span>{text}
-    </button>
+    <div className="flex justify-center py-0.5">
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={!onOpen}
+        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#7A7B90] transition hover:text-[#4C38D6] disabled:hover:text-[#7A7B90]"
+      >
+        <RotateCcw size={11.5} strokeWidth={2} className="text-[#9A9BAC]" aria-hidden="true" />
+        <span>{text}</span>
+        {onOpen && <ChevronRight size={11.5} aria-hidden="true" />}
+      </button>
+    </div>
   );
 }
 
-function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
+function ArtifactCard({ card, board, workspaceId, onOpen }) {
   if (card === 'script') {
     if (!board.script) return null;
+    const lineCount = (board.script.text || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean).length;
     return (
-      <CardShell icon="✎" title="Naskah" accent={board.script.title} action="Buka naskah" onAction={() => onOpen('script')}>
-        <p className="line-clamp-4 whitespace-pre-line text-[12px] leading-relaxed text-white/60">{board.script.text}</p>
+      <CardShell
+        icon={<FileText size={15} strokeWidth={2} aria-hidden="true" />}
+        title="Script"
+        accent={board.script.title || `${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`}
+        badge={board.script.locked ? <Badge tone="green">Confirmed</Badge> : null}
+        action="Open script"
+        actionTone="soft"
+        onAction={() => onOpen('script')}
+      >
+        <div className="rounded-xl border border-[#ECECF4] bg-[#FAFAFD] px-3.5 py-3">
+          <p className="line-clamp-4 whitespace-pre-line text-[13px] leading-[1.68] text-[#2D2E3F]">
+            {board.script.text}
+          </p>
+        </div>
+        <div className="mt-2.5 flex items-center justify-between text-[11.5px] text-[#7A7B90]">
+          <span>{lineCount} {lineCount === 1 ? 'line' : 'lines'} · ready to review or edit</span>
+          <span>Click to read full script</span>
+        </div>
       </CardShell>
     );
   }
   if (card === 'brief') {
     const brief = board.brief || {};
+    const chips = [
+      brief.duration_seconds ? `${brief.duration_seconds}s` : null,
+      brief.aspect_ratio || null,
+      brief.resolution || null,
+      brief.product ? `Product: ${brief.product}` : null,
+      brief.audience ? `Audience: ${brief.audience}` : null,
+      brief.goal ? `Goal: ${brief.goal}` : null,
+    ].filter(Boolean);
     return (
-      <CardShell icon="◎" title="Brief" accent={brief.duration_seconds ? `${brief.duration_seconds} detik · ${brief.aspect_ratio}` : brief.aspect_ratio} action="View" onAction={() => onOpen('brief')}>
-        <p className="line-clamp-3 text-[12px] leading-relaxed text-white/65">{brief.summary}</p>
-        {[brief.goal, brief.audience, brief.product].some(Boolean) && <p className="mt-1.5 line-clamp-2 text-[11px] text-white/45">{[brief.goal, brief.audience, brief.product].filter(Boolean).join(' · ')}</p>}
-        {brief.style && <p className="mt-1.5 line-clamp-1 text-[11px] text-white/40">{brief.style}</p>}
+      <CardShell
+        icon={<Target size={15} strokeWidth={2} aria-hidden="true" />}
+        title="Production Brief"
+        accent={brief.style || 'Video direction summary'}
+        badge={brief.locked ? <Badge tone="green">Locked</Badge> : null}
+        action="View brief"
+        actionTone="soft"
+        onAction={() => onOpen('brief')}
+      >
+        <p className="line-clamp-3 text-[13.5px] leading-[1.65] text-[#1E1E28]">{brief.summary}</p>
+        {chips.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {chips.slice(0, 5).map((chip) => (
+              <span
+                key={chip}
+                className="inline-flex max-w-full truncate rounded-lg border border-[#E6E7F0] bg-[#F8F8FC] px-2.5 py-1 text-[11.5px] font-medium text-[#4C4D61]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        )}
       </CardShell>
     );
   }
   if (card === 'assets') {
-    const kinds = [['character', 'Karakter'], ['location', 'Lokasi'], ['prop', 'Properti']];
+    const kinds = [
+      ['character', 'Characters'],
+      ['location', 'Locations'],
+      ['prop', 'Props'],
+    ];
     return (
-      <CardShell icon="☺" title="Aset" accent="siap dicek" action="View" onAction={() => onOpen('assets')}>
+      <CardShell
+        icon={<Users size={15} strokeWidth={2} aria-hidden="true" />}
+        title="Story Assets"
+        accent={`${board.elements.length} ${board.elements.length === 1 ? 'element' : 'elements'} ready to review`}
+        action="View assets"
+        actionTone="soft"
+        onAction={() => onOpen('assets')}
+      >
         <div className="flex items-center gap-4">
-          <Stack items={board.elements.map((e) => ({ src: assetUrl(board.media[`element:${e.id}`]?.asset_id, workspaceId, true), label: e.name }))} />
-          <div className="min-w-0 space-y-1 text-[12px] font-semibold text-white/85">
+          <Stack
+            items={board.elements.map((e) => ({
+              src: assetUrl(board.media[`element:${e.id}`]?.asset_id, workspaceId, true),
+              label: e.name,
+            }))}
+          />
+          <div className="min-w-0 space-y-1.5 text-[13px] font-medium text-[#14141F]">
             {kinds.map(([kind, label]) => {
               const items = board.elements.filter((e) => e.kind === kind);
               if (!items.length) return null;
-              return <p key={kind} className="truncate">{label}{items.length === 1 ? ` — ${items[0].name}` : ''} × {items.length}</p>;
+              return (
+                <p key={kind} className="truncate">
+                  {label}
+                  {items.length === 1 ? ` — ${items[0].name}` : ''} <span className="text-[#5B45F2]">× {items.length}</span>
+                </p>
+              );
             })}
           </div>
         </div>
@@ -201,13 +406,32 @@ function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
     const { numbered } = groupShots(board);
     const total = numbered.reduce((t, n) => t + n.shot.duration_seconds, 0);
     return (
-      <CardShell icon="▤" title={numbered.length ? 'Shot list' : 'Scene list'} accent={numbered.length ? `${total} detik` : 'shot belum dibuat'}
-        action="View" onAction={() => onOpen(null)}>
+      <CardShell
+        icon={<Clapperboard size={15} strokeWidth={2} aria-hidden="true" />}
+        title={numbered.length ? 'Shot list' : 'Scene list'}
+        accent={numbered.length ? `${total}s · ${numbered.length} ${numbered.length === 1 ? 'shot' : 'shots'}` : 'no shots yet'}
+        action="View board"
+        actionTone="accent"
+        onAction={() => onOpen(null)}
+      >
         <div className="flex items-center gap-4">
-          <Stack items={numbered.map((n) => ({ src: assetUrl(board.media[`frame:${n.shot.id}`]?.asset_id, workspaceId, true), label: n.shot.title }))} />
-          <div className="min-w-0 space-y-1 text-[12px] font-semibold text-white/85">
-            {board.scenes?.length > 0 && <p>Scene × {board.scenes.length}</p>}
-            {numbered.length > 0 && <p>Shot × {numbered.length}</p>}
+          <Stack
+            items={numbered.map((n) => ({
+              src: assetUrl(board.media[`frame:${n.shot.id}`]?.asset_id, workspaceId, true),
+              label: n.shot.title,
+            }))}
+          />
+          <div className="min-w-0 space-y-1.5 text-[13px] font-medium text-[#14141F]">
+            {board.scenes?.length > 0 && (
+              <p>
+                Scenes <span className="text-[#5B45F2]">× {board.scenes.length}</span>
+              </p>
+            )}
+            {numbered.length > 0 && (
+              <p>
+                Shots <span className="text-[#5B45F2]">× {numbered.length}</span>
+              </p>
+            )}
           </div>
         </div>
       </CardShell>
@@ -216,15 +440,49 @@ function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
   if (card === 'concepts') {
     const concepts = board.concepts || { options: [] };
     return (
-      <CardShell icon="✦" title="Arah kreatif" accent={`${concepts.options.length} konsep`} action={concepts.chosen ? 'View' : 'Pilih konsep'} onAction={() => onOpen('concepts')}>
-        <ul className="space-y-1">
-          {concepts.options.map((o) => (
-            <li key={o.id} className="truncate text-[12px] text-white/75">
-              {o.title}
-              {concepts.recommended === o.id && <span className="ml-1.5 text-[11px] text-[#d4ff64]/80">rekomendasi</span>}
-              {concepts.chosen === o.id && <span className="ml-1.5 text-[11px] text-emerald-300/90">dipilih</span>}
-            </li>
-          ))}
+      <CardShell
+        icon={<Sparkles size={15} strokeWidth={2} aria-hidden="true" />}
+        title="Creative Direction"
+        accent={`${concepts.options.length} concept ${concepts.options.length === 1 ? 'option' : 'options'}`}
+        badge={concepts.chosen ? <Badge tone="green">Selected</Badge> : <Badge tone="accent">Action needed</Badge>}
+        action={concepts.chosen ? 'View concepts' : 'Choose concept'}
+        actionTone={concepts.chosen ? 'soft' : 'accent'}
+        onAction={() => onOpen('concepts')}
+      >
+        <ul className="space-y-2">
+          {concepts.options.map((o, idx) => {
+            const isChosen = concepts.chosen === o.id;
+            return (
+              <li
+                key={o.id}
+                className={`rounded-xl border px-3 py-2.5 transition ${
+                  isChosen
+                    ? 'border-[#C5BAFC] bg-[#F6F4FF]'
+                    : 'border-[#EFEFF5] bg-[#FAFAFD]'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={`inline-flex h-5 w-5 flex-none items-center justify-center rounded-md text-[10.5px] font-bold ${
+                        isChosen ? 'bg-[#5B45F2] text-white' : 'bg-[#F2F0FF] text-[#4C38D6]'
+                      }`}
+                    >
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <span className="truncate text-[13px] font-semibold text-[#14141F]">{o.title}</span>
+                  </div>
+                  <span className="flex flex-none items-center gap-1.5">
+                    {concepts.recommended === o.id && <Badge tone="accent">Recommended</Badge>}
+                    {isChosen && <Badge tone="green">Selected</Badge>}
+                  </span>
+                </div>
+                {o.logline && (
+                  <p className="mt-1.5 line-clamp-2 pl-7 text-[12px] leading-relaxed text-[#5E5E72]">{o.logline}</p>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </CardShell>
     );
@@ -234,23 +492,40 @@ function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
     const chosen = audio.options?.find((o) => o.id === audio.chosen);
     const voLines = board.shots.filter((s) => s.vo_text).length;
     const lines = [
-      voLines ? `VO (${audio.voiceover?.voice_name || 'suara'}): ${voLines} baris di ${voLines} shot` : audio.voiceover?.text && `VO (${audio.voiceover.voice_name || 'suara'}): ${audio.voiceover.text}`,
-      audio.music?.prompt && `Musik: ${audio.music.prompt}`,
+      voLines
+        ? `VO (${audio.voiceover?.voice_name || 'voice'}): ${voLines} ${voLines === 1 ? 'line' : 'lines'} across ${voLines} ${voLines === 1 ? 'shot' : 'shots'}`
+        : audio.voiceover?.text && `VO (${audio.voiceover.voice_name || 'voice'}): ${audio.voiceover.text}`,
+      audio.music?.prompt && `Music: ${audio.music.prompt}`,
     ].filter(Boolean);
     const options = audio.options?.length && !audio.chosen;
-    const accent = audio.chosen === 'none' ? 'tanpa audio' : chosen ? chosen.title : options ? `${audio.options.length} usulan` : null;
+    const accent = audio.chosen === 'none' ? 'no audio' : chosen ? chosen.title : options ? `${audio.options.length} proposals` : null;
     return (
-      <CardShell icon="♪" title="Audio" accent={accent} action={options ? 'Lihat & pilih' : 'View'} onAction={() => onOpen('audio')}>
+      <CardShell
+        icon={<Music size={15} strokeWidth={2} aria-hidden="true" />}
+        title="Audio"
+        accent={accent}
+        action={options ? 'Review & choose' : 'View audio'}
+        actionTone={options ? 'accent' : 'soft'}
+        onAction={() => onOpen('audio')}
+      >
         {options ? (
-          <ul className="space-y-1">
+          <ul className="divide-y divide-[#F2F2F7]">
             {audio.options.map((o) => (
-              <li key={o.id} className="truncate text-[12px] text-white/75">
-                {o.title}{audio.recommended === o.id && <span className="ml-1.5 text-[11px] text-[#d4ff64]/80">rekomendasi</span>}
+              <li key={o.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0 text-[13px] font-medium text-[#2D2E3F]">
+                <span className="truncate">{o.title}</span>
+                {audio.recommended === o.id && <Badge tone="accent">recommended</Badge>}
               </li>
             ))}
           </ul>
-        ) : lines.length ? lines.map((line) => <p key={line} className="line-clamp-2 text-[12px] leading-relaxed text-white/65">{line}</p>)
-          : <p className="text-[12px] text-white/45">Tanpa voiceover dan musik.</p>}
+        ) : lines.length ? (
+          lines.map((line) => (
+            <p key={line} className="line-clamp-2 text-[13px] leading-relaxed text-[#3A3B4C]">
+              {line}
+            </p>
+          ))
+        ) : (
+          <p className="text-[13px] text-[#8A8B9C]">No voiceover or music.</p>
+        )}
       </CardShell>
     );
   }
@@ -258,8 +533,15 @@ function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
     const latest = board.research[board.research.length - 1];
     if (!latest) return null;
     return (
-      <CardShell icon="⌕" title="Riset" accent={latest.query} action="View" onAction={() => onOpen('research')}>
-        <p className="line-clamp-3 text-[12px] leading-relaxed text-white/60">{latest.notes}</p>
+      <CardShell
+        icon={<Search size={15} strokeWidth={2} aria-hidden="true" />}
+        title="Research"
+        accent={latest.query}
+        action="View research"
+        actionTone="soft"
+        onAction={() => onOpen('research')}
+      >
+        <p className="line-clamp-3 text-[13px] leading-relaxed text-[#3A3B4C]">{latest.notes}</p>
       </CardShell>
     );
   }
@@ -268,20 +550,26 @@ function ArtifactCard({ card, board, workspaceId, onOpen, busy }) {
 
 export function requestSummary(estimate) {
   const parts = [];
-  if (estimate.images) parts.push(`${estimate.images} gambar`);
-  if (estimate.videos) parts.push(estimate.video_seconds ? `${estimate.videos} video (${estimate.video_seconds} detik)` : `${estimate.videos} video`);
+  if (estimate.images) parts.push(`${estimate.images} ${estimate.images === 1 ? 'image' : 'images'}`);
+  if (estimate.videos) {
+    parts.push(
+      estimate.video_seconds
+        ? `${estimate.videos} ${estimate.videos === 1 ? 'video' : 'videos'} (${estimate.video_seconds}s)`
+        : `${estimate.videos} ${estimate.videos === 1 ? 'video' : 'videos'}`
+    );
+  }
   if (estimate.audio) parts.push(`${estimate.audio} audio`);
   return parts.join(' + ');
 }
 
 const REQUEST_STATUS = {
-  pending: { label: 'Menunggu persetujuan', tone: 'accent' },
-  running: { label: 'Sedang dibuat', tone: 'amber' },
-  done: { label: 'Selesai', tone: 'green' },
-  failed: { label: 'Sebagian gagal', tone: 'red' },
-  rejected: { label: 'Dibatalkan', tone: 'default' },
-  superseded: { label: 'Diganti estimasi baru', tone: 'default' },
-  needs_credits: { label: 'Kredit kurang', tone: 'amber' },
+  pending: { label: 'Awaiting approval', tone: 'accent' },
+  running: { label: 'Generating', tone: 'amber' },
+  done: { label: 'Done', tone: 'green' },
+  failed: { label: 'Partially failed', tone: 'red' },
+  rejected: { label: 'Cancelled', tone: 'default' },
+  superseded: { label: 'Replaced by new estimate', tone: 'default' },
+  needs_credits: { label: 'Insufficient credits', tone: 'amber' },
 };
 
 // Voiceover lines and music are never needed to make the video: on a pending card they start unticked.
@@ -292,50 +580,105 @@ function RequestCard({ request, board, workspaceId, busy, generationRunning, onA
   const [ticked, setTicked] = useState(() => (request?.items?.length && request.items.every(isOptional) ? request.items : []));
   if (!request) return null;
   const auto = !!request.auto;
-  const status = auto && request.status === 'pending' ? { label: 'Antre', tone: 'amber' } : (REQUEST_STATUS[request.status] || REQUEST_STATUS.pending);
+  const status = auto && request.status === 'pending' ? { label: 'Queued', tone: 'amber' } : REQUEST_STATUS[request.status] || REQUEST_STATUS.pending;
   const pending = request.status === 'pending' && !auto;
   const optional = pending ? request.items.filter(isOptional) : [];
   const skip = optional.filter((k) => !ticked.includes(k));
   const required = request.items.filter((k) => !skip.includes(k));
   const base = request.estimate || {};
   const left = skip.reduce((sum, k) => sum + Number(request.item_estimates?.[k]?.credits || 0), 0);
-  const estimate = skip.length ? { ...base, audio: Math.max(0, (base.audio || 0) - skip.length), credits: Math.max(0, (base.credits || 0) - left) } : base;
+  const estimate = skip.length
+    ? { ...base, audio: Math.max(0, (base.audio || 0) - skip.length), credits: Math.max(0, (base.credits || 0) - left) }
+    : base;
   const nothing = pending && required.length === 0;
   return (
-    <CardShell icon="✧" title={`Generate ${requestSummary(estimate) || 'audio'}`} accent={auto ? 'otomatis' : null}
-      action={pending ? 'Approve & generate' : null} onAction={() => onApprove(skip, estimate)}
+    <CardShell
+      icon={<Wand2 size={15} strokeWidth={2} aria-hidden="true" />}
+      title={`Generate ${requestSummary(estimate) || 'audio'}`}
+      accent={auto ? 'automatic' : status.label}
+      action={pending ? 'Approve & generate' : null}
+      actionTone="accent"
+      onAction={() => onApprove(skip, estimate)}
       actionDisabled={busy || generationRunning || !base.available || nothing}
-      secondary={pending ? (
-        <button type="button" onClick={onReject} disabled={busy}
-          className="rounded-full border border-white/[0.1] px-4 py-2 text-[12px] text-white/60 hover:border-white/25 disabled:opacity-50">Batal</button>
-      ) : null}>
+      secondary={
+        pending ? (
+          <button
+            type="button"
+            onClick={onReject}
+            disabled={busy}
+            className="rounded-xl border border-[#D8DAE6] bg-white px-4 py-2 text-[12.5px] font-medium text-[#4C4D61] transition hover:border-[#BFC2D4] hover:bg-[#F5F6FA] hover:text-[#14141F] disabled:opacity-45"
+          >
+            Cancel
+          </button>
+        ) : null
+      }
+    >
       <div className="flex items-start gap-4">
-        <Stack items={required.map((k) => ({ src: board.media[k]?.kind === 'audio' ? null : assetUrl(board.media[k]?.asset_id, workspaceId, true), label: (board.media[k]?.label || k).replace(' — reference sheet', '') }))} />
+        <Stack
+          items={required.map((k) => ({
+            src: board.media[k]?.kind === 'audio' ? null : assetUrl(board.media[k]?.asset_id, workspaceId, true),
+            label: (board.media[k]?.label || k).replace(' — reference sheet', ''),
+          }))}
+        />
         <div className="min-w-0 flex-1">
-          <div className="mb-1.5"><Badge tone={status.tone}>{status.label}</Badge></div>
-          <ul className="space-y-0.5">
-            {required.filter((k) => !optional.includes(k)).slice(0, 4).map((key) => <li key={key} className="truncate text-[11px] text-white/55">{board.media[key]?.label || key}</li>)}
-            {required.length - optional.filter((k) => ticked.includes(k)).length > 4 && <li className="text-[10px] text-white/35">+{required.length - optional.filter((k) => ticked.includes(k)).length - 4} lagi</li>}
+          <div className="mb-2">
+            <Badge tone={status.tone}>{status.label}</Badge>
+          </div>
+          <ul className="space-y-1">
+            {required
+              .filter((k) => !optional.includes(k))
+              .slice(0, 4)
+              .map((key) => (
+                <li key={key} className="truncate text-[12.5px] text-[#4C4D61]">
+                  {board.media[key]?.label || key}
+                </li>
+              ))}
+            {required.length - optional.filter((k) => ticked.includes(k)).length > 4 && (
+              <li className="text-[11.5px] text-[#8A8B9C]">
+                +{required.length - optional.filter((k) => ticked.includes(k)).length - 4} more
+              </li>
+            )}
           </ul>
           {optional.length > 0 && (
-            <div className="mt-2 border-t border-white/[0.06] pt-1.5">
-              <p className="text-[10px] text-white/35">Opsional, centang kalau mau ikut dibuat:</p>
+            <div className="mt-2.5 border-t border-[#EFEFF5] pt-2.5">
+              <p className="mb-1 text-[11px] font-medium text-[#8A8B9C]">Optional — check to include in generation:</p>
               {optional.map((key) => (
-                <label key={key} className="flex cursor-pointer items-center gap-1.5 truncate text-[11px] text-white/55">
-                  <input type="checkbox" className="accent-[#d4ff64]" checked={ticked.includes(key)} disabled={busy}
-                    onChange={(e) => setTicked(e.target.checked ? [...ticked, key] : ticked.filter((k) => k !== key))} />
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-center gap-2 py-0.5 text-[12px] text-[#3A3B4C]"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded accent-[#5B45F2]"
+                    checked={ticked.includes(key)}
+                    disabled={busy}
+                    onChange={(e) => setTicked(e.target.checked ? [...ticked, key] : ticked.filter((k) => k !== key))}
+                  />
                   <span className="truncate">{board.media[key]?.label || key}</span>
-                  {request.item_estimates?.[key] && <span className="flex-none text-[10px] text-white/30">{fmtCredits(request.item_estimates[key].credits)} kr</span>}
+                  {request.item_estimates?.[key] && (
+                    <span className="ml-auto flex-none text-[11px] text-[#8A8B9C]">
+                      {fmtCredits(request.item_estimates[key].credits)} cr
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
           )}
-          <p className="mt-1.5 text-[12px] text-white/75">
-            {estimate.available ? <>{auto ? 'Biaya' : 'Estimasi'} <strong className={ACCENT}>{fmtCredits(estimate.credits)} kredit</strong></> : <span className="text-amber-300/80">Estimasi kredit belum tersedia.</span>}
+          <p className="mt-2.5 text-[13px] text-[#2D2E3F]">
+            {estimate.available ? (
+              <>
+                {auto ? 'Cost' : 'Estimated'}{' '}
+                <strong className={`font-semibold ${ACCENT}`}>{fmtCredits(estimate.credits)} credits</strong>
+              </>
+            ) : (
+              <span className="text-[#A05C07]">Credit estimate is not available yet.</span>
+            )}
           </p>
         </div>
       </div>
-      {pending && generationRunning && <p className="mt-2 text-[10px] text-white/40">Tunggu generate yang sedang berjalan selesai dulu.</p>}
+      {pending && generationRunning && (
+        <p className="mt-2.5 text-[11.5px] text-[#8A8B9C]">Wait for the current generation to finish first.</p>
+      )}
     </CardShell>
   );
 }
@@ -355,35 +698,55 @@ export function RenderCard({ render, workspaceId, rendering, onRender }) {
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
   const src = done && render.asset_id ? assetUrl(render.asset_id, workspaceId) : null;
   const notes = [];
-  if (render.stills) notes.push(`${render.stills} shot masih frame diam`);
-  if (render.skipped) notes.push(`${render.skipped} shot dilewati (belum ada gambar)`);
+  if (render.stills) notes.push(`${render.stills} ${render.stills === 1 ? 'shot is' : 'shots are'} still frames`);
+  if (render.skipped) notes.push(`${render.skipped} ${render.skipped === 1 ? 'shot' : 'shots'} skipped (no image yet)`);
   return (
-    <CardShell icon="▶" title="Video final" accent={done ? fmtDuration(render.duration_seconds) : failed ? 'gagal' : 'dirender'}
-      action={done || failed ? (failed ? 'Coba render lagi' : 'Render ulang') : null} onAction={onRender} actionDisabled={rendering}
-      secondary={done && src ? (
-        <a href={`${src}&download=1`} download
-          className="flex items-center justify-center rounded-full bg-[#d4ff64] px-5 py-2 text-[12px] font-semibold text-[#10130a] hover:brightness-110">
-          Download
-        </a>
-      ) : null}>
+    <CardShell
+      icon={<Play size={14} fill="currentColor" aria-hidden="true" />}
+      title="Final video"
+      accent={done ? fmtDuration(render.duration_seconds) : failed ? 'failed' : 'rendering'}
+      action={done || failed ? (failed ? 'Retry render' : 'Re-render') : null}
+      actionTone="soft"
+      onAction={onRender}
+      actionDisabled={rendering}
+      secondary={
+        done && src ? (
+          <a
+            href={`${src}&download=1`}
+            download
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#5B45F2] px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_2px_8px_rgba(91,69,242,0.22)] transition hover:bg-[#4731D8]"
+          >
+            <Download size={14} strokeWidth={2.2} aria-hidden="true" />
+            <span>Download</span>
+          </a>
+        ) : null
+      }
+    >
       {done && src ? (
-        <video src={src} controls preload="metadata" playsInline className="w-full rounded-lg bg-black" />
+        <video src={src} controls preload="metadata" playsInline className="w-full rounded-xl bg-[#0F1117]" />
       ) : done ? (
-        <p className="text-[11.5px] leading-relaxed text-white/50">File render lama ini sudah dihapus untuk menghemat penyimpanan (yang disimpan 3 render terakhir). Render ulang kalau masih butuh.</p>
+        <p className="text-[12.5px] leading-relaxed text-[#5E5E72]">
+          This older render file was removed to save storage (the last 3 renders are kept). Re-render if you still need it.
+        </p>
       ) : failed ? (
-        <p className="text-[11.5px] leading-relaxed text-red-300/90">{render.error || 'Render gagal.'}</p>
+        <p className="text-[12.5px] leading-relaxed text-[#C01048]">{render.error || 'Render failed.'}</p>
       ) : (
         <div>
-          <div className="flex items-center gap-2 text-[11.5px] text-white/75">
-            <Spinner /> {progress.done < progress.total ? `Menggabungkan shot ${Math.min(progress.done + 1, progress.total)}/${progress.total}` : 'Menyimpan video…'}
+          <div className="flex items-center gap-2 text-[12.5px] font-medium text-[#2D2E3F]">
+            <Spinner />{' '}
+            {progress.done < progress.total
+              ? `Combining shot ${Math.min(progress.done + 1, progress.total)}/${progress.total}`
+              : 'Saving video…'}
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-            <div className="h-full rounded-full bg-[#d4ff64] transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+          <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-[#ECECF4]">
+            <div className="h-full rounded-full bg-[#5B45F2] transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
           </div>
         </div>
       )}
-      <p className="mt-2 text-[10.5px] text-white/40">
-        {render.shots?.length || 0} shot · {render.aspect_ratio} · {render.resolution}{render.fps ? ` · ${render.fps} fps` : ''}{render.format ? ` · ${render.format.toUpperCase()}` : ''}
+      <p className="mt-2.5 text-[11.5px] text-[#8A8B9C]">
+        {render.shots?.length || 0} {render.shots?.length === 1 ? 'shot' : 'shots'} · {render.aspect_ratio} · {render.resolution}
+        {render.fps ? ` · ${render.fps} fps` : ''}
+        {render.format ? ` · ${render.format.toUpperCase()}` : ''}
         {done && render.size_bytes ? ` · ${(render.size_bytes / (1024 * 1024)).toFixed(1)} MB` : ''}
         {notes.length ? ` · ${notes.join(', ')}` : ''}
       </p>
@@ -414,16 +777,34 @@ function CreditGateCard({ entry, board, busy, onContinue }) {
   const gate = request.credit_gate || entry.meta || {};
   const held = request.status === 'needs_credits';
   return (
-    <CardShell icon="!" title="Kredit kurang" accent={held ? 'tertahan' : 'lanjut'}
-      action={held ? 'Lanjutkan' : null} onAction={() => onContinue(request)} actionDisabled={busy}
-      secondary={held ? (
-        <a href="/studio/billing" target="_blank" rel="noreferrer"
-          className="rounded-full border border-[#d4ff64]/40 px-4 py-2 text-[12px] text-[#e4f5bd] hover:border-[#d4ff64]">Top up</a>
-      ) : null}>
-      <p className="text-[12px] text-white/75">
-        Langkah ini butuh <strong className={ACCENT}>{fmtCredits(gate.needed)} kredit</strong>, saldo kamu {fmtCredits(gate.balance)}.
+    <CardShell
+      icon={<AlertCircle size={15} strokeWidth={2.1} aria-hidden="true" />}
+      title="Insufficient credits"
+      accent={held ? 'paused' : 'resumed'}
+      action={held ? 'Continue' : null}
+      actionTone="accent"
+      onAction={() => onContinue(request)}
+      actionDisabled={busy}
+      secondary={
+        held ? (
+          <a
+            href="/studio/billing"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center rounded-xl border border-[#DDD7FE] bg-[#F2F0FF] px-4 py-2 text-[12.5px] font-semibold text-[#4C38D6] transition hover:bg-[#E6E2FF]"
+          >
+            Top up
+          </a>
+        ) : null
+      }
+    >
+      <p className="text-[13px] leading-relaxed text-[#2D2E3F]">
+        This step needs <strong className={`font-semibold ${ACCENT}`}>{fmtCredits(gate.needed)} credits</strong>; your balance is{' '}
+        {fmtCredits(gate.balance)}.
       </p>
-      <p className="mt-1 text-[11px] text-white/45">{held ? 'Pekerjaanmu aman. Top up dulu, lalu klik Lanjutkan.' : 'Sudah dilanjutkan.'}</p>
+      <p className="mt-1.5 text-[12px] text-[#5E5E72]">
+        {held ? 'Your work is safe. Top up first, then click Continue.' : 'Resumed.'}
+      </p>
     </CardShell>
   );
 }
@@ -437,9 +818,15 @@ function splitMentions(text, labels) {
     let hit = null;
     for (const label of labels) {
       const i = rest.indexOf(label);
-      if (i >= 0 && (at < 0 || i < at)) { at = i; hit = label; }
+      if (i >= 0 && (at < 0 || i < at)) {
+        at = i;
+        hit = label;
+      }
     }
-    if (hit === null) { parts.push(rest); break; }
+    if (hit === null) {
+      parts.push(rest);
+      break;
+    }
     if (at > 0) parts.push(rest.slice(0, at));
     parts.push(hit);
     rest = rest.slice(at + hit.length);
@@ -453,64 +840,148 @@ function UserMessage({ entry, workspaceId, videoNotes }) {
   const watched = attachments.filter((a) => a.kind === 'video' && videoNotes?.[a.asset_id]);
   const labels = (entry.meta?.mentions || []).map((m) => `@${m.label}`);
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex flex-col items-end gap-2">
       {attachments.length > 0 && (
-        <div className="flex max-w-[72%] flex-wrap justify-end gap-1.5">
+        <div className="flex max-w-[82%] flex-wrap justify-end gap-2">
           {attachments.map((a) => (
-            <a key={a.asset_id} href={assetUrl(a.asset_id, workspaceId)} target="_blank" rel="noreferrer" title={a.name}
-              className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-              {a.kind === 'video'
-                ? <video src={`${assetUrl(a.asset_id, workspaceId)}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+            <a
+              key={a.asset_id}
+              href={assetUrl(a.asset_id, workspaceId)}
+              target="_blank"
+              rel="noreferrer"
+              title={a.name}
+              className="relative h-16 w-16 overflow-hidden rounded-xl border border-[#E2E3EC] bg-[#11141C] shadow-xs"
+            >
+              {a.kind === 'video' ? (
+                <video
+                  src={`${assetUrl(a.asset_id, workspaceId)}#t=0.5`}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                : <img src={assetUrl(a.asset_id, workspaceId, true)} alt={a.name} className="h-full w-full object-cover" />}
-              {a.kind === 'video' && <span className="absolute bottom-0 left-0 rounded-tr bg-black/70 px-1 text-[9px] text-white">▶</span>}
+                <img src={assetUrl(a.asset_id, workspaceId, true)} alt={a.name} className="h-full w-full object-cover" />
+              )}
+              {a.kind === 'video' && (
+                <span className="absolute bottom-1 left-1 inline-flex h-4 w-4 items-center justify-center rounded bg-black/75 text-white">
+                  <Play size={8} fill="currentColor" aria-hidden="true" />
+                </span>
+              )}
             </a>
           ))}
         </div>
       )}
       {watched.map((a) => (
-        <details key={a.asset_id} className="max-w-[72%] rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-[11px] text-white/60">
-          <summary className="cursor-pointer text-white/45 hover:text-white/75">Hasil tonton AI · {a.name || 'video'}</summary>
+        <details
+          key={a.asset_id}
+          className="max-w-[82%] rounded-xl border border-[#EAEAEF] bg-[#FAFAFD] px-3.5 py-2 text-[12px] text-[#4C4D61]"
+        >
+          <summary className="cursor-pointer font-medium text-[#5E5E72] hover:text-[#14141F]">
+            AI watch notes · {a.name || 'video'}
+          </summary>
           <p className="mt-1.5 whitespace-pre-line leading-relaxed">{videoNotes[a.asset_id]}</p>
         </details>
       ))}
-      <div className="max-w-[72%] whitespace-pre-line break-words rounded-lg border border-white/[0.06] bg-[#181b20] px-3 py-1.5 text-[11.5px] leading-[1.6] text-white/90">
-        {splitMentions(entry.text, labels).map((part, i) => (labels.includes(part)
-          ? <span key={i} className="rounded bg-[#d4ff64]/15 px-1 text-[#e4f5bd]">{part}</span>
-          : <Fragment key={i}>{part}</Fragment>))}
+      <div className="max-w-[82%] whitespace-pre-line break-words rounded-[18px] rounded-br-[6px] border border-[#DFDAFE] bg-[#F2F0FF] px-4 py-2.5 text-[13.5px] leading-[1.64] text-[#1A1638]">
+        {splitMentions(entry.text, labels).map((part, i) =>
+          labels.includes(part) ? (
+            <span key={i} className="rounded-md bg-[#5B45F2]/12 px-1.5 py-0.5 font-medium text-[#4C38D6]">
+              {part}
+            </span>
+          ) : (
+            <Fragment key={i}>{part}</Fragment>
+          )
+        )}
       </div>
     </div>
   );
 }
 
-function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunning, onApprove, onReject, onOpenPanel, onRender, onContinue, folded }) {
-  if (entry.kind === 'credit_gate') return <CreditGateCard entry={entry} board={board} busy={busy} onContinue={onContinue} />;
+function Entry({
+  entry,
+  board,
+  workspaceId,
+  busy,
+  generationRunning,
+  renderRunning,
+  onApprove,
+  onReject,
+  onOpenPanel,
+  onRender,
+  onContinue,
+  folded,
+}) {
+  if (entry.kind === 'credit_gate') {
+    return <CreditGateCard entry={entry} board={board} busy={busy} onContinue={onContinue} />;
+  }
   if (entry.kind === 'render') {
     const render = (board.renders || []).find((r) => r.id === entry.meta?.render_id);
     return <RenderCard render={render} workspaceId={workspaceId} rendering={busy || renderRunning} onRender={onRender} />;
   }
   if (entry.kind === 'card') {
     const card = entry.meta?.card;
-    if (folded) return <FoldedLine text={`${CARD_NAMES[card] || card} diperbarui`} onOpen={() => onOpenPanel(card === 'shots' ? null : card)} />;
-    return <ArtifactCard card={card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} busy={busy} />;
+    if (folded) {
+      return (
+        <FoldedLine
+          text={`${CARD_NAMES[card] || card} updated`}
+          onOpen={() => onOpenPanel(card === 'shots' ? null : card)}
+        />
+      );
+    }
+    return <ArtifactCard card={card} board={board} workspaceId={workspaceId} onOpen={onOpenPanel} />;
   }
   if (entry.kind === 'request') {
     const request = board.requests.find((r) => r.id === entry.meta?.request_id);
     if (request && (request.status === 'superseded' || request.status === 'rejected')) {
-      return <FoldedLine text={`Estimasi generate ${requestSummary(request.estimate || {})} — ${REQUEST_STATUS[request.status].label.toLowerCase()}`} />;
+      return (
+        <FoldedLine
+          text={`Generation estimate ${requestSummary(request.estimate || {})} — ${REQUEST_STATUS[request.status].label.toLowerCase()}`}
+        />
+      );
     }
-    return <RequestCard request={request} board={board} workspaceId={workspaceId} busy={busy} generationRunning={generationRunning}
-      onApprove={(skip, estimate) => onApprove(request, skip, estimate)} onReject={() => onReject(request)} />;
+    return (
+      <RequestCard
+        request={request}
+        board={board}
+        workspaceId={workspaceId}
+        busy={busy}
+        generationRunning={generationRunning}
+        onApprove={(skip, estimate) => onApprove(request, skip, estimate)}
+        onReject={() => onReject(request)}
+      />
+    );
   }
   if (entry.kind === 'edit' || entry.kind === 'approval') {
-    return <div className="text-right text-[10.5px] text-white/40">{entry.kind === 'edit' ? '✎ ' : '✓ '}{entry.text}</div>;
+    return (
+      <div className="flex items-center justify-center gap-1.5 py-0.5 text-[12px] text-[#9495A6]">
+        {entry.kind === 'edit' ? <Pencil size={11} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+        <span>{entry.text}</span>
+      </div>
+    );
   }
   if (entry.role === 'user') return <UserMessage entry={entry} workspaceId={workspaceId} videoNotes={board.video_notes} />;
-  if (entry.kind === 'error') return <p className="text-[11.5px] leading-relaxed text-red-300/90">{entry.text}</p>;
-  if (entry.kind === 'generation') {
-    return <div className="flex items-center gap-2 text-[11.5px] text-white/80"><CheckIcon />{entry.text}</div>;
+  if (entry.kind === 'error') {
+    return (
+      <p className="rounded-2xl border border-[#FCCDD6] bg-[#FFF1F3] px-4 py-3 text-[13px] leading-relaxed text-[#C01048]">
+        {entry.text}
+      </p>
+    );
   }
-  return <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={entry.text} /></div>;
+  if (entry.kind === 'generation') {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl border border-[#C5F0D6] bg-[#ECFDF3] px-4 py-2.5 text-[13px] font-medium text-[#147A49]">
+        <CheckIcon />
+        <span>{entry.text}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="w-fit max-w-full rounded-[18px] bg-[#F1F1F4] px-4 py-3 text-[13.5px] leading-[1.68] text-[#1E1E28]">
+      <Markdown text={entry.text} />
+    </div>
+  );
 }
 
 // The streamed reply typed out at a steady pace (about 70 characters a second, faster when far behind),
@@ -518,7 +989,10 @@ function Entry({ entry, board, workspaceId, busy, generationRunning, renderRunni
 function useTypewriter(target) {
   const [shown, setShown] = useState('');
   useEffect(() => {
-    if (!target) { setShown(''); return undefined; }
+    if (!target) {
+      setShown('');
+      return undefined;
+    }
     let frame;
     let last = performance.now();
     const step = (time) => {
@@ -539,32 +1013,82 @@ function useTypewriter(target) {
   return shown;
 }
 
-export default function ChatTimeline({ chat, board, workspaceId, busy, generationRunning, renderRunning, agentRunning, onApprove, onReject, onOpenPanel, onRender, draft, onContinue }) {
+export default function ChatTimeline({
+  chat,
+  board,
+  workspaceId,
+  busy,
+  generationRunning,
+  renderRunning,
+  agentRunning,
+  onApprove,
+  onReject,
+  onOpenPanel,
+  onRender,
+  draft,
+  onContinue,
+  projectTitle,
+  runMode,
+  needsApproval,
+}) {
   const blocks = groupEntries(chat);
   // Every card shows the board as it is now, so only the newest card of each kind is drawn in full.
   const newest = {};
-  blocks.forEach((block) => { if (block.type !== 'steps' && block.entry.kind === 'card') newest[block.entry.meta?.card] = block.key; });
+  blocks.forEach((block) => {
+    if (block.type !== 'steps' && block.entry.kind === 'card') newest[block.entry.meta?.card] = block.key;
+  });
   // The draft stays until the saved message with the same text is in the chat, then the message takes its place.
   const lastReply = [...chat].reverse().find((entry) => entry.role === 'assistant' && entry.kind === 'message');
   const pending = draft && !(lastReply && lastReply.text.trim() === draft.trim()) ? draft : '';
   const typed = useTypewriter(pending);
+  const statusLabel = agentRunning
+    ? 'Working…'
+    : needsApproval
+    ? 'Awaiting approval'
+    : generationRunning
+    ? 'Generating media…'
+    : 'Ready to help';
+  const modeLabel = runMode === 'auto' ? 'Autopilot' : 'Guided';
+
   return (
-    <div className="space-y-4">
-      {blocks.map((block, i) => block.type === 'steps' ? (
-        <StepGroup key={block.key} items={block.items} live={agentRunning && i === blocks.length - 1} />
-      ) : (
-        <Entry key={block.key} entry={block.entry} board={board} workspaceId={workspaceId} busy={busy}
-          generationRunning={generationRunning} renderRunning={renderRunning} onApprove={onApprove} onReject={onReject}
-          onOpenPanel={onOpenPanel} onRender={onRender} onContinue={onContinue}
-          folded={block.entry.kind === 'card' && newest[block.entry.meta?.card] !== block.key} />
-      ))}
-      {pending && (
-        // The reply as it is being written; replaced by the saved message when the step ends.
-        <div className="text-[11.5px] leading-[1.7] text-[#e6e7ea]"><Markdown text={typed} /><span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-[#d4ff64]/70 align-middle" /></div>
-      )}
-      {agentRunning && !pending && blocks[blocks.length - 1]?.type !== 'steps' && (
-        <div className="flex items-center gap-2 text-[10.5px] text-white/40"><Spinner /> Director sedang bekerja…</div>
-      )}
+    <div>
+      <AgentIdentityHeader title={projectTitle} statusLabel={statusLabel} modeLabel={modeLabel} />
+      <div className="space-y-4">
+        {blocks.map((block, i) =>
+          block.type === 'steps' ? (
+            <StepGroup key={block.key} items={block.items} live={agentRunning && i === blocks.length - 1} />
+          ) : (
+            <Entry
+              key={block.key}
+              entry={block.entry}
+              board={board}
+              workspaceId={workspaceId}
+              busy={busy}
+              generationRunning={generationRunning}
+              renderRunning={renderRunning}
+              onApprove={onApprove}
+              onReject={onReject}
+              onOpenPanel={onOpenPanel}
+              onRender={onRender}
+              onContinue={onContinue}
+              folded={block.entry.kind === 'card' && newest[block.entry.meta?.card] !== block.key}
+            />
+          )
+        )}
+        {pending && (
+          // The reply as it is being written; replaced by the saved message when the step ends.
+          <div className="w-fit max-w-full rounded-[18px] bg-[#F1F1F4] px-4 py-3 text-[13.5px] leading-[1.68] text-[#1E1E28]">
+            <Markdown text={typed} />
+            <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-[#5B45F2] align-middle" />
+          </div>
+        )}
+        {agentRunning && !pending && blocks[blocks.length - 1]?.type !== 'steps' && (
+          <div className="inline-flex items-center gap-2 px-1 text-[12.5px] font-medium text-[#8A8B9C]">
+            <Spinner />
+            <span>Director is thinking…</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

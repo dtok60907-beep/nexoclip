@@ -18,7 +18,7 @@ export async function POST(request) {
     pool: getPool(),
     verifier: async ({ signature }) => webhookSecretMatches(process.env.PAKASIR_WEBHOOK_SECRET, signature),
     // A subscription payment settles its order; any other transaction is a top-up.
-    handler: async ({ eventId }) => { if (!(await subscriptionService().settleByTxnId(eventId))) await topupService().settleByTxnId(eventId); },
+    handler: async ({ eventId }) => { if (!(await subscriptionService().settleByTxnId(eventId, 'pakasir'))) await topupService().settleByTxnId(eventId, 'pakasir'); },
   });
 
   try {

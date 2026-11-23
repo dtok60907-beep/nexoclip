@@ -56,9 +56,9 @@ export function usualRows(data) {
   return { video, image };
 }
 
-export const ENTERPRISE_WHATSAPP_URL = `https://wa.me/6285183162659?text=${encodeURIComponent('Halo, saya tertarik dengan paket Enterprise Nexo Clip.')}`;
+export const ENTERPRISE_WHATSAPP_URL = `https://wa.me/6285183162659?text=${encodeURIComponent('Hi, I am interested in the NexoClip Enterprise plan.')}`;
 // The support chat (sidebar and floating button).
-export const SUPPORT_WHATSAPP_URL = `https://wa.me/6285183162659?text=${encodeURIComponent('Halo Nexo Clip, saya butuh bantuan.')}`;
+export const SUPPORT_WHATSAPP_URL = `https://wa.me/6285183162659?text=${encodeURIComponent('Hi NexoClip, I need some help.')}`;
 
 export const ENTERPRISE_POINTS = [
   'Credit quota sized to your team',

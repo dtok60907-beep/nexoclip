@@ -16,6 +16,7 @@ export async function createUserWithWorkspace(client, {
   marketingOptIn = false,
   workspaceName,
   workspaceSlug,
+  joinWorkspace,
 }) {
   const userResult = await client.query(
     `INSERT INTO users (email, password_hash, display_name, marketing_opt_in, marketing_opt_in_at)
@@ -24,6 +25,8 @@ export async function createUserWithWorkspace(client, {
     [email, passwordHash, displayName, Boolean(marketingOptIn)],
   );
   const user = userResult.rows[0];
+
+  if (joinWorkspace) return {user, workspace: await joinWorkspace(client,user)};
 
   const workspaceResult = await client.query(
     `INSERT INTO workspaces (name, slug)
@@ -40,4 +43,15 @@ export async function createUserWithWorkspace(client, {
   );
 
   return { user, workspace };
+}
+
+export async function updateUserDisplayName(client, userId, displayName) {
+  const result = await client.query(
+    `UPDATE users
+     SET display_name = $2, updated_at = now()
+     WHERE id = $1
+     RETURNING id, email, display_name`,
+    [userId, displayName],
+  );
+  return result.rows[0] || null;
 }

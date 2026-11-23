@@ -1,15 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import {
+  ArrowRight,
+  Check,
+  Infinity as InfinityIcon,
+  MessageCircle,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { saasFetch } from '../src/lib/saas/api.js';
 import { ENTERPRISE_POINTS, ENTERPRISE_WHATSAPP_URL, usualRows, useModelPrices } from './publicPricing';
+import { NxBillingPlansSkeleton } from './ui/nx-loading';
+import { Highlight, HighlightItem } from './animate-ui/primitives/effects/highlight';
+import { SlidingNumber } from './animate-ui/primitives/texts/sliding-number';
 
-const rupiah = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
+const rupiah = (v) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
 const number = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const day = (v) => (v ? new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const DAY_MS = 86_400_000;
 
-// What the button does for this account now (see quotePlan on the server).
 function quoteLabel(plan, current) {
   const q = plan.quote || { kind: 'new' };
   if (q.kind === 'upgrade') return `Upgrade · pay ${rupiah(q.amountIdr)}`;
@@ -20,16 +33,22 @@ function quoteLabel(plan, current) {
   return `Choose ${plan.name}`;
 }
 
-// A signed-out visitor sees what a new workspace pays (quotePlan on the server).
 function guestQuote(plan, promo) {
   if (!promo || plan.interval !== promo.interval || plan.tier !== promo.tier) return { kind: 'new', amountIdr: plan.priceIdr };
-  return { kind: 'new', amountIdr: Math.round(plan.priceIdr * (100 - promo.percent) / 100), listPriceIdr: plan.priceIdr, promoPercent: promo.percent, promoEndsAt: promo.endsAt };
+  return {
+    kind: 'new',
+    amountIdr: Math.round((plan.priceIdr * (100 - promo.percent)) / 100),
+    listPriceIdr: plan.priceIdr,
+    promoPercent: promo.percent,
+    promoEndsAt: promo.endsAt,
+  };
 }
 
 function quoteNote(q) {
   if (!q) return null;
   if (q.promoPercent) return `${q.promoPercent}% off your first month, full credits. Then ${rupiah(q.listPriceIdr)} a month.`;
-  if (q.kind === 'upgrade') return `Prorated for the rest of your period: +${number(q.creditsNow)} credits now (until ${day(q.creditsExpireAt)}), then the bigger plan every month. Your renewal date stays.`;
+  if (q.kind === 'upgrade')
+    return `Prorated for the rest of your period: +${number(q.creditsNow)} credits now (until ${day(q.creditsExpireAt)}), then the bigger plan every month. Your renewal date stays.`;
   if (q.kind === 'switch') return 'A new yearly period starts today; credits you already have keep their dates.';
   if (q.kind === 'downgrade') return `Your current plan runs to its end; this one starts ${day(q.startsAt)}. Paid now.`;
   if (q.kind === 'renew') return `Adds another period after ${day(q.startsAt)}.`;
@@ -58,64 +77,166 @@ function planFeatures(modelCount) {
   ];
 }
 
-// What a month of credits buys with each model, or the features, in one card.
-function PlanDetail({ tab, rows, credits, popular, features }) {
-  if (tab === 'features') {
-    return <ul className="divide-y divide-white/[.06]">{features.map(([name, detail]) => <li key={name} className="flex gap-2.5 py-2">
-      <span className={`mt-0.5 grid h-4 w-4 flex-none place-items-center rounded-full text-[10px] font-black ${popular ? 'bg-[#d4ff64] text-black' : 'bg-white/10 text-[#d4ff64]'}`}>✓</span>
-      <span className="min-w-0"><span className="block text-[13px] text-white/85">{name}</span><span className="block text-[11px] text-white/35">{detail}</span></span>
-    </li>)}</ul>;
-  }
-  return <ul className="divide-y divide-white/[.06]">{rows.map((row) => <li key={row.id} className="flex items-center gap-3 py-[7px]">
-    <span className={`grid h-4 w-4 flex-none place-items-center rounded-full text-[10px] font-black ${popular ? 'bg-[#d4ff64] text-black' : 'bg-white/10 text-[#d4ff64]'}`}>✓</span>
-    <span className="min-w-0"><span className="block truncate text-[13px] text-white/85">{row.name}</span>{row.duration ? <span className="block text-[11px] text-white/35">hingga {row.duration} detik</span> : null}</span>
-  </li>)}</ul>;
+function PlanDetail({ tab, rows, popular, features }) {
+  const prefersReducedMotion = useReducedMotion();
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={tab}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={prefersReducedMotion ? undefined : { opacity: 0, y: -4 }}
+        transition={{ duration: 0.16, ease: 'easeOut' }}
+      >
+        {tab === 'features' ? (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {features.map(([name, detail], idx) => (
+              <li
+                key={name}
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  padding: '8px 0',
+                  borderTop: idx === 0 ? 0 : '1px solid #f0f0f7',
+                }}
+              >
+                <span className={`nx-bill-check${popular ? ' is-popular' : ''}`} style={{ marginTop: 2 }}>
+                  <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 550, color: 'var(--nx-ub-ink)' }}>{name}</span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--nx-ub-muted)' }}>{detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {rows.map((row, idx) => (
+              <li
+                key={row.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '7px 0',
+                  borderTop: idx === 0 ? 0 : '1px solid #f0f0f7',
+                }}
+              >
+                <span className={`nx-bill-check${popular ? ' is-popular' : ''}`}>
+                  <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: 12.5,
+                      fontWeight: 550,
+                      color: 'var(--nx-ub-ink)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {row.name}
+                  </span>
+                  {row.duration ? (
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--nx-ub-muted)' }}>
+                      hingga {row.duration} detik
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
-// Monthly and yearly plans above the top-ups. Renders nothing while subscriptions are
-// off (SUBSCRIPTIONS_ENABLED). Payment is one period at a time; renewing is manual.
-// Signed out, the plans come from the public price list and choosing one asks to log in.
 export default function SubscriptionSection({ workspaceId, onCompleted, onRequireAuth }) {
-  const [data, setData] = useState(null), [period, setPeriod] = useState('monthly'), [buying, setBuying] = useState(null), [message, setMessage] = useState(null);
+  const prefersReducedMotion = useReducedMotion();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('monthly');
+  const [buying, setBuying] = useState(null);
+  const [message, setMessage] = useState(null);
   const [detailTab, setDetailTab] = useState('video');
   const rows = usualRows(useModelPrices());
   const modelCount = rows.video.length + rows.image.length;
-  const smallest = data?.plans?.find((p) => p.interval === 'monthly');
   const headers = workspaceId ? { 'x-workspace-id': workspaceId } : {};
-  const load = useCallback(() => (workspaceId
-    ? saasFetch('/api/billing/subscription', { headers })
-    : saasFetch('/api/public/plans').then((p) => ({ enabled: p.subscriptionsEnabled, plans: p.plans.map((plan) => ({ ...plan, quote: guestQuote(plan, p.promo) })), subscription: null }))
-  ).then(setData), [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { load().catch(() => {}); }, [load]);
+
+  const load = useCallback(
+    () =>
+      (workspaceId
+        ? saasFetch('/api/billing/subscription', { headers })
+        : saasFetch('/api/public/plans').then((p) => ({
+            enabled: p.subscriptionsEnabled,
+            plans: p.plans.map((plan) => ({ ...plan, quote: guestQuote(plan, p.promo) })),
+            subscription: null,
+          }))
+      ).then(setData),
+    [workspaceId], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    load()
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [load]);
 
   // Back from Pakasir with ?subscription=<order>: poll until it settles.
   useEffect(() => {
     if (!workspaceId) return undefined;
     const orderId = new URLSearchParams(window.location.search).get('subscription');
     if (!orderId) return undefined;
-    let attempts = 0, timer, cancelled = false;
+    let attempts = 0;
+    let timer;
+    let cancelled = false;
     setMessage({ tone: 'info', text: 'Confirming your payment…' });
     const done = (text, tone) => {
       setMessage({ tone, text });
-      const url = new URL(window.location.href); url.searchParams.delete('subscription'); window.history.replaceState(null, '', url.pathname + url.search);
-      load().catch(() => {}); onCompleted?.();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('subscription');
+      window.history.replaceState(null, '', url.pathname + url.search);
+      load().catch(() => {});
+      onCompleted?.();
     };
     const poll = async () => {
       attempts += 1;
       try {
         const { order } = await saasFetch(`/api/billing/subscription/${encodeURIComponent(orderId)}`, { headers });
         if (cancelled) return;
-        if (order.status === 'completed') return done('Payment received. Your plan is active and this month\'s credits are in your balance.', 'success');
-        if (order.status !== 'pending') return done(`This payment was ${order.status}. You were not charged.`, 'error');
-      } catch { /* retry */ }
+        if (order.status === 'completed') {
+          return done("Payment received. Your plan is active and this month's credits are in your balance.", 'success');
+        }
+        if (order.status !== 'pending') {
+          return done(`This payment was ${order.status}. You were not charged.`, 'error');
+        }
+      } catch {
+        /* retry */
+      }
       if (attempts < 20) timer = window.setTimeout(poll, 3000);
       else setMessage({ tone: 'info', text: 'Payment not confirmed yet. Your plan starts automatically once it clears.' });
     };
     poll();
-    return () => { cancelled = true; window.clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [workspaceId, load]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (loading && !data) return <NxBillingPlansSkeleton count={3} />;
   if (!data?.enabled) return null;
+
   const sub = data.subscription;
   const active = sub && sub.status === 'active' && new Date(sub.currentPeriodEnd) > new Date();
   const daysLeft = active ? Math.ceil((new Date(sub.currentPeriodEnd) - new Date()) / DAY_MS) : null;
@@ -123,101 +244,385 @@ export default function SubscriptionSection({ workspaceId, onCompleted, onRequir
   const promo = data.plans.find((p) => p.quote?.promoPercent)?.quote;
 
   async function buy(planCode) {
-    if (!workspaceId) { onRequireAuth?.(); return; }
-    setBuying(planCode); setMessage(null);
+    if (!workspaceId) {
+      onRequireAuth?.();
+      return;
+    }
+    setBuying(planCode);
+    setMessage(null);
     try {
-      const { order } = await saasFetch('/api/billing/subscription', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ planCode }) });
+      const { order } = await saasFetch('/api/billing/subscription', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ planCode }),
+      });
       window.location.assign(order.paymentUrl);
-    } catch (e) { setMessage({ tone: 'error', text: e.message }); setBuying(null); }
+    } catch (e) {
+      setMessage({ tone: 'error', text: e.message });
+      setBuying(null);
+    }
   }
 
-  const tones = { info: 'border-lime-300/20 bg-lime-300/10 text-lime-100', success: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100', error: 'border-red-400/20 bg-red-400/10 text-red-200' };
-  return <section className="mb-10">
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h2 className="text-2xl font-bold">Plans</h2>
-        <p className="mt-1 text-sm text-white/45">Credits every month. Unused monthly credits expire at the end of their month; top-up credits never expire.</p>
-      </div>
-      <div className="flex rounded-xl border border-white/10 p-1 text-sm">
-        {['monthly', 'yearly'].map((i) => <button key={i} type="button" onClick={() => setPeriod(i)} className={`rounded-lg px-3 py-1.5 ${period === i ? 'bg-white/10 text-white' : 'text-white/50'}`}>{i === 'monthly' ? 'Monthly' : 'Yearly · 2 months free'}</button>)}
-      </div>
-    </div>
-    {promo && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300/30 bg-gradient-to-r from-amber-300/15 to-pink-400/10 px-4 py-3 text-sm">
-      <p className="text-amber-50"><b>Launch promo: {promo.promoPercent}% off Creator bulan pertama</b>. Kredit tetap penuh.</p>
-      <p className="text-xs text-amber-100/70">Until {day(new Date(new Date(promo.promoEndsAt) - 1))}</p>
-    </div>}
-    {active && <div className={`mt-4 grid gap-3 rounded-xl border p-4 text-sm sm:grid-cols-3 ${daysLeft <= 7 ? tones.info : 'border-white/10 bg-white/[.03] text-white/75'}`}>
-      <div><p className="text-xs text-white/45">Your plan</p><p className="mt-1 font-semibold text-white">{sub.name} · {sub.interval}</p><p className="text-xs text-white/45">{number(sub.monthlyCredits)} credits every month</p></div>
-      <div><p className="text-xs text-white/45">This month</p><p className="mt-1 font-semibold text-white">{number(data.expiringCredits?.credits)} credits left</p><p className="text-xs text-white/45">expire {day(sub.monthEndsAt)}{sub.monthEndsAt ? ` · ${Math.max(0, Math.ceil((new Date(sub.monthEndsAt) - new Date()) / DAY_MS))} days` : ''}</p></div>
-      <div><p className="text-xs text-white/45">Renews manually</p><p className="mt-1 font-semibold text-white">by {day(sub.currentPeriodEnd)}</p><p className="text-xs text-white/45">{daysLeft} day{daysLeft === 1 ? '' : 's'} left{daysLeft <= 7 ? ' — renew below to keep your monthly credits' : ''}</p></div>
-      {sub.pendingPlan && <p className="text-xs sm:col-span-3">From {day(sub.pendingPlan.startsAt)} your plan becomes <b>{sub.pendingPlan.name} ({sub.pendingPlan.interval})</b>.</p>}
-    </div>}
-    {sub && !active && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tones.info}`}>Your {sub.name} plan ended on {day(sub.currentPeriodEnd)}. Choose a plan to get monthly credits again.</p>}
-    {message && <p className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tones[message.tone]}`}>{message.text}</p>}
-    <div className="mt-5 grid items-start gap-4 md:grid-cols-3">
-      {plans.map((plan) => {
-        const current = active && sub.planCode === plan.code;
-        const perMonth = plan.interval === 'yearly' ? plan.priceIdr / 12 : plan.priceIdr;
-        const saving = smallest ? Math.round((1 - (perMonth / plan.monthlyCredits) / (smallest.priceIdr / smallest.monthlyCredits)) * 100) : 0;
-        const imageEstimate = Math.floor(plan.monthlyCredits / Math.min(...rows.image.map((row) => row.credits)));
-        const videoEstimate = Math.floor(plan.monthlyCredits / Math.min(...rows.video.map((row) => row.credits)));
-        const detailTabs = [['video', `Video · ${rows.video.length}`], ['image', `Image · ${rows.image.length}`], ['features', 'Features']];
-        return <article key={plan.code} className={`relative flex flex-col overflow-hidden rounded-[22px] border ${plan.popular ? 'border-[#d4ff64]/60 bg-[linear-gradient(165deg,#26301b_0%,#141812_45%,#0f120e_100%)] shadow-[0_24px_70px_-30px_rgba(212,255,100,.45)]' : 'border-white/10 bg-[linear-gradient(165deg,#1a1d19_0%,#121411_50%,#0f110e_100%)]'}`}>
-          <div className="p-5 pb-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-lg font-bold tracking-tight">{plan.name}</p>
-              {plan.popular ? <span className="rounded-full bg-[#d4ff64] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Most popular</span>
-                : current ? <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-bold uppercase text-white/60">Your plan</span> : null}
-            </div>
-            <p className="mt-1.5 min-h-[34px] text-xs leading-relaxed text-white/45">{PLAN_AUDIENCE[plan.name]}</p>
+  const remainingRatio =
+    active && Number(sub.monthlyCredits) > 0
+      ? Math.max(0, Math.min(1, Number(data.expiringCredits?.credits || 0) / Number(sub.monthlyCredits)))
+      : 0;
+  const filledTicks = remainingRatio > 0 ? Math.max(1, Math.round(remainingRatio * 18)) : 0;
 
-            {plan.quote?.promoPercent
-              ? <div className="mt-4">
-                <div className="flex items-baseline gap-2"><span className="text-[34px] font-bold leading-none tracking-tight">{rupiah(plan.quote.amountIdr)}</span><span className="rounded-full bg-[#ff5a1f] px-2 py-0.5 text-[11px] font-bold text-white">-{plan.quote.promoPercent}%</span></div>
-                <p className="mt-1.5 text-xs text-white/45">first month · <s>{rupiah(plan.quote.listPriceIdr)}</s> · then {rupiah(plan.quote.listPriceIdr)}/month</p>
-              </div>
-              : <div className="mt-4">
-                <div className="flex items-baseline gap-1"><span className="text-[34px] font-bold leading-none tracking-tight">{rupiah(perMonth)}</span><span className="text-sm text-white/45">/month</span></div>
-                <p className="mt-1.5 text-xs text-white/45">{plan.interval === 'yearly' ? `billed ${rupiah(plan.priceIdr)} a year · 2 months free` : 'billed monthly'}</p>
-              </div>}
-            {quoteNote(plan.quote) && !plan.quote?.promoPercent && <p className="mt-2 text-xs text-lime-100/80">{quoteNote(plan.quote)}</p>}
+  return (
+    <section className="nx-bill-section">
+      <div className="nx-bill-section-head">
+        <div>
+          <p className="nx-bill-eyebrow">
+            <Sparkles size={12} aria-hidden="true" />
+            <span>Subscription Plans</span>
+          </p>
+          <h2 className="nx-bill-heading">Monthly &amp; yearly plans</h2>
+          <p className="nx-bill-desc">
+            Fresh credits every month with full access to every studio. Unused monthly credits expire at month end; top-up credits never expire.
+          </p>
+        </div>
 
-            <button type="button" disabled={buying !== null || plan.quote?.kind === 'scheduled'} onClick={() => buy(plan.code)} className={`mt-4 w-full rounded-full px-4 py-3 text-sm font-bold transition disabled:opacity-50 ${plan.popular ? 'bg-[#d4ff64] text-black hover:bg-[#e2ff91]' : 'border border-white/15 bg-white/[.06] text-white hover:border-[#d4ff64]/60 hover:text-[#d4ff64]'}`}>
-              {buying === plan.code ? 'Opening checkout…' : `${quoteLabel(plan, current)} →`}
+        <Highlight
+          value={period}
+          className="nx-ub-segmented"
+          highlightClassName="nx-ub-segmented-pill"
+        >
+          <HighlightItem value="monthly">
+            <button
+              type="button"
+              onClick={() => setPeriod('monthly')}
+              className={`nx-ub-segmented-btn${period === 'monthly' ? ' is-active' : ''}`}
+            >
+              Monthly
             </button>
-
-            <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-white/[.08] bg-black/20 text-center">
-              <div className="px-2 py-2.5"><p className="text-[15px] font-bold">{number(plan.monthlyCredits)}</p><p className="text-[10px] text-white/40">credits / month</p></div>
-              <div className="border-x border-white/[.08] px-2 py-2.5"><p className="text-[15px] font-bold">{number(imageEstimate)}</p><p className="text-[10px] text-white/40">up to images</p></div>
-              <div className="px-2 py-2.5"><p className="text-[15px] font-bold text-[#d4ff64]">{number(videoEstimate)}</p><p className="text-[10px] text-white/40">up to videos</p></div>
-            </div>
-          </div>
-
-          <div className="border-t border-white/[.08] bg-black/15 px-5 pb-5 pt-3">
-            <div className="mb-1 flex gap-1 rounded-full bg-white/[.05] p-1" role="tablist" aria-label="Plan details">
-              {detailTabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={detailTab === id} onClick={() => setDetailTab(id)} className={`flex-1 rounded-full py-1.5 text-[11px] font-bold transition ${detailTab === id ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>{label}</button>)}
-            </div>
-            {detailTab !== 'features' && <p className="mb-1 mt-2 text-[10px] uppercase tracking-[.14em] text-white/30">Model yang tersedia di paket ini</p>}
-            <PlanDetail tab={detailTab} rows={detailTab === 'image' ? rows.image : rows.video} credits={plan.monthlyCredits} popular={plan.popular} features={planFeatures(modelCount)} />
-          </div>
-        </article>;
-      })}
-    </div>
-
-    <div className="mt-4 grid items-center gap-5 rounded-[22px] border border-white/10 bg-[linear-gradient(120deg,#1a1f17,#10120f_60%)] p-5 md:grid-cols-[1fr_1.3fr_auto]">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#d4ff64]">Enterprise</p>
-        <p className="mt-1 text-xl font-bold tracking-tight">Need volume or a custom price?</p>
-        <p className="mt-1 text-xs text-white/45">For companies, brands and agencies with high volume or special needs.</p>
+          </HighlightItem>
+          <HighlightItem value="yearly">
+            <button
+              type="button"
+              onClick={() => setPeriod('yearly')}
+              className={`nx-ub-segmented-btn${period === 'yearly' ? ' is-active' : ''}`}
+            >
+              <span>Yearly</span>
+              <span className="nx-bill-badge is-soft" style={{ padding: '2px 7px', fontSize: 10 }}>
+                2 mo free
+              </span>
+            </button>
+          </HighlightItem>
+        </Highlight>
       </div>
-      <ul className="grid gap-x-5 gap-y-1.5 text-xs text-white/65 sm:grid-cols-2">{ENTERPRISE_POINTS.map((f) => <li key={f}><span className="mr-1.5 text-[#d4ff64]">✓</span>{f}</li>)}</ul>
-      <a href={ENTERPRISE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap rounded-full bg-[#d4ff64] px-5 py-3 text-center text-sm font-bold text-black transition hover:bg-[#e2ff91]">Chat via WhatsApp →</a>
-    </div>
-    <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-white/45">
-      <span>🔒 Secure checkout via Pakasir (QRIS, virtual account)</span>
-      <span>No auto-debit: you renew when you choose</span>
-      <span>Top-up credits never expire</span>
-      <span>Help on WhatsApp</span>
-    </p>
-  </section>;
+
+      {promo && (
+        <motion.div
+          className="nx-bill-promo"
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24 }}
+        >
+          <p style={{ margin: 0 }}>
+            <strong style={{ color: 'var(--nx-ub-violet)' }}>
+              Launch promo: {promo.promoPercent}% off Creator for the first month
+            </strong>
+            <span style={{ color: 'var(--nx-ub-ink-secondary)' }}> — full credit allocation included.</span>
+          </p>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--nx-ub-muted)' }}>
+            Until {day(new Date(new Date(promo.promoEndsAt) - 1))}
+          </span>
+        </motion.div>
+      )}
+
+      {active && (
+        <div className={`nx-ub-card nx-bill-active-strip${daysLeft <= 7 ? ' is-soon' : ''}`}>
+          <div className="nx-bill-active-cell">
+            <p style={{ margin: 0, fontSize: 11.5, color: 'var(--nx-ub-muted)', fontWeight: 500 }}>Your active plan</p>
+            <p style={{ margin: '5px 0 2px', fontSize: 17, fontWeight: 700, color: 'var(--nx-ub-ink)' }}>
+              {sub.name}{' '}
+              <span style={{ fontSize: 12.5, fontWeight: 550, color: 'var(--nx-ub-violet)', textTransform: 'capitalize' }}>
+                · {sub.interval}
+              </span>
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--nx-ub-muted)' }}>
+              {number(sub.monthlyCredits)} credits every month
+            </p>
+          </div>
+
+          <div className="nx-bill-active-cell" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 11.5, color: 'var(--nx-ub-muted)', fontWeight: 500 }}>This month remaining</p>
+              <p style={{ margin: '5px 0 2px', fontSize: 17, fontWeight: 700, color: 'var(--nx-ub-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                {number(data.expiringCredits?.credits)} credits left
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--nx-ub-muted)' }}>
+                Expires {day(sub.monthEndsAt)}
+                {sub.monthEndsAt ? ` · ${Math.max(0, Math.ceil((new Date(sub.monthEndsAt) - new Date()) / DAY_MS))}d` : ''}
+              </p>
+            </div>
+            <div className="nx-ub-ticks" aria-hidden="true">
+              {Array.from({ length: 18 }).map((_, i) => (
+                <span key={i} className={`nx-ub-tick${i < filledTicks ? ' is-filled tone-violet' : ''}`} />
+              ))}
+            </div>
+          </div>
+
+          <div className="nx-bill-active-cell">
+            <p style={{ margin: 0, fontSize: 11.5, color: 'var(--nx-ub-muted)', fontWeight: 500 }}>Renews manually</p>
+            <p style={{ margin: '5px 0 2px', fontSize: 17, fontWeight: 700, color: 'var(--nx-ub-ink)' }}>
+              by {day(sub.currentPeriodEnd)}
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: daysLeft <= 7 ? 'var(--nx-ub-amber-ink)' : 'var(--nx-ub-muted)' }}>
+              {daysLeft} day{daysLeft === 1 ? '' : 's'} left
+              {daysLeft <= 7 ? ' — renew below to keep monthly credits' : ''}
+            </p>
+          </div>
+
+          {sub.pendingPlan && (
+            <div
+              style={{
+                gridColumn: '1 / -1',
+                padding: '10px 20px',
+                borderTop: '1px solid var(--nx-ub-border)',
+                backgroundColor: 'var(--nx-ub-surface-soft)',
+                fontSize: 12.5,
+                color: 'var(--nx-ub-ink-secondary)',
+              }}
+            >
+              From {day(sub.pendingPlan.startsAt)} your plan becomes{' '}
+              <strong style={{ color: 'var(--nx-ub-ink)' }}>
+                {sub.pendingPlan.name} ({sub.pendingPlan.interval})
+              </strong>
+              .
+            </div>
+          )}
+        </div>
+      )}
+
+      {sub && !active && (
+        <p className="nx-bill-notice tone-info">
+          Your {sub.name} plan ended on {day(sub.currentPeriodEnd)}. Choose a plan below to get monthly credits again.
+        </p>
+      )}
+      {message && <p className={`nx-bill-notice tone-${message.tone}`}>{message.text}</p>}
+
+      <div className="nx-bill-grid">
+        {plans.map((plan, idx) => {
+          const current = active && sub.planCode === plan.code;
+          const perMonth = plan.interval === 'yearly' ? plan.priceIdr / 12 : plan.priceIdr;
+          const minImgCost = rows.image.length ? Math.min(...rows.image.map((row) => row.credits)) : 1;
+          const minVidCost = rows.video.length ? Math.min(...rows.video.map((row) => row.credits)) : 1;
+          const imageEstimate = rows.image.length ? Math.floor(plan.monthlyCredits / minImgCost) : 0;
+          const videoEstimate = rows.video.length ? Math.floor(plan.monthlyCredits / minVidCost) : 0;
+          const detailTabs = [
+            ['video', `Video · ${rows.video.length}`],
+            ['image', `Image · ${rows.image.length}`],
+            ['features', 'Features'],
+          ];
+
+          return (
+            <motion.article
+              key={plan.code}
+              className={`nx-bill-card${plan.popular ? ' is-popular' : ''}`}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, delay: idx * 0.05, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="nx-bill-card-top">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--nx-ub-ink)' }}>
+                    {plan.name}
+                  </h3>
+                  {plan.popular ? (
+                    <span className="nx-bill-badge is-primary">Most popular</span>
+                  ) : current ? (
+                    <span className="nx-bill-badge is-soft">Your plan</span>
+                  ) : null}
+                </div>
+
+                <p style={{ margin: '6px 0 0', minHeight: 36, fontSize: 12.5, lineHeight: 1.5, color: 'var(--nx-ub-muted)' }}>
+                  {PLAN_AUDIENCE[plan.name]}
+                </p>
+
+                {plan.quote?.promoPercent ? (
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="nx-bill-price">
+                        <SlidingNumber value={plan.quote.amountIdr} formatter={rupiah} />
+                      </span>
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: 999,
+                          backgroundColor: '#ef5b3c',
+                          color: '#ffffff',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        -{plan.quote.promoPercent}%
+                      </span>
+                    </div>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--nx-ub-muted)' }}>
+                      first month · <s>{rupiah(plan.quote.listPriceIdr)}</s> · then {rupiah(plan.quote.listPriceIdr)}/mo
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                      <span className="nx-bill-price">
+                        <SlidingNumber value={perMonth} formatter={rupiah} />
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--nx-ub-muted)' }}>/month</span>
+                    </div>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--nx-ub-muted)' }}>
+                      {plan.interval === 'yearly' ? `billed ${rupiah(plan.priceIdr)} / year · 2 months free` : 'billed monthly'}
+                    </p>
+                  </div>
+                )}
+
+                {quoteNote(plan.quote) && !plan.quote?.promoPercent && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--nx-ub-violet)', fontWeight: 500 }}>
+                    {quoteNote(plan.quote)}
+                  </p>
+                )}
+
+                <motion.button
+                  type="button"
+                  disabled={buying !== null || plan.quote?.kind === 'scheduled'}
+                  onClick={() => buy(plan.code)}
+                  whileHover={prefersReducedMotion || buying !== null ? undefined : { scale: 1.015 }}
+                  whileTap={prefersReducedMotion || buying !== null ? undefined : { scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                  className={plan.popular ? 'nx-bill-btn-primary' : 'nx-bill-btn-secondary'}
+                  style={{ marginTop: 18, opacity: buying !== null || plan.quote?.kind === 'scheduled' ? 0.55 : 1 }}
+                >
+                  <span>{buying === plan.code ? 'Opening checkout…' : quoteLabel(plan, current)}</span>
+                  <ArrowRight size={15} aria-hidden="true" />
+                </motion.button>
+
+                <div className="nx-bill-stats">
+                  <div className="nx-bill-stat">
+                    <p className="nx-bill-stat-val">{number(plan.monthlyCredits)}</p>
+                    <p className="nx-bill-stat-lbl">credits / mo</p>
+                  </div>
+                  <div className="nx-bill-stat">
+                    <p className="nx-bill-stat-val">{number(imageEstimate)}</p>
+                    <p className="nx-bill-stat-lbl">up to images</p>
+                  </div>
+                  <div className="nx-bill-stat">
+                    <p className="nx-bill-stat-val is-accent">{number(videoEstimate)}</p>
+                    <p className="nx-bill-stat-lbl">up to videos</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="nx-bill-card-foot">
+                <Highlight
+                  value={detailTab}
+                  className="nx-bill-detail-tabs"
+                  highlightClassName="nx-bill-detail-pill"
+                >
+                  {detailTabs.map(([id, label]) => (
+                    <HighlightItem key={id} value={id} className="flex-1">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={detailTab === id}
+                        onClick={() => setDetailTab(id)}
+                        className={`nx-bill-detail-tab${detailTab === id ? ' is-active' : ''}`}
+                      >
+                        {label}
+                      </button>
+                    </HighlightItem>
+                  ))}
+                </Highlight>
+
+                {detailTab !== 'features' && (
+                  <p
+                    style={{
+                      margin: '8px 0 4px',
+                      fontSize: 10.5,
+                      fontWeight: 650,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      color: 'var(--nx-ub-muted)',
+                    }}
+                  >
+                    Included AI models
+                  </p>
+                )}
+
+                <PlanDetail
+                  tab={detailTab}
+                  rows={detailTab === 'image' ? rows.image : rows.video}
+                  popular={plan.popular}
+                  features={planFeatures(modelCount)}
+                />
+              </div>
+            </motion.article>
+          );
+        })}
+      </div>
+
+      {/* Enterprise Card */}
+      <div className="nx-bill-enterprise">
+        <div>
+          <p className="nx-bill-eyebrow" style={{ marginBottom: 4 }}>Enterprise</p>
+          <p style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--nx-ub-ink)' }}>
+            Need volume or a custom price?
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--nx-ub-muted)', lineHeight: 1.5 }}>
+            For companies, brands, and creative agencies running high-volume campaigns.
+          </p>
+        </div>
+
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+            gap: '7px 18px',
+            fontSize: 12.5,
+            color: 'var(--nx-ub-ink-secondary)',
+          }}
+        >
+          {ENTERPRISE_POINTS.map((f) => (
+            <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <Check size={13} strokeWidth={2.6} style={{ color: 'var(--nx-ub-violet)', flexShrink: 0 }} aria-hidden="true" />
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
+
+        <motion.a
+          href={ENTERPRISE_WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
+          whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+          className="nx-bill-btn-primary"
+          style={{ width: 'auto', whiteSpace: 'nowrap', textDecoration: 'none' }}
+        >
+          <MessageCircle size={15} aria-hidden="true" />
+          <span>Chat via WhatsApp</span>
+          <ArrowRight size={14} aria-hidden="true" />
+        </motion.a>
+      </div>
+
+      <div className="nx-bill-trust-row">
+        <span className="nx-bill-trust-item">
+          <ShieldCheck size={14} style={{ color: 'var(--nx-ub-violet)' }} aria-hidden="true" />
+          Secure checkout via Pakasir (QRIS, virtual account)
+        </span>
+        <span className="nx-bill-trust-item">
+          <RefreshCw size={13} style={{ color: 'var(--nx-ub-violet)' }} aria-hidden="true" />
+          No auto-debit: renew when you choose
+        </span>
+        <span className="nx-bill-trust-item">
+          <InfinityIcon size={14} style={{ color: 'var(--nx-ub-violet)' }} aria-hidden="true" />
+          Top-up credits never expire
+        </span>
+      </div>
+    </section>
+  );
 }

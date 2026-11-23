@@ -5,9 +5,13 @@ services:
       - "127.0.0.1:8080:80"
   nexoclip-app:
     environment:
-      PUBLIC_APP_URL: http://localhost
+      PUBLIC_APP_URL: https://dev.nexoclip.com
     env_file:
       - ./nexoclip-app/.env.tiktok.local
+      - path: ./nexoclip-app/.env.meta.local
+        required: false
   nexoclip-video-worker:
     env_file:
       - ./nexoclip-app/.env.tiktok.local
+      - path: ./nexoclip-app/.env.meta.local
+        required: false

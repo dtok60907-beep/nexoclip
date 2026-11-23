@@ -3,7 +3,7 @@
 import { withBasePath } from '@/lib/base-path'
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
-import { ArrowLeft, Question } from '@phosphor-icons/react'
+import { Question } from '@phosphor-icons/react'
 import { ProjectCard } from './project-card'
 import { NewProjectCard } from './new-project-card'
 import { SearchBar } from './search-bar'
@@ -85,17 +85,9 @@ export function ProjectsDashboard() {
       <div className="spite-ozone-bg fixed inset-0 z-0 pointer-events-none" aria-hidden="true" />
       <div className="relative z-10 min-h-screen">
         {/* Header */}
-        <header className="sticky top-0 z-50">
-          <div className="glass border-b border-white/5 px-6 md:px-10 py-4">
+        <header className="sticky top-0 z-50 bg-transparent">
+          <div className="bg-transparent px-6 md:px-10 py-4">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-6">
-              <a
-                href={process.env.NEXT_PUBLIC_STUDIO_URL || '/studio'}
-                className="shrink-0 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft size={15} />
-                Kembali ke Studio
-              </a>
-
               {/* Search */}
               <div className="flex-1 max-w-md" data-tour="search">
                 <SearchBar value={search} onChange={setSearch} />

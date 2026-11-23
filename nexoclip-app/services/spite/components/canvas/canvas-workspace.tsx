@@ -1496,21 +1496,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
       <OnboardingTour surface="canvas" />
       {/* Auto-remove any persisted legacy note nodes on sync/hydration */}
       <LegacyNoteCleanup />
-      {/* Scene Timeline */}
-      <SceneTimeline
-        scenes={scenesWithShots}
-        activeSceneId={activeSceneId}
-        onSceneChange={(sceneId) => {
-          if (!allowDocumentMutation) return
-          commands.switchScene(sceneId)
-          setSelectedNodeIds([])
-        }}
-        onAddScene={handleAddScene}
-        onDeleteScene={handleDeleteScene}
-        onShotClick={handleShotClick}
-        projectName={projectName}
-      />
-
       {/* Top toolbar */}
       <CanvasToolbar
         projectName={projectName}
@@ -1520,13 +1505,24 @@ function CanvasInner({ projectId }: { projectId: string }) {
         readOnly={readOnly}
         jobsPanelOpen={jobsPanelOpen}
         onToggleJobsPanel={() => { setChatOpen(false); setJobsPanelOpen(v => !v) }}
-        chatOpen={chatOpen}
-        chatUnread={chat.unread}
-        onToggleChat={() => { setJobsPanelOpen(false); setChatOpen(v => !v) }}
         activeJobCount={activeJobCount}
         guests={visiblePresence}
         onFollowGuest={handleFollowGuest}
-      />
+      >
+        <SceneTimeline
+          scenes={scenesWithShots}
+          activeSceneId={activeSceneId}
+          onSceneChange={(sceneId) => {
+            if (!allowDocumentMutation) return
+            commands.switchScene(sceneId)
+            setSelectedNodeIds([])
+          }}
+          onAddScene={handleAddScene}
+          onDeleteScene={handleDeleteScene}
+          onShotClick={handleShotClick}
+          projectName={projectName}
+        />
+      </CanvasToolbar>
 
       {/* Right-side jobs panel — fixed position, doesn't capture canvas
           clicks so the user can pan/zoom/edit while it stays open. */}

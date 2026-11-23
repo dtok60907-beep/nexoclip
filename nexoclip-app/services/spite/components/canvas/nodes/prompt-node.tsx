@@ -314,8 +314,8 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
         minHeight={180}
         maxWidth={900}
         maxHeight={900}
-        lineStyle={{ borderColor: '#1597ff', borderWidth: 1 }}
-        handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9 }}
+        lineStyle={{ borderColor: '#1597ff', borderWidth: 1, zIndex: 20 }}
+        handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9, zIndex: 20 }}
         onResize={(_, params) => {
           // Live drag feedback: update local state on every frame so the
           // card tracks the pointer. Not persisted here — patchNodeData on

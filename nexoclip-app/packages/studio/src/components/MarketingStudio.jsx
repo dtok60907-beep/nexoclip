@@ -455,7 +455,7 @@ export default function MarketingStudio({
                 <video 
                   src={entry.url} 
                   className="w-full aspect-video object-cover hover:opacity-80 transition-opacity" 
-                  muted loop onMouseOver={e => e.target.play()} onMouseOut={e => { e.target.pause(); e.target.currentTime = 0; }}
+                  muted loop onMouseEnter={e => { const p = e.currentTarget.play(); if (p && typeof p.catch === "function") p.catch(() => {}); }} onMouseLeave={e => { try { e.currentTarget.pause(); e.currentTarget.currentTime = 0; } catch {} }}
                 />
                 
                 {/* Actions Overlay */}
