@@ -72,7 +72,7 @@ const Select = ({ data, defaultValue, value, onChange, disabled }: SelectProps) 
         type: "spring",
         stiffness: 300,
         damping: 25,
-        ease: "0.65, 0, 0.35, 1",
+        ease: [0.65, 0, 0.35, 1],
       }}
     >
       <motion.div className="nx-model-picker relative flex items-center justify-center">
