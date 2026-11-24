@@ -125,16 +125,6 @@ export const APPS_CATALOG = [
     description: 'Direct widescreen narrative shots & camera lighting',
   },
   {
-    id: 'motion',
-    title: 'Motion Studio',
-    category: 'video-film',
-    categoryLabel: 'Video & Film',
-    pill: 'New',
-    tone: 'violet',
-    icon: Wand2,
-    description: 'Design kinetic typography & animated brand sequences',
-  },
-  {
     id: 'image',
     title: 'Image Studio',
     category: 'visuals',

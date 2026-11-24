@@ -298,34 +298,6 @@ export const PAGE_TOURS = {
     ],
   },
 
-  motion: {
-    id: 'motion',
-    title: 'Motion Studio',
-    shortTitle: 'Motion',
-    icon: 'motion',
-    steps: [
-      {
-        target: 'motion-composer',
-        preview: 'motion',
-        title: 'Chat your animated video brief',
-        body: 'Describe your topic, attach reference images/videos, or paste a link. Motion Director proposes style, pace, script, and voice.',
-        tip: 'Keep on-screen headlines short (3–6 words) for mobile legibility.',
-      },
-      {
-        target: 'motion-preview',
-        preview: 'motion',
-        title: 'Live preview, format & MP4 export',
-        body: 'Switch aspect ratios (9:16, 4:5, 1:1, 16:9), scrub the scene timeline, and export a crisp MP4 directly from your browser.',
-      },
-      {
-        target: 'motion-scenes',
-        preview: 'controls',
-        title: 'Fine-tune every scene & audio track',
-        body: 'Edit individual scene text, camera moves, narration voice, and background music before approving the production plan.',
-      },
-    ],
-  },
-
   marketing: {
     id: 'marketing',
     title: 'Marketing Studio',
@@ -548,7 +520,6 @@ export const OVERVIEW_TOUR_STEPS = [
 
 export function resolveFeatureTipId(tabId) {
   if (!tabId) return 'home';
-  if (tabId === 'vibe-motion') return 'motion';
   if (PAGE_TOURS[tabId]) return tabId;
   return 'home';
 }

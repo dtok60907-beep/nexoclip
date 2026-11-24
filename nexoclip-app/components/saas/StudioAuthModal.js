@@ -48,19 +48,6 @@ const AUTH_SLIDES = [
     ],
   },
   {
-    id: 'motion',
-    image: '/media/homepage/3d-animation-3.jpg',
-    bg: '#E9F1FC',
-    frameBg: '#4A8CF5',
-    title: 'Chat-Driven AI Motion & 3D',
-    description:
-      'Describe educational, promo, or explainer animations in chat and watch every scene come alive with narration.',
-    badges: [
-      { label: 'Kinetic Scenes', pos: 'top-[16%] -right-4 sm:-right-6', icon: Wand2 },
-      { label: 'Auto Narration', pos: 'top-[52%] -left-4 sm:-left-6', icon: Sparkles },
-    ],
-  },
-  {
     id: 'product',
     image: '/showcase/workflow-product.webp',
     bg: '#FBF3E8',
@@ -234,7 +221,7 @@ export default function StudioAuthModal({ initialMode = 'login', initialError = 
     setError('');
     try {
       const { path, options } = getAuthRequest(mode, values);
-      const result = await saasFetch(path, options);
+      const result = await saasFetch(path, { ...options, signal: AbortSignal.timeout(20000) });
       if (mode === 'forgot') { setError('If that email is registered, a password reset link has been sent.'); return; }
       remember('email');
       await onAuthenticated(result);

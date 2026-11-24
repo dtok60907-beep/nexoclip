@@ -10,7 +10,6 @@ const labels = {
   canvas: 'Canvas',
   cinema: 'Cinema',
   director: 'AI Director',
-  motion: 'AI Motion',
   'ai-influencer': 'AI Influencer',
 };
 const field = 'h-[38px] rounded-[10px] border border-[#e5e5ee] bg-white px-3 text-[13px] text-[#14141f] outline-none transition focus:border-[#14141f]';

@@ -55,23 +55,6 @@ const HOME_TABS = [
     ],
   },
   {
-    id: 'motion',
-    label: 'AI Motion',
-    icon: 'motion',
-    targetTab: 'motion',
-    heading: 'Design animated explainers and motion stories from chat.',
-    placeholder: 'Describe the animated explainer, educational video, or promo motion you want...',
-    defaultCategory: '3d-animation',
-    categories: FILMMAKING_SHOWCASE_CATEGORIES,
-    interleaveCategories: ['3d-animation', 'experimental-vfx', 'cinematic-ads'],
-    typingPrompts: [
-      'A 30-second editorial explainer video on how AI works with engaging kinetic illustrations...',
-      'Weekend iced brown-sugar latte 20% off promo with energetic typography and motion...',
-      'Animated SaaS product launch teaser with crisp kinetic typography and clean transitions...',
-      'Short illustrated story about building daily creative habits, warm narration...',
-    ],
-  },
-  {
     id: 'canvas',
     label: 'Canvas AI Filmmaking',
     icon: 'canvas',
@@ -137,13 +120,10 @@ const ShowcaseCard = memo(function ShowcaseCard({
   onOpen,
   onBroken,
   pausePlayback,
-  prefersReducedMotion,
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
-  const [isVisible, setIsVisible] = useState(index < 5);
   const [isHovered, setIsHovered] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
-  const cardRef = useRef(null);
   const videoElRef = useRef(null);
 
   const title = useMemo(() => formatPortfolioName(video), [video]);
@@ -169,23 +149,7 @@ const ShowcaseCard = memo(function ShowcaseCard({
     }
   }, []);
 
-  useEffect(() => {
-    const node = cardRef.current;
-    if (!node || typeof IntersectionObserver === 'undefined') {
-      setIsVisible(true);
-      return undefined;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsVisible(entry.isIntersecting);
-      },
-      { rootMargin: '80px 220px', threshold: 0.05 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
-  const shouldMountVideo = Boolean(previewUrl) && (isVisible || isHovered) && (!prefersReducedMotion || isHovered);
+  const shouldMountVideo = Boolean(previewUrl) && isHovered;
   const shouldPlayVideo = shouldMountVideo && !pausePlayback;
 
   useEffect(() => {
@@ -225,7 +189,6 @@ const ShowcaseCard = memo(function ShowcaseCard({
 
   return (
     <div
-      ref={cardRef}
       role="button"
       tabIndex={0}
       className={`nx-reel-card${isHovered ? ' is-hovered' : ''}`}
@@ -269,7 +232,7 @@ const ShowcaseCard = memo(function ShowcaseCard({
             loop
             playsInline
             autoPlay={!pausePlayback}
-            preload={index < 5 ? 'auto' : 'metadata'}
+            preload="auto"
             aria-hidden="true"
             className={`nx-showcase-hover-video${videoReady ? ' is-ready' : ''}`}
             onLoadedData={(event) => {
@@ -815,10 +778,6 @@ export default function StudioHome({ onNavigate, onCreate, initialPrompt = '', o
           promptRef={promptRef}
           onCreate={(selectedMode, text, files, modelId) => {
             if (currentTab.id === 'director' && !files.length) return onCreate('director', text, files, modelId);
-            if (currentTab.id === 'motion' && !files.length) {
-              onNavigate?.('motion', text);
-              return true;
-            }
             if (currentTab.id === 'canvas' && !files.length) {
               onNavigate?.('canvas', text);
               return true;
@@ -935,7 +894,6 @@ export default function StudioHome({ onNavigate, onCreate, initialPrompt = '', o
                 onOpen={openVideoModal}
                 onBroken={markBroken}
                 pausePlayback={Boolean(modalState)}
-                prefersReducedMotion={Boolean(prefersReducedMotion)}
               />
             ))}
           </div>

@@ -71,7 +71,9 @@ export function middleware(request) {
         }
     }
 
-    if (url.pathname === '/motion-player') return addPlayerHeaders(NextResponse.next(), request);
+    if (url.pathname === '/studio/motion' || url.pathname.startsWith('/studio/motion/') || url.pathname === '/motion-player') {
+        return NextResponse.redirect(new URL('/studio/home', request.url));
+    }
 
     // Add security headers to all responses
     return addSecurityHeaders(NextResponse.next());
