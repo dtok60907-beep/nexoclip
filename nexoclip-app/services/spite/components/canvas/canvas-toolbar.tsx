@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Sparkle } from '@phosphor-icons/react'
+import { Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
 import type { RemotePresencePeer } from '@/lib/realtime/presence'
@@ -62,12 +62,12 @@ export function CanvasToolbar({ children, projectName, onProjectNameChange, read
   }
 
   return (
-    <div ref={toolbarRef} className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-[#0b0c11]/85 px-2 sm:px-4 relative z-30">
+    <div ref={toolbarRef} className="relative z-30 flex h-13 shrink-0 items-center gap-2 border-b border-zinc-800/80 bg-[#161618]/95 px-2 sm:px-4">
       {/* Left */}
       <div className="flex shrink-0 items-center gap-3">
-        <div className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-amber-400 via-lime-400 to-emerald-400 text-slate-950 shadow-lg shadow-lime-500/10"><Sparkle size={16} weight="fill" /></div>
-        <Link href="/" className="hidden lg:block text-xs font-medium text-slate-400 transition-colors hover:text-slate-100">Projects</Link>
-        <div className="hidden lg:block w-px h-4 bg-border" />
+        <div className="hidden lg:flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-700/80 bg-[#1c1c1e] text-zinc-100"><Sparkles size={14} strokeWidth={1.8} /></div>
+        <Link href="/" className="hidden lg:block text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-100">Projects</Link>
+        <div className="hidden lg:block h-4 w-px bg-zinc-800" />
         {editing ? (
           <input
             autoFocus

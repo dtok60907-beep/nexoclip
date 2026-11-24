@@ -35,6 +35,23 @@ import {
   At,
   Folder,
 } from '@phosphor-icons/react'
+import {
+  AtSign as LucideAtSign,
+  Box as LucideBox,
+  Copy as LucideCopy,
+  Download as LucideDownload,
+  Folder as LucideFolder,
+  Loader2 as LucideLoader,
+  Lock as LucideLock,
+  MapPin as LucideMapPin,
+  Maximize2 as LucideMaximize,
+  MoreHorizontal as LucideMore,
+  Pencil as LucidePencil,
+  ShieldCheck as LucideShieldCheck,
+  Trash2 as LucideTrash,
+  Unlock as LucideUnlock,
+  User as LucideUser,
+} from 'lucide-react'
 
 interface NodeActionToolbarProps {
   nodeId: string
@@ -547,23 +564,76 @@ export function ToolBtn({
   onClick?: () => void
 }) {
   return (
-    <button type="button"
+    <button
+      type="button"
       onClick={onClick}
       title={label}
       aria-label={label}
       disabled={disabled}
-      className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         accent
-          ? 'bg-accent/20 text-accent hover:bg-accent hover:text-accent-foreground'
+          ? 'bg-zinc-200 text-zinc-950 hover:bg-white'
           : danger
-          ? 'text-muted-foreground hover:text-red-400 hover:bg-red-400/10'
-          : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+          ? 'text-zinc-400 hover:bg-red-500/15 hover:text-red-400'
+          : 'text-zinc-300 hover:bg-white/[0.08] hover:text-white'
       }`}
     >
-      <Icon size={12} weight={accent ? 'fill' : 'regular'} className={spinning ? 'animate-spin' : undefined} />
+      <Icon size={14} strokeWidth={1.8} className={spinning ? 'animate-spin' : undefined} />
     </button>
   )
 }
+
+export function NodePortDot({
+  color,
+  side,
+  top,
+  label,
+}: {
+  color: string
+  side: 'left' | 'right'
+  top: number | string
+  label?: string
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute z-10 flex items-center justify-center transition-transform duration-200 ease-out group-hover:scale-115"
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: '50%',
+        background: '#1c1c1e',
+        border: `1.75px solid ${color}`,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.55)',
+        top,
+        transform: 'translateY(-50%)',
+        [side === 'left' ? 'left' : 'right']: -7,
+      }}
+      title={label}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full opacity-90"
+        style={{ background: color }}
+      />
+    </div>
+  )
+}
+
+export const UNIFIED_RESIZER_LINE_STYLE = {
+  borderColor: 'rgba(255, 255, 255, 0.55)',
+  borderWidth: 1.25,
+  borderRadius: 18,
+  zIndex: 20,
+} as const
+
+export const UNIFIED_RESIZER_HANDLE_STYLE = {
+  backgroundColor: '#ffffff',
+  border: '1.5px solid #18181b',
+  borderRadius: 9999,
+  width: 10,
+  height: 10,
+  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.55)',
+  zIndex: 20,
+} as const
 
 function DropdownMenu({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -581,13 +651,7 @@ function DropdownMenu({ children, onClose }: { children: React.ReactNode; onClos
   return (
     <div
       ref={ref}
-      className="absolute top-full left-0 mt-1 min-w-[160px] py-1 rounded-lg z-50"
-      style={{
-        background: 'rgba(18,20,24,0.98)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(12px)',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-      }}
+      className="dock-popover-enter absolute left-0 top-full z-50 mt-1.5 min-w-[168px] rounded-[12px] border border-zinc-800 bg-[#1c1c1e]/98 p-1 shadow-[0_12px_32px_rgba(0,0,0,0.55)]"
     >
       {children}
     </div>
@@ -604,20 +668,18 @@ function MenuItem({
   onClick?: () => void
 }) {
   return (
-    <button type="button"
+    <button
+      type="button"
       onClick={onClick}
-      className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.08] hover:text-white"
     >
-      {Icon && <Icon size={12} className="text-accent" />}
+      {Icon && <Icon size={13} strokeWidth={1.8} className="shrink-0 text-zinc-400" />}
       {label}
     </button>
   )
 }
 
-// Prompt's toolbar deliberately doesn't reuse NodeActionToolbar — that one
-// carries Run/Quick-connect/Copy/Sort/etc. for generator nodes, none of
-// which apply to a plain text node. Prompt only ever needs to be removed
-// or protected from an accidental drag/edit, so it gets just those two.
+// Prompt / Sticky / Reference toolbar — sleek matte pill (Copy | Lock | extras | Delete).
 export function SimpleNodeToolbar({
   nodeId,
   selected,
@@ -629,7 +691,7 @@ export function SimpleNodeToolbar({
   nodeId: string
   selected?: boolean
   locked?: boolean
-  // Node-specific controls (e.g. a sticky note's colors), shown after Lock.
+  // Node-specific controls (e.g. a sticky note's colors), shown before Delete.
   children?: ReactNode
   trustAction?: {
     label: string
@@ -640,44 +702,42 @@ export function SimpleNodeToolbar({
   }
   onAddToFolder?: (type: 'character' | 'prop' | 'location' | 'general') => void
 }) {
-  const { patchNodeData, deleteNodes } = useCanvasCollaboration()
+  const { getNodes } = useReactFlow()
+  const { addNodes, patchNodeData, deleteNodes } = useCanvasCollaboration()
   const [addToMenuOpen, setAddToMenuOpen] = useState(false)
 
   return (
     <NodeToolbar isVisible={selected} position={Position.Top} offset={12}>
-      <div
-        className="flex items-center gap-0.5 px-1.5 py-1 rounded-full"
-        style={{
-          background: 'rgba(18,20,24,0.95)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          backdropFilter: 'blur(12px)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-        }}
-      >
-        <ToolBtn icon={Trash} label="Delete" onClick={() => deleteNodes([nodeId])} danger />
+      <div className="dock-popover-enter flex items-center gap-0.5 rounded-[12px] border border-zinc-800 bg-[#1c1c1e]/95 px-1.5 py-1 shadow-[0_8px_28px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <ToolBtn icon={LucideCopy} label="Duplicate" onClick={() => duplicateNode(nodeId, getNodes, addNodes)} />
         <ToolBtn
-          icon={locked ? Lock : LockOpen}
+          icon={locked ? LucideLock : LucideUnlock}
           label={locked ? 'Unlock' : 'Lock'}
           accent={locked}
           onClick={() => patchNodeData(nodeId, { locked: !locked })}
         />
-        {children}
+        {children && (
+          <>
+            <div className="mx-1 h-4 w-px bg-zinc-800" />
+            {children}
+          </>
+        )}
         {onAddToFolder && (
           <div className="relative">
-            <ToolBtn icon={At} label="Add to Character/Location/Prop" onClick={() => setAddToMenuOpen((v) => !v)} />
+            <ToolBtn icon={LucideAtSign} label="Add to Library" onClick={() => setAddToMenuOpen((v) => !v)} />
             {addToMenuOpen && (
               <DropdownMenu onClose={() => setAddToMenuOpen(false)}>
-                <MenuItem label="Character" icon={User} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
-                <MenuItem label="Location" icon={MapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
-                <MenuItem label="Prop" icon={Package} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
-                <MenuItem label="General" icon={Folder} onClick={() => { onAddToFolder('general'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Character" icon={LucideUser} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Location" icon={LucideMapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Prop" icon={LucideBox} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
+                <MenuItem label="General" icon={LucideFolder} onClick={() => { onAddToFolder('general'); setAddToMenuOpen(false) }} />
               </DropdownMenu>
             )}
           </div>
         )}
         {trustAction && (
           <ToolBtn
-            icon={trustAction.processing ? CircleNotch : ShieldCheck}
+            icon={trustAction.processing ? LucideLoader : LucideShieldCheck}
             label={trustAction.label || 'Trust for Seedance'}
             onClick={trustAction.onClick}
             disabled={trustAction.disabled}
@@ -685,28 +745,13 @@ export function SimpleNodeToolbar({
             spinning={trustAction.processing}
           />
         )}
+        <div className="mx-1 h-4 w-px bg-zinc-800" />
+        <ToolBtn icon={LucideTrash} label="Delete" onClick={() => deleteNodes([nodeId])} danger />
       </div>
     </NodeToolbar>
   )
 }
 
-// Image/Video Generator toolbar — a flat row (Expand, Copy, Add-to-folder,
-// Download, Lock, Delete) instead of NodeActionToolbar's fuller menu
-// (Run/Quick-connect/Arrange-grid/Move-to-page), which are dead weight here:
-// none of image-node/video-node/reference-node/compress-node ever actually
-// wire up onRun/onQuickConnect/onMoveToPage, and generation itself runs from
-// a button in the node body, not the toolbar. Kept OUT of NodeActionToolbar
-// itself (rather than trimmed in place) so reference-node and compress-node
-// — which nobody asked to change — keep Quick-connect/Arrange-grid exactly
-// as they are.
-//
-// Two things from the reference mockup this was modeled on (Crop, a
-// favorite/heart toggle) aren't here — both are net-new features (a real
-// crop UI; a favorite flag that needs its own storage/API), not a button
-// this toolbar can just grow. Trust-for-Seedance and Rename didn't fit the
-// mockup's flat row either, but unlike Crop/Heart they already exist and
-// looked too load-bearing to just drop, so they live behind the overflow
-// "…" button instead of disappearing.
 export function GeneratorNodeToolbar({
   nodeId,
   selected,
@@ -745,30 +790,22 @@ export function GeneratorNodeToolbar({
 
   return (
     <NodeToolbar isVisible={selected} position={Position.Top} offset={12}>
-      <div
-        className="flex items-center gap-0.5 px-1.5 py-1 rounded-full"
-        style={{
-          background: 'rgba(18,20,24,0.95)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          backdropFilter: 'blur(12px)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-        }}
-      >
+      <div className="dock-popover-enter flex items-center gap-0.5 rounded-[12px] border border-zinc-800 bg-[#1c1c1e]/95 px-1.5 py-1 shadow-[0_8px_28px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)]">
         {assetUrl && onViewFullscreen && (
-          <ToolBtn icon={ArrowsOutSimple} label="Expand" onClick={onViewFullscreen} />
+          <ToolBtn icon={LucideMaximize} label="Expand" onClick={onViewFullscreen} />
         )}
 
-        <ToolBtn icon={CopySimple} label="Copy" onClick={() => duplicateNode(nodeId, getNodes, addNodes)} />
+        <ToolBtn icon={LucideCopy} label="Duplicate" onClick={() => duplicateNode(nodeId, getNodes, addNodes)} />
 
         {onAddToFolder && (
           <div className="relative">
-            <ToolBtn icon={At} label="Add to Character/Location/Prop" onClick={() => setAddToMenuOpen((v) => !v)} />
+            <ToolBtn icon={LucideAtSign} label="Add to Library" onClick={() => setAddToMenuOpen((v) => !v)} />
             {addToMenuOpen && (
               <DropdownMenu onClose={() => setAddToMenuOpen(false)}>
-                <MenuItem label="Character" icon={User} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
-                <MenuItem label="Location" icon={MapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
-                <MenuItem label="Prop" icon={Package} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
-                <MenuItem label="General" icon={Folder} onClick={() => { onAddToFolder('general'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Character" icon={LucideUser} onClick={() => { onAddToFolder('character'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Location" icon={LucideMapPin} onClick={() => { onAddToFolder('location'); setAddToMenuOpen(false) }} />
+                <MenuItem label="Prop" icon={LucideBox} onClick={() => { onAddToFolder('prop'); setAddToMenuOpen(false) }} />
+                <MenuItem label="General" icon={LucideFolder} onClick={() => { onAddToFolder('general'); setAddToMenuOpen(false) }} />
               </DropdownMenu>
             )}
           </div>
@@ -776,7 +813,7 @@ export function GeneratorNodeToolbar({
 
         {assetUrl && (
           <ToolBtn
-            icon={DownloadSimple}
+            icon={LucideDownload}
             label="Download"
             onClick={() => {
               const ext = assetType === 'video' ? 'mp4' : 'png'
@@ -786,33 +823,34 @@ export function GeneratorNodeToolbar({
         )}
 
         <ToolBtn
-          icon={locked ? Lock : LockOpen}
+          icon={locked ? LucideLock : LucideUnlock}
           label={locked ? 'Unlock' : 'Lock'}
           accent={locked}
           onClick={() => patchNodeData(nodeId, { locked: !locked })}
         />
 
-        <ToolBtn icon={Trash} label="Delete" onClick={() => deleteNodes([nodeId])} danger />
-
         {hasOverflow && (
           <div className="relative">
-            <ToolBtn icon={DotsThree} label="More options" onClick={() => setMoreMenuOpen((v) => !v)} />
+            <ToolBtn icon={LucideMore} label="More options" onClick={() => setMoreMenuOpen((v) => !v)} />
             {moreMenuOpen && (
               <DropdownMenu onClose={() => setMoreMenuOpen(false)}>
                 {trustAction && (
                   <MenuItem
                     label={trustAction.label || 'Trust for Seedance'}
-                    icon={trustAction.processing ? CircleNotch : ShieldCheck}
+                    icon={trustAction.processing ? LucideLoader : LucideShieldCheck}
                     onClick={() => { if (!trustAction.disabled) { trustAction.onClick(); setMoreMenuOpen(false) } }}
                   />
                 )}
                 {onRename && (
-                  <MenuItem label="Rename" icon={PencilSimple} onClick={() => { onRename(); setMoreMenuOpen(false) }} />
+                  <MenuItem label="Rename" icon={LucidePencil} onClick={() => { onRename(); setMoreMenuOpen(false) }} />
                 )}
               </DropdownMenu>
             )}
           </div>
         )}
+
+        <div className="mx-1 h-4 w-px bg-zinc-800" />
+        <ToolBtn icon={LucideTrash} label="Delete" onClick={() => deleteNodes([nodeId])} danger />
       </div>
     </NodeToolbar>
   )
@@ -829,15 +867,15 @@ export function MediaQuickActions({ url, type, name, selected, onExpand }: {
   onExpand?: () => void
 }) {
   const [busy, setBusy] = useState(false)
-  const button = 'nodrag nopan flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-black/85 hover:text-[#d4ff64]'
+  const button = 'nodrag nopan flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700/80 bg-[#141416]/90 text-zinc-200 shadow-lg transition-colors hover:bg-[#1c1c1e] hover:text-white'
   return (
     <div
-      className={`absolute right-2 top-2 z-30 flex gap-1.5 transition-opacity ${selected ? 'opacity-100' : 'opacity-0 group-hover/media:opacity-100 focus-within:opacity-100'}`}
+      className={`absolute right-2.5 top-2.5 z-30 flex gap-1.5 transition-opacity ${selected ? 'opacity-100' : 'opacity-0 group-hover/media:opacity-100 focus-within:opacity-100'}`}
       onDoubleClick={(event) => event.stopPropagation()}
     >
       {onExpand && (
         <button type="button" className={button} title="Expand" aria-label="Expand" onClick={(event) => { event.stopPropagation(); onExpand() }}>
-          <ArrowsOutSimple size={15} weight="bold" />
+          <LucideMaximize size={14} strokeWidth={1.8} />
         </button>
       )}
       <button
@@ -853,7 +891,7 @@ export function MediaQuickActions({ url, type, name, selected, onExpand }: {
           setBusy(false)
         }}
       >
-        {busy ? <CircleNotch size={15} className="animate-spin" /> : <DownloadSimple size={15} weight="bold" />}
+        {busy ? <LucideLoader size={14} strokeWidth={1.8} className="animate-spin" /> : <LucideDownload size={14} strokeWidth={1.8} />}
       </button>
     </div>
   )

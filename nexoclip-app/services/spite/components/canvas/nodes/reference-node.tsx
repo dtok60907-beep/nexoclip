@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { Image as ImageIcon, UploadSimple, CircleNotch, VideoCamera, SpeakerHigh } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
 import { getLocalUploadPreview, subscribeLocalUploadPreviews } from '@/lib/local-upload-previews'
-import { SimpleNodeToolbar } from './node-toolbar'
+import { NodePortDot, SimpleNodeToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { displayThumbnailUrl, resolveNodeMediaUrl } from '@/lib/node-media'
@@ -146,51 +146,32 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         style={{ top: '50%', right: -12, width: 24, height: 24, transform: 'translateY(-50%)', opacity: 0, zIndex: 5 }}
       />
       {/* Visible output indicator so the reference can be wired into a generator.
-          Color by media type: blue=image, pink=video, amber=audio. */}
-      <div
-        className="absolute flex items-center justify-center"
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: '50%',
-          background: '#111316',
-          border: `1.5px solid ${
-            isAudio ? 'rgba(251,191,36,0.85)' :
-            isVideo ? 'rgba(244,114,182,0.85)' :
-            'rgba(96,165,250,0.85)'
-          }`,
-          top: '50%',
-          right: -12,
-          transform: 'translateY(-50%)',
-          zIndex: 10,
-          pointerEvents: 'none',
-        }}
-      >
-        {isAudio
-          ? <SpeakerHigh size={11} weight="bold" style={{ color: 'rgba(251,191,36,0.95)' }} />
-          : isVideo
-            ? <VideoCamera size={11} weight="bold" style={{ color: 'rgba(244,114,182,0.95)' }} />
-            : <ImageIcon size={11} weight="bold" style={{ color: 'rgba(96,165,250,0.95)' }} />}
-      </div>
+          Color by media type: sky=image, rose=video, amber=audio. */}
+      <NodePortDot
+        color={isAudio ? '#fbbf24' : isVideo ? '#f472b6' : '#38bdf8'}
+        side="right"
+        top="50%"
+        label={isAudio ? 'Audio output' : isVideo ? 'Video output' : 'Image output'}
+      />
 
       {/* Card */}
       <div
-        className="rounded-xl overflow-hidden"
+        className={`overflow-hidden rounded-[18px] bg-[#1c1c1e] p-2 shadow-[0_12px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${
+          isTaggedToShot
+            ? 'border border-amber-400/75'
+            : selected
+              ? 'border border-white/60'
+              : 'border border-zinc-800/95 hover:border-zinc-700/90'
+        }`}
         style={{
           width: '100%',
           height: '100%',
-          background: '#0D0F12',
-          border: isTaggedToShot
-            ? '1.5px solid rgba(251,191,36,0.7)'
-            : selected
-              ? '1.5px solid rgba(107,143,168,0.85)'
-              : '1.5px solid rgba(107,143,168,0.25)',
         }}
       >
         {/* Media area */}
         {thumbnail ? (
           <div
-            className="relative"
+            className="relative overflow-hidden rounded-[12px] bg-[#141416]"
             onDoubleClick={() => { if (thumbnail && !isUploading && !isAudio) setLightboxOpen(true) }}
           >
             {isAudio ? (

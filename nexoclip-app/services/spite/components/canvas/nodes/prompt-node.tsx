@@ -3,8 +3,13 @@
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Position, NodeProps, Handle, NodeResizer } from '@xyflow/react'
-import { TextT } from '@phosphor-icons/react'
-import { SimpleNodeToolbar } from './node-toolbar'
+import { Sparkles } from 'lucide-react'
+import {
+  NodePortDot,
+  SimpleNodeToolbar,
+  UNIFIED_RESIZER_HANDLE_STYLE,
+  UNIFIED_RESIZER_LINE_STYLE,
+} from './node-toolbar'
 import { MentionTextarea, type Mention, type MentionTextareaRef } from '../mention-textarea'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -19,40 +24,19 @@ import { withBasePath } from '@/lib/base-path'
 import { describeLockFailure } from '@/lib/lock-messages'
 import { getOrCreateParticipantHint } from '@/lib/realtime/presence'
 
-function HandleIcon({ icon: Icon, color, style }: { icon: React.ElementType; color: string; style?: React.CSSProperties }) {
-  return (
-    <div
-      className="absolute flex items-center justify-center"
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: '50%',
-        background: '#111316',
-        border: `1.5px solid ${color}`,
-        transform: 'translate(-50%, -50%)',
-        zIndex: 10,
-        pointerEvents: 'none',
-        ...style,
-      }}
-    >
-      <Icon size={10} weight="bold" style={{ color }} />
-    </div>
-  )
-}
-
 function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
   const projectId = params.id as string | undefined
   const [text, setText] = useState((data.text as string) || '')
   const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
-  const [nodeHeight, setNodeHeight] = useState(typeof data.height === 'number' ? data.height : 500)
+  const [nodeHeight, setNodeHeight] = useState(typeof data.height === 'number' ? data.height : 220)
   const nodeHeightRef = useRef(nodeHeight)
   // Mirrors nodeHeight: width must also be driven by local state during a
   // resize drag. Reading it straight from `data.width` (as this used to)
   // only updates once the resize is persisted and echoes back through the
   // collaboration round-trip, which is why dragging looked frozen until
   // mouseup.
-  const [nodeWidth, setNodeWidth] = useState(typeof data.width === 'number' ? data.width : 620)
+  const [nodeWidth, setNodeWidth] = useState(typeof data.width === 'number' ? data.width : 380)
   const nodeWidthRef = useRef(nodeWidth)
   const { folders, refresh: refreshFolders } = useProjectFolders(projectId)
   const { patchNodeData, persistenceStatus } = useCanvasCollaboration()
@@ -310,12 +294,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
     >
       <NodeResizer
         isVisible={selected}
-        minWidth={360}
-        minHeight={180}
+        minWidth={280}
+        minHeight={150}
         maxWidth={900}
         maxHeight={900}
-        lineStyle={{ borderColor: '#1597ff', borderWidth: 1, zIndex: 20 }}
-        handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9, zIndex: 20 }}
+        lineStyle={UNIFIED_RESIZER_LINE_STYLE}
+        handleStyle={UNIFIED_RESIZER_HANDLE_STYLE}
         onResize={(_, params) => {
           // Live drag feedback: update local state on every frame so the
           // card tracks the pointer. Not persisted here — patchNodeData on
@@ -336,33 +320,37 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       />
       <SimpleNodeToolbar nodeId={id} selected={selected} locked={locked} />
 
-      {/* Node label */}
-      <div className="absolute -top-6 left-0 text-[10px] font-mono text-muted-foreground/60 whitespace-nowrap pointer-events-none">
-        {(data.label as string)?.replace(/^Text(?: Input)?/i, 'Prompt') || 'Prompt'}
-      </div>
-
-      {/* Output handle (card height ~170px). zIndex:5 matches the image
-          and video nodes — keeps drag-origin detection robust against
-          card content that might be added later. */}
-      <Handle type="source" id="prompt-out" position={Position.Right} style={{ top: 85, right: 0, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-      <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" style={{ top: 85, left: '100%' }} />
+      {/* Output handle */}
+      <Handle type="source" id="prompt-out" position={Position.Right} style={{ top: 82, right: -7, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+      <NodePortDot color="#a78bfa" side="right" top={82} label="Prompt output" />
 
       {/* Card content */}
       <div
         ref={cardRef}
-        className={`relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-[#161a22] transition-all duration-200 ${selected ? 'border-transparent' : 'border-[#2b313e]'}`}
-        style={{ boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.7)' }}
+        className={`relative flex h-full w-full flex-col overflow-hidden rounded-[18px] border bg-[#1c1c1e] shadow-[0_12px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${selected ? 'border-transparent' : 'border-zinc-800/95 hover:border-zinc-700/90'}`}
       >
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800/70 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-500/15 text-violet-300">
+              <Sparkles size={11} strokeWidth={2} />
+            </span>
+            <span className="text-[12px] font-medium tracking-tight text-zinc-200">
+              {(data.label as string)?.replace(/^Text(?: Input)?/i, 'Prompt') || 'Prompt'}
+            </span>
+          </div>
+          <span className="text-[10px] text-zinc-500">@ to mention</span>
+        </div>
+
         <MentionTextarea
           ref={editorRef}
           value={text}
           mentions={mentions}
           onChange={handleChange}
           folders={folders}
-          placeholder="Type your prompt here..."
-          className="nodrag custom-scrollbar w-full flex-1 resize-none bg-transparent p-6 text-[16px] leading-[1.65] text-slate-300 outline-none placeholder:text-[16px] placeholder:text-slate-500 cursor-text"
+          placeholder="Describe your shot, subject, lighting..."
+          className="nodrag custom-scrollbar w-full flex-1 resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.6] text-zinc-200 outline-none placeholder:text-[14px] placeholder:text-zinc-500 cursor-text"
           disabled={readOnly}
-          rows={6}
+          rows={5}
           onContentHeightChange={handleContentHeightChange}
         />
 

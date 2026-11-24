@@ -55,18 +55,23 @@ function StickyNoteNodeImpl({ id, data, selected }: NodeProps) {
         <BoardColorSwatches nodeId={id} value={colorId} kind="paper" />
       </SimpleNodeToolbar>
       <div
-        className="absolute inset-0 overflow-hidden rounded-md shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
+        className="absolute inset-0 overflow-hidden rounded-[14px] shadow-[0_10px_28px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.35)] transition-shadow"
         style={{
           background: color.paper,
           color: color.ink,
-          outline: selected ? '2px solid rgba(255,255,255,0.8)' : undefined,
-          outlineOffset: 2,
+          outline: selected ? '2px solid rgba(255,255,255,0.85)' : undefined,
+          outlineOffset: 3,
         }}
         onDoubleClick={(event) => {
           event.stopPropagation()
           void startEditing()
         }}
       >
+        {/* Subtle bottom-right paper fold accent */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 right-0 h-4 w-4 rounded-tl-md bg-black/[0.08]"
+        />
         {editing ? (
           <textarea
             autoFocus
@@ -79,13 +84,13 @@ function StickyNoteNodeImpl({ id, data, selected }: NodeProps) {
               event.stopPropagation()
               if (event.key === 'Escape') (event.currentTarget as HTMLTextAreaElement).blur()
             }}
-            className="nodrag nopan nowheel h-full w-full resize-none bg-transparent p-3 text-[14px] leading-snug outline-none placeholder:opacity-50"
+            className="nodrag nopan nowheel h-full w-full resize-none bg-transparent p-4 text-[14px] leading-relaxed outline-none placeholder:opacity-50"
             style={{ color: color.ink }}
             placeholder="Type a note…"
           />
         ) : (
           <div
-            className={`h-full w-full overflow-hidden whitespace-pre-wrap break-words p-3 text-[14px] leading-snug ${text ? '' : 'opacity-50'}`}
+            className={`h-full w-full overflow-hidden whitespace-pre-wrap break-words p-4 text-[14px] leading-relaxed ${text ? '' : 'opacity-50'}`}
             title={canEdit ? 'Double-click to edit' : undefined}
           >
             {text || (canEdit ? 'Double-click to write…' : '')}

@@ -2,47 +2,34 @@
 @import 'tw-animate-css';
 
 .spite-canvas-shell {
-  background-color: #0c0d12;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1.2px, transparent 1.2px);
-  background-size: 26px 26px;
+  background-color: var(--canvas, #161618);
 }
 
 .spite-react-flow .react-flow__pane { cursor: grab; }
 .spite-react-flow .react-flow__pane:active { cursor: grabbing; }
-.spite-react-flow .react-flow__node { filter: none; }
+.spite-react-flow .react-flow__viewport { will-change: transform; }
+.spite-react-flow .react-flow__node { filter: none; contain: layout style; }
 .spite-react-flow .react-flow__node.selected {
   outline: none;
 }
 .spite-react-flow .react-flow__node.selected::after {
   content: none;
 }
-.spite-react-flow .react-flow__node-imageGen > div,
-.spite-react-flow .react-flow__node-videoGen > div {
-  border-radius: 6px;
-}
-.spite-react-flow .react-flow__node-imageGen [class*="bg-[#181a25]"],
-.spite-react-flow .react-flow__node-videoGen [class*="bg-[#181a25]"] {
-  background-color: #20222a !important;
-}
-.spite-react-flow .react-flow__node-imageGen [class*="border-white/[0.08]"],
-.spite-react-flow .react-flow__node-videoGen [class*="border-white/[0.08]"] {
-  border-color: #2d313c !important;
-}
-.spite-react-flow .react-flow__node-imageGen [class*="bg-white/[0.03]"],
-.spite-react-flow .react-flow__node-videoGen [class*="bg-white/[0.03]"] {
-  background-color: #20222a !important;
-}
 .spite-react-flow .react-flow__edge-path {
   stroke-linecap: round;
-  filter: drop-shadow(0 0 4px rgba(56, 189, 248, .45));
+  stroke: #5c5c66;
+  stroke-width: 1.75;
+}
+.spite-react-flow .react-flow__edge:hover .react-flow__edge-path {
+  stroke: #a1a1aa;
 }
 .spite-react-flow .react-flow__edge.selected .react-flow__edge-path {
-  filter: drop-shadow(0 0 7px rgba(56, 189, 248, .78));
+  stroke: #e4e4e7;
+  stroke-width: 2.25;
 }
 .spite-react-flow .react-flow__connection-path {
-  stroke: #38bdf8;
+  stroke: #e4e4e7;
   stroke-width: 2;
-  filter: drop-shadow(0 0 5px rgba(56, 189, 248, .65));
 }
 .spite-glow-edge { pointer-events: stroke; }
 
@@ -146,9 +133,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* SPITE — cold, restrained, cinematic dark theme */
-  --background: #11151a;
-  --canvas: #1a2027;
+  /* SPITE — matte neutral dark canvas theme */
+  --background: #141416;
+  --canvas: #161618;
+  --canvas-dot: #4b4b53;
   --foreground: #F0EDE6;
   --muted-foreground: #6B7280;
   --accent: #6B8FA8;
@@ -248,4 +236,19 @@
 /* Shake animation for login errors */
 .animate-shake {
   animation: shake 0.6s ease-in-out;
+}
+
+@keyframes dock-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dock-popover-enter {
+  animation: dock-popover-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }

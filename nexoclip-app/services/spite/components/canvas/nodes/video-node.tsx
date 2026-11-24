@@ -7,7 +7,14 @@ import { useParams } from 'next/navigation'
 import { CaretDown, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus, Sparkle, Play } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
-import { GeneratorNodeToolbar, MediaQuickActions } from './node-toolbar'
+import {
+  GeneratorNodeToolbar,
+  MediaQuickActions,
+  NodePortDot,
+  UNIFIED_RESIZER_HANDLE_STYLE,
+  UNIFIED_RESIZER_LINE_STYLE,
+} from './node-toolbar'
+import { ChevronDown as LucideChevronDown, Clapperboard as LucideClapperboard, RefreshCw as LucideRefresh, Sparkles as LucideSparkles } from 'lucide-react'
 import { GenerationGallery } from '../generation-gallery'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
@@ -51,42 +58,12 @@ function ControlSelect({ value, disabled, section = 'model' }: {
       type="button"
       data-generation-setting={section}
       disabled={disabled}
-      className="nodrag nopan flex h-7 items-center gap-1.5 bg-transparent px-0 text-[12px] font-semibold text-slate-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      className="nodrag nopan flex h-7 items-center gap-1 rounded-lg bg-transparent px-1 text-[12px] font-medium text-zinc-200 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
       title="Choose model and open generation settings"
     >
-      {value}
-      <CaretDown size={11} weight="bold" className="text-slate-500" />
+      <span className="max-w-[165px] truncate">{value}</span>
+      <LucideChevronDown size={13} strokeWidth={1.8} className="shrink-0 text-zinc-500" />
     </button>
-  )
-}
-
-function HandleIcon({ icon: Icon, color, position, top, visible = true }: { 
-  icon: React.ElementType
-  color: string
-  position: 'left' | 'right'
-  top: number
-  visible?: boolean 
-}) {
-  if (!visible) return null
-  
-  return (
-    <div
-      className="absolute flex items-center justify-center"
-      style={{
-        width: 24,
-        height: 24,
-        borderRadius: '50%',
-        background: '#111316',
-        border: `1.5px solid ${color}`,
-        top: top,
-        transform: 'translateY(-50%)',
-        [position === 'left' ? 'left' : 'right']: -12,
-        zIndex: 10,
-        pointerEvents: 'none',
-      }}
-    >
-      <Icon size={11} weight="bold" style={{ color }} />
-    </div>
   )
 }
 
@@ -1183,11 +1160,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       type="button"
       onClick={requestGenerate}
       disabled={isGenerating || blockedNoFirstFrame || blockedNoExtendVideo || promptState.disabled || !generationPersistenceGuard.allowed}
-      className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex h-8 items-center justify-center gap-1.5 rounded-[11px] bg-[#f4f4f6] px-3 text-[#141416] shadow-sm transition-all duration-150 hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
       title={hasRun ? `Regenerate — ${generateTooltip}` : generateTooltip}
     >
-      {hasRun ? <ArrowsClockwise size={12} weight="bold" /> : <Sparkle size={12} weight="fill" />}
-      <span className="ml-1 text-[11px] font-bold">
+      {hasRun ? <LucideRefresh size={12} strokeWidth={2.2} /> : <LucideSparkles size={12} strokeWidth={2.2} />}
+      <span className="text-[11px] font-semibold whitespace-nowrap">
         {hasRun ? 'Regenerate' : 'Generate'}{costEstimate.isKnown ? ` · ${formatCreditsShort(costEstimate.total)}` : ''}
       </span>
     </button>
@@ -1225,7 +1202,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   return (
     <div
       className="relative group"
-      style={{ width: typeof data.width === 'number' ? data.width : 650 }}
+      style={{ width: typeof data.width === 'number' ? data.width : 440 }}
       onClickCapture={(event) => {
         const control = (event.target as HTMLElement).closest<HTMLElement>('[data-generation-setting]')
         if (control) {
@@ -1308,55 +1285,48 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       </div>
 
       {/* Handles - dynamic based on model inputTypes */}
-      
-      {/* Text input - always shown.
-          NOTE on zIndex: handles are positioned absolutely as siblings of
-          the card, but the card comes AFTER them in DOM order so by default
-          stacks on top. That made drops at y=250 (reference-in) land on the
-          prompt textarea instead of the handle and silently fail. zIndex:5
-          puts every Handle above the card so React Flow's drop detection
-          actually finds them. */}
-      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 80, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-      <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" position="left" top={80} visible />
+      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 74, left: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+      <NodePortDot color="#a78bfa" side="left" top={74} label="Prompt input" />
 
-      {/* First frame (blue) - only if model supports image input */}
+      {/* First frame (sky) - only if model supports image input */}
       {isFrameModel && (
         <>
-          <Handle type="target" id="image-in" title="First frame (required) — the video opens on this exact image" position={Position.Left} style={{ top: 150, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-          <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="left" top={150} visible />
-          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={150} label="First frame" />
+          <Handle type="target" id="image-in" title="First frame (required) — the video opens on this exact image" position={Position.Left} style={{ top: 122, left: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+          <NodePortDot color="#38bdf8" side="left" top={122} label="First frame" />
+          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={122} label="First frame" />
         </>
       )}
 
       {/* End frame (amber) - optional last frame for frame models */}
       {isFrameModel && (
         <>
-          <Handle type="target" id="end-frame-in" title="End frame" position={Position.Left} style={{ top: 200, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-          <HandleIcon icon={ImageIcon} color="rgba(251,191,36,0.9)" position="left" top={200} visible />
-          <ConnectedInputs nodeId={id} handleId="end-frame-in" side="left" top={200} label="End frame" />
+          <Handle type="target" id="end-frame-in" title="End frame" position={Position.Left} style={{ top: 168, left: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+          <NodePortDot color="#fbbf24" side="left" top={168} label="End frame" />
+          <ConnectedInputs nodeId={id} handleId="end-frame-in" side="left" top={168} label="End frame" />
         </>
       )}
 
-      {/* Reference images (pink) - models that support subject/style refs.
-          Accepts multiple image connections. */}
+      {/* Reference images (rose) - models that support subject/style refs. */}
       {currentModel?.referenceParam && (
         <>
-          <Handle type="target" id="reference-in" title="Reference image(s)" position={Position.Left} style={{ top: 250, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-          <HandleIcon icon={ImageIcon} color="rgba(236,72,153,0.9)" position="left" top={250} visible />
-          <ConnectedInputs nodeId={id} handleId="reference-in" side="left" top={250} label="References" />
+          <Handle type="target" id="reference-in" title="Reference image(s)" position={Position.Left} style={{ top: 214, left: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+          <NodePortDot color="#f472b6" side="left" top={214} label="References" />
+          <ConnectedInputs nodeId={id} handleId="reference-in" side="left" top={214} label="References" />
         </>
       )}
 
       {/* Video output - always shown */}
-      <Handle type="source" id="video-out" position={Position.Right} style={{ top: 150, right: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-      <HandleIcon icon={FilmStrip} color="rgba(74,222,128,0.8)" position="right" top={150} visible />
+      <Handle type="source" id="video-out" position={Position.Right} style={{ top: 132, right: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+      <NodePortDot color="#4ade80" side="right" top={132} label="Video output" />
 
-      {/* Card content */}
+      {/* Card content — clean 2-zone matte layout (full preview + integrated footer) */}
       <div
-        className="relative flex flex-col overflow-hidden rounded-md bg-[#17191e] p-4 transition-all duration-200"
+        className={`relative flex flex-col overflow-hidden rounded-[18px] border bg-[#1c1c1e] p-2.5 shadow-[0_14px_38px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${
+          selected ? 'border-transparent' : 'border-zinc-800/95 hover:border-zinc-700/90'
+        }`}
         style={{
-          border: selected ? 'none' : feedbackFrameStyle.border || 'none',
-          boxShadow: feedbackFrameStyle.boxShadow || 'none',
+          border: selected ? 'none' : feedbackFrameStyle.border || undefined,
+          boxShadow: feedbackFrameStyle.boxShadow || undefined,
         }}
       >
         <NodeResizer
@@ -1364,26 +1334,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           keepAspectRatio
           minWidth={320}
           minHeight={220}
-          lineStyle={{ borderColor: '#1597ff', borderWidth: 1 }}
-          handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9 }}
+          lineStyle={UNIFIED_RESIZER_LINE_STYLE}
+          handleStyle={UNIFIED_RESIZER_HANDLE_STYLE}
           onResizeEnd={(_, params) => patchNodeData(id, { width: params.width, height: params.height })}
         />
-        <div className="hidden" aria-hidden="true">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/15 text-sky-300">
-              <FilmStrip size={14} weight="bold" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold tracking-tight text-slate-100">Video Generation</p>
-              <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">{currentModel?.name || 'Select model'}</p>
-            </div>
-          </div>
-          <StatusBadge status={status} progress={progress} />
-        </div>
 
         {/* Preview area */}
         <div
-          className="group/media relative flex items-center justify-center overflow-hidden bg-black"
+          className="group/media relative flex items-center justify-center overflow-hidden rounded-[12px] bg-[#141416]"
           style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '16:9')) }}
         >
           {outputUrl ? (
@@ -1415,7 +1373,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               {!isPlaying && (
                 <button
                   type="button"
-                  className="nodrag nopan absolute left-1/2 top-1/2 z-20 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-xl backdrop-blur-sm transition-transform hover:scale-105 hover:bg-black/75"
+                  className="nodrag nopan absolute left-1/2 top-1/2 z-20 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/75 text-white shadow-lg transition-transform hover:scale-105 hover:bg-black/85"
                   aria-label="Play video"
                   onClick={(event) => {
                     event.stopPropagation()
@@ -1448,124 +1406,151 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           )}
 
           {!outputUrl && !isGenerating && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#17191e] text-[#343943]">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black/10">
-                <FilmStrip size={27} weight="thin" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#141416] text-zinc-600">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800/80 bg-[#1c1c1e]">
+                <LucideClapperboard size={20} strokeWidth={1.6} />
               </div>
+              <span className="text-[11px] font-medium text-zinc-500">
+                {resolvedPrompt.connected ? 'Ready to generate' : 'Connect a Prompt node'}
+              </span>
             </div>
           )}
 
           {!error && blockedNoExtendVideo && (
-            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
-              <span className="text-[9px] font-mono text-amber-300">
+            <div className="absolute bottom-2 left-2 right-2 rounded-lg border border-amber-500/30 bg-amber-950/85 px-2.5 py-1.5">
+              <span className="text-[10px] font-medium text-amber-200">
                 {editMode ? 'Edit' : 'Extend'} membutuhkan video sumber. @mention folder yang berisi video tersebut.
               </span>
             </div>
           )}
 
           {!error && !isFrameModel && hasMediaEdges && (
-            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
-              <span className="text-[9px] font-mono text-amber-300">
+            <div className="absolute bottom-2 left-2 right-2 rounded-lg border border-amber-500/30 bg-amber-950/85 px-2.5 py-1.5">
+              <span className="text-[10px] font-medium text-amber-200">
                 Edge gambar/video/audio diabaikan di mode Omni. Pakai @mention folder, atau ganti ke model · Frame untuk first/last frame.
               </span>
             </div>
           )}
 
           {!error && blockedNoFirstFrame && (
-            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/20 border border-amber-500/30 rounded px-2 py-1">
-              <span className="text-[9px] font-mono text-amber-300">
+            <div className="absolute bottom-2 left-2 right-2 rounded-lg border border-amber-500/30 bg-amber-950/85 px-2.5 py-1.5">
+              <span className="text-[10px] font-medium text-amber-200">
                 Mode Frame butuh first frame. Hubungkan gambar ke handle biru (First frame).
               </span>
             </div>
           )}
-          <div className="absolute bottom-[118px] left-3 z-20 flex items-center gap-1.5">
-            {resolution && <button data-generation-setting="resolution" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 shadow-md backdrop-blur-md" title="Edit resolution">{resolution}</button>}
-            <button data-generation-setting="aspect" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 backdrop-blur-md" title="Edit aspect ratio">{aspectRatio}</button>
-            {duration && <button data-generation-setting="duration" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 backdrop-blur-md" title="Edit duration">{duration}</button>}
-          </div>
-        </div>
-      </div>
-
-      <div className="nodrag nopan absolute bottom-4 left-4 right-4 z-30 rounded-xl border border-[#2d313c] bg-[#20222a]/95 px-4 py-3 shadow-xl backdrop-blur-md">
-        <div className="min-h-7 text-[14px] font-semibold leading-relaxed text-[#8b94a5]">
-          {resolvedPrompt.connected ? null : 'Describe...'}
         </div>
 
-        {/* Kling 2.6 voice ID slots. Only shown for kling-2.6 since it's
-            the only model on our list that supports this. Max 2 voices
-            per fal docs; user references them in the prompt with
-            <<<voice_1>>> and <<<voice_2>>>. Comma-separated input;
-            server splits and sends as voice_ids array. */}
-        {modelId === 'kling-2.6' && (
-          <div className="px-3 pb-2">
-            <input
-              type="text"
-              value={voiceIds}
-              onChange={e => {
-                syncGuardRef.current.beginUserEdit()
-                setVoiceIds(e.target.value)
-              }}
-              placeholder="Voice IDs — paste from fal create-voice (max 2, comma-separated)"
-              disabled={isGenerating}
-              className="nodrag w-full bg-white/[0.03] border border-white/[0.06] rounded-md px-2 py-1.5 text-[11px] font-mono text-foreground/90 placeholder:text-muted-foreground/40 outline-none focus:border-accent/40 disabled:opacity-50"
-            />
-            <p className="text-[9px] font-mono text-muted-foreground/40 mt-1 leading-snug">
-              Reference in prompt as {`<<<voice_1>>>`} / {`<<<voice_2>>>`}. Get IDs from fal&apos;s create-voice endpoint.
-            </p>
+        {/* Clean Integrated Footer — sits below video preview, never covers video */}
+        <div className="nodrag nopan mt-2.5 flex flex-col gap-2 px-1 pb-0.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              {resolution && (
+                <button
+                  type="button"
+                  data-generation-setting="resolution"
+                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  title="Edit resolution"
+                >
+                  {resolution}
+                </button>
+              )}
+              {aspectRatio && (
+                <button
+                  type="button"
+                  data-generation-setting="aspect"
+                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  title="Edit aspect ratio"
+                >
+                  {aspectRatio}
+                </button>
+              )}
+              {duration && (
+                <button
+                  type="button"
+                  data-generation-setting="duration"
+                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  title="Edit duration"
+                >
+                  {duration}
+                </button>
+              )}
+            </div>
+
+            <span className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+              <span className={`h-1.5 w-1.5 rounded-full ${resolvedPrompt.connected ? 'bg-violet-400' : 'bg-zinc-600'}`} />
+              <span>{resolvedPrompt.connected ? 'Prompt linked' : 'No prompt'}</span>
+            </span>
           </div>
-        )}
 
-        {/* Controls - Dynamic based on model */}
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap [&>*:not(.node-model-control)]:hidden">
-            {/* Video count counter */}
-            <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
-              <button
-                onClick={() => {
+          {modelId === 'kling-2.6' && (
+            <div className="pt-0.5">
+              <input
+                type="text"
+                value={voiceIds}
+                onChange={e => {
                   syncGuardRef.current.beginUserEdit()
-                  setNumVideos(n => {
-                    const next = Math.max(1, n - 1)
-                    patchPersistedNodeData({ numVideos: next })
-                    return next
-                  })
+                  setVoiceIds(e.target.value)
                 }}
-                disabled={isGenerating || numVideos <= 1}
-                className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
-              >
-                <Minus size={8} weight="bold" />
-              </button>
-              <span className="w-6 text-center">x{numVideos}</span>
-              <button
-                onClick={() => {
-                  syncGuardRef.current.beginUserEdit()
-                  setNumVideos(n => {
-                    const next = Math.min(12, n + 1)
-                    patchPersistedNodeData({ numVideos: next })
-                    return next
-                  })
-                }}
-                disabled={isGenerating || numVideos >= 12}
-                className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
-              >
-                <Plus size={8} weight="bold" />
-              </button>
+                placeholder="Voice IDs — paste from fal create-voice (max 2, comma-separated)"
+                disabled={isGenerating}
+                className="nodrag w-full rounded-lg border border-zinc-800 bg-[#141416] px-2.5 py-1.5 text-[11px] text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-zinc-600 disabled:opacity-50"
+              />
+              <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                Reference in prompt as {`<<<voice_1>>>`} / {`<<<voice_2>>>`}. Get IDs from fal&apos;s create-voice endpoint.
+              </p>
             </div>
+          )}
 
-            {/* Model selector */}
-            <div className="node-model-control flex items-center gap-2 text-slate-300">
-            <FilmStrip size={15} weight="bold" />
-            <ControlSelect
-              value={currentModel?.name || modelId}
-              options={modelOptions}
-              onChange={(value) => {
-                syncGuardRef.current.beginUserEdit()
-                // Same fields the settings panel writes; local state then
-                // follows from the persisted data instead of diverging from it.
-                patchPersistedNodeData(settingsForModelChange('video', value, data as Record<string, unknown>))
-              }}
-              disabled={isGenerating}
-            />
-            </div>
+          {/* Controls - Dynamic based on model */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap [&>*:not(.node-model-control)]:hidden">
+              {/* Video count counter */}
+              <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
+                <button
+                  onClick={() => {
+                    syncGuardRef.current.beginUserEdit()
+                    setNumVideos(n => {
+                      const next = Math.max(1, n - 1)
+                      patchPersistedNodeData({ numVideos: next })
+                      return next
+                    })
+                  }}
+                  disabled={isGenerating || numVideos <= 1}
+                  className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
+                >
+                  <Minus size={8} weight="bold" />
+                </button>
+                <span className="w-6 text-center">x{numVideos}</span>
+                <button
+                  onClick={() => {
+                    syncGuardRef.current.beginUserEdit()
+                    setNumVideos(n => {
+                      const next = Math.min(12, n + 1)
+                      patchPersistedNodeData({ numVideos: next })
+                      return next
+                    })
+                  }}
+                  disabled={isGenerating || numVideos >= 12}
+                  className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
+                >
+                  <Plus size={8} weight="bold" />
+                </button>
+              </div>
+
+              {/* Model selector */}
+              <div className="node-model-control flex items-center gap-1.5 text-indigo-400">
+                <LucideClapperboard size={14} strokeWidth={1.8} />
+                <ControlSelect
+                  value={currentModel?.name || modelId}
+                  options={modelOptions}
+                  onChange={(value) => {
+                    syncGuardRef.current.beginUserEdit()
+                    patchPersistedNodeData(settingsForModelChange('video', value, data as Record<string, unknown>))
+                  }}
+                  disabled={isGenerating}
+                />
+              </div>
 
             {/* Topaz mode toggle — only when the upscaler is selected. */}
             {modelId === 'topaz-video-upscale' && (
@@ -1750,7 +1735,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <button
                 type="button"
                 onClick={finalizeDraft}
-                className="flex h-8 min-w-12 items-center justify-center rounded-full bg-amber-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-amber-300"
+                className="flex h-8 items-center justify-center gap-1 rounded-[11px] bg-amber-400 px-3 text-zinc-950 shadow-sm transition-colors hover:bg-amber-300"
                 title="Render this Draft at 1080p"
               >
                 <Sparkle size={12} weight="fill" />
@@ -1763,7 +1748,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 type="button"
                 onClick={() => { void createNextShotFromLastFrame() }}
                 disabled={creatingNextShot}
-                className="flex h-8 items-center justify-center rounded-full bg-sky-400 px-3 text-slate-950 shadow-lg transition-colors hover:bg-sky-300 disabled:cursor-wait disabled:opacity-60"
+                className="flex h-8 items-center justify-center rounded-[11px] bg-sky-400 px-3 text-zinc-950 shadow-sm transition-colors hover:bg-sky-300 disabled:cursor-wait disabled:opacity-60"
                 title="Start a new shot from this video's last frame, keeping the same references"
               >
                 {creatingNextShot ? <CircleNotch size={12} weight="bold" className="animate-spin" /> : <Plus size={12} weight="bold" />}
@@ -1784,6 +1769,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               {generateButton}
             </div>
           ) : generateButton}
+          </div>
         </div>
       </div>
 

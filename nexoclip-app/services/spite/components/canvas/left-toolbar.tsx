@@ -12,7 +12,7 @@ import {
   shouldPollBytePlusTrust,
   workspaceAssetIdFromUrl,
 } from '@/lib/byteplus-trust'
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { toast } from 'sonner'
 import useSWR from 'swr'
 import { AddToFolderModal } from './add-to-folder-modal'
@@ -130,7 +130,7 @@ interface LeftToolbarProps {
   onShowHistoryChange?: (show: boolean) => void
 }
 
-export function LeftToolbar({ 
+export const LeftToolbar = memo(function LeftToolbar({ 
   onAddNode, 
   onSetTool,
   activeTool: externalActiveTool,
@@ -2358,4 +2358,4 @@ export function LeftToolbar({
       )}
     </div>
   )
-}
+})

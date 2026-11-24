@@ -7,7 +7,14 @@ import { useParams } from 'next/navigation'
 import { Handle, NodeResizer, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { GeneratorNodeToolbar, MediaQuickActions } from './node-toolbar'
+import {
+  GeneratorNodeToolbar,
+  MediaQuickActions,
+  NodePortDot,
+  UNIFIED_RESIZER_HANDLE_STYLE,
+  UNIFIED_RESIZER_LINE_STYLE,
+} from './node-toolbar'
+import { ChevronDown as LucideChevronDown, Image as LucideImage, RefreshCw as LucideRefresh, Sparkles as LucideSparkles } from 'lucide-react'
 import { GenerationGallery } from '../generation-gallery'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
@@ -49,42 +56,12 @@ function ControlSelect({ value, disabled, section = 'model' }: {
       type="button"
       data-generation-setting={section}
       disabled={disabled}
-      className="nodrag nopan flex h-7 items-center gap-1.5 bg-transparent px-0 text-[12px] font-semibold text-slate-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      className="nodrag nopan flex h-7 items-center gap-1 rounded-lg bg-transparent px-1 text-[12px] font-medium text-zinc-200 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
       title="Choose model and open generation settings"
     >
-      {value}
-      <CaretDown size={11} weight="bold" className="text-slate-500" />
+      <span className="max-w-[155px] truncate">{value}</span>
+      <LucideChevronDown size={13} strokeWidth={1.8} className="shrink-0 text-zinc-500" />
     </button>
-  )
-}
-
-function HandleIcon({ icon: Icon, color, position, top, visible = true }: { 
-  icon: React.ElementType
-  color: string
-  position: 'left' | 'right'
-  top: number
-  visible?: boolean 
-}) {
-  if (!visible) return null
-  
-  return (
-    <div
-      className="absolute flex items-center justify-center"
-      style={{
-        width: 24,
-        height: 24,
-        borderRadius: '50%',
-        background: '#111316',
-        border: `1.5px solid ${color}`,
-        top: top,
-        transform: 'translateY(-50%)',
-        [position === 'left' ? 'left' : 'right']: -12,
-        zIndex: 10,
-        pointerEvents: 'none',
-      }}
-    >
-      <Icon size={11} weight="bold" style={{ color }} />
-    </div>
   )
 }
 
@@ -1009,11 +986,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       type="button"
       onClick={requestGenerate}
       disabled={isGenerating || promptState.disabled || !generationPersistenceGuard.allowed}
-      className="flex h-8 min-w-12 items-center justify-center rounded-full bg-white px-3 text-slate-950 shadow-lg transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex h-8 items-center justify-center gap-1.5 rounded-[11px] bg-[#f4f4f6] px-3 text-[#141416] shadow-sm transition-all duration-150 hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
       title={hasRun ? `Regenerate — ${generateTooltip}` : generateTooltip}
     >
-      {hasRun ? <ArrowsClockwise size={12} weight="bold" /> : <Sparkle size={12} weight="fill" />}
-      <span className="ml-1 text-[11px] font-bold">
+      {hasRun ? <LucideRefresh size={12} strokeWidth={2.2} /> : <LucideSparkles size={12} strokeWidth={2.2} />}
+      <span className="text-[11px] font-semibold whitespace-nowrap">
         {hasRun ? 'Regenerate' : 'Generate'}{costEstimate.isKnown ? ` · ${formatCreditsShort(costEstimate.total)}` : ''}
       </span>
     </button>
@@ -1021,7 +998,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   return (
     <div
       className="relative group"
-      style={{ width: typeof data.width === 'number' ? data.width : 480 }}
+      style={{ width: typeof data.width === 'number' ? data.width : 380 }}
       onClickCapture={(event) => {
         const control = (event.target as HTMLElement).closest<HTMLElement>('[data-generation-setting]')
         if (control) {
@@ -1107,35 +1084,30 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       </div>
 
       {/* Handles - dynamic based on model inputTypes */}
-      
-      {/* Text input - always shown.
-          zIndex:5 puts every Handle above the card content; without it,
-          drops that landed on the prompt textarea (which sits at the
-          same y-coordinate as some handles) were silently rejected
-          because React Flow's drop detection found the textarea before
-          the handle. */}
-      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 80, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-      <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" position="left" top={80} visible />
+      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 80, left: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+      <NodePortDot color="#a78bfa" side="left" top={80} label="Prompt input" />
 
       {/* Image input - only if model supports image input */}
       {currentModel?.inputTypes.includes('image') && (
         <>
-          <Handle type="target" id="image-in" position={Position.Left} style={{ top: 180, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-          <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="left" top={180} visible />
-          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={180} label="Images" />
+          <Handle type="target" id="image-in" position={Position.Left} style={{ top: 155, left: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+          <NodePortDot color="#38bdf8" side="left" top={155} label="Image reference" />
+          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={155} label="Images" />
         </>
       )}
 
       {/* Image output - always shown */}
-      <Handle type="source" id="image-out" position={Position.Right} style={{ top: 130, right: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-      <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="right" top={130} visible />
+      <Handle type="source" id="image-out" position={Position.Right} style={{ top: 118, right: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
+      <NodePortDot color="#38bdf8" side="right" top={118} label="Image output" />
 
-      {/* Card content */}
+      {/* Card content — clean 2-zone matte layout (full preview + integrated footer) */}
       <div
-        className="relative flex flex-col overflow-hidden rounded-md bg-[#17191e] p-4 transition-all duration-200"
+        className={`relative flex flex-col overflow-hidden rounded-[18px] border bg-[#1c1c1e] p-2.5 shadow-[0_14px_38px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${
+          selected ? 'border-transparent' : 'border-zinc-800/95 hover:border-zinc-700/90'
+        }`}
         style={{
-          border: selected ? 'none' : feedbackFrameStyle.border || 'none',
-          boxShadow: feedbackFrameStyle.boxShadow || 'none',
+          border: selected ? 'none' : feedbackFrameStyle.border || undefined,
+          boxShadow: feedbackFrameStyle.boxShadow || undefined,
         }}
       >
         <NodeResizer
@@ -1143,25 +1115,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           keepAspectRatio
           minWidth={280}
           minHeight={220}
-          lineStyle={{ borderColor: '#1597ff', borderWidth: 1 }}
-          handleStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #1597ff', borderRadius: 2, width: 9, height: 9 }}
+          lineStyle={UNIFIED_RESIZER_LINE_STYLE}
+          handleStyle={UNIFIED_RESIZER_HANDLE_STYLE}
           onResizeEnd={(_, params) => patchNodeData(id, { width: params.width, height: params.height })}
         />
-        <div className="hidden" aria-hidden="true">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/15 text-sky-300">
-              <ImageIcon size={14} weight="bold" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold tracking-tight text-slate-100">Image Generation</p>
-              <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">{currentModel?.name || 'Select model'}</p>
-            </div>
-          </div>
-          <StatusBadge status={status} progress={progress} />
-        </div>
-        {/* Preview area - image displays at natural aspect ratio */}
+
+        {/* Preview area - image displays cleanly at natural aspect ratio with nothing covering it */}
         <div
-          className="group/media relative overflow-hidden bg-black"
+          className="group/media relative overflow-hidden rounded-[12px] bg-[#141416]"
           style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '1:1')) }}
           onDoubleClick={() => { if (outputUrl) setLightboxOpen(true) }}
         >
@@ -1176,7 +1137,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               onDragStart={(event) => event.preventDefault()}
               loading="lazy"
               decoding="async"
-              className="w-full h-full object-cover cursor-zoom-in"
+              className="h-full w-full cursor-zoom-in object-cover"
               onError={() => {
                 // Image failed to load - could be stale URL
               }}
@@ -1185,138 +1146,154 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               {isGenerating ? (
                 <>
-                  <CircleNotch size={24} className="animate-spin text-accent/60" />
+                  <CircleNotch size={24} className="animate-spin text-zinc-400" />
                   <StatusBadge status={status} progress={progress} />
                 </>
-              ) : (
-                <span className="text-[11px] font-mono text-muted-foreground/30">No output yet</span>
-              )}
-            </div>
-          )}
-          
-          {!outputUrl && !isGenerating && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#17191e] text-[#343943]">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black/10">
-                <ImageIcon size={27} weight="thin" />
-              </div>
+              ) : !error ? (
+                <div className="flex flex-col items-center gap-2 text-zinc-600">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800/80 bg-[#1c1c1e]">
+                    <LucideImage size={20} strokeWidth={1.6} />
+                  </div>
+                  <span className="text-[11px] font-medium text-zinc-500">
+                    {resolvedPrompt.connected ? 'Ready to generate' : 'Connect a Prompt node'}
+                  </span>
+                </div>
+              ) : null}
             </div>
           )}
 
           <GenerationFeedbackOverlay state={feedbackState} error={error} onRetry={requestGenerate} />
 
           {error && !feedbackState.isFailedRegeneration && (
-            <div className="absolute bottom-2 left-2 right-2 bg-red-500/20 border border-red-500/30 rounded px-2 py-1">
-              <span className="text-[9px] font-mono text-red-400">{error}</span>
+            <div className="absolute bottom-2 left-2 right-2 rounded-lg border border-red-500/30 bg-red-950/80 px-2.5 py-1.5">
+              <span className="text-[10px] font-medium text-red-300">{error}</span>
             </div>
           )}
-          <div className="absolute bottom-[118px] left-3 z-20 flex items-center gap-1.5">
-            {resolution && <button data-generation-setting="resolution" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 shadow-md backdrop-blur-md" title="Edit resolution">{resolution}</button>}
-            <button data-generation-setting="aspect" className="nodrag nopan rounded-md border border-white/10 bg-[#20232a]/95 px-2.5 py-1 text-[10px] font-semibold text-slate-200 backdrop-blur-md" title="Edit aspect ratio">{aspectRatio}</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="nodrag nopan absolute bottom-4 left-4 right-4 z-30 rounded-xl border border-[#2d313c] bg-[#20222a]/95 px-4 py-3 shadow-xl backdrop-blur-md">
-        <div className="min-h-7 text-[14px] font-semibold leading-relaxed text-[#8b94a5]">
-          {resolvedPrompt.connected ? null : 'Describe...'}
         </div>
 
-        {/* Controls - Dynamic based on model */}
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap [&>*:not(.node-model-control)]:hidden">
-            {/* Num images counter */}
-            <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
-              <button 
-                onClick={() => {
-                  syncGuardRef.current.beginUserEdit()
-                  setNumImages(n => {
-                    const next = Math.max(1, n - 1)
-                    patchPersistedNodeData({ numImages: next })
-                    return next
-                  })
-                }}
-                disabled={isGenerating || numImages <= 1}
-                className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
-              >
-                <Minus size={8} weight="bold" />
-              </button>
-              <span className="w-6 text-center">x{numImages}</span>
-              <button
-                onClick={() => {
-                  syncGuardRef.current.beginUserEdit()
-                  setNumImages(n => {
-                    const next = Math.min(12, n + 1)
-                    patchPersistedNodeData({ numImages: next })
-                    return next
-                  })
-                }}
-                disabled={isGenerating || numImages >= 12}
-                className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
-              >
-                <Plus size={8} weight="bold" />
-              </button>
-            </div>
-
-            {/* Model selector */}
-            <div className="node-model-control flex items-center gap-2 text-emerald-400">
-            <ImageIcon size={15} weight="bold" />
-            <ControlSelect 
-              value={currentModel?.name || modelId} 
-              options={modelOptions}
-              onChange={(value) => {
-                syncGuardRef.current.beginUserEdit()
-                patchPersistedNodeData(settingsForModelChange('image', value, data as Record<string, unknown>))
-              }}
-              disabled={isGenerating}
-            />
-            </div>
-            
-            {/* Aspect ratio - dynamic based on model */}
-            {aspectOptions.length > 0 && (
-              <ControlSelect 
-                value={aspectRatio || currentModel?.defaultAspectRatio || ''} 
-                section="aspect"
-                options={aspectOptions}
-                onChange={(value) => {
-                  syncGuardRef.current.beginUserEdit()
-                  setAspectRatio(value)
-                  patchPersistedNodeData({ aspectRatio: value })
-                }}
-                disabled={isGenerating}
-              />
-            )}
-            
-            {/* Resolution - only if model supports it */}
-            {resolutionOptions.length > 0 && (
-              <ControlSelect 
-                value={resolution || currentModel?.defaultResolution || ''} 
-                section="resolution"
-                options={resolutionOptions}
-                onChange={(value) => {
-                  syncGuardRef.current.beginUserEdit()
-                  setResolution(value)
-                  patchPersistedNodeData({ resolution: value })
-                }}
-                disabled={isGenerating}
-              />
-            )}
-          </div>
-          
-          {/* A submitted durable job cannot be cancelled safely: the provider may
-              finish after a local cancel and leave the node/server disagreeing.
-              Keep polling, and offer re-check only after a soft timeout. */}
-          {isGenerating ? null : status === 'failed' && generationId ? (
+        {/* Clean Integrated Footer — sits below preview, never clips artwork */}
+        <div className="nodrag nopan mt-2.5 flex flex-col gap-2 px-1 pb-0.5">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={handleRecheck}
-                className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
-                title="Check the durable generation result again."
-              >
-                Re-check
-              </button>
-              {generateButton}
+              {resolution && (
+                <button
+                  type="button"
+                  data-generation-setting="resolution"
+                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  title="Edit resolution"
+                >
+                  {resolution}
+                </button>
+              )}
+              {aspectRatio && (
+                <button
+                  type="button"
+                  data-generation-setting="aspect"
+                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  title="Edit aspect ratio"
+                >
+                  {aspectRatio}
+                </button>
+              )}
             </div>
-          ) : generateButton}
+
+            <span className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+              <span className={`h-1.5 w-1.5 rounded-full ${resolvedPrompt.connected ? 'bg-violet-400' : 'bg-zinc-600'}`} />
+              <span>{resolvedPrompt.connected ? 'Prompt linked' : 'No prompt'}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap [&>*:not(.node-model-control)]:hidden">
+              {/* Num images counter */}
+              <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
+                <button
+                  onClick={() => {
+                    syncGuardRef.current.beginUserEdit()
+                    setNumImages(n => {
+                      const next = Math.max(1, n - 1)
+                      patchPersistedNodeData({ numImages: next })
+                      return next
+                    })
+                  }}
+                  disabled={isGenerating || numImages <= 1}
+                  className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
+                >
+                  <Minus size={8} weight="bold" />
+                </button>
+                <span className="w-6 text-center">x{numImages}</span>
+                <button
+                  onClick={() => {
+                    syncGuardRef.current.beginUserEdit()
+                    setNumImages(n => {
+                      const next = Math.min(12, n + 1)
+                      patchPersistedNodeData({ numImages: next })
+                      return next
+                    })
+                  }}
+                  disabled={isGenerating || numImages >= 12}
+                  className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
+                >
+                  <Plus size={8} weight="bold" />
+                </button>
+              </div>
+
+              {/* Model selector */}
+              <div className="node-model-control flex items-center gap-1.5 text-sky-400">
+                <LucideImage size={14} strokeWidth={1.8} />
+                <ControlSelect
+                  value={currentModel?.name || modelId}
+                  options={modelOptions}
+                  onChange={(value) => {
+                    syncGuardRef.current.beginUserEdit()
+                    patchPersistedNodeData(settingsForModelChange('image', value, data as Record<string, unknown>))
+                  }}
+                  disabled={isGenerating}
+                />
+              </div>
+
+              {aspectOptions.length > 0 && (
+                <ControlSelect
+                  value={aspectRatio || currentModel?.defaultAspectRatio || ''}
+                  section="aspect"
+                  options={aspectOptions}
+                  onChange={(value) => {
+                    syncGuardRef.current.beginUserEdit()
+                    setAspectRatio(value)
+                    patchPersistedNodeData({ aspectRatio: value })
+                  }}
+                  disabled={isGenerating}
+                />
+              )}
+
+              {resolutionOptions.length > 0 && (
+                <ControlSelect
+                  value={resolution || currentModel?.defaultResolution || ''}
+                  section="resolution"
+                  options={resolutionOptions}
+                  onChange={(value) => {
+                    syncGuardRef.current.beginUserEdit()
+                    setResolution(value)
+                    patchPersistedNodeData({ resolution: value })
+                  }}
+                  disabled={isGenerating}
+                />
+              )}
+            </div>
+
+            {isGenerating ? null : status === 'failed' && generationId ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleRecheck}
+                  className="flex h-7 items-center justify-center rounded-lg bg-amber-500/20 px-2.5 text-[10px] font-medium text-amber-300 transition-colors hover:bg-amber-500 hover:text-white"
+                  title="Check the durable generation result again."
+                >
+                  Re-check
+                </button>
+                {generateButton}
+              </div>
+            ) : generateButton}
+          </div>
         </div>
       </div>
 

@@ -78,8 +78,8 @@ import { LeftToolbar, type Asset } from './left-toolbar'
 import { BottomBar, type CanvasTool } from './bottom-bar'
 import { GenerationSettingsPanel } from './generation-settings-panel'
 import { SceneTimeline, type Shot } from './scene-timeline'
-import { AlignmentGuides, computeAlignmentGuides } from './alignment-guides'
-import { MapTrifold, X, ImageSquare, FilmSlate } from '@phosphor-icons/react'
+import { ImageSquare, FilmSlate } from '@phosphor-icons/react'
+import { Map as MapIcon, X as CloseIcon, Eraser as EraserIcon, Pencil as PencilIcon } from 'lucide-react'
 import { AddNodeMenu } from './add-node-menu'
 import { ImageNode } from './nodes/image-node'
 import { VideoNode } from './nodes/video-node'
@@ -133,6 +133,17 @@ const DEFAULT_EDGE_OPTIONS = {
   style: EDGE_STYLE,
   animated: false,
 } as const
+const PRO_OPTIONS = { hideAttribution: true } as const
+const MIN_CANVAS_ZOOM = 0.3
+const MAX_CANVAS_ZOOM = 4
+const MINIMAP_STYLE = {
+  background: 'rgba(22,22,24,0.95)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 8,
+  width: 160,
+  height: 100,
+} as const
+const PAN_ON_DRAG_BUTTONS: number[] = [1, 2]
 
 // Restores AND persists the viewport (pan + zoom) per-project via localStorage,
 // so a project reopens exactly where you left it. Lives in its own leaf so that
@@ -158,7 +169,11 @@ function ViewportPersistor({ projectId }: { projectId: string | undefined }) {
       if (raw) {
         const vp = JSON.parse(raw)
         if (typeof vp?.x === 'number' && typeof vp?.y === 'number' && typeof vp?.zoom === 'number') {
-          setViewport(vp)
+          setViewport({
+            x: vp.x,
+            y: vp.y,
+            zoom: Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, vp.zoom)),
+          })
         }
       }
     } catch {}
@@ -347,7 +362,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // React Flow's separate hook for forcing a node's handle re-measurement.
   // Declared here near the top because onConnect (below) depends on it.
   const updateNodeInternals = useUpdateNodeInternals()
-  const viewport = useViewport()
 
   // Asset management
   const [assets, setAssets] = useState<Asset[]>(INITIAL_ASSETS)
@@ -657,7 +671,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   const [minimapOpen, setMinimapOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flowPos: { x: number; y: number } } | null>(null)
-  const { fitView, screenToFlowPosition, setCenter, getNodes } = useReactFlow()
+  const { fitView, screenToFlowPosition, setCenter, getNodes, getViewport } = useReactFlow()
   const flowRef = useRef<HTMLDivElement>(null)
 
   // Drag-to-create: dragging a connection off an output handle and
@@ -1183,7 +1197,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
         setContextMenu(null)
         setActiveTool((tool) => (PLACEMENT_TOOLS[tool] || tool === 'pen' || tool === 'eraser' ? 'select' : tool))
       }
-      // C / N / T: comment, sticky note, text (plain keys only; Ctrl+C/N/T
+      // V / H: select & hand navigation (plain keys only).
+      if (!ctrl && !e.altKey && !e.shiftKey) {
+        if (key === 'v') setActiveTool('select')
+        if (key === 'h') setActiveTool('hand')
+      }
+      // C / N / T / P / E: comment, sticky note, text, pen, eraser (plain keys only; Ctrl+C/N/T
       // keep their copy / add-node meanings).
       if (!ctrl && !e.altKey && !e.shiftKey && allowDocumentMutation) {
         if (key === 'c') setActiveTool('comment')
@@ -1233,15 +1252,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
     setContextMenu({ x: e.clientX, y: e.clientY, flowPos })
   }, [screenToFlowPosition])
 
-  // Smart-guide state. Populated on every drag tick with the flow
-  // coordinates of any alignments between the dragged node and the
-  // others; cleared when the drag finishes so guides only show during
-  // active manipulation.
-  const [dragGuides, setDragGuides] = useState<{ vertical: number[]; horizontal: number[] }>({
-    vertical: [],
-    horizontal: [],
-  })
-
   const remotePresence = useMemo(
     () => projectRemotePresence(realtimePeers, { now: presenceNow }),
     [realtimePeers, presenceNow],
@@ -1270,28 +1280,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
   )
   lockedNodeIdsRef.current = lockedNodeIds
 
-  const onNodeDrag = useCallback((_event: any, node: Node) => {
-    const others = (nodes as Node[]).filter(n => n.id !== node.id)
-    const guides = computeAlignmentGuides(node, others)
-    // Avoid re-rendering when nothing changed — set state by identity
-    // comparison on the small flat arrays.
-    setDragGuides(prev => {
-      if (
-        prev.vertical.length === guides.vertical.length &&
-        prev.horizontal.length === guides.horizontal.length &&
-        prev.vertical.every((v, i) => v === guides.vertical[i]) &&
-        prev.horizontal.every((v, i) => v === guides.horizontal[i])
-      ) return prev
-      return guides
-    })
-  }, [nodes])
-
   const onNodeDragStart = useCallback((_event: any, node: Node) => {
     presenceControllerRef.current?.startDragLock(node.id)
   }, [])
 
   const onNodeDragStop = useCallback((_event: unknown, _node: Node, draggedNodes: Node[]) => {
-    setDragGuides({ vertical: [], horizontal: [] })
     presenceControllerRef.current?.stopDragLock()
     // A node dropped inside a group frame joins it; one dragged out leaves.
     if (!allowDocumentMutation) return
@@ -1308,7 +1301,17 @@ function CanvasInner({ projectId }: { projectId: string }) {
     })
   }, [allowDocumentMutation, commands, getNodes])
 
+  const lastCursorPublishAtRef = useRef(0)
+  const hasVisiblePeersRef = useRef(false)
+  hasVisiblePeersRef.current = visiblePresence.length > 0
+
   const handlePresencePointerMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    // Skip expensive screenToFlowPosition (forces getBoundingClientRect reflow)
+    // when working solo, and cap remote cursor broadcasts to ~30fps.
+    if (!hasVisiblePeersRef.current) return
+    const now = performance.now()
+    if (now - lastCursorPublishAtRef.current < 32) return
+    lastCursorPublishAtRef.current = now
     presenceControllerRef.current?.publishCursor(
       screenToFlowPosition({ x: event.clientX, y: event.clientY }),
     )
@@ -1345,10 +1348,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // A locked group frame locks every member too.
       const manuallyLocked = Boolean((node.data as Record<string, unknown> | undefined)?.locked)
         || isLockedByGroup(node as unknown as GroupableNode, nodesById)
-      if (!lockedNodeIds.has(node.id) && !manuallyLocked && node.selected === selected) {
+      if (!lockedNodeIds.has(node.id) && !manuallyLocked && Boolean(node.selected) === selected) {
         return node
       }
-      const nextNode = node.selected === selected ? node : { ...node, selected }
+      const nextNode = Boolean(node.selected) === selected ? node : { ...node, selected }
       if (lockedNodeIds.has(node.id)) {
         return {
           ...nextNode,
@@ -1472,24 +1475,76 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
     commands.switchScene(target.sceneId)
     if (target.point) {
-      setCenter(target.point.x, target.point.y, { zoom: viewport.zoom, duration: 300 })
+      setCenter(target.point.x, target.point.y, { zoom: getViewport().zoom, duration: 300 })
     }
-  }, [allNodes, commands, scenes, setCenter, viewport.zoom])
+  }, [allNodes, commands, getViewport, scenes, setCenter])
 
   const handleRecenter = useCallback(() => {
     fitView({ duration: 300, padding: 0.2 })
   }, [fitView])
 
+  const collaborationValue = useMemo(
+    () => ({
+      ...realtime,
+      commands,
+      undo,
+      redo,
+    }),
+    [realtime, commands, undo, redo],
+  )
+
+  const flowStyle = useMemo(
+    () => ({
+      background: 'var(--canvas, #161618)',
+      cursor: !allowDocumentMutation
+        ? 'default'
+        : activeTool === 'hand'
+          ? 'grab'
+          : activeTool === 'cut' || activeTool === 'pen' || PLACEMENT_TOOLS[activeTool]
+            ? 'crosshair'
+            : activeTool === 'eraser'
+              ? 'cell'
+              : 'default',
+    }),
+    [activeTool, allowDocumentMutation],
+  )
+
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    presenceControllerRef.current?.startDragLock(node.id)
+  }, [])
+
+  const handlePaneClick = useCallback((event: React.MouseEvent) => {
+    const placement = PLACEMENT_TOOLS[activeTool]
+    if (placement) {
+      if (allowDocumentMutation && currentUser) {
+        const position = screenToFlowPosition({ x: event.clientX - placement.offset.x, y: event.clientY - placement.offset.y })
+        commands.createNode(makeNode(placement.type, position, placement.label, activeSceneId, { createdBy: currentUser.id, ...placement.data?.() }))
+      }
+      setActiveTool('select')
+      return
+    }
+    presenceControllerRef.current?.stopDragLock()
+    setSettingsNodeId(null)
+    setSelectedNodeIds([])
+  }, [activeSceneId, activeTool, allowDocumentMutation, commands, currentUser, screenToFlowPosition])
+
+  const handleEdgeClick = useCallback((_e: React.MouseEvent, edge: Edge) => {
+    if (allowDocumentMutation && activeTool === 'cut') {
+      commands.deleteEdge(edge.id)
+    }
+  }, [activeTool, allowDocumentMutation, commands])
+
+  const handleToggleResolvedComments = useCallback(() => {
+    setShowResolvedComments(v => !v)
+  }, [])
+
+  const handleBottomAssetAction = useCallback((action: string) => {
+    window.dispatchEvent(new CustomEvent('spite:bottom-toolbar-action', { detail: action }))
+  }, [])
+
   return (
-    <CanvasCollaborationProvider
-      value={{
-        ...realtime,
-        commands,
-        undo,
-        redo,
-      }}
-    >
-      <div className="spite-canvas-shell flex flex-col h-screen bg-[#0b0c10] overflow-hidden">
+    <CanvasCollaborationProvider value={collaborationValue}>
+      <div className="spite-canvas-shell flex flex-col h-screen bg-[#161618] overflow-hidden">
       {/* Covers the canvas until its content has synced from the server. */}
       <CanvasLoadingScreen ready={realtime.initialSyncComplete} />
       <GenerationGalleryHost nodes={allNodes as Array<{ id: string; data?: unknown }>} />
@@ -1587,59 +1642,26 @@ function CanvasInner({ projectId }: { projectId: string }) {
               nodesConnectable={allowDocumentMutation && activeTool === 'select'}
               isValidConnection={isValidConnection}
               onNodeDragStart={onNodeDragStart}
-              onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
-              onNodeClick={(_event, node) => {
-                // Ownership begins before toolbars/settings can be opened.
-                // Peers see it through awareness and their wrapper becomes
-                // pointer-events:none; server lease remains the mutation gate.
-                presenceControllerRef.current?.startDragLock(node.id)
-              }}
-              onPaneClick={(event) => {
-                // Placement tools (comment, note, text): drop the object where
-                // the user clicked, then go back to the cursor so the next
-                // click selects as usual.
-                const placement = PLACEMENT_TOOLS[activeTool]
-                if (placement) {
-                  if (allowDocumentMutation && currentUser) {
-                    const position = screenToFlowPosition({ x: event.clientX - placement.offset.x, y: event.clientY - placement.offset.y })
-                    commands.createNode(makeNode(placement.type, position, placement.label, activeSceneId, { createdBy: currentUser.id, ...placement.data?.() }))
-                  }
-                  setActiveTool('select')
-                  return
-                }
-                // Leaving a node releases its transient interaction lock.
-                presenceControllerRef.current?.stopDragLock()
-                setSettingsNodeId(null)
-                // Default: deselect all
-                setSelectedNodeIds([])
-              }}
-              onEdgeClick={(e, edge) => {
-                // Cut tool: delete clicked edge
-                if (allowDocumentMutation && activeTool === 'cut') {
-                  commands.deleteEdge(edge.id)
-                  return
-                }
-              }}
+              onNodeClick={handleNodeClick}
+              onPaneClick={handlePaneClick}
+              onEdgeClick={handleEdgeClick}
               nodeTypes={NODE_TYPES}
               onContextMenu={onContextMenu}
               // Box selection only with the cursor tool, so the eraser can
               // sweep across strokes.
               selectionOnDrag={activeTool === 'select'}
               selectionMode={SelectionMode.Partial}
-              panOnDrag={activeTool === 'hand' ? true : [1, 2]}
+              panOnDrag={activeTool === 'hand' ? true : PAN_ON_DRAG_BUTTONS}
               panOnScroll
               panOnScrollMode={PanOnScrollMode.Free}
               zoomOnScroll={false}
               zoomOnPinch
-              minZoom={0.1}
-              maxZoom={4}
+              minZoom={MIN_CANVAS_ZOOM}
+              maxZoom={MAX_CANVAS_ZOOM}
               className="spite-react-flow"
-              style={{
-                background: '#0c0d12',
-                cursor: !allowDocumentMutation ? 'default' : activeTool === 'hand' ? 'grab' : activeTool === 'cut' || activeTool === 'pen' || PLACEMENT_TOOLS[activeTool] ? 'crosshair' : activeTool === 'eraser' ? 'cell' : 'default'
-              }}
-              proOptions={{ hideAttribution: true }}
+              style={flowStyle}
+              proOptions={PRO_OPTIONS}
               // Keep nodes mounted while they are off-screen. Generator polling,
               // upload completion, and mention-editor state live in the node
               // components; viewport culling unmounted them and lost those tasks.
@@ -1648,30 +1670,20 @@ function CanvasInner({ projectId }: { projectId: string }) {
             >
               <Background
                 variant={BackgroundVariant.Dots}
-                gap={26}
-                size={1.2}
-                color="rgba(255,255,255,0.14)"
+                gap={24}
+                size={2.4}
+                color="var(--canvas-dot, #4b4b53)"
               />
 
               {minimapOpen && (
                 <MiniMap
-                  style={{
-                    background: 'rgba(13,15,18,0.95)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 8,
-                    width: 160,
-                    height: 100,
-                  }}
+                  style={MINIMAP_STYLE}
                   maskColor="rgba(8,10,12,0.7)"
                   nodeColor="rgba(107,143,168,0.5)"
                   position="bottom-right"
                   className="!bottom-14 !right-3"
                 />
               )}
-              <AlignmentGuides
-                vertical={dragGuides.vertical}
-                horizontal={dragGuides.horizontal}
-              />
             </ReactFlow>
           )
         })()}
@@ -1679,7 +1691,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
         <RealtimePresenceOverlay
           peers={visiblePresence}
           nodes={sceneNodes}
-          viewport={viewport}
         />
         {activeTool === 'pen' && !readOnly ? (
           <PenOverlay
@@ -1700,33 +1711,51 @@ function CanvasInner({ projectId }: { projectId: string }) {
             }}
           />
         ) : null}
-        {activeTool === 'pen' && !readOnly ? (
-          <div className="pointer-events-none absolute bottom-[76px] left-1/2 z-30 -translate-x-1/2">
-            <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/[0.1] bg-[#12141c]/95 px-3 py-1.5 shadow-xl backdrop-blur-xl" aria-label="Pen settings">
+        {(activeTool === 'pen' || activeTool === 'eraser') && !readOnly ? (
+          <div className="pointer-events-none absolute bottom-[78px] left-1/2 z-30 -translate-x-1/2">
+            <div className="dock-popover-enter pointer-events-auto flex items-center gap-2 rounded-[14px] border border-zinc-800 bg-[#1c1c1e]/95 px-3 py-1.5 shadow-[0_8px_28px_rgba(0,0,0,0.45)]" aria-label="Pen settings">
               {PEN_COLORS.map((color) => (
                 <button
                   key={color}
                   type="button"
-                  onClick={() => choosePen({ color })}
+                  onClick={() => {
+                    choosePen({ color })
+                    setActiveTool('pen')
+                  }}
                   aria-label={`Pen color ${color}`}
-                  aria-pressed={pen.color === color}
-                  className={`h-5 w-5 rounded-full border ${pen.color === color ? 'border-white ring-2 ring-white/40' : 'border-black/40'}`}
+                  aria-pressed={activeTool === 'pen' && pen.color === color}
+                  className={`h-5 w-5 rounded-full border transition-transform hover:scale-110 ${activeTool === 'pen' && pen.color === color ? 'border-white ring-2 ring-white/40 scale-105' : 'border-black/40'}`}
                   style={{ background: color }}
                 />
               ))}
-              <div className="mx-1 h-4 w-px bg-white/10" />
+              <div className="mx-1 h-4 w-px bg-zinc-700" />
               {PEN_WIDTHS.map((width) => (
                 <button
                   key={width}
                   type="button"
-                  onClick={() => choosePen({ width })}
+                  onClick={() => {
+                    choosePen({ width })
+                    setActiveTool('pen')
+                  }}
                   aria-label={`Pen width ${width}`}
-                  aria-pressed={pen.width === width}
-                  className={`flex h-6 w-6 items-center justify-center rounded-md ${pen.width === width ? 'bg-white/15' : 'hover:bg-white/10'}`}
+                  aria-pressed={activeTool === 'pen' && pen.width === width}
+                  className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${activeTool === 'pen' && pen.width === width ? 'bg-zinc-700/80' : 'hover:bg-zinc-800'}`}
                 >
-                  <span className="rounded-full bg-slate-200" style={{ width: width + 2, height: width + 2 }} />
+                  <span className="rounded-full bg-zinc-200" style={{ width: width + 2, height: width + 2 }} />
                 </button>
               ))}
+              <div className="mx-1 h-4 w-px bg-zinc-700" />
+              <button
+                type="button"
+                onClick={() => setActiveTool(activeTool === 'eraser' ? 'pen' : 'eraser')}
+                aria-label={activeTool === 'eraser' ? 'Switch to pen' : 'Switch to eraser'}
+                aria-pressed={activeTool === 'eraser'}
+                title={activeTool === 'eraser' ? 'Back to Draw (P)' : 'Eraser (E)'}
+                className={`flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors ${activeTool === 'eraser' ? 'bg-zinc-200 text-zinc-950' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}
+              >
+                {activeTool === 'eraser' ? <PencilIcon size={12} strokeWidth={2} /> : <EraserIcon size={12} strokeWidth={2} />}
+                <span>{activeTool === 'eraser' ? 'Draw' : 'Eraser'}</span>
+              </button>
             </div>
           </div>
         ) : null}
@@ -1751,10 +1780,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
         {!minimapOpen && (
           <button
             onClick={() => setMinimapOpen(true)}
-            className="absolute bottom-14 right-3 z-20 glass flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute bottom-14 right-4 z-20 glass flex items-center justify-center w-8 h-8 rounded-[10px] text-muted-foreground hover:text-foreground transition-colors"
             title="Show minimap"
           >
-            <MapTrifold size={14} weight="thin" />
+            <MapIcon size={15} strokeWidth={1.75} />
           </button>
         )}
 
@@ -1762,10 +1791,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
         {minimapOpen && (
           <button
             onClick={() => setMinimapOpen(false)}
-            className="absolute bottom-[118px] right-3 z-20 glass flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute bottom-[118px] right-4 z-20 glass flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground transition-colors"
             title="Hide minimap"
           >
-            <X size={10} weight="bold" />
+            <CloseIcon size={11} strokeWidth={2} />
           </button>
         )}
 
@@ -1813,9 +1842,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
           activeTool={activeTool}
           onSetTool={setActiveTool}
           showResolvedComments={showResolvedComments}
-          onToggleResolvedComments={() => setShowResolvedComments(v => !v)}
+          onToggleResolvedComments={handleToggleResolvedComments}
           onAddNode={addNode}
-          onAssetAction={(action) => window.dispatchEvent(new CustomEvent('spite:bottom-toolbar-action', { detail: action }))}
+          onAssetAction={handleBottomAssetAction}
           onUndo={undo}
           onRedo={redo}
           canUndo={!readOnly}

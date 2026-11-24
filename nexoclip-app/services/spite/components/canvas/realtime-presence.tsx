@@ -1,6 +1,7 @@
 'use client'
 
-import { useReactFlow, type Node } from '@xyflow/react'
+import { memo } from 'react'
+import { useReactFlow, useViewport, type Node } from '@xyflow/react'
 
 import {
   type PresencePoint,
@@ -16,13 +17,18 @@ type ViewportLike = {
 type RealtimePresenceProps = {
   peers: RemotePresencePeer[]
   nodes: Node[]
-  viewport: ViewportLike
+  viewport?: ViewportLike
 }
 
 const FALLBACK_NODE_WIDTH = 240
 const FALLBACK_NODE_HEIGHT = 120
 
-export function RealtimePresenceOverlay({ peers, nodes, viewport }: RealtimePresenceProps) {
+function RealtimePresenceOverlayInner({ peers, nodes, viewport: explicitViewport }: RealtimePresenceProps) {
+  // Subscribe to viewport ONLY inside this leaf component, and only when at
+  // least one remote collaborator is visible. Solo sessions skip viewport
+  // subscriptions completely so pan/zoom triggers zero React re-renders.
+  const liveViewport = useViewport()
+  const viewport = explicitViewport ?? liveViewport
   // Nodes coming from the shared document carry no rendered size (it is
   // ephemeral and never synced), so every highlight used the small fallback
   // box. React Flow's internal node has the measured size.
@@ -40,6 +46,11 @@ export function RealtimePresenceOverlay({ peers, nodes, viewport }: RealtimePres
     </div>
   )
 }
+
+export const RealtimePresenceOverlay = memo(function RealtimePresenceOverlay(props: RealtimePresenceProps) {
+  if (props.peers.length === 0) return null
+  return <RealtimePresenceOverlayInner {...props} />
+})
 
 function PresencePeerLayer({
   peer,
