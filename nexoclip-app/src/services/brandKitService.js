@@ -1,6 +1,7 @@
 import { getPool } from '../db/pool.js';
 import * as repository from '../repositories/brandKitRepository.js';
 
+
 export const NEXOCLIP_BRAND_KIT = {
   brandName: 'Nexo Clip',
   about: 'Studio kreatif AI untuk gambar dan video iklan, UGC, dan cerita visual. Dibuat untuk Indonesia.',
@@ -170,14 +171,13 @@ export function validateBrandKit(value) {
 export function createBrandKitService({ pool = getPool() } = {}) {
   return {
     async get(workspaceId) {
-      return (await repository.getWorkspaceBrandKit(pool, workspaceId)) || NEXOCLIP_BRAND_KIT;
+      return repository.getWorkspaceBrandKit(pool, workspaceId);
     },
     async save({ workspaceId, userId, data }) {
       return repository.saveWorkspaceBrandKit(pool, { workspaceId, userId, data: validateBrandKit(data) });
     },
   };
 }
-
 let defaultService;
 export function brandKitService() {
   defaultService ??= createBrandKitService();

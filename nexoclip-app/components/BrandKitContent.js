@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   Bookmark,
   Check,
   ChevronRight,
@@ -23,7 +24,6 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { NxBrandSetupSkeleton } from './ui/nx-loading';
 
 const DEFAULT_FALLBACK_KIT = {
   brandName: 'Nexo Clip',
@@ -160,9 +160,9 @@ function workspaceId() {
 }
 
 function normalizeKit(raw) {
-  const source = raw && typeof raw === 'object' ? raw : DEFAULT_FALLBACK_KIT;
+  const source = raw && typeof raw === 'object' ? raw : EMPTY_KIT;
   return {
-    ...DEFAULT_FALLBACK_KIT,
+    ...EMPTY_KIT,
     ...source,
     slogans: Array.isArray(source.slogans) ? source.slogans : [],
     audience: Array.isArray(source.audience) ? source.audience : [],
@@ -175,11 +175,11 @@ function normalizeKit(raw) {
     colors: Array.isArray(source.colors) ? source.colors : [],
     bannerColor: typeof source.bannerColor === 'string' && /^#[0-9a-f]{6}$/i.test(source.bannerColor) ? source.bannerColor : '#D4FF64',
     logoDataUrl: typeof source.logoDataUrl === 'string' ? source.logoDataUrl : '',
-    logoNote: typeof source.logoNote === 'string' ? source.logoNote : DEFAULT_FALLBACK_KIT.logoNote,
-    glossary: Array.isArray(source.glossary) ? source.glossary : DEFAULT_FALLBACK_KIT.glossary,
-    deals: Array.isArray(source.deals) ? source.deals : DEFAULT_FALLBACK_KIT.deals,
-    compareAgainst: typeof source.compareAgainst === 'string' ? source.compareAgainst : DEFAULT_FALLBACK_KIT.compareAgainst,
-    leadWith: typeof source.leadWith === 'string' ? source.leadWith : DEFAULT_FALLBACK_KIT.leadWith,
+    logoNote: typeof source.logoNote === 'string' ? source.logoNote : '',
+    glossary: Array.isArray(source.glossary) ? source.glossary : [],
+    deals: Array.isArray(source.deals) ? source.deals : [],
+    compareAgainst: typeof source.compareAgainst === 'string' ? source.compareAgainst : '',
+    leadWith: typeof source.leadWith === 'string' ? source.leadWith : '',
     avatars: Array.isArray(source.avatars) ? source.avatars : [],
     voices: Array.isArray(source.voices) ? source.voices : [],
     customPages: Array.isArray(source.customPages) ? source.customPages : [],
@@ -195,13 +195,13 @@ function resolveProductThumb(name) {
 }
 
 function NexoLogoSvg({ src, brandName }) {
-  return (
+  return src ? (
     <img
-      src={src || '/brand/nexoclip-icon.png'}
-      alt={`${brandName || 'Nexo Clip'} Logo`}
+      src={src}
+      alt={`${brandName || 'Brand'} Logo`}
       className="bs-logo-img"
     />
-  );
+  ) : <Sparkles className="bs-logo-img" aria-label={`${brandName || 'Brand'} logo placeholder`} />;
 }
 
 function BrandKitTreeIcon() {
@@ -357,6 +357,7 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
   const [kit, setKit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [manualSetupStarted, setManualSetupStarted] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [statusError, setStatusError] = useState('');
@@ -652,7 +653,11 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
   const isCardVisible = (id) => (!visibleMap ? true : Boolean(visibleMap[id]));
 
   if (loading) {
-    return <NxBrandSetupSkeleton />;
+    return (
+      <main className="grid min-h-[100svh] place-items-center bg-[#fbfafc]" role="status" aria-label="Loading My Brand">
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-[#e7e6f0] border-t-[#5b45f2]" />
+      </main>
+    );
   }
 
   if (!kit) {
@@ -730,8 +735,63 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
     },
   ];
 
-  const isBrandEmpty =
-    !kit.brandName && !kit.about && catalog.length === 0 && kit.audience.length === 0 && kit.sellingPoints.length === 0;
+  const hasBrandProfile = Boolean(
+    kit.brandName || kit.about || kit.website || kit.category || kit.mission || kit.positioning || kit.headline ||
+    kit.language || kit.tone || kit.logoDataUrl || kit.colors.length || kit.fonts.length || kit.audience.length || kit.sellingPoints.length
+  );
+  const isBrandEmpty = !hasBrandProfile && catalog.length === 0 && kit.audience.length === 0 && kit.sellingPoints.length === 0;
+
+  if (!loading && !hasBrandProfile && !manualSetupStarted) {
+    return (
+      <main className="flex min-h-[100svh] items-center justify-center bg-[#fbfafc] px-5 py-12 text-[#171821]">
+        <section className="w-full max-w-[932px]">
+          <div className="mx-auto max-w-[700px] text-center">
+            <h1 className="mb-2 text-[26px] font-semibold tracking-[-0.04em] sm:text-[29px]">Set up your brand</h1>
+            <p className="mx-auto mb-6 max-w-[570px] text-[14px] leading-6 text-[#81859a]">
+              Isi informasi brand secara manual. Brand Kit akan jadi acuan untuk konten yang kamu buat di Nexoclip.
+            </p>
+            <button
+              type="button"
+              onClick={() => setManualSetupStarted(true)}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5b45f2] px-5 text-[13px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(91,69,242,0.5)] transition hover:bg-[#4731d8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2"
+            >
+              Mulai isi Brand Kit
+            </button>
+          </div>
+
+          <div className="mt-16 sm:mt-[68px]">
+            <div className="mb-3 flex items-center justify-between text-[13px] text-[#85899d]">
+              <span>What you&apos;ll get</span>
+              <span className="flex gap-1.5" aria-hidden="true">
+                <span className="grid h-8 w-8 place-items-center rounded-full border border-[#e5e5ed] text-[#bcc0cc]"><ArrowLeft size={14} /></span>
+                <span className="grid h-8 w-8 place-items-center rounded-full border border-[#e5e5ed] text-[#656a7b]"><ArrowRight size={14} /></span>
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="flex h-[112px] flex-col items-center justify-center rounded-xl bg-[#eeedff] px-4 text-center">
+                <span className="font-serif text-[27px] italic text-[#6158ff]">Your brand</span>
+                <span className="mt-1 text-[10px] text-[#85899d]">A clear overview of what you offer.</span>
+              </div>
+              <div className="flex h-[112px] items-center justify-center gap-3 rounded-xl bg-[#eeedff] px-3">
+                <span className="grid h-12 w-12 place-items-center rounded-xl bg-white text-[#6158ff]"><Sparkles size={22} /></span>
+                <span><span className="mb-2 flex gap-1"><i className="h-4 w-4 rounded-md bg-[#6158ff]" /><i className="h-4 w-4 rounded-md bg-[#aaa5ff]" /><i className="h-4 w-4 rounded-md bg-[#20212a]" /></span><span className="font-serif text-[13px]">Aa Bb Cc</span></span>
+              </div>
+              <div className="flex h-[112px] items-center justify-center rounded-xl bg-[#eeedff] px-3">
+                <span className="rounded-full bg-white px-3 py-2 text-[11px] text-[#454756]">Your target audience</span>
+              </div>
+              <div className="flex h-[112px] flex-col items-center justify-center rounded-xl bg-[#eeedff] px-4 text-center">
+                <span className="font-serif text-[16px] italic text-[#6158ff]">Your brand voice</span>
+                <span className="mt-2 rounded-full bg-white px-2.5 py-1 text-[10px] text-[#777b8c]">Tone &amp; messaging</span>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-3 text-[11px] text-[#606474] sm:grid-cols-4">
+              {['Overview', 'Brand kit', 'Audience', 'Messaging'].map((label) => <span key={label}>{label}</span>)}
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <div className="bs-root">
@@ -902,10 +962,10 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
             <div className="bs-card">
               <div className="bs-card-body flex flex-wrap items-center justify-between gap-3 py-5">
                 <p className="m-0 text-[13px] text-[#6E6E7A]">
-                  Your Brand Kit is empty. Start typing directly in the cards below or load the Nexo Clip sample profile.
+                  Brand Kit kamu masih kosong. Isi manual atau gunakan profil contoh.
                 </p>
                 <button type="button" className="bs-btn-add" onClick={handleRestoreDefaults}>
-                  Load Nexo Clip sample
+                  Gunakan contoh Nexo Clip
                 </button>
               </div>
             </div>

@@ -4,38 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NxInlineSpinner, NxIntegrationsSkeleton, NxSkeleton } from './ui/nx-loading';
 
 const INITIAL_INTEGRATIONS = [
-  // Ads accounts: Meta Ads
-  {
-    id: 'meta-ads',
-    tab: 'ads',
-    title: 'Meta Ads',
-    connected: false,
-    icon: 'meta',
-    provider: 'meta',
-    description:
-      'Integrate NexoClip with Meta Ads to synchronize your ad campaigns, ROAS performance, and creative workflows.',
-  },
-
-  // Social account: YouTube, Instagram, TikTok
-  {
-    id: 'youtube-social',
-    tab: 'social',
-    title: 'YouTube',
-    connected: false,
-    icon: 'youtube',
-    provider: 'youtube',
-    description:
-      'Integrate NexoClip with YouTube to publish Shorts, widescreen videos, and custom AI thumbnails directly.',
-  },
+  { id: 'youtube-social', tab: 'social', title: 'YouTube', connected: false, icon: 'youtube', provider: 'youtube', description: 'Link a YouTube channel to your workspace.' },
   {
     id: 'instagram-social',
     tab: 'social',
     title: 'Instagram',
-    connected: true,
+    connected: false,
     icon: 'instagram',
-    provider: 'meta',
+    provider: 'instagram',
+    manageTab: 'publish',
     description:
-      'Integrate NexoClip with Instagram to auto-publish 9:16 Reels, schedule posts, and sync engagement insights.',
+      'Link an Instagram professional account for social publishing.',
   },
   {
     id: 'tiktok-social',
@@ -44,41 +23,14 @@ const INITIAL_INTEGRATIONS = [
     connected: false,
     icon: 'tiktok',
     provider: 'tiktok',
+    manageTab: 'publish',
     description:
-      'Integrate NexoClip with TikTok to export 9:16 UGC videos and push rendered drafts to your creator inbox.',
+      'Link a TikTok account for social publishing.',
   },
 
-  // Additional: Google Sheets, Google Drive, Dropbox
-  {
-    id: 'google-sheets',
-    tab: 'additional',
-    title: 'Google Sheets',
-    connected: true,
-    icon: 'sheets',
-    provider: 'google-sheets',
-    description:
-      'Integrate NexoClip with Google Sheets to import bulk content briefs and sync campaign performance rows.',
-  },
-  {
-    id: 'google-drive',
-    tab: 'additional',
-    title: 'Google Drive',
-    connected: true,
-    icon: 'drive',
-    provider: 'google-drive',
-    description:
-      'Integrate NexoClip with Google Drive to import raw footage and automatically back up rendered videos.',
-  },
-  {
-    id: 'dropbox',
-    tab: 'additional',
-    title: 'Dropbox',
-    connected: false,
-    icon: 'dropbox',
-    provider: 'dropbox',
-    description:
-      'Integrate NexoClip with Dropbox to synchronize media folders and export high-bitrate final video cuts.',
-  },
+  { id: 'google-sheets', tab: 'additional', title: 'Google Sheets', connected: false, icon: 'sheets', provider: 'google-sheets', description: 'Link a Google account for spreadsheet workflows.' },
+  { id: 'google-drive', tab: 'additional', title: 'Google Drive', connected: false, icon: 'drive', provider: 'google-drive', description: 'Link a Google account for Drive file workflows.' },
+  { id: 'dropbox', tab: 'additional', title: 'Dropbox', connected: false, icon: 'dropbox', provider: 'dropbox', description: 'Link a Dropbox account to your workspace.' },
 ];
 
 function BrandLogo({ kind }) {
@@ -198,8 +150,8 @@ function BrandLogo({ kind }) {
   }
 }
 
-export default function IntegrationApps({ authStatus }) {
-  const [activeTab, setActiveTab] = useState('ads');
+export default function IntegrationApps({ authStatus, onSignIn }) {
+  const [activeTab, setActiveTab] = useState('social');
   const [items, setItems] = useState(INITIAL_INTEGRATIONS);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -208,10 +160,22 @@ export default function IntegrationApps({ authStatus }) {
   const [statusBanner, setStatusBanner] = useState('');
   const [busyId, setBusyId] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [configured, setConfigured] = useState({});
+  const [accountsByProvider, setAccountsByProvider] = useState({});
 
   const headers = useCallback(() => ({
     'x-workspace-id': typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') || '' : '',
   }), []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href), result = url.searchParams.get('integration'), provider = url.searchParams.get('provider');
+    if (!result) return;
+    const names = { youtube: 'YouTube', 'google-sheets': 'Google Sheets', 'google-drive': 'Google Drive', dropbox: 'Dropbox' };
+    setStatusBanner(result === 'connected' ? `${names[provider] || 'Integration'} connected.` : `Integration ${result.replaceAll('_', ' ')}.`);
+    url.searchParams.delete('integration');
+    url.searchParams.delete('provider');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, []);
 
   useEffect(() => {
     if (authStatus !== 'authenticated') {
@@ -220,40 +184,58 @@ export default function IntegrationApps({ authStatus }) {
     }
     let active = true;
     setSyncing(true);
-    const metaReq = fetch('/api/meta/accounts', { headers: headers(), credentials: 'include', cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (active && d && ((d.accounts && d.accounts.length > 0) || (d.adAccounts && d.adAccounts.length > 0))) {
-          setItems((prev) =>
-            prev.map((item) => (item.provider === 'meta' ? { ...item, connected: true } : item))
-          );
-        }
-      })
-      .catch(() => {});
-
-    const tiktokReq = fetch('/api/tiktok/accounts', { headers: headers(), credentials: 'include', cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (active && d?.accounts?.length > 0) {
-          setItems((prev) =>
-            prev.map((item) => (item.provider === 'tiktok' ? { ...item, connected: true } : item))
-          );
-        }
-      })
-      .catch(() => {});
-
-    Promise.allSettled([metaReq, tiktokReq]).finally(() => {
-      if (active) setSyncing(false);
-    });
+    const load = async (path) => {
+      try {
+        const response = await fetch(path, { headers: headers(), credentials: 'include', cache: 'no-store' });
+        return response.ok ? await response.json() : null;
+      } catch { return null; }
+    };
+    Promise.all([
+      load('/api/integrations'), load('/api/meta/accounts'), load('/api/tiktok/accounts'),
+    ]).then(([external, meta, tiktok]) => {
+      if (!active) return;
+      setConfigured({
+        ...(external?.configured || {}),
+        instagram: Boolean(meta?.configured),
+        tiktok: Boolean(tiktok?.configured),
+      });
+      setAccountsByProvider((external?.integrations || []).reduce((accounts, entry) => {
+        accounts[entry.provider] = [...(accounts[entry.provider] || []), entry.display_name];
+        return accounts;
+      }, {}));
+      const connectedProviders = new Set((external?.integrations || []).map((entry) => entry.provider));
+      if (meta?.accounts?.length) connectedProviders.add('instagram');
+      if (tiktok?.accounts?.length) connectedProviders.add('tiktok');
+      setItems((current) => current.map((item) => ({
+        ...item,
+        connected: connectedProviders.has(item.provider),
+      })));
+    }).finally(() => { if (active) setSyncing(false); });
     return () => { active = false; };
   }, [authStatus, headers]);
 
   const handleCardAction = async (item) => {
     if (item.connected) {
-      setItems((prev) =>
-        prev.map((entry) => (entry.id === item.id ? { ...entry, connected: false } : entry))
-      );
-      setStatusBanner(`${item.title} integration disabled.`);
+      if (['youtube', 'google-sheets', 'google-drive', 'dropbox'].includes(item.provider)) {
+        if (!window.confirm(`Disconnect ${item.title} from this workspace?`)) return;
+        setBusyId(item.id);
+        try {
+          const response = await fetch(`/api/integrations/${item.provider}`, { method: 'DELETE', headers: headers(), credentials: 'include' });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Could not disconnect integration');
+          setItems((current) => current.map((entry) => entry.provider === item.provider ? { ...entry, connected: false } : entry));
+          setStatusBanner(`${item.title} disconnected.`);
+        } catch (error) { setStatusBanner(error.message); }
+        finally { setBusyId(''); }
+        return;
+      }
+      window.location.assign(`/studio/${item.manageTab || 'publish'}`);
+      return;
+    }
+
+    if (['youtube', 'google-sheets', 'google-drive', 'dropbox'].includes(item.provider) && authStatus === 'authenticated') {
+      const workspaceId = window.sessionStorage.getItem('nexoclip_workspace_id') || '';
+      window.location.assign(`/api/integrations/oauth/${item.provider}/start?workspace_id=${encodeURIComponent(workspaceId)}`);
       return;
     }
 
@@ -263,7 +245,7 @@ export default function IntegrationApps({ authStatus }) {
       return;
     }
 
-    if (item.provider === 'meta' && authStatus === 'authenticated') {
+    if (item.provider === 'instagram' && authStatus === 'authenticated') {
       setBusyId(item.id);
       setStatusBanner('');
       try {
@@ -273,21 +255,17 @@ export default function IntegrationApps({ authStatus }) {
           credentials: 'include',
         });
         const d = await r.json();
-        if (r.ok && d?.url) {
-          window.location.assign(d.url);
-          return;
-        }
-      } catch {
-        // Fallback to local enable
+        if (!r.ok || !d?.url) throw new Error(d.error || 'Instagram OAuth is not configured.');
+        window.location.assign(d.url);
+        return;
+      } catch (error) {
+        setStatusBanner(error.message || 'Instagram OAuth belum berhasil dimulai. Cek konfigurasi Meta App lalu coba lagi.');
       } finally {
         setBusyId('');
       }
     }
 
-    setItems((prev) =>
-      prev.map((entry) => (entry.id === item.id ? { ...entry, connected: true } : entry))
-    );
-    setStatusBanner(`${item.title} connected and enabled for NexoClip.`);
+    setStatusBanner('Integrasi ini belum tersedia.');
   };
 
   const filterItem = useCallback(
@@ -316,7 +294,6 @@ export default function IntegrationApps({ authStatus }) {
 
   const counts = useMemo(
     () => ({
-      ads: items.filter((i) => i.tab === 'ads').length,
       social: items.filter((i) => i.tab === 'social').length,
       additional: items.filter((i) => i.tab === 'additional').length,
     }),
@@ -325,12 +302,18 @@ export default function IntegrationApps({ authStatus }) {
 
   const renderCard = (item) => {
     const isBusy = busyId === item.id;
-    const isSyncingCard = syncing && (item.provider === 'meta' || item.provider === 'tiktok');
+    const isSyncingCard = syncing;
+    const isConfigured = configured[item.provider] === true;
     return (
       <article key={item.id} className="nx-int-card">
         <BrandLogo kind={item.icon} />
         <h3 className="nx-int-card-title">{item.title}</h3>
         <p className="nx-int-card-desc">{item.description}</p>
+        {item.connected && accountsByProvider[item.provider]?.length ? (
+          <p className="nx-int-card-desc" title={accountsByProvider[item.provider].join(', ')}>
+            {accountsByProvider[item.provider].join(', ')}
+          </p>
+        ) : null}
         <div className="nx-int-card-footer">
           {isSyncingCard ? (
             <NxSkeleton variant="pill" width={94} height={38} />
@@ -338,10 +321,10 @@ export default function IntegrationApps({ authStatus }) {
             <button
               type="button"
               className={`nx-int-pill-btn ${item.connected ? 'is-enabled' : 'is-connect'}`}
-              disabled={isBusy}
-              onClick={() => handleCardAction(item)}
+              disabled={isBusy || (authStatus === 'authenticated' && !item.connected && !isConfigured)}
+              onClick={() => authStatus === 'authenticated' ? handleCardAction(item) : onSignIn?.()}
             >
-              {isBusy ? 'Connecting...' : item.connected ? 'Enabled' : 'Connect'}
+              {isBusy ? 'Connecting...' : authStatus !== 'authenticated' ? 'Login required' : item.connected ? (['youtube','google-sheets','google-drive','dropbox'].includes(item.provider) ? 'Disconnect' : 'Manage') : isConfigured ? 'Connect' : 'Setup required'}
             </button>
           )}
         </div>
@@ -350,9 +333,7 @@ export default function IntegrationApps({ authStatus }) {
   };
 
   const primarySectionTitle =
-    activeTab === 'ads'
-      ? 'Ads accounts'
-      : activeTab === 'social'
+    activeTab === 'social'
       ? 'Social account'
       : 'Additional';
 
@@ -373,7 +354,7 @@ export default function IntegrationApps({ authStatus }) {
           <div className="nx-int-header-copy">
             <h1 className="nx-int-title">Integrations</h1>
             <p className="nx-int-subtitle">
-              Connect your ad accounts, social channels, and cloud workspace tools with NexoClip.
+              Hubungkan channel publikasi dan penyimpanan kerja ke workspace NexoClip.
             </p>
           </div>
           <button
@@ -403,16 +384,6 @@ export default function IntegrationApps({ authStatus }) {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'ads'}
-              className={`nx-int-tab ${activeTab === 'ads' ? 'is-active' : ''}`}
-              onClick={() => setActiveTab('ads')}
-            >
-              <span>Ads accounts</span>
-              <span className="nx-int-tab-count">{counts.ads}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
               aria-selected={activeTab === 'social'}
               className={`nx-int-tab ${activeTab === 'social' ? 'is-active' : ''}`}
               onClick={() => setActiveTab('social')}
@@ -427,7 +398,7 @@ export default function IntegrationApps({ authStatus }) {
               className={`nx-int-tab ${activeTab === 'additional' ? 'is-active' : ''}`}
               onClick={() => setActiveTab('additional')}
             >
-              <span>Additional</span>
+              <span>Storage &amp; data</span>
               <span className="nx-int-tab-count">{counts.additional}</span>
             </button>
           </div>
@@ -526,10 +497,10 @@ export default function IntegrationApps({ authStatus }) {
           )}
         </section>
 
-        {/* Additional Section (Google Sheets, Google Drive, Dropbox) shown below Ads/Social tabs */}
+        {/* Cloud integrations also appear below social channels. */}
         {activeTab !== 'additional' && additionalItems.length > 0 ? (
           <section className="nx-int-section" aria-label="Additional integrations">
-            <h2 className="nx-int-section-heading">Additional</h2>
+            <h2 className="nx-int-section-heading">Storage &amp; data</h2>
             <div className="nx-int-grid">{additionalItems.map(renderCard)}</div>
           </section>
         ) : null}
@@ -568,22 +539,20 @@ export default function IntegrationApps({ authStatus }) {
                   className="nx-int-oauth-btn"
                   onClick={() => {
                     setModalOpen(false);
-                    if (!entry.connected) {
-                      handleCardAction(entry);
-                    }
+                    handleCardAction(entry);
                   }}
                 >
                   <BrandLogo kind={entry.icon} />
                   <div className="nx-int-oauth-copy">
                     <strong>{entry.title}</strong>
-                    <span>{entry.connected ? 'Currently enabled' : 'Click to connect'}</span>
+                  <span>{entry.connected ? 'Connected' : 'Connect to workspace'}</span>
                   </div>
                   <span
                     className={`nx-int-pill-btn nx-int-pill-btn--sm ${
                       entry.connected ? 'is-enabled' : 'is-connect'
                     }`}
                   >
-                    {entry.connected ? 'Enabled' : 'Connect'}
+                    {authStatus !== 'authenticated' ? 'Log in' : entry.connected ? (['youtube','google-sheets','google-drive','dropbox'].includes(entry.provider) ? 'Disconnect' : 'Manage') : 'Connect'}
                   </span>
                 </button>
               ))}
