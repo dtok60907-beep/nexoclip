@@ -42,14 +42,7 @@ export async function localCatalog(db, workspace, owner) {
     LEFT JOIN LATERAL (SELECT id,updated_at,status FROM generation_jobs WHERE workspace_id=p.workspace_id AND project_id=p.id
       AND created_by_user_id=$2 ORDER BY created_at DESC,id LIMIT 1) j ON true
     LEFT JOIN LATERAL (SELECT asset_id FROM generation_outputs WHERE workspace_id=p.workspace_id AND generation_job_id=j.id ORDER BY output_index LIMIT 1) o ON true
-    WHERE p.workspace_id=$1 AND (p.studio IS NULL OR (p.studio_owner=$2 AND p.studio IN ('cinema','ai-influencer')))
-    UNION ALL SELECT m.id,'motion',coalesce(nullif(m.doc#>>'{story,title}',''),m.name),m.created_at,greatest(m.updated_at,mj.updated_at),mj.status,
-      (SELECT a.id FROM jsonb_each(CASE WHEN jsonb_typeof(m.doc#>'{story,assets}')='object' THEN m.doc#>'{story,assets}' ELSE '{}'::jsonb END) ref JOIN assets a
-        ON a.workspace_id=m.workspace_id AND a.id::text=ref.value->>'assetId'
-        WHERE ref.value->>'type'='image' ORDER BY ref.key LIMIT 1),NULL,(m.doc->>'kind' IS DISTINCT FROM 'story')
-    FROM motion_projects m LEFT JOIN LATERAL (SELECT status,updated_at FROM motion_jobs
-      WHERE workspace_id=m.workspace_id AND project_id=m.id ORDER BY created_at DESC LIMIT 1) mj ON true
-    WHERE m.workspace_id=$1 AND m.created_by=$2`,
+    WHERE p.workspace_id=$1 AND (p.studio IS NULL OR (p.studio_owner=$2 AND p.studio IN ('cinema','ai-influencer')))`,
     scope,
   );
   const folders = await db.query(

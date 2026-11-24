@@ -66,7 +66,6 @@ const createStudioLoader = (label, variant = 'split') => function LazyStudioSkel
 };
 
 const DirectorLoading = () => <NxDirectorSkeleton label="Loading AI Director" surface="light" variant="full" />;
-const MotionLoading = () => <NxDirectorSkeleton label="Loading AI Motion" surface="light" variant="full" />;
 
 const ComingSoon = ({ title }) => (
   <div className="h-full w-full bg-white text-[#292733] flex items-center justify-center text-center px-6">
@@ -93,7 +92,6 @@ const AudioStudio = studioLazy('AudioStudio', 'Loading Audio Studio', 'canvas');
 const MarketingStudio = studioLazy('MarketingStudio', 'Loading Marketing Studio', 'canvas');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio', 'Loading AI Influencer Studio', 'split');
 const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: DirectorLoading });
-const MotionStudio = dynamic(() => import('./motion/MotionHub.js'), { ssr: false, loading: MotionLoading });
 const DotGrid = dynamic(() => import('./ui/DotGrid'), { ssr: false });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
@@ -113,7 +111,6 @@ const sidebarIcons = {
   'image': 'image',
   'cinema': 'cinema',
   'ai-influencer': 'ai-influencer',
-  'motion': 'motion',
   'publish': 'publish',
   'ads': 'ads',
   'accounts': 'accounts',
@@ -217,7 +214,6 @@ const TABS = [
   { id: 'marketing', label: 'Marketing Studio', icon: <NxIcon name="marketing" size={18} /> },
   { id: 'canvas', label: 'Canvas', icon: <NxIcon name="canvas" size={18} /> },
   { id: 'director', label: 'AI Director', icon: <NxIcon name="director" size={18} /> },
-  { id: 'motion', label: 'Motion', icon: <NxIcon name="motion" size={18} /> },
   { id: 'billing', label: 'Top Up', icon: <NxIcon name="billing" size={18} /> },
   { id: 'usage', label: 'Usage', icon: <NxIcon name="usage" size={18} /> },
   { id: 'brand-kit', label: 'Brand Kit', icon: <NxIcon name="settings" size={18} /> },
@@ -228,7 +224,7 @@ const TABS = [
 ];
 
 // The header's page title for each tab (sidebar labels where they differ from TABS).
-const TAB_TITLES = { home: 'Home', apps: 'Apps', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', motion: 'Motion', billing: 'Top up', usage: 'Usage', 'brand-kit': 'Brand Kit', settings: 'Settings', accounts: 'Integration Apps', canvas: 'Canvas' };
+const TAB_TITLES = { home: 'Home', apps: 'Apps', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', billing: 'Top up', usage: 'Usage', 'brand-kit': 'Brand Kit', settings: 'Settings', accounts: 'Integration Apps', canvas: 'Canvas' };
 
 const LIBRARY_TAB_IDS = new Set(['templates', 'products', 'media']);
 
@@ -236,7 +232,6 @@ const APPS_EXT_NAV = [
   { id: 'apps', label: 'All Apps', group: 'overview', icon: LayoutGrid },
   { id: 'home', label: 'AI Ads & UGC', group: 'studios', icon: Sparkles },
   { id: 'director', label: 'AI Director', group: 'studios', icon: Clapperboard },
-  { id: 'motion', label: 'AI Motion', group: 'studios', icon: Film },
   { id: 'canvas', label: 'Canvas Filmmaking', group: 'studios', icon: Workflow },
   { id: 'ai-influencer', label: 'AI Influencer', group: 'classic', icon: UserRound },
   { id: 'video', label: 'Video Studio', group: 'classic', icon: Video },
@@ -400,7 +395,6 @@ export default function StandaloneShell({ initialTab, children }) {
   const [extSidebar, setExtSidebar] = useState(() => getDefaultExtSidebar(getInitialTab()));
   const [extSidebarSearch, setExtSidebarSearch] = useState('');
   const [directorHeroActive, setDirectorHeroActive] = useState(true);
-  const [motionHeroActive, setMotionHeroActive] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [getStartedOpen, setGetStartedOpen] = useState(false);
   const [imageVisited, setImageVisited] = useState(() => getInitialTab() === 'image');
@@ -948,17 +942,16 @@ export default function StandaloneShell({ initialTab, children }) {
   const showSidebar = authStatus === 'authenticated' && (currentTab === 'home' || isHeaderVisible);
   const isHomeDotGrid = currentTab === 'home' && authStatus === 'authenticated';
   const isDirectorDotGrid = currentTab === 'director' && directorHeroActive;
-  const isMotionDotGrid = currentTab === 'motion' && motionHeroActive;
-  const isRedesignedStudioTab = ['image', 'video', 'ai-influencer', 'motion', 'vibe-motion'].includes(currentTab);
+  const isRedesignedStudioTab = ['image', 'video', 'ai-influencer', 'vibe-motion'].includes(currentTab);
   const isStudioDotGrid = ['image', 'video', 'vibe-motion'].includes(currentTab);
-  const showDotGridBg = isHomeDotGrid || isDirectorDotGrid || isMotionDotGrid || isStudioDotGrid;
+  const showDotGridBg = isHomeDotGrid || isDirectorDotGrid || isStudioDotGrid;
   const isLibraryTab = LIBRARY_TAB_IDS.has(currentTab);
   const showExtSidebar = showSidebar && (extSidebar === 'team' || extSidebar === 'apps' || extSidebar === 'library');
   const sidebarPinnedIds = new Set(['team', 'home', 'apps', 'projects', 'templates', 'products', 'media', 'brand-kit', 'accounts', 'usage', 'billing', 'settings']);
   const showGlobalTopBar = authStatus === 'authenticated' && ['team', 'home', 'apps', 'projects', 'templates', 'products', 'media', 'accounts'].includes(currentTab);
   return (
     <div
-      className={`nx-shell${currentTab === 'home' ? ' nx-home-shell' : ''}${isHomeDotGrid ? ' nx-home-authed' : ''}${currentTab === 'brand-kit' ? ' is-brand-kit-tab' : ''}${showExtSidebar ? ' has-ext-sidebar' : ''}${currentTab === 'director' ? ' is-director-tab' : ''}${currentTab === 'motion' ? ' is-motion-tab' : ''}${isRedesignedStudioTab ? ' is-studio-redesign' : ''}${isStudioDotGrid ? ' is-studio-dotgrid' : ''}`}
+      className={`nx-shell${currentTab === 'home' ? ' nx-home-shell' : ''}${isHomeDotGrid ? ' nx-home-authed' : ''}${currentTab === 'brand-kit' ? ' is-brand-kit-tab' : ''}${showExtSidebar ? ' has-ext-sidebar' : ''}${currentTab === 'director' ? ' is-director-tab' : ''}${isRedesignedStudioTab ? ' is-studio-redesign' : ''}${isStudioDotGrid ? ' is-studio-dotgrid' : ''}`}
       onDragOver={currentTab === 'home' ? undefined : handleDragOver}
       onDragEnter={currentTab === 'home' ? undefined : handleDragEnter}
       onDragLeave={currentTab === 'home' ? undefined : handleDragLeave}
@@ -1567,11 +1560,6 @@ export default function StandaloneShell({ initialTab, children }) {
         {currentTab === 'vibe-motion' && (
           <div className="h-full w-full">
             <VibeMotionStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('vibe-motion')} onGenerationEnd={makeGenerationEndCallback('vibe-motion')} onGenerationComplete={makeSuccessCallback('vibe-motion')} onGenerationError={makeErrorCallback('vibe-motion')} />
-          </div>
-        )}
-        {currentTab === 'motion' && (
-          <div className="h-full w-full">
-            <MotionStudio authenticated={authStatus === 'authenticated'} beforeGenerate={requireAuth} onCreditsUsed={refreshBalance} onHeroChange={setMotionHeroActive} />
           </div>
         )}
         {currentTab === 'lipsync' && (

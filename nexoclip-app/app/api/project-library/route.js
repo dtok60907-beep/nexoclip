@@ -1,9 +1,17 @@
 import { getPool } from '../../../src/db/pool.js';
-import { UUID, motionTenant } from '../motion/projects/shared.js';
-import { requireCanSpend } from '../../../src/services/tenantContext.js';
+import { SESSION_COOKIE } from '../../../src/lib/auth/session.js';
+import { requireCanSpend, resolveTenantContext } from '../../../src/services/tenantContext.js';
 import { catalog } from '../../../src/services/projectCatalog.js';
 import { changeFolder, restoreWork } from '../../../src/repositories/studioWork.js';
 export const dynamic = 'force-dynamic';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveProjectTenant(request) {
+  const workspaceId = request.headers.get('x-workspace-id');
+  if (!workspaceId || !UUID.test(workspaceId)) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
+  return resolveTenantContext({ token: request.cookies?.get(SESSION_COOKIE)?.value, workspaceId });
+}
 
 function failure(error) {
   const status =
@@ -12,7 +20,7 @@ function failure(error) {
 }
 export async function GET(request) {
   try {
-    const { workspace, user } = await motionTenant(request);
+    const { workspace, user } = await resolveProjectTenant(request);
     const params = new URL(request.url).searchParams;
     if (params.has('id')) {
       if (!UUID.test(params.get('id'))) throw Object.assign(new Error('ID tidak valid.'), { status: 400 });
@@ -27,7 +35,7 @@ export async function GET(request) {
 }
 export async function POST(request) {
   try {
-    const tenant = await motionTenant(request);
+    const tenant = await resolveProjectTenant(request);
     requireCanSpend(tenant);
     const { workspace, user } = tenant;
     const body = await request.json();

@@ -17,16 +17,6 @@ const QUICK_CREATE_ITEMS = [
     objectPosition: 'center 25%',
   },
   {
-    id: 'motion',
-    title: 'AI Motion',
-    badge: 'New',
-    badgeVariant: 'ink',
-    description: 'Create animated explainer & kinetic 3D motion videos through chat.',
-    video: '/media/preview/3d-animation-3.mp4',
-    poster: '/media/homepage/3d-animation-3.jpg',
-    objectPosition: 'center 56%',
-  },
-  {
     id: 'canvas',
     title: 'Canvas Filmmaking',
     badge: 'New',

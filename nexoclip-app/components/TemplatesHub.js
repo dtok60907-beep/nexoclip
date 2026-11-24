@@ -19,7 +19,7 @@ const PRIMARY_TABS = [
   { id: 'ugc', label: 'UGC Video' },
   { id: 'promo', label: 'Promo Video' },
   { id: 'film', label: 'Film & Drama' },
-  { id: 'motion', label: '3D & Motion' },
+  { id: 'motion', label: '3D & VFX' },
 ];
 
 const USE_CASES_BY_TAB = {
@@ -30,7 +30,7 @@ const USE_CASES_BY_TAB = {
     { id: 'affiliate-ugc', label: 'Affiliate Hooks' },
     { id: 'ads-fnb', label: 'Food & Drink' },
     { id: 'drama', label: 'Micro Drama' },
-    { id: '3d-animation', label: '3D & Motion' },
+    { id: '3d-animation', label: '3D Animation' },
     { id: 'experimental-vfx', label: 'Sci-Fi & VFX' },
     { id: 'music-videos', label: 'Music Film' },
   ],

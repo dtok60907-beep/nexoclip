@@ -48,19 +48,6 @@ const AUTH_SLIDES = [
     ],
   },
   {
-    id: 'motion',
-    image: '/media/homepage/3d-animation-3.jpg',
-    bg: '#E9F1FC',
-    frameBg: '#4A8CF5',
-    title: 'Chat-Driven AI Motion & 3D',
-    description:
-      'Describe educational, promo, or explainer animations in chat and watch every scene come alive with narration.',
-    badges: [
-      { label: 'Kinetic Scenes', pos: 'top-[16%] -right-4 sm:-right-6', icon: Wand2 },
-      { label: 'Auto Narration', pos: 'top-[52%] -left-4 sm:-left-6', icon: Sparkles },
-    ],
-  },
-  {
     id: 'product',
     image: '/showcase/workflow-product.webp',
     bg: '#FBF3E8',
