@@ -134,6 +134,40 @@ function collectGroups(
   const consider = (folder: FolderInput, selectedIds?: string[], selectedWorkspaceIds?: string[]) => {
     if (seen.has(folder.id)) return
     const canonicalIds = [...new Set((selectedWorkspaceIds ?? []).filter(Boolean))]
+    const useAll = (!selectedIds || selectedIds.length === 0) && canonicalIds.length === 0
+    const idSet = new Set(selectedIds || [])
+    const workspaceIdSet = new Set(canonicalIds)
+
+    // When the folder's assets are loaded, resolve against them first so mixed
+    // folders (e.g. a trusted Character face image with a workspaceAssetId PLUS
+    // an uploaded/recorded voice audio clip without one) keep EVERY selected asset.
+    if (folder.assets.length > 0) {
+      const requested = folder.assets.filter(
+        (asset) =>
+          useAll ||
+          idSet.has(asset.id) ||
+          (asset.workspaceAssetId && workspaceIdSet.has(asset.workspaceAssetId)),
+      )
+      const usable = requested
+        .map((asset) => ({
+          url: asset.workspaceAssetId ? `/api/assets/${encodeURIComponent(asset.workspaceAssetId)}/download` : asset.r2_url,
+          kind: mediaKind(asset.type, asset.r2_url),
+        }))
+        .filter((asset) => Boolean(asset.url))
+      if (usable.length > 0) {
+        seen.add(folder.id)
+        groupsByFolderId.set(folder.id, {
+          urls: usable.map((asset) => asset.url),
+          kinds: usable.map((asset) => asset.kind),
+          workspaceAssetIds: requested.flatMap((asset) => (asset.workspaceAssetId ? [asset.workspaceAssetId] : [])),
+          folderName: folder.name,
+          folderType: folder.type,
+        })
+        orderedFolderIds.push(folder.id)
+        return
+      }
+    }
+
     if (canonicalIds.length > 0) {
       seen.add(folder.id)
       groupsByFolderId.set(folder.id, {
@@ -149,31 +183,6 @@ function collectGroups(
       orderedFolderIds.push(folder.id)
       return
     }
-
-    const useAll = !selectedIds || selectedIds.length === 0
-    const idSet = new Set(selectedIds || [])
-    const workspaceIdSet = new Set(selectedWorkspaceIds || [])
-    const requested = folder.assets
-      .filter((asset) => useAll || idSet.has(asset.id) || (asset.workspaceAssetId && workspaceIdSet.has(asset.workspaceAssetId)))
-    // Workspace assets are preferred because the worker can resolve their
-    // authoritative Trust state. Assets that are not imported/trusted remain
-    // valid raw image references rather than blocking the whole mention.
-    const usable = requested
-      .map((asset) => ({
-        url: asset.workspaceAssetId ? `/api/assets/${encodeURIComponent(asset.workspaceAssetId)}/download` : asset.r2_url,
-        kind: mediaKind(asset.type, asset.r2_url),
-      }))
-      .filter((asset) => Boolean(asset.url))
-    if (usable.length === 0) return
-    seen.add(folder.id)
-    groupsByFolderId.set(folder.id, {
-      urls: usable.map((asset) => asset.url),
-      kinds: usable.map((asset) => asset.kind),
-      workspaceAssetIds: requested.flatMap((asset) => asset.workspaceAssetId ? [asset.workspaceAssetId] : []),
-      folderName: folder.name,
-      folderType: folder.type,
-    })
-    orderedFolderIds.push(folder.id)
   }
 
   for (const m of mentions) {
@@ -275,7 +284,20 @@ export function compileMentionsForModel(
     const type = group.folderType || 'general'
 
     if (strategy === 'citation-media') {
-      return withIdentity(folderId, type, mediaCites.get(folderId)!.join(' '))
+      const cites = mediaCites.get(folderId)!
+      if (type === 'character') {
+        const audioCites = cites.filter((c) => c.startsWith('@Audio'))
+        const visualCites = cites.filter((c) => !c.startsWith('@Audio'))
+        if (audioCites.length > 0) {
+          if (expanded.has(folderId)) return cites.join(' ')
+          expanded.add(folderId)
+          if (visualCites.length > 0) {
+            return `${exactReference('character', visualCites.join(' '))}, speaking with the exact same voice, vocal timbre, and speaking style as ${audioCites.join(' ')}`
+          }
+          return `the exact same character voice, vocal timbre, and speaking style as ${audioCites.join(' ')}`
+        }
+      }
+      return withIdentity(folderId, type, cites.join(' '))
     }
     if (strategy === 'citation-flat') {
       const start = slotStarts.get(folderId)!

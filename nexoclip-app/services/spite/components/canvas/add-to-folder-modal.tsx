@@ -12,6 +12,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { MagnifyingGlass, Plus, ArrowLeft, User, MapPin, Package, X, UploadSimple } from '@phosphor-icons/react'
 import { uploadMediaFile } from '@/lib/upload-media'
 import { AssetThumb } from '@/components/canvas/asset-thumb'
+import { CharacterVoiceSection, type VoiceAssetItem } from '@/components/canvas/character-voice-section'
+import { Volume2 } from 'lucide-react'
 
 type FolderType = 'character' | 'prop' | 'location' | 'general'
 
@@ -24,6 +26,7 @@ interface AssetItem {
   workspaceAssetId?: string
   url: string
   type?: MediaType
+  label?: string
   isUploading?: boolean
 }
 
@@ -51,7 +54,7 @@ interface Folder {
   name: string
   description: string | null
   type: FolderType
-  assets: { id: string; r2_url: string; type: string; prompt: string }[]
+  assets: { id: string; workspaceAssetId?: string; r2_url: string; type: string; prompt: string }[]
 }
 
 interface AddToFolderModalProps {
@@ -195,7 +198,13 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       setShowNewForm(true)
       setNewName(editFolder.name)
       setNewDescription(editFolder.description || '')
-      setSelectedAssets(editFolder.assets.map(a => ({ id: a.id, url: a.r2_url, type: mediaTypeOf(a.r2_url, a.type) })))
+      setSelectedAssets(editFolder.assets.map(a => ({
+        id: a.id,
+        workspaceAssetId: a.workspaceAssetId,
+        url: a.r2_url,
+        type: mediaTypeOf(a.r2_url, a.type),
+        label: a.prompt || undefined,
+      })))
       return
     }
     // Category panel's "+ New Character/Prop/…" buttons set defaultNew so
@@ -241,7 +250,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
     // Add placeholder immediately
     const type = mediaTypeOfFile(file) ?? 'image'
-    setSelectedAssets(prev => [...prev, { id: tempId, url: tempUrl, type, isUploading: true }])
+    setSelectedAssets(prev => [...prev, { id: tempId, url: tempUrl, type, label: file.name, isUploading: true }])
 
     try {
       const { url: proxyUrl } = await uploadMediaFile(file, { filename: file.name })
@@ -260,10 +269,10 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       // thumbnail via cookie auth), and free the temp blob.
       URL.revokeObjectURL(tempUrl)
       setSelectedAssets(prev => prev.map(a =>
-        a.id === tempId ? { id: assetData.id, url: proxyUrl, type, isUploading: false } : a
+        a.id === tempId ? { id: assetData.id, url: proxyUrl, type, label: file.name, isUploading: false } : a
       ))
       setAvailableAssets(prev => [...prev, { id: assetData.id, r2_url: proxyUrl, prompt: file.name, type }])
-      return { id: assetData.id, url: proxyUrl, type }
+      return { id: assetData.id, url: proxyUrl, type, label: file.name }
     } catch (err: any) {
       console.error('[folder-modal] Upload failed:', err)
       URL.revokeObjectURL(tempUrl)
@@ -425,24 +434,34 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     setSelectedAssets(prev => prev.filter(a => a.id !== id))
   }
 
+  const handleAttachVoiceAsset = useCallback((asset: VoiceAssetItem) => {
+    setSelectedAssets(prev => prev.some(a => a.id === asset.id) ? prev : [...prev, asset])
+  }, [])
+
+  const isCharacter = folderType === 'character'
+  const visualAssets = isCharacter
+    ? selectedAssets.filter(a => mediaTypeOf(a.url, a.type) !== 'audio')
+    : selectedAssets
+  const voiceAssets: VoiceAssetItem[] = isCharacter
+    ? selectedAssets
+        .filter(a => mediaTypeOf(a.url, a.type) === 'audio')
+        .map(a => ({
+          id: a.id,
+          workspaceAssetId: a.workspaceAssetId,
+          url: a.url,
+          type: 'audio' as const,
+          label: a.label,
+          isUploading: a.isUploading,
+        }))
+    : []
+
   const Icon = typeIcons[folderType]
   const label = typeLabels[folderType]
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        // max-h + overflow keeps the form fully visible on short screens —
-        // without this the centered-fixed dialog can clip its lower half off
-        // when its content (asset thumbnails, picker, etc.) is tall.
-        // NOTE: do NOT add a `relative` class here — tailwind-merge would
-        // overwrite the base `fixed` and the dialog would lose its centered
-        // viewport positioning. `fixed` is already a positioning context
-        // for the absolute-positioned drop overlay below.
-        //
-        // z-[60] sits this modal above the expanded assets panel
-        // (z-50), which is otherwise the same layer and was hiding the
-        // modal entirely when opened from inside the folder detail view.
-        className="bg-[#1A1D21] border-white/10 max-w-md max-h-[85vh] overflow-y-auto z-[60]"
+        className="bg-[#1c1c1e] border-zinc-800 max-w-md max-h-[88vh] overflow-y-auto z-[60] rounded-[20px]"
         // Block every Radix auto-dismiss path. Each of these was
         // independently firing in the wild and closing the dialog:
         //   - pointerdown outside (starting a drag from the sidebar)
@@ -589,7 +608,9 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
               {/* Assets section */}
               <div>
-                <label className="text-xs text-white/50 mb-2 block font-mono">Assets</label>
+                <label className="text-[11px] font-medium text-zinc-400 mb-2 block">
+                  {isCharacter ? 'Visual References' : 'Assets'}
+                </label>
 
                 <div className="flex gap-2 flex-wrap">
                   {/* Drop/upload zone */}
@@ -597,10 +618,10 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                     onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
                     onDragLeave={() => setIsDraggingOver(false)}
                     onDrop={handleDrop}
-                    className={`relative w-16 h-16 border border-dashed rounded-lg flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
+                    className={`relative w-16 h-16 border border-dashed rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
                       isDraggingOver
-                        ? 'border-accent bg-accent/10'
-                        : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+                        ? 'border-zinc-400 bg-white/[0.08]'
+                        : 'border-zinc-700 hover:border-zinc-500 hover:bg-white/[0.04]'
                     }`}
                   >
                     <input
@@ -617,22 +638,22 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                       className="absolute inset-0 flex flex-col items-center justify-center gap-0.5"
                       title="Click to pick from library, or drop/upload files"
                     >
-                      <Plus size={14} className="text-white/40" />
+                      <Plus size={14} className="text-zinc-400" />
                     </button>
                     {/* Upload from disk sub-button */}
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); fileInputRef.current?.click() }}
-                      className="absolute bottom-0.5 right-0.5 w-5 h-5 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                      className="absolute bottom-0.5 right-0.5 w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center"
                       title="Upload from disk"
                     >
-                      <UploadSimple size={9} className="text-white/60" />
+                      <UploadSimple size={9} className="text-zinc-300" />
                     </button>
                   </div>
 
-                  {/* Selected assets */}
-                  {selectedAssets.map(asset => (
-                    <div key={asset.id} className="relative w-16 h-16 rounded-lg overflow-hidden bg-white/5 group shrink-0">
+                  {/* Selected visual assets */}
+                  {visualAssets.map(asset => (
+                    <div key={asset.id} className="relative w-16 h-16 rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 group shrink-0">
                       <div className={`w-full h-full ${asset.isUploading ? 'opacity-50' : ''}`}><AssetThumb url={asset.url} type={mediaTypeOf(asset.url, asset.type)} audioIconSize={18} /></div>
                       {asset.isUploading && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -654,18 +675,18 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
                 {/* Asset picker from library */}
                 {showAssetPicker && (
-                  <div className="mt-2 rounded-lg border border-white/10 bg-[#111316] p-2">
+                  <div className="mt-2 rounded-xl border border-zinc-800 bg-[#141416] p-2">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-mono text-white/40">Pick from library</span>
+                      <span className="text-[10px] font-medium text-zinc-400">Pick from library</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => pickerFileInputRef.current?.click()}
-                          className="text-[10px] font-mono text-accent hover:underline flex items-center gap-1"
+                          className="text-[10px] font-medium text-zinc-200 hover:underline flex items-center gap-1"
                         >
                           <UploadSimple size={10} /> Upload new
                         </button>
-                        <button type="button" onClick={() => setShowAssetPicker(false)} className="text-white/30 hover:text-white">
+                        <button type="button" onClick={() => setShowAssetPicker(false)} className="text-zinc-500 hover:text-white">
                           <X size={12} />
                         </button>
                       </div>
@@ -686,18 +707,30 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                             key={asset.id}
                             type="button"
                             onClick={() => handleAddFromPicker(asset)}
-                            className="aspect-square rounded overflow-hidden bg-white/5 hover:ring-2 hover:ring-accent transition-all"
+                            className="aspect-square rounded-lg overflow-hidden bg-zinc-900 hover:ring-2 hover:ring-zinc-400 transition-all"
                           >
                             <AssetThumb url={asset.r2_url} type={mediaTypeOf(asset.r2_url, asset.type)} audioIconSize={18} />
                           </button>
                         ))}
                       {availableAssets.filter(a => !selectedAssets.find(s => s.id === a.id)).length === 0 && (
-                        <div className="col-span-5 text-[10px] text-white/30 py-3 text-center">No more assets</div>
+                        <div className="col-span-5 text-[10px] text-zinc-500 py-3 text-center">No more assets</div>
                       )}
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Dedicated Character Voice section (ElevenLabs / Upload / Record Mic) */}
+              {isCharacter && (
+                <CharacterVoiceSection
+                  projectId={projectId}
+                  characterName={newName}
+                  voiceAssets={voiceAssets}
+                  onUploadFile={uploadFile}
+                  onAttachAsset={handleAttachVoiceAsset}
+                  onRemoveAsset={handleRemoveAsset}
+                />
+              )}
 
               <div className="flex items-center gap-2 pt-1">
                 {/* Delete <type> lives on the left when editing —
@@ -802,8 +835,16 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-mono text-white truncate">{folder.name}</div>
-                          <div className="text-[10px] text-white/30 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-sm font-medium text-zinc-100 truncate">{folder.name}</div>
+                            {folder.assets.some(a => mediaTypeOf(a.r2_url, a.type) === 'audio') && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-medium text-violet-300">
+                                <Volume2 size={9} strokeWidth={2.2} />
+                                Voice
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-zinc-500">
                             {folder.assets.length} asset{folder.assets.length !== 1 ? 's' : ''}
                           </div>
                         </div>

@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { X, User, Package, MapPin, Folder, Check, PencilSimple, Trash } from '@phosphor-icons/react'
+import { Volume2 } from 'lucide-react'
 import { AssetThumb } from './asset-thumb'
 import { mentionStateKey } from '@/lib/mention-state'
 import { isUsableCaretRect, placeMentionMenu } from '@/lib/mention-position'
@@ -1060,7 +1061,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl min-w-[200px] max-w-[360px]"
+          className="fixed z-50 max-h-60 overflow-y-auto rounded-[12px] border border-zinc-800 bg-[#1c1c1e]/98 p-1 shadow-xl min-w-[210px] max-w-[360px]"
           style={{
             left: menuPos ? menuPos.left : -9999,
             top: menuPos ? menuPos.top : -9999,
@@ -1070,12 +1071,13 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
           onMouseDown={(e) => e.stopPropagation()}
         >
           {filteredFolders.length === 0 && (
-            <div className="px-3 py-2 text-[11px] text-muted-foreground/60">
+            <div className="px-3 py-2 text-[11px] text-zinc-500">
               {folders.length === 0 ? 'No Characters, Props, or Locations yet.' : 'No matching folder.'}
             </div>
           )}
           {filteredFolders.map((f, i) => {
             const Icon = ICONS[f.type]
+            const hasVoice = f.assets.some((a) => a.type === 'audio' || /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(a.r2_url))
             return (
               <button
                 key={f.id}
@@ -1086,14 +1088,22 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => { insertChipAtCursor(f, new Set(f.assets.map((a) => a.id))) }}
                 onMouseEnter={() => setHi(i)}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 text-left ${i === hi ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${i === hi ? 'bg-white/[0.09]' : 'hover:bg-white/[0.06]'}`}
               >
-                <div className={`w-5 h-5 rounded flex items-center justify-center ${COLOR[f.type]}`}>
+                <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${COLOR[f.type]}`}>
                   <Icon size={10} weight="fill" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-foreground truncate">{f.name}</div>
-                  <div className="text-[9px] text-muted-foreground/50 capitalize">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-zinc-100 truncate">{f.name}</span>
+                    {hasVoice && (
+                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-500/15 px-1 py-0.5 text-[9px] font-medium text-violet-300">
+                        <Volume2 size={9} strokeWidth={2.2} />
+                        Voice
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[9px] text-zinc-500 capitalize">
                     {f.type} · {f.assets.length} asset{f.assets.length !== 1 ? 's' : ''}
                   </div>
                 </div>

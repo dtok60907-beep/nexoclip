@@ -207,3 +207,55 @@ test('a video recorded as an image in a folder is still sent as a video', () => 
   assert.deepEqual(result.videoUrls, ['/canvas/api/r2-image/uploads/klip.mp4'])
   assert.match(result.prompt, /@Video1/)
 })
+
+test('Character folder with trusted face image AND voice audio sends both to Seedance omni and instructs voice matching', () => {
+  const result = compileMentionsForModel(
+    '@Raka greets the camera. @Raka smiles.',
+    [{
+      folderId: 'raka',
+      name: 'Raka',
+      selectedAssetIds: ['img-1', 'voice-1'],
+      selectedWorkspaceAssetIds: ['ws-img-1'],
+    }],
+    [{
+      id: 'raka',
+      name: 'Raka',
+      type: 'character',
+      assets: [
+        { id: 'img-1', workspaceAssetId: 'ws-img-1', r2_url: '/canvas/api/r2-image/raka.png', type: 'image' },
+        { id: 'voice-1', r2_url: '/canvas/api/r2-image/uploads/raka-voice.mp3', type: 'audio' },
+      ],
+    }],
+    getModelById('seedance-2.5'),
+  )
+  assert.deepEqual(result.refGroups.map((g) => g.urls), [['/api/assets/ws-img-1/download']])
+  assert.deepEqual(result.audioUrls, ['/canvas/api/r2-image/uploads/raka-voice.mp3'])
+  assert.match(result.prompt, /shown in @Image1,.*speaking with the exact same voice, vocal timbre, and speaking style as @Audio1/)
+  // Second mention stays compact
+  assert.match(result.prompt, /@Image1 @Audio1 smiles\./)
+})
+
+test('Character folder with ElevenLabs workspace audio keeps canonical audio URL on Seedance omni and skips audio on image models', () => {
+  const folders = [{
+    id: 'sinta',
+    name: 'Sinta',
+    type: 'character' as const,
+    assets: [
+      { id: 'img-s', workspaceAssetId: 'ws-img-s', r2_url: '/api/assets/ws-img-s/download', type: 'image' as const },
+      { id: 'aud-s', workspaceAssetId: 'ws-aud-s', r2_url: '/api/assets/ws-aud-s/download', type: 'audio' as const },
+    ],
+  }]
+  const mentions = [{
+    folderId: 'sinta',
+    name: 'Sinta',
+    selectedAssetIds: ['img-s', 'aud-s'],
+    selectedWorkspaceAssetIds: ['ws-img-s', 'ws-aud-s'],
+  }]
+  const videoRes = compileMentionsForModel('@Sinta talks', mentions, folders, getModelById('seedance-2.5'))
+  assert.deepEqual(videoRes.audioUrls, ['/api/assets/ws-aud-s/download'])
+  assert.deepEqual(videoRes.refGroups[0]?.urls, ['/api/assets/ws-img-s/download'])
+
+  const imageRes = compileMentionsForModel('@Sinta portrait', mentions, folders, getModelById('nano-banana-pro'))
+  assert.deepEqual(imageRes.audioUrls, [])
+  assert.deepEqual(imageRes.refGroups[0]?.urls, ['/api/assets/ws-img-s/download'])
+})

@@ -1662,7 +1662,15 @@ export const LeftToolbar = memo(function LeftToolbar({
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[10px] font-mono text-foreground truncate">{folder.name}</div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-mono text-foreground truncate">{folder.name}</span>
+                                {folder.assets.some((a) => a.type === 'audio' || /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(a.r2_url)) && (
+                                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-500/15 px-1 py-0.5 text-[8px] font-medium text-violet-300" title="Has character voice">
+                                    <SpeakerHigh size={8} weight="fill" />
+                                    Voice
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[9px] text-muted-foreground/50">{folder.assets.length} assets</div>
                             </button>
                           ))}
@@ -2242,7 +2250,15 @@ export const LeftToolbar = memo(function LeftToolbar({
                             )}
                           </div>
                           <div className="flex-1 min-w-0 text-left">
-                            <div className="text-[10px] text-foreground/80 truncate">{folder.name}</div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-foreground/80 truncate">{folder.name}</span>
+                              {folder.assets.some((a) => a.type === 'audio' || /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(a.r2_url)) && (
+                                <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-500/15 px-1 py-0.5 text-[8px] font-medium text-violet-300" title="Has voice reference">
+                                  <SpeakerHigh size={8} weight="fill" />
+                                  Voice
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[9px] text-muted-foreground/50">
                               {folder.assets.length} asset{folder.assets.length !== 1 ? 's' : ''}
                             </div>
