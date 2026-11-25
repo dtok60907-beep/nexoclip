@@ -327,18 +327,18 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       {/* Card content */}
       <div
         ref={cardRef}
-        className={`relative flex h-full w-full flex-col overflow-hidden rounded-[18px] border bg-[#1c1c1e] shadow-[0_12px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${selected ? 'border-transparent' : 'border-zinc-800/95 hover:border-zinc-700/90'}`}
+        className={`relative flex h-full w-full flex-col overflow-hidden rounded-[18px] border bg-white shadow-[0_8px_28px_rgba(15,15,20,0.07)] transition-colors duration-150 ${selected ? 'border-transparent' : 'border-zinc-200/95 hover:border-zinc-300'}`}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800/70 px-4 py-2.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-500/15 text-violet-300">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-50 text-violet-600">
               <Sparkles size={11} strokeWidth={2} />
             </span>
-            <span className="text-[12px] font-medium tracking-tight text-zinc-200">
+            <span className="text-[12px] font-semibold tracking-tight text-zinc-900">
               {(data.label as string)?.replace(/^Text(?: Input)?/i, 'Prompt') || 'Prompt'}
             </span>
           </div>
-          <span className="text-[10px] text-zinc-500">@ to mention</span>
+          <span className="text-[10px] text-zinc-400">@ to mention</span>
         </div>
 
         <MentionTextarea
@@ -348,7 +348,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           onChange={handleChange}
           folders={folders}
           placeholder="Describe your shot, subject, lighting..."
-          className="nodrag custom-scrollbar w-full flex-1 resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.6] text-zinc-200 outline-none placeholder:text-[14px] placeholder:text-zinc-500 cursor-text"
+          className="nodrag custom-scrollbar w-full flex-1 resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.6] text-zinc-800 outline-none placeholder:text-[14px] placeholder:text-zinc-400 cursor-text"
           disabled={readOnly}
           rows={5}
           onContentHeightChange={handleContentHeightChange}

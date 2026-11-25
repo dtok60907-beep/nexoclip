@@ -137,9 +137,10 @@ const PRO_OPTIONS = { hideAttribution: true } as const
 const MIN_CANVAS_ZOOM = 0.3
 const MAX_CANVAS_ZOOM = 4
 const MINIMAP_STYLE = {
-  background: 'rgba(22,22,24,0.95)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 8,
+  background: 'rgba(255,255,255,0.96)',
+  border: '1px solid #e4e4e7',
+  borderRadius: 12,
+  boxShadow: '0 6px 20px rgba(15,15,20,0.08)',
   width: 160,
   height: 100,
 } as const
@@ -1495,7 +1496,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   const flowStyle = useMemo(
     () => ({
-      background: 'var(--canvas, #161618)',
+      background: 'var(--canvas, #f5f5f7)',
       cursor: !allowDocumentMutation
         ? 'default'
         : activeTool === 'hand'
@@ -1544,7 +1545,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   return (
     <CanvasCollaborationProvider value={collaborationValue}>
-      <div className="spite-canvas-shell flex flex-col h-screen bg-[#161618] overflow-hidden">
+      <div className="spite-canvas-shell flex flex-col h-screen bg-[#f5f5f7] overflow-hidden">
       {/* Covers the canvas until its content has synced from the server. */}
       <CanvasLoadingScreen ready={realtime.initialSyncComplete} />
       <GenerationGalleryHost nodes={allNodes as Array<{ id: string; data?: unknown }>} />
@@ -1672,16 +1673,16 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 variant={BackgroundVariant.Dots}
                 gap={24}
                 size={2.4}
-                color="var(--canvas-dot, #4b4b53)"
+                color="var(--canvas-dot, #c4c4ce)"
               />
 
               {minimapOpen && (
                 <MiniMap
                   style={MINIMAP_STYLE}
-                  maskColor="rgba(8,10,12,0.7)"
-                  nodeColor="rgba(107,143,168,0.5)"
+                  maskColor="rgba(24,24,27,0.07)"
+                  nodeColor="rgba(113,113,122,0.45)"
                   position="bottom-right"
-                  className="!bottom-14 !right-3"
+                  className="!bottom-14 !right-4"
                 />
               )}
             </ReactFlow>

@@ -575,7 +575,7 @@ export function ToolBtn({
           ? 'bg-zinc-200 text-zinc-950 hover:bg-white'
           : danger
           ? 'text-zinc-400 hover:bg-red-500/15 hover:text-red-400'
-          : 'text-zinc-300 hover:bg-white/[0.08] hover:text-white'
+          : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
       }`}
     >
       <Icon size={14} strokeWidth={1.8} className={spinning ? 'animate-spin' : undefined} />
@@ -601,9 +601,9 @@ export function NodePortDot({
         width: 14,
         height: 14,
         borderRadius: '50%',
-        background: '#1c1c1e',
+        background: '#ffffff',
         border: `1.75px solid ${color}`,
-        boxShadow: '0 2px 6px rgba(0,0,0,0.55)',
+        boxShadow: '0 2px 6px rgba(15,15,20,0.16)',
         top,
         transform: 'translateY(-50%)',
         [side === 'left' ? 'left' : 'right']: -7,
@@ -611,7 +611,7 @@ export function NodePortDot({
       title={label}
     >
       <span
-        className="h-1.5 w-1.5 rounded-full opacity-90"
+        className="h-1.5 w-1.5 rounded-full opacity-95"
         style={{ background: color }}
       />
     </div>
@@ -619,19 +619,19 @@ export function NodePortDot({
 }
 
 export const UNIFIED_RESIZER_LINE_STYLE = {
-  borderColor: 'rgba(255, 255, 255, 0.55)',
-  borderWidth: 1.25,
+  borderColor: '#18181b',
+  borderWidth: 1.5,
   borderRadius: 18,
   zIndex: 20,
 } as const
 
 export const UNIFIED_RESIZER_HANDLE_STYLE = {
   backgroundColor: '#ffffff',
-  border: '1.5px solid #18181b',
+  border: '1.75px solid #18181b',
   borderRadius: 9999,
   width: 10,
   height: 10,
-  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.55)',
+  boxShadow: '0 2px 6px rgba(15, 15, 20, 0.18)',
   zIndex: 20,
 } as const
 
@@ -671,7 +671,7 @@ function MenuItem({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.08] hover:text-white"
+      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
     >
       {Icon && <Icon size={13} strokeWidth={1.8} className="shrink-0 text-zinc-400" />}
       {label}

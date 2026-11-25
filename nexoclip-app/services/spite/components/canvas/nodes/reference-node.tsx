@@ -156,12 +156,12 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
 
       {/* Card */}
       <div
-        className={`overflow-hidden rounded-[18px] bg-[#1c1c1e] p-2 shadow-[0_12px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${
+        className={`overflow-hidden rounded-[18px] bg-white p-2 shadow-[0_8px_28px_rgba(15,15,20,0.07)] transition-colors duration-150 ${
           isTaggedToShot
-            ? 'border border-amber-400/75'
+            ? 'border border-amber-400'
             : selected
-              ? 'border border-white/60'
-              : 'border border-zinc-800/95 hover:border-zinc-700/90'
+              ? 'border border-zinc-900'
+              : 'border border-zinc-200/95 hover:border-zinc-300'
         }`}
         style={{
           width: '100%',
@@ -171,7 +171,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         {/* Media area */}
         {thumbnail ? (
           <div
-            className="relative overflow-hidden rounded-[12px] bg-[#141416]"
+            className="relative overflow-hidden rounded-[12px] bg-[#f4f4f6]"
             onDoubleClick={() => { if (thumbnail && !isUploading && !isAudio) setLightboxOpen(true) }}
           >
             {isAudio ? (

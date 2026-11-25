@@ -34,10 +34,10 @@ type Props = {
 }
 
 const FIELD_CARD =
-  'rounded-[13px] border border-zinc-800/90 bg-[#242428] transition-colors hover:border-zinc-700/90'
+  'rounded-[13px] border border-zinc-200/90 bg-[#f5f5f7] transition-colors hover:border-zinc-300'
 
 const POPOVER_CARD =
-  'dock-popover-enter overflow-hidden rounded-[16px] border border-zinc-800 bg-[#1c1c1e]/98 shadow-[0_16px_42px_rgba(0,0,0,0.58)]'
+  'dock-popover-enter overflow-hidden rounded-[16px] border border-zinc-200 bg-white shadow-[0_16px_42px_rgba(15,15,20,0.14)]'
 
 export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
   const [modelOpen, setModelOpen] = useState(false)
@@ -71,8 +71,6 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
 
   const isVideo = node?.type === 'videoGen'
   const models = useMemo(() => (isVideo ? getVideoModels() : getImageModels()), [isVideo])
-  // Same resolution the node uses when it submits, so the panel shows what
-  // will actually be generated.
   const effective = resolveGenerationSettings(isVideo ? 'video' : 'image', node?.data)
   const currentModel = effective.model || models[0]
   const resolution = effective.resolution
@@ -96,21 +94,21 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
 
   const renderToggle = (label: string, on: boolean, onClick: () => void, title?: string) => (
     <div
-      className="flex items-center justify-between rounded-[13px] border border-zinc-800/80 bg-[#242428] px-3.5 py-2.5"
+      className="flex items-center justify-between rounded-[13px] border border-zinc-200/80 bg-[#f5f5f7] px-3.5 py-2.5"
       title={title}
     >
-      <span className="text-[12px] font-medium text-zinc-200">{label}</span>
+      <span className="text-[12px] font-medium text-zinc-800">{label}</span>
       <button
         type="button"
         onClick={onClick}
         aria-pressed={on}
         className={`relative h-[22px] w-10 rounded-full p-0.5 transition-colors duration-200 ${
-          on ? 'bg-[#f4f4f6]' : 'bg-zinc-700'
+          on ? 'bg-[#18181b]' : 'bg-zinc-300'
         }`}
       >
         <span
-          className={`block h-[18px] w-[18px] rounded-full shadow-sm transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
-            on ? 'translate-x-[18px] bg-[#141416]' : 'translate-x-0 bg-zinc-200'
+          className={`block h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+            on ? 'translate-x-[18px]' : 'translate-x-0'
           }`}
         />
       </button>
@@ -131,28 +129,28 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
   }
 
   return (
-    <aside className="dock-popover-enter absolute right-4 top-4 z-40 w-[332px] select-none rounded-[20px] border border-zinc-800 bg-[#1c1c1e]/98 p-4 text-zinc-100 shadow-[0_18px_48px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]">
+    <aside className="dock-popover-enter absolute right-4 top-4 z-40 w-[332px] select-none rounded-[20px] border border-zinc-200/95 bg-white/98 p-4 text-zinc-900 shadow-[0_16px_44px_rgba(15,15,20,0.12)]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+      <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
         <div className="flex items-center gap-2.5">
           <span
             className={`flex h-7 w-7 items-center justify-center rounded-[9px] ${
-              isVideo ? 'bg-indigo-500/15 text-indigo-300' : 'bg-sky-500/15 text-sky-300'
+              isVideo ? 'bg-indigo-50 text-indigo-600' : 'bg-sky-50 text-sky-600'
             }`}
           >
             {isVideo ? <Clapperboard size={14} strokeWidth={1.85} /> : <ImageIcon size={14} strokeWidth={1.85} />}
           </span>
           <div>
-            <div className="text-[13px] font-semibold leading-tight text-zinc-100">
+            <div className="text-[13px] font-semibold leading-tight text-zinc-900">
               {isVideo ? 'Video Settings' : 'Image Settings'}
             </div>
-            <div className="text-[10px] text-zinc-500">Node configuration</div>
+            <div className="text-[10px] text-zinc-400">Node configuration</div>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.08] hover:text-zinc-100"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
           aria-label="Close dynamic settings"
         >
           <X size={15} strokeWidth={1.9} />
@@ -171,12 +169,12 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
             className={`${FIELD_CARD} flex w-full items-center justify-between px-3 py-2.5 text-left`}
           >
             <span className="min-w-0">
-              <span className="block text-[10px] font-medium uppercase tracking-wider text-zinc-500">Model</span>
-              <span className="block truncate text-[13px] font-semibold text-zinc-100">{currentModel.name}</span>
+              <span className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400">Model</span>
+              <span className="block truncate text-[13px] font-semibold text-zinc-900">{currentModel.name}</span>
             </span>
             <span className="ml-2 flex shrink-0 items-center gap-2">
               {isVideo && (
-                <span className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
+                <span className="rounded-md bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700">
                   ≤ {maxDuration}s
                 </span>
               )}
@@ -190,15 +188,15 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
 
           {modelOpen ? (
             <div className={`${POPOVER_CARD} absolute right-[calc(100%+10px)] top-0 z-50 w-[370px]`}>
-              <div className="border-b border-zinc-800/80 p-2.5">
-                <div className="flex items-center gap-2 rounded-[10px] border border-zinc-800 bg-[#141416] px-2.5 py-2 text-zinc-400">
+              <div className="border-b border-zinc-100 p-2.5">
+                <div className="flex items-center gap-2 rounded-[10px] border border-zinc-200 bg-[#f5f5f7] px-2.5 py-2 text-zinc-400">
                   <Search size={14} strokeWidth={1.8} />
                   <input
                     autoFocus
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search models..."
-                    className="w-full border-0 bg-transparent p-0 text-[12px] text-zinc-100 outline-none placeholder:text-zinc-500 focus:ring-0"
+                    className="w-full border-0 bg-transparent p-0 text-[12px] text-zinc-900 outline-none placeholder:text-zinc-400 focus:ring-0"
                   />
                 </div>
               </div>
@@ -211,22 +209,28 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                       type="button"
                       onClick={() => selectModel(model.id)}
                       className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors ${
-                        selected ? 'bg-[#2c2c32] text-white' : 'text-zinc-200 hover:bg-white/[0.06]'
+                        selected ? 'bg-zinc-900 text-white' : 'text-zinc-800 hover:bg-zinc-100'
                       }`}
                     >
                       <span
                         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                          selected ? 'bg-white/[0.12] text-white' : 'bg-zinc-800/80 text-zinc-400'
+                          selected ? 'bg-white/15 text-white' : 'bg-zinc-100 text-zinc-500'
                         }`}
                       >
                         <Sparkles size={14} strokeWidth={1.8} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[12px] font-semibold">{model.name}</span>
-                        <span className="block truncate text-[10px] text-zinc-500">{model.description}</span>
+                        <span className={`block truncate text-[10px] ${selected ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                          {model.description}
+                        </span>
                       </span>
                       {isVideo ? (
-                        <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                            selected ? 'bg-white/15 text-white' : 'bg-zinc-100 text-zinc-600'
+                          }`}
+                        >
                           ≤ {maxVideoDurationSeconds(model)}s
                         </span>
                       ) : null}
@@ -265,10 +269,10 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                   className={`${FIELD_CARD} flex w-full items-center justify-between px-3 py-2 text-left`}
                 >
                   <span className="min-w-0">
-                    <span className="block text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                    <span className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400">
                       {type === 'resolution' ? 'Resolution' : 'Aspect'}
                     </span>
-                    <span className="block truncate text-[13px] font-semibold text-zinc-100">{value}</span>
+                    <span className="block truncate text-[13px] font-semibold text-zinc-900">{value}</span>
                   </span>
                   <ChevronDown
                     size={14}
@@ -286,7 +290,7 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                           type="button"
                           onClick={() => selectOption(option)}
                           className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors ${
-                            active ? 'bg-[#2c2c32] font-medium text-white' : 'text-zinc-300 hover:bg-white/[0.06]'
+                            active ? 'bg-zinc-900 font-medium text-white' : 'text-zinc-700 hover:bg-zinc-100'
                           }`}
                         >
                           <span>{option}</span>
@@ -303,9 +307,9 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
 
         {/* Duration Slider (Video only) */}
         {isVideo ? (
-          <div className="rounded-[13px] border border-zinc-800/80 bg-[#242428] px-3.5 py-3">
+          <div className="rounded-[13px] border border-zinc-200/80 bg-[#f5f5f7] px-3.5 py-3">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[12px] font-medium text-zinc-200">Duration</span>
+              <span className="text-[12px] font-medium text-zinc-800">Duration</span>
               <span className="flex items-center gap-2">
                 {currentModel.supportsAutoDuration ? (
                   <button
@@ -314,13 +318,13 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                     onClick={() => patch({ duration: autoDuration ? `${duration}s` : AUTO_DURATION })}
                     title={edit ? 'Edit keeps the source video length' : 'Let the model pick the length'}
                     className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 ${
-                      autoDuration ? 'bg-[#f4f4f6] text-[#141416]' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      autoDuration ? 'bg-[#18181b] text-white' : 'bg-zinc-200 text-zinc-600 hover:text-zinc-900'
                     }`}
                   >
                     Auto
                   </button>
                 ) : null}
-                <span className="min-w-[30px] text-right text-[12px] font-semibold tabular-nums text-zinc-100">
+                <span className="min-w-[30px] text-right text-[12px] font-semibold tabular-nums text-zinc-900">
                   {autoDuration ? 'auto' : `${duration}s`}
                 </span>
               </span>
@@ -334,9 +338,9 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
               value={duration}
               disabled={autoDuration}
               onChange={(event) => patch({ duration: `${event.target.value}s` })}
-              className={`h-1.5 w-full cursor-ew-resize accent-zinc-100 ${autoDuration ? 'opacity-35' : ''}`}
+              className={`h-1.5 w-full cursor-ew-resize accent-[#18181b] ${autoDuration ? 'opacity-35' : ''}`}
             />
-            <div className="mt-1 flex justify-between text-[10px] tabular-nums text-zinc-500">
+            <div className="mt-1 flex justify-between text-[10px] tabular-nums text-zinc-400">
               <span>{minDuration}s</span>
               <span>{maxDuration}s</span>
             </div>
@@ -344,26 +348,26 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
         ) : null}
 
         {/* Batch Size Stepper */}
-        <div className="flex items-center justify-between rounded-[13px] border border-zinc-800/80 bg-[#242428] px-3.5 py-2.5">
-          <span className="text-[12px] font-medium text-zinc-200">Batch size</span>
+        <div className="flex items-center justify-between rounded-[13px] border border-zinc-200/80 bg-[#f5f5f7] px-3.5 py-2.5">
+          <span className="text-[12px] font-medium text-zinc-800">Batch size</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={batch <= 1}
               onClick={() => patch({ [isVideo ? 'numVideos' : 'numImages']: Math.max(1, batch - 1) })}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-800 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="Decrease batch size"
             >
               <Minus size={12} strokeWidth={2} />
             </button>
-            <span className="min-w-[30px] text-center text-[12px] font-semibold tabular-nums text-zinc-100">
+            <span className="min-w-[30px] text-center text-[12px] font-semibold tabular-nums text-zinc-900">
               {batch}/4
             </span>
             <button
               type="button"
               disabled={batch >= 4}
               onClick={() => patch({ [isVideo ? 'numVideos' : 'numImages']: Math.min(4, batch + 1) })}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-800 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="Increase batch size"
             >
               <Plus size={12} strokeWidth={2} />
@@ -373,7 +377,7 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
 
         {/* Mode Segmented Buttons (Draft / Extend / Edit) */}
         {isVideo && (currentModel.supportsDraft || currentModel.supportsExtend || currentModel.supportsEdit) ? (
-          <div className="grid grid-cols-3 gap-1.5 rounded-[13px] border border-zinc-800/80 bg-[#161618] p-1">
+          <div className="grid grid-cols-3 gap-1.5 rounded-[13px] border border-zinc-200/80 bg-[#f5f5f7] p-1">
             {currentModel.supportsDraft ? (
               <button
                 type="button"
@@ -387,8 +391,8 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                 }
                 className={`rounded-[9px] py-2 text-[11px] font-semibold transition-colors ${
                   draft
-                    ? 'bg-amber-400/20 text-amber-200 ring-1 ring-amber-400/35'
-                    : 'text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200'
+                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300'
+                    : 'text-zinc-600 hover:bg-white hover:text-zinc-950'
                 }`}
               >
                 Draft
@@ -402,8 +406,8 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                 onClick={() => patch({ extendMode: !extend, draftMode: false, editMode: false })}
                 className={`rounded-[9px] py-2 text-[11px] font-semibold transition-colors ${
                   extend
-                    ? 'bg-emerald-400/20 text-emerald-200 ring-1 ring-emerald-400/35'
-                    : 'text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200'
+                    ? 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300'
+                    : 'text-zinc-600 hover:bg-white hover:text-zinc-950'
                 }`}
               >
                 Extend
@@ -425,8 +429,8 @@ export function GenerationSettingsPanel({ node, onClose, onPatch }: Props) {
                 }
                 className={`rounded-[9px] py-2 text-[11px] font-semibold transition-colors ${
                   edit
-                    ? 'bg-sky-400/20 text-sky-200 ring-1 ring-sky-400/35'
-                    : 'text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200'
+                    ? 'bg-sky-100 text-sky-900 ring-1 ring-sky-300'
+                    : 'text-zinc-600 hover:bg-white hover:text-zinc-950'
                 }`}
               >
                 Edit

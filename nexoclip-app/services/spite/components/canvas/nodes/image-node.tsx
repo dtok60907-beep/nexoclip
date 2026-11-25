@@ -56,11 +56,11 @@ function ControlSelect({ value, disabled, section = 'model' }: {
       type="button"
       data-generation-setting={section}
       disabled={disabled}
-      className="nodrag nopan flex h-7 items-center gap-1 rounded-lg bg-transparent px-1 text-[12px] font-medium text-zinc-200 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      className="nodrag nopan flex h-7 items-center gap-1 rounded-lg bg-transparent px-1.5 text-[12px] font-medium text-zinc-800 transition-colors hover:bg-zinc-100 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
       title="Choose model and open generation settings"
     >
       <span className="max-w-[155px] truncate">{value}</span>
-      <LucideChevronDown size={13} strokeWidth={1.8} className="shrink-0 text-zinc-500" />
+      <LucideChevronDown size={13} strokeWidth={1.8} className="shrink-0 text-zinc-400" />
     </button>
   )
 }
@@ -986,7 +986,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       type="button"
       onClick={requestGenerate}
       disabled={isGenerating || promptState.disabled || !generationPersistenceGuard.allowed}
-      className="flex h-8 items-center justify-center gap-1.5 rounded-[11px] bg-[#f4f4f6] px-3 text-[#141416] shadow-sm transition-all duration-150 hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+      className="flex h-8 items-center justify-center gap-1.5 rounded-[11px] bg-[#18181b] px-3 text-white shadow-sm transition-all duration-150 hover:bg-[#27272a] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
       title={hasRun ? `Regenerate — ${generateTooltip}` : generateTooltip}
     >
       {hasRun ? <LucideRefresh size={12} strokeWidth={2.2} /> : <LucideSparkles size={12} strokeWidth={2.2} />}
@@ -1100,10 +1100,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       <Handle type="source" id="image-out" position={Position.Right} style={{ top: 118, right: -10, opacity: 0, width: 22, height: 22, zIndex: 5 }} />
       <NodePortDot color="#38bdf8" side="right" top={118} label="Image output" />
 
-      {/* Card content — clean 2-zone matte layout (full preview + integrated footer) */}
+      {/* Card content — clean 2-zone Light Studio card */}
       <div
-        className={`relative flex flex-col overflow-hidden rounded-[18px] border bg-[#1c1c1e] p-2.5 shadow-[0_14px_38px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-150 ${
-          selected ? 'border-transparent' : 'border-zinc-800/95 hover:border-zinc-700/90'
+        className={`relative flex flex-col overflow-hidden rounded-[18px] border bg-white p-2.5 shadow-[0_10px_30px_rgba(15,15,20,0.08)] transition-colors duration-150 ${
+          selected ? 'border-transparent' : 'border-zinc-200/95 hover:border-zinc-300'
         }`}
         style={{
           border: selected ? 'none' : feedbackFrameStyle.border || undefined,
@@ -1122,7 +1122,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
         {/* Preview area - image displays cleanly at natural aspect ratio with nothing covering it */}
         <div
-          className="group/media relative overflow-hidden rounded-[12px] bg-[#141416]"
+          className={`group/media relative overflow-hidden rounded-[12px] ${outputUrl ? 'bg-zinc-950' : 'border border-zinc-200/70 bg-[#f4f4f6]'}`}
           style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '1:1')) }}
           onDoubleClick={() => { if (outputUrl) setLightboxOpen(true) }}
         >
@@ -1146,12 +1146,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               {isGenerating ? (
                 <>
-                  <CircleNotch size={24} className="animate-spin text-zinc-400" />
+                  <CircleNotch size={24} className="animate-spin text-zinc-500" />
                   <StatusBadge status={status} progress={progress} />
                 </>
               ) : !error ? (
-                <div className="flex flex-col items-center gap-2 text-zinc-600">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800/80 bg-[#1c1c1e]">
+                <div className="flex flex-col items-center gap-2 text-zinc-400">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-200 bg-white shadow-xs">
                     <LucideImage size={20} strokeWidth={1.6} />
                   </div>
                   <span className="text-[11px] font-medium text-zinc-500">
@@ -1165,8 +1165,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           <GenerationFeedbackOverlay state={feedbackState} error={error} onRetry={requestGenerate} />
 
           {error && !feedbackState.isFailedRegeneration && (
-            <div className="absolute bottom-2 left-2 right-2 rounded-lg border border-red-500/30 bg-red-950/80 px-2.5 py-1.5">
-              <span className="text-[10px] font-medium text-red-300">{error}</span>
+            <div className="absolute bottom-2 left-2 right-2 rounded-lg border border-red-500/30 bg-red-950/90 px-2.5 py-1.5">
+              <span className="text-[10px] font-medium text-red-200">{error}</span>
             </div>
           )}
         </div>
@@ -1179,7 +1179,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 <button
                   type="button"
                   data-generation-setting="resolution"
-                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  className="nodrag nopan rounded-md border border-zinc-200 bg-[#f4f4f6] px-2 py-0.5 text-[10px] font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-200/70 hover:text-zinc-950"
                   title="Edit resolution"
                 >
                   {resolution}
@@ -1189,7 +1189,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 <button
                   type="button"
                   data-generation-setting="aspect"
-                  className="nodrag nopan rounded-md border border-zinc-800 bg-[#252529] px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                  className="nodrag nopan rounded-md border border-zinc-200 bg-[#f4f4f6] px-2 py-0.5 text-[10px] font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-200/70 hover:text-zinc-950"
                   title="Edit aspect ratio"
                 >
                   {aspectRatio}
@@ -1198,7 +1198,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             </div>
 
             <span className="flex items-center gap-1.5 text-[10px] text-zinc-500">
-              <span className={`h-1.5 w-1.5 rounded-full ${resolvedPrompt.connected ? 'bg-violet-400' : 'bg-zinc-600'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${resolvedPrompt.connected ? 'bg-violet-500' : 'bg-zinc-300'}`} />
               <span>{resolvedPrompt.connected ? 'Prompt linked' : 'No prompt'}</span>
             </span>
           </div>

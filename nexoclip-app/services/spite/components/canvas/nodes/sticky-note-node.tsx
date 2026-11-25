@@ -55,11 +55,11 @@ function StickyNoteNodeImpl({ id, data, selected }: NodeProps) {
         <BoardColorSwatches nodeId={id} value={colorId} kind="paper" />
       </SimpleNodeToolbar>
       <div
-        className="absolute inset-0 overflow-hidden rounded-[14px] shadow-[0_10px_28px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.35)] transition-shadow"
+        className="absolute inset-0 overflow-hidden rounded-[14px] shadow-[0_10px_26px_rgba(15,15,20,0.14),inset_0_1px_0_rgba(255,255,255,0.4)] transition-shadow"
         style={{
           background: color.paper,
           color: color.ink,
-          outline: selected ? '2px solid rgba(255,255,255,0.85)' : undefined,
+          outline: selected ? '2px solid #18181b' : undefined,
           outlineOffset: 3,
         }}
         onDoubleClick={(event) => {

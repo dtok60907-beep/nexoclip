@@ -324,8 +324,8 @@ function DockSlot({
           : submenuOpen
             ? 'bg-[#2a2a2e] text-white'
             : flushBottom
-              ? 'text-zinc-200 hover:bg-white/[0.04]'
-              : 'text-zinc-300 hover:bg-white/[0.07] hover:text-white'
+              ? 'text-zinc-200 hover:bg-zinc-800/60'
+              : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
       }`}
     >
       {children}
@@ -361,7 +361,7 @@ function ZoomReadout() {
         type="button"
         onClick={() => zoomOut({ duration: 150 })}
         disabled={atMinZoom}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
         title={atMinZoom ? 'Minimum zoom (30%)' : 'Zoom out'}
         aria-label="Zoom out"
       >
@@ -373,7 +373,7 @@ function ZoomReadout() {
       <button
         type="button"
         onClick={() => zoomIn({ duration: 150 })}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-zinc-100"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
         title="Zoom in"
         aria-label="Zoom in"
       >
@@ -383,7 +383,7 @@ function ZoomReadout() {
       <button
         type="button"
         onClick={() => fitView({ duration: 250, padding: 0.2 })}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-zinc-100"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
         title="Fit canvas"
         aria-label="Fit canvas"
       >
@@ -463,7 +463,7 @@ export const BottomBar = memo(function BottomBar({
             onClick={onUndo}
             disabled={!canUndo}
             aria-label="Undo (Ctrl+Z)"
-            className="group relative flex h-8 w-8 items-center justify-center rounded-[10px] text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
           >
             <Undo2
               size={15}
@@ -485,7 +485,7 @@ export const BottomBar = memo(function BottomBar({
             onClick={onRedo}
             disabled={!canRedo}
             aria-label="Redo (Ctrl+Shift+Z)"
-            className="group relative flex h-8 w-8 items-center justify-center rounded-[10px] text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
           >
             <Redo2
               size={15}
@@ -604,7 +604,7 @@ export const BottomBar = memo(function BottomBar({
                           className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors ${
                             isActive
                               ? 'bg-[#2e2e34] text-white'
-                              : 'text-zinc-200 hover:bg-white/[0.07]'
+                              : 'text-zinc-200 hover:bg-zinc-800'
                           }`}
                         >
                           <Icon size={15} strokeWidth={1.8} className="shrink-0 text-zinc-300" />
@@ -673,7 +673,7 @@ export const BottomBar = memo(function BottomBar({
                         onAssetAction?.(id)
                         setOpenMenu(null)
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-200 transition-colors hover:bg-white/[0.07]"
+                      className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-200 transition-colors hover:bg-zinc-800"
                     >
                       <Icon size={15} strokeWidth={1.8} className="shrink-0 text-zinc-400" />
                       <div className="min-w-0 flex-1">
@@ -722,7 +722,7 @@ export const BottomBar = memo(function BottomBar({
                       onAddNode?.('prompt')
                       setOpenMenu(null)
                     }}
-                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-100 transition-colors hover:bg-white/[0.08]"
+                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-100 transition-colors hover:bg-zinc-800"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
                       <Sparkles size={15} strokeWidth={1.8} className={`${SPRING} group-hover/item:scale-110`} />
@@ -740,7 +740,7 @@ export const BottomBar = memo(function BottomBar({
                       onAddNode?.('imageGen')
                       setOpenMenu(null)
                     }}
-                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-100 transition-colors hover:bg-white/[0.08]"
+                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-100 transition-colors hover:bg-zinc-800"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
                       <ImagePlus size={15} strokeWidth={1.8} className={`${SPRING} group-hover/item:scale-110`} />
@@ -758,7 +758,7 @@ export const BottomBar = memo(function BottomBar({
                       onAddNode?.('videoGen')
                       setOpenMenu(null)
                     }}
-                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-100 transition-colors hover:bg-white/[0.08]"
+                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-100 transition-colors hover:bg-zinc-800"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300">
                       <Clapperboard size={15} strokeWidth={1.8} className={`${SPRING} group-hover/item:scale-110`} />
@@ -778,7 +778,7 @@ export const BottomBar = memo(function BottomBar({
                       onAssetAction?.('upload')
                       setOpenMenu(null)
                     }}
-                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-200 transition-colors hover:bg-white/[0.08]"
+                    className="group/item flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-zinc-200 transition-colors hover:bg-zinc-800"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300">
                       <Upload size={14} strokeWidth={1.8} className={`${SPRING} group-hover/item:-translate-y-0.5`} />
@@ -804,7 +804,7 @@ export const BottomBar = memo(function BottomBar({
           <button
             type="button"
             onClick={onRecenter}
-            className="group flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-zinc-100"
+            className="group flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
             title="Recenter canvas"
             aria-label="Recenter canvas"
           >
