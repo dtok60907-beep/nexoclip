@@ -7,6 +7,7 @@ import {
   Bookmark,
   Check,
   ChevronRight,
+  Clock,
   Copy,
   ExternalLink,
   FileText,
@@ -24,6 +25,21 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
+import {
+  clearBrandAnalyzeJob,
+  getBrandAnalyzeJob,
+  startBrandWebsiteAnalysis,
+  subscribeBrandAnalyze,
+} from './brandAnalyzeStore.js';
+import BrandVoicePicker from './BrandVoicePicker.js';
+import {
+  AddBlockMenu,
+  BrandAnalyzingSkeleton,
+  BrandDocumentBlocks,
+  BrandHistoryDrawer,
+  BrandSubpageView,
+  RichInlineText,
+} from './BrandRichDocument.js';
 
 const DEFAULT_FALLBACK_KIT = {
   brandName: 'Nexo Clip',
@@ -108,6 +124,9 @@ const DEFAULT_FALLBACK_KIT = {
   avatars: [],
   voices: [],
   customPages: [],
+  subpages: [],
+  sectionBlocks: {},
+  history: [],
 };
 
 const EMPTY_KIT = {
@@ -149,6 +168,9 @@ const EMPTY_KIT = {
   avatars: [],
   voices: [],
   customPages: [],
+  subpages: [],
+  sectionBlocks: {},
+  history: [],
 };
 
 function workspaceId() {
@@ -183,6 +205,11 @@ function normalizeKit(raw) {
     avatars: Array.isArray(source.avatars) ? source.avatars : [],
     voices: Array.isArray(source.voices) ? source.voices : [],
     customPages: Array.isArray(source.customPages) ? source.customPages : [],
+    subpages: Array.isArray(source.subpages) ? source.subpages : [],
+    sectionBlocks: source.sectionBlocks && typeof source.sectionBlocks === 'object' && !Array.isArray(source.sectionBlocks)
+      ? source.sectionBlocks
+      : {},
+    history: Array.isArray(source.history) ? source.history : [],
   };
 }
 
@@ -261,12 +288,24 @@ function AutoTextarea({ value, onChange, onKeyDown, placeholder, className = 'bs
   );
 }
 
-function EditableBulletList({ items, onChange, placeholder, itemLabel, focusIndex, onFocusHandled }) {
+function EditableBulletList({
+  items,
+  onChange,
+  placeholder,
+  itemLabel,
+  focusIndex,
+  onFocusHandled,
+  subpages = [],
+  onOpenSubpage = null,
+  onJumpSection = null,
+}) {
   const itemRefs = useRef([]);
+  const [editingIdx, setEditingIdx] = useState(null);
 
   useEffect(() => {
-    if (focusIndex !== null && focusIndex !== undefined && itemRefs.current[focusIndex]) {
-      itemRefs.current[focusIndex].focus();
+    if (focusIndex !== null && focusIndex !== undefined) {
+      setEditingIdx(focusIndex);
+      setTimeout(() => itemRefs.current[focusIndex]?.focus(), 20);
       onFocusHandled?.();
     }
   }, [focusIndex, items.length, onFocusHandled]);
@@ -280,6 +319,7 @@ function EditableBulletList({ items, onChange, placeholder, itemLabel, focusInde
   const removeItem = (index) => {
     const next = items.filter((_, i) => i !== index);
     onChange(next);
+    if (editingIdx === index) setEditingIdx(null);
   };
 
   const handleKeyDown = (event, index) => {
@@ -288,11 +328,16 @@ function EditableBulletList({ items, onChange, placeholder, itemLabel, focusInde
       const next = [...items];
       next.splice(index + 1, 0, '');
       onChange(next);
-      setTimeout(() => itemRefs.current[index + 1]?.focus(), 16);
+      setEditingIdx(index + 1);
+      setTimeout(() => itemRefs.current[index + 1]?.focus(), 20);
     } else if (event.key === 'Backspace' && !items[index] && items.length > 0) {
       event.preventDefault();
       removeItem(index);
-      setTimeout(() => itemRefs.current[Math.max(0, index - 1)]?.focus(), 16);
+      const prevIdx = Math.max(0, index - 1);
+      setEditingIdx(prevIdx);
+      setTimeout(() => itemRefs.current[prevIdx]?.focus(), 20);
+    } else if (event.key === 'Escape') {
+      setEditingIdx(null);
     }
   };
 
@@ -307,7 +352,10 @@ function EditableBulletList({ items, onChange, placeholder, itemLabel, focusInde
               value=""
               placeholder={placeholder}
               aria-label={itemLabel}
-              onChange={(event) => onChange([event.target.value])}
+              onChange={(event) => {
+                onChange([event.target.value]);
+                setEditingIdx(0);
+              }}
               className="bs-inline-text"
             />
           </div>
@@ -318,45 +366,73 @@ function EditableBulletList({ items, onChange, placeholder, itemLabel, focusInde
 
   return (
     <div className="bs-bullet-list">
-      {items.map((item, index) => (
-        <div key={index} className="bs-bullet-row">
-          <span className="bs-bullet-dot" aria-hidden="true" />
-          <div className="bs-bullet-field">
-            <AutoTextarea
-              inputRef={{
-                get current() {
-                  return itemRefs.current[index];
-                },
-                set current(node) {
-                  itemRefs.current[index] = node;
-                },
-              }}
-              value={item}
-              placeholder={placeholder}
-              ariaLabel={`${itemLabel} ${index + 1}`}
-              onChange={(event) => updateItem(index, event.target.value)}
-              onKeyDown={(event) => handleKeyDown(event, index)}
-            />
+      {items.map((item, index) => {
+        const isEditing = editingIdx === index || !String(item || '').trim();
+        return (
+          <div key={index} className="bs-bullet-row">
+            <span className="bs-bullet-dot" aria-hidden="true" />
+            <div className="bs-bullet-field">
+              {isEditing ? (
+                <AutoTextarea
+                  inputRef={{
+                    get current() {
+                      return itemRefs.current[index];
+                    },
+                    set current(node) {
+                      itemRefs.current[index] = node;
+                    },
+                  }}
+                  value={item}
+                  placeholder={placeholder}
+                  ariaLabel={`${itemLabel} ${index + 1}`}
+                  onChange={(event) => updateItem(index, event.target.value)}
+                  onKeyDown={(event) => handleKeyDown(event, index)}
+                />
+              ) : (
+                <div
+                  onClick={() => {
+                    setEditingIdx(index);
+                    setTimeout(() => itemRefs.current[index]?.focus(), 20);
+                  }}
+                  className="cursor-text py-[2px] text-[13.5px] leading-[1.6] text-[#282a35]"
+                >
+                  <RichInlineText
+                    text={item}
+                    subpages={subpages}
+                    onOpenSubpage={onOpenSubpage}
+                    onJumpSection={onJumpSection}
+                  />
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              className="bs-row-remove"
+              onClick={() => removeItem(index)}
+              aria-label={`Remove ${itemLabel} ${index + 1}`}
+              title="Remove item"
+            >
+              <X size={13} />
+            </button>
           </div>
-          <button
-            type="button"
-            className="bs-row-remove"
-            onClick={() => removeItem(index)}
-            aria-label={`Remove ${itemLabel} ${index + 1}`}
-            title="Remove item"
-          >
-            <X size={13} />
-          </button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-export default function BrandKitContent({ onOpenDirector, onBack }) {
+export default function BrandKitContent({ onOpenDirector, onNavigate, onBack }) {
   const [kit, setKit] = useState(null);
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [activeSubpageId, setActiveSubpageId] = useState(null);
+  const manualEditedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [websiteInput, setWebsiteInput] = useState('');
+  const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
+  const [detectedProducts, setDetectedProducts] = useState([]);
+  const [importingProducts, setImportingProducts] = useState(false);
   const [manualSetupStarted, setManualSetupStarted] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -420,8 +496,25 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to load Brand Kit.');
         if (!cancelled) {
-          setKit(normalizeKit(result.brandKit));
-          setDirty(false);
+          const pendingJob = getBrandAnalyzeJob(id);
+          if (pendingJob?.status === 'done' && pendingJob.brandKit) {
+            setKit(normalizeKit(pendingJob.brandKit));
+            setDetectedProducts(Array.isArray(pendingJob.detectedProducts) ? pendingJob.detectedProducts : []);
+            setWebsiteInput(pendingJob.url || '');
+            setDirty(true);
+            setManualSetupStarted(true);
+            setStatusMessage('Hasil analisis siap ditinjau. Simpan setelah kamu cek.');
+          } else {
+            setKit(normalizeKit(result.brandKit));
+            setDirty(false);
+            if (pendingJob?.status === 'running') {
+              setWebsiteInput(pendingJob.url || '');
+              setAnalyzingWebsite(true);
+            } else if (pendingJob?.status === 'error') {
+              setWebsiteInput(pendingJob.url || '');
+              setStatusError(pendingJob.error || 'Website belum bisa dianalisis.');
+            }
+          }
         }
       })
       .catch((error) => {
@@ -440,6 +533,7 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
       if (!prev) return prev;
       return typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
     });
+    manualEditedRef.current = true;
     setDirty(true);
     setStatusMessage('');
     setStatusError('');
@@ -449,6 +543,47 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
     updateKit((prev) => ({ ...prev, [key]: value }));
   }, [updateKit]);
 
+  const importDetectedProducts = useCallback(async (wsId, items) => {
+    if (!wsId || !Array.isArray(items) || !items.length) return 0;
+    setImportingProducts(true);
+    try {
+      const existingNames = new Set(catalog.map((p) => String(p.name || '').trim().toLowerCase()));
+      const created = [];
+      for (const item of items) {
+        const name = String(item?.name || '').trim();
+        if (!name || existingNames.has(name.toLowerCase())) continue;
+        existingNames.add(name.toLowerCase());
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'x-workspace-id': wsId },
+          body: JSON.stringify({
+            name,
+            category: item.category || '',
+            price: item.price || '',
+            usp: item.usp || '',
+            advantages: [item.price, item.usp || item.description].filter(Boolean).join(' · '),
+            description: item.description || item.usp || '',
+            url: item.url || '',
+            imageUrl: item.imageUrl || '',
+            media: item.imageUrl ? [{ id: `web-${Date.now()}-${created.length}`, kind: 'image', url: item.imageUrl, name }] : [],
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.product) created.push(data.product);
+        }
+      }
+      if (created.length) {
+        setCatalog((prev) => [...created, ...prev]);
+      }
+      setDetectedProducts([]);
+      return created.length;
+    } finally {
+      setImportingProducts(false);
+    }
+  }, [catalog]);
+
   const handleSave = useCallback(async () => {
     const id = workspaceId();
     if (!id || !kit || saving) return;
@@ -456,23 +591,114 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
     setStatusMessage('');
     setStatusError('');
     try {
+      let kitToSave = kit;
+      if (manualEditedRef.current) {
+        const SECTION_LABELS = {
+          overview: 'Overview',
+          'brand-kit': 'Brand Kit',
+          audience: 'Audience',
+          messaging: 'Messaging',
+          competitors: 'Competitors',
+          products: 'Products',
+          avatars: 'Avatars',
+          voices: 'Voices',
+          'offers-and-pricing': 'Offers and pricing',
+        };
+        const currentSub = activeSubpageId
+          ? (kit.subpages || []).find((sp) => sp.id === activeSubpageId)
+          : null;
+        const pageEntry = currentSub
+          ? {
+              targetType: 'subpage',
+              targetId: currentSub.id,
+              title: currentSub.title || 'Subpage',
+              summary: currentSub.subtitle || '',
+            }
+          : {
+              targetType: 'section',
+              targetId: activePageId || 'overview',
+              title:
+                SECTION_LABELS[activePageId] ||
+                (kit.customPages || []).find((p) => p.id === activePageId)?.title ||
+                'Overview',
+              summary: '',
+            };
+        const manualEntry = {
+          id: `hist-manual-${Date.now()}`,
+          actorType: 'user',
+          actorName: 'You',
+          source: 'Manual edit',
+          createdAt: new Date().toISOString(),
+          pages: [pageEntry],
+        };
+        kitToSave = {
+          ...kit,
+          history: [manualEntry, ...(Array.isArray(kit.history) ? kit.history : [])].slice(0, 50),
+        };
+      }
       const response = await fetch('/api/workspaces/brand-kit', {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-workspace-id': id },
-        body: JSON.stringify({ brandKit: kit }),
+        body: JSON.stringify({ brandKit: kitToSave }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to save Brand Kit.');
       setKit(normalizeKit(result.brandKit));
+      manualEditedRef.current = false;
       setDirty(false);
-      setStatusMessage('Saved');
+      let importedCount = 0;
+      if (detectedProducts.length) {
+        importedCount = await importDetectedProducts(id, detectedProducts);
+      }
+      setStatusMessage(importedCount ? `Saved · ${importedCount} produk otomatis ditambahkan ke Products` : 'Saved');
+      clearBrandAnalyzeJob(id);
     } catch (error) {
       setStatusError(error.message || 'Failed to save Brand Kit.');
     } finally {
       setSaving(false);
     }
-  }, [kit, saving]);
+  }, [kit, saving, detectedProducts, importDetectedProducts, activeSubpageId, activePageId]);
+
+  // Subscribe to background Brand Kit website analysis so leaving the page never loses progress/result
+  useEffect(() => {
+    const syncJob = () => {
+      const id = workspaceId();
+      if (!id) return;
+      const job = getBrandAnalyzeJob(id);
+      if (!job) {
+        setAnalyzingWebsite(false);
+        return;
+      }
+      if (job.status === 'running') {
+        setAnalyzingWebsite(true);
+        if (job.url) setWebsiteInput(job.url);
+        setStatusError('');
+      } else if (job.status === 'done' && job.brandKit) {
+        setAnalyzingWebsite(false);
+        setKit(normalizeKit(job.brandKit));
+        setDetectedProducts(Array.isArray(job.detectedProducts) ? job.detectedProducts : []);
+        setDirty(true);
+        setManualSetupStarted(true);
+        setStatusError('');
+        setStatusMessage('Hasil analisis siap ditinjau. Simpan setelah kamu cek.');
+      } else if (job.status === 'error') {
+        setAnalyzingWebsite(false);
+        setStatusError(job.error || 'Website belum bisa dianalisis. Coba lagi atau isi manual.');
+      }
+    };
+    return subscribeBrandAnalyze(syncJob);
+  }, []);
+
+  const handleAnalyzeWebsite = useCallback((event) => {
+    event.preventDefault();
+    const id = workspaceId();
+    const url = websiteInput.trim();
+    if (!id || !url || analyzingWebsite) return;
+    setStatusError('');
+    setStatusMessage('');
+    startBrandWebsiteAnalysis({ workspaceId: id, url });
+  }, [analyzingWebsite, websiteInput]);
 
   // Ctrl/Cmd + S saves Brand Kit directly
   useEffect(() => {
@@ -499,10 +725,199 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
   }, [briefOpen]);
 
   const parsedProducts = useMemo(() => catalog.map((product, index) => ({
-    id: product.id, index, name: product.name, description: product.advantages || '',
-    thumb: product.media?.find(item => item.kind === 'image')?.url || resolveProductThumb(product.name),
-    letter: product.name.charAt(0).toUpperCase(),
+    id: product.id,
+    index,
+    name: product.name,
+    description: product.advantages || product.description || '',
+    price: product.price || '',
+    category: product.category || '',
+    url: product.url || '',
+    thumb: product.media?.find((item) => item.kind === 'image')?.url || product.imageUrl || resolveProductThumb(product.name),
+    letter: (product.name || 'P').charAt(0).toUpperCase(),
   })), [catalog]);
+
+  const allSubpages = useMemo(() => {
+    const saved = Array.isArray(kit?.subpages) ? [...kit.subpages] : [];
+    const seen = new Set(saved.map((p) => `${p.parent}:${String(p.title || '').trim().toLowerCase()}`));
+    const slugOf = (name) =>
+      String(name || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'page';
+
+    // Auto-hydrate clickable Product subpages from workspace catalog if not yet saved in kit.subpages
+    for (const prod of parsedProducts) {
+      const title = String(prod.name || '').trim();
+      if (!title || seen.has(`products:${title.toLowerCase()}`)) continue;
+      seen.add(`products:${title.toLowerCase()}`);
+      const blocks = [];
+      if (prod.description || prod.url) {
+        blocks.push({ id: 'what-h', type: 'heading', text: 'What it is' });
+        blocks.push({
+          id: 'what-p',
+          type: 'paragraph',
+          text: [prod.description, prod.url ? `Page: ${prod.url}` : ''].filter(Boolean).join('\n'),
+        });
+      }
+      if (prod.price) {
+        blocks.push({ id: 'price-h', type: 'heading', text: 'Pricing' });
+        blocks.push({ id: 'price-p', type: 'paragraph', text: prod.price });
+      }
+      blocks.push({ id: 'who-h', type: 'heading', text: "Who it's for" });
+      blocks.push({ id: 'who-p', type: 'paragraph', text: `[[Audience]] yang membutuhkan ${title}.` });
+      if (prod.thumb) {
+        blocks.push({ id: 'media-h', type: 'heading', text: 'Media' });
+        blocks.push({ id: 'media-img', type: 'image', url: prod.thumb, caption: title });
+      }
+      saved.push({
+        id: `sub-prod-${slugOf(title)}`,
+        slug: slugOf(title),
+        parent: 'products',
+        title,
+        subtitle: prod.description.slice(0, 180),
+        url: prod.url || '',
+        imageUrl: prod.thumb || '',
+        blocks,
+      });
+    }
+
+    // Auto-hydrate Product subpages from kit.products lines if not already present
+    for (const line of kit?.products || []) {
+      const raw = String(line || '').trim();
+      if (!raw) continue;
+      const urlMatch = raw.match(/https?:\/\/[^\s)]+/i);
+      const url = urlMatch ? urlMatch[0].replace(/[.,;)]+$/, '') : '';
+      const cleaned = raw.replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?/gi, '').trim();
+      const [namePart, ...rest] = cleaned.split(/\s+[—–-]\s+/);
+      const title = (namePart || '').trim();
+      const desc = rest.join(' — ').trim();
+      if (!title || seen.has(`products:${title.toLowerCase()}`)) continue;
+      seen.add(`products:${title.toLowerCase()}`);
+      saved.push({
+        id: `sub-prod-${slugOf(title)}`,
+        slug: slugOf(title),
+        parent: 'products',
+        title,
+        subtitle: desc.slice(0, 180),
+        url,
+        imageUrl: resolveProductThumb(title) || '',
+        blocks: [
+          { id: 'what-h', type: 'heading', text: 'What it is' },
+          { id: 'what-p', type: 'paragraph', text: [desc || title, url ? `Page: ${url}` : ''].filter(Boolean).join('\n') },
+          { id: 'who-h', type: 'heading', text: "Who it's for" },
+          { id: 'who-p', type: 'paragraph', text: `[[Audience]] yang mencari ${title}.` },
+        ],
+      });
+    }
+
+    // Auto-hydrate clickable Competitor subpages from kit.competitors lines if not yet saved
+    for (const line of kit?.competitors || []) {
+      const raw = String(line || '').trim();
+      if (!raw) continue;
+      const urlMatch = raw.match(/https?:\/\/[^\s)]+/i);
+      const url = urlMatch ? urlMatch[0].replace(/[.,;)]+$/, '') : '';
+      const cleaned = raw.replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?/gi, '').trim();
+      const [namePart, ...rest] = cleaned.split(/\s+[—–-]\s+/);
+      const title = (namePart || '').trim();
+      const note = rest.join(' — ').trim();
+      if (!title || seen.has(`competitors:${title.toLowerCase()}`)) continue;
+      seen.add(`competitors:${title.toLowerCase()}`);
+      saved.push({
+        id: `sub-comp-${slugOf(title)}`,
+        slug: slugOf(title),
+        parent: 'competitors',
+        title,
+        subtitle: note.slice(0, 180),
+        url,
+        imageUrl: '',
+        blocks: [
+          { id: 'c-pos-h', type: 'heading', text: 'Positioning' },
+          {
+            id: 'c-pos-p',
+            type: 'paragraph',
+            text: [note || `${title} adalah kompetitor langsung di kategori ini.`, url ? `Website: ${url}` : ''].filter(Boolean).join('\n'),
+          },
+          { id: 'c-beat-h', type: 'heading', text: 'Ad angles' },
+          {
+            id: 'c-beat-b',
+            type: 'bullets',
+            items: [
+              kit?.compareAgainst || 'Tonjolkan keunggulan produk & bukti kepercayaan pelanggan.',
+              kit?.leadWith || 'Bandingkan langsung dengan [[Products]] unggulan di 3 detik pertama.',
+            ].filter(Boolean),
+          },
+        ],
+      });
+    }
+
+    return saved;
+  }, [kit?.subpages, kit?.products, kit?.competitors, kit?.compareAgainst, kit?.leadWith, parsedProducts]);
+
+  const activeSubpage = useMemo(
+    () => allSubpages.find((sp) => sp.id === activeSubpageId) || null,
+    [allSubpages, activeSubpageId],
+  );
+  const productSubpages = useMemo(() => allSubpages.filter((sp) => sp.parent === 'products'), [allSubpages]);
+  const competitorSubpages = useMemo(() => allSubpages.filter((sp) => sp.parent === 'competitors'), [allSubpages]);
+
+  const addSectionBlock = useCallback((sectionKey, block) => {
+    updateKit((prev) => ({
+      ...prev,
+      sectionBlocks: {
+        ...(prev.sectionBlocks || {}),
+        [sectionKey]: [...(prev.sectionBlocks?.[sectionKey] || []), block],
+      },
+    }));
+  }, [updateKit]);
+
+  const setSectionBlocks = useCallback((sectionKey, nextBlocks) => {
+    updateKit((prev) => ({
+      ...prev,
+      sectionBlocks: {
+        ...(prev.sectionBlocks || {}),
+        [sectionKey]: nextBlocks,
+      },
+    }));
+  }, [updateKit]);
+
+  const createNewSubpage = useCallback((parent = 'products', defaultTitle = '') => {
+    const title = defaultTitle || (parent === 'products' ? 'New Product' : parent === 'competitors' ? 'New Competitor' : 'New Page');
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `page-${Date.now()}`;
+    const newPage = {
+      id: `sub-${parent}-${Date.now()}`,
+      slug,
+      parent,
+      title,
+      subtitle: '',
+      url: '',
+      imageUrl: '',
+      blocks: [
+        { id: `b-${Date.now()}-1`, type: 'heading', text: 'Overview' },
+        { id: `b-${Date.now()}-2`, type: 'paragraph', text: '' },
+      ],
+    };
+    updateKit((prev) => ({ ...prev, subpages: [...(prev.subpages || []), newPage] }));
+    setActiveSubpageId(newPage.id);
+  }, [updateKit]);
+
+  const updateSubpage = useCallback((updated) => {
+    updateKit((prev) => {
+      const list = Array.isArray(prev.subpages) ? prev.subpages : [];
+      const exists = list.some((sp) => sp.id === updated.id);
+      return {
+        ...prev,
+        subpages: exists ? list.map((sp) => (sp.id === updated.id ? updated : sp)) : [...list, updated],
+      };
+    });
+  }, [updateKit]);
+
+  const deleteSubpage = useCallback((id) => {
+    updateKit((prev) => ({
+      ...prev,
+      subpages: (prev.subpages || []).filter((sp) => sp.id !== id),
+    }));
+    if (activeSubpageId === id) setActiveSubpageId(null);
+  }, [updateKit, activeSubpageId]);
 
   const navItems = useMemo(() => {
     if (!kit) return [];
@@ -511,8 +926,8 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
       { id: 'brand-kit', group: 1, label: 'Brand Kit', count: 6, icon: <BrandKitTreeIcon /> },
       { id: 'audience', group: 2, label: 'Audience', icon: <User size={15} strokeWidth={1.8} /> },
       { id: 'messaging', group: 2, label: 'Messaging', icon: <MessageSquare size={15} strokeWidth={1.8} /> },
-      { id: 'competitors', group: 2, label: 'Competitors', icon: <TrendingUp size={15} strokeWidth={1.8} /> },
-      { id: 'products', group: 3, label: 'Products', count: catalog.length, icon: <ShoppingBag size={15} strokeWidth={1.8} /> },
+      { id: 'competitors', group: 2, label: 'Competitors', count: competitorSubpages.length || kit.competitors.length || null, icon: <TrendingUp size={15} strokeWidth={1.8} /> },
+      { id: 'products', group: 3, label: 'Products', count: productSubpages.length || catalog.length || null, icon: <ShoppingBag size={15} strokeWidth={1.8} /> },
       { id: 'avatars', group: 3, label: 'Avatars', count: kit.avatars.length || null, icon: <AvatarsTreeIcon /> },
       { id: 'voices', group: 3, label: 'Voices', count: kit.voices.length || null, icon: <VoicesTreeIcon /> },
       { id: 'offers-and-pricing', group: 3, label: 'Offers and pricing', icon: <Bookmark size={15} strokeWidth={1.8} /> },
@@ -524,7 +939,7 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
       icon: <FileText size={15} strokeWidth={1.8} />,
     }));
     return [...base, ...custom];
-  }, [kit, catalog.length]);
+  }, [kit, catalog.length, competitorSubpages.length, productSubpages.length]);
 
   // Live search match check per card
   const visibleMap = useMemo(() => {
@@ -741,6 +1156,19 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
   );
   const isBrandEmpty = !hasBrandProfile && catalog.length === 0 && kit.audience.length === 0 && kit.sellingPoints.length === 0;
 
+  // Show full Notion-style progressive skeleton canvas while Ad Agent writes brand pages!
+  if (analyzingWebsite) {
+    return (
+      <BrandAnalyzingSkeleton
+        websiteUrl={websiteInput}
+        onCancelToManual={() => {
+          setAnalyzingWebsite(false);
+          setManualSetupStarted(true);
+        }}
+      />
+    );
+  }
+
   if (!loading && !hasBrandProfile && !manualSetupStarted) {
     return (
       <main className="flex min-h-[100svh] items-center justify-center bg-[#fbfafc] px-5 py-12 text-[#171821]">
@@ -748,14 +1176,34 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
           <div className="mx-auto max-w-[700px] text-center">
             <h1 className="mb-2 text-[26px] font-semibold tracking-[-0.04em] sm:text-[29px]">Set up your brand</h1>
             <p className="mx-auto mb-6 max-w-[570px] text-[14px] leading-6 text-[#81859a]">
-              Isi informasi brand secara manual. Brand Kit akan jadi acuan untuk konten yang kamu buat di Nexoclip.
+              Masukkan website brand kamu. Ad Agent akan menyusun Brand Kit untuk kamu tinjau sebelum disimpan.
             </p>
-            <button
-              type="button"
-              onClick={() => setManualSetupStarted(true)}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5b45f2] px-5 text-[13px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(91,69,242,0.5)] transition hover:bg-[#4731d8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2"
-            >
-              Mulai isi Brand Kit
+            <form onSubmit={handleAnalyzeWebsite} className="mx-auto flex max-w-[480px] flex-col gap-2.5 sm:flex-row">
+              <input
+                type="url"
+                required
+                value={websiteInput}
+                onChange={(event) => setWebsiteInput(event.target.value)}
+                placeholder="https://websitebrand.com"
+                aria-label="Website brand"
+                className="h-11 min-w-0 flex-1 rounded-xl border border-[#dddde5] bg-white px-4 text-[13px] text-[#171821] outline-none placeholder:text-[#9699a8] focus:border-[#5b45f2] focus:ring-2 focus:ring-[#5b45f2]/15"
+              />
+              <button
+                type="submit"
+                disabled={analyzingWebsite}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5b45f2] px-5 text-[13px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(91,69,242,0.5)] transition hover:bg-[#4731d8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b45f2] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+              >
+                {analyzingWebsite ? 'Menganalisis…' : 'Set up with Ad Agent'}
+              </button>
+            </form>
+            {analyzingWebsite && (
+              <p className="mt-2.5 text-[12px] text-[#5b45f2]">
+                Sedang menganalisis di latar belakang — kamu bebas pindah ke halaman lain, hasilnya otomatis siap saat kembali.
+              </p>
+            )}
+            {statusError && <p role="alert" className="mt-2 text-[12px] text-red-600">{statusError}</p>}
+            <button type="button" onClick={() => setManualSetupStarted(true)} className="mt-4 text-[13px] font-medium text-[#282a35] underline-offset-4 hover:underline">
+              Lanjut tanpa website
             </button>
           </div>
 
@@ -851,9 +1299,12 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                 {showDivider && <div className="bs-tree-divider" role="separator" />}
                 <button
                   type="button"
-                  onClick={() => scrollToCard(item.id)}
+                  onClick={() => {
+                    setActiveSubpageId(null);
+                    scrollToCard(item.id);
+                  }}
                   style={hiddenBySearch ? { opacity: 0.4 } : undefined}
-                  className={`bs-tree-item${isActive ? ' is-active' : ''}`}
+                  className={`bs-tree-item${isActive && !activeSubpageId ? ' is-active' : ''}`}
                 >
                   {item.icon}
                   <span className="bs-tree-item-label">{item.label}</span>
@@ -861,6 +1312,36 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                     <span className="bs-tree-item-count">{item.count}</span>
                   )}
                 </button>
+                {(() => {
+                  const childSubpages =
+                    item.id === 'products'
+                      ? productSubpages
+                      : item.id === 'competitors'
+                        ? competitorSubpages
+                        : allSubpages.filter((sp) => sp.parent === item.id);
+                  if (!childSubpages.length) return null;
+                  return (
+                    <div className="mb-1.5 mt-0.5 space-y-0.5 pl-7 pr-1">
+                      {childSubpages.map((sp) => (
+                        <button
+                          key={sp.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveSubpageId(sp.id);
+                            setMobileTreeOpen(false);
+                          }}
+                          className={`block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12.5px] transition ${
+                            activeSubpageId === sp.id
+                              ? 'bg-violet-50 font-semibold text-[#5B45F2]'
+                              : 'text-[#3F4150] hover:bg-zinc-100/70 hover:text-[#171821]'
+                          }`}
+                        >
+                          {sp.title}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -909,9 +1390,48 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <Menu size={14} />
               <span>Pages</span>
             </button>
-            <span className="bs-crumb-root">My Brand</span>
-            <span className="bs-crumb-sep" aria-hidden="true">/</span>
-            <span className="bs-crumb-current">{activeNavLabel}</span>
+            {activeSubpage ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSubpageId(null);
+                    setTimeout(() => scrollToCard('overview'), 20);
+                  }}
+                  className="bs-crumb-root cursor-pointer border-0 bg-transparent p-0 transition hover:text-[#171821]"
+                >
+                  My Brand
+                </button>
+                <span className="bs-crumb-sep" aria-hidden="true">/</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetParent = activeSubpage.parent || 'products';
+                    setActiveSubpageId(null);
+                    setTimeout(() => scrollToCard(targetParent), 20);
+                  }}
+                  className="bs-crumb-root cursor-pointer border-0 bg-transparent p-0 transition hover:text-[#171821]"
+                >
+                  {activeSubpage.parent === 'competitors'
+                    ? 'Competitors'
+                    : activeSubpage.parent === 'products'
+                      ? 'Products'
+                      : activeSubpage.parent === 'audience'
+                        ? 'Audience'
+                        : activeSubpage.parent === 'messaging'
+                          ? 'Messaging'
+                          : 'Overview'}
+                </button>
+                <span className="bs-crumb-sep" aria-hidden="true">/</span>
+                <span className="bs-crumb-current">{activeSubpage.title}</span>
+              </>
+            ) : (
+              <>
+                <span className="bs-crumb-root">My Brand</span>
+                <span className="bs-crumb-sep" aria-hidden="true">/</span>
+                <span className="bs-crumb-current">{activeNavLabel}</span>
+              </>
+            )}
           </div>
 
           <div className="bs-topbar-right">
@@ -954,9 +1474,39 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((v) => !v)}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+                historyOpen
+                  ? 'border-[#5B45F2]/30 bg-violet-50 text-[#5B45F2]'
+                  : 'border-transparent text-[#707384] hover:border-[#E5E5EE] hover:bg-zinc-50 hover:text-[#171821]'
+              }`}
+              title="History"
+              aria-label="Open brand history"
+              aria-expanded={historyOpen}
+            >
+              <Clock size={16} strokeWidth={1.8} />
+            </button>
           </div>
         </header>
 
+        {activeSubpage ? (
+          <BrandSubpageView
+            subpage={activeSubpage}
+            allSubpages={allSubpages}
+            kit={kit}
+            onBack={() => setActiveSubpageId(null)}
+            onChangeSubpage={updateSubpage}
+            onDeleteSubpage={deleteSubpage}
+            onOpenSubpage={(id) => setActiveSubpageId(id)}
+            onJumpSection={(sec) => {
+              setActiveSubpageId(null);
+              setTimeout(() => scrollToCard(sec), 30);
+            }}
+          />
+        ) : (
         <main className="bs-feed">
           {isBrandEmpty && (
             <div className="bs-card">
@@ -997,18 +1547,10 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Overview</h2>
-                  <button
-                    type="button"
-                    className="bs-btn-add"
-                    onClick={() => {
-                      const nextIdx = kit.sellingPoints.length;
-                      setField('sellingPoints', [...kit.sellingPoints, '']);
-                      setFocusTarget({ section: 'overview-positioning', index: nextIdx });
-                    }}
-                  >
-                    <Plus size={13} strokeWidth={2.2} />
-                    <span>Add</span>
-                  </button>
+                  <AddBlockMenu
+                    onAddBlock={(blk) => addSectionBlock('overview', blk)}
+                    onCreateSubpage={() => createNewSubpage('overview', 'Brand Note')}
+                  />
                 </div>
 
                 <AutoTextarea
@@ -1098,6 +1640,18 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                     ariaLabel="Brand positioning"
                   />
                 </div>
+
+                {(kit.sectionBlocks?.overview || []).length > 0 && (
+                  <div className="bs-section">
+                    <BrandDocumentBlocks
+                      blocks={kit.sectionBlocks?.overview || []}
+                      subpages={allSubpages}
+                      onChangeBlocks={(next) => setSectionBlocks('overview', next)}
+                      onOpenSubpage={(id) => setActiveSubpageId(id)}
+                      onJumpSection={(sec) => scrollToCard(sec)}
+                    />
+                  </div>
+                )}
 
                 <div className="bs-section">
                   <div className="bs-section-head">
@@ -1414,18 +1968,10 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Audience</h2>
-                  <button
-                    type="button"
-                    className="bs-btn-add"
-                    onClick={() => {
-                      const nextIdx = kit.audience.length;
-                      setField('audience', [...kit.audience, '']);
-                      setFocusTarget({ section: 'audience', index: nextIdx });
-                    }}
-                  >
-                    <Plus size={13} strokeWidth={2.2} />
-                    <span>Add</span>
-                  </button>
+                  <AddBlockMenu
+                    onAddBlock={(blk) => addSectionBlock('audience', blk)}
+                    onCreateSubpage={() => createNewSubpage('audience', 'New Persona')}
+                  />
                 </div>
                 <p className="bs-card-subtitle">
                   Who {kit.brandName || 'your brand'}&apos;s ads speak to: segments, pain points, and what to lead with.
@@ -1444,7 +1990,19 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                     itemLabel="Audience segment"
                     focusIndex={focusTarget.section === 'audience' ? focusTarget.index : null}
                     onFocusHandled={() => setFocusTarget({ section: null, index: null })}
+                    subpages={allSubpages}
+                    onOpenSubpage={(id) => setActiveSubpageId(id)}
+                    onJumpSection={(sec) => scrollToCard(sec)}
                   />
+                  <div className="mt-3">
+                    <BrandDocumentBlocks
+                      blocks={kit.sectionBlocks?.audience || []}
+                      subpages={allSubpages}
+                      onChangeBlocks={(next) => setSectionBlocks('audience', next)}
+                      onOpenSubpage={(id) => setActiveSubpageId(id)}
+                      onJumpSection={(sec) => scrollToCard(sec)}
+                    />
+                  </div>
 
                   {parsedProducts.length > 0 && (
                     <div className="bs-chip-strip">
@@ -1477,18 +2035,10 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Messaging</h2>
-                  <button
-                    type="button"
-                    className="bs-btn-add"
-                    onClick={() => {
-                      const nextIdx = kit.sellingPoints.length;
-                      setField('sellingPoints', [...kit.sellingPoints, '']);
-                      setFocusTarget({ section: 'sellingPoints', index: nextIdx });
-                    }}
-                  >
-                    <Plus size={13} strokeWidth={2.2} />
-                    <span>Add</span>
-                  </button>
+                  <AddBlockMenu
+                    onAddBlock={(blk) => addSectionBlock('messaging', blk)}
+                    onCreateSubpage={() => createNewSubpage('messaging', 'Messaging Guide')}
+                  />
                 </div>
                 <p className="bs-card-subtitle">
                   Selling points, tone, claims to avoid, disclaimers, and glossary for ads and scripts.
@@ -1594,8 +2144,22 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                     itemLabel="Glossary"
                     focusIndex={focusTarget.section === 'glossary' ? focusTarget.index : null}
                     onFocusHandled={() => setFocusTarget({ section: null, index: null })}
+                    subpages={allSubpages}
+                    onOpenSubpage={(id) => setActiveSubpageId(id)}
+                    onJumpSection={(sec) => scrollToCard(sec)}
                   />
                 </div>
+                {(kit.sectionBlocks?.messaging || []).length > 0 && (
+                  <div className="bs-section">
+                    <BrandDocumentBlocks
+                      blocks={kit.sectionBlocks?.messaging || []}
+                      subpages={allSubpages}
+                      onChangeBlocks={(next) => setSectionBlocks('messaging', next)}
+                      onOpenSubpage={(id) => setActiveSubpageId(id)}
+                      onJumpSection={(sec) => scrollToCard(sec)}
+                    />
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -1610,18 +2174,10 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Competitors</h2>
-                  <button
-                    type="button"
-                    className="bs-btn-add"
-                    onClick={() => {
-                      const nextIdx = kit.competitors.length;
-                      setField('competitors', [...kit.competitors, '']);
-                      setFocusTarget({ section: 'competitors', index: nextIdx });
-                    }}
-                  >
-                    <Plus size={13} strokeWidth={2.2} />
-                    <span>Add</span>
-                  </button>
+                  <AddBlockMenu
+                    onAddBlock={(blk) => addSectionBlock('competitors', blk)}
+                    onCreateSubpage={() => createNewSubpage('competitors', 'New Competitor')}
+                  />
                 </div>
                 <p className="bs-card-subtitle">
                   Landscape of alternatives {kit.brandName || 'your brand'} competes with.
@@ -1638,6 +2194,9 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                     itemLabel="Competitor"
                     focusIndex={focusTarget.section === 'competitors' ? focusTarget.index : null}
                     onFocusHandled={() => setFocusTarget({ section: null, index: null })}
+                    subpages={allSubpages}
+                    onOpenSubpage={(id) => setActiveSubpageId(id)}
+                    onJumpSection={(sec) => scrollToCard(sec)}
                   />
                 </div>
 
@@ -1652,6 +2211,78 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                     ariaLabel="Competitor comparison"
                   />
                 </div>
+
+                {competitorSubpages.length > 0 && (
+                  <div className="bs-section">
+                    <div className="bs-section-head">
+                      <h3 className="bs-section-title">
+                        All competitors <span className="bs-section-count">{competitorSubpages.length}</span>
+                      </h3>
+                    </div>
+                    <div className="bs-entity-box">
+                      {competitorSubpages.map((sp) => {
+                        let host = '';
+                        if (sp.url) {
+                          try {
+                            host = new URL(sp.url).hostname.replace(/^www\./i, '');
+                          } catch {
+                            host = sp.url;
+                          }
+                        }
+                        return (
+                          <div
+                            key={sp.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setActiveSubpageId(sp.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setActiveSubpageId(sp.id);
+                              }
+                            }}
+                            className="bs-product-row w-full cursor-pointer text-left transition hover:bg-violet-50/40"
+                          >
+                            <div className="bs-product-thumb">
+                              <span>{sp.title.charAt(0).toUpperCase()}</span>
+                            </div>
+                            <div className="bs-product-body min-w-0 flex-1">
+                              <div className="bs-product-name">{sp.title}</div>
+                              {sp.subtitle && <div className="bs-product-desc">{sp.subtitle}</div>}
+                            </div>
+                            {sp.url && (
+                              <a
+                                href={/^https?:\/\//i.test(sp.url) ? sp.url : `https://${sp.url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#E4E3F7] bg-[#F6F5FF] px-2.5 py-1 text-[11px] font-medium text-[#5B45F2] transition hover:border-[#5B45F2] hover:bg-violet-100"
+                                title={`Buka website resmi ${sp.title} (${sp.url})`}
+                              >
+                                <Globe size={11} />
+                                <span className="max-w-[140px] truncate">{host || 'Website'}</span>
+                                <ExternalLink size={10.5} />
+                              </a>
+                            )}
+                            <ChevronRight size={15} className="shrink-0 text-zinc-300" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {(kit.sectionBlocks?.competitors || []).length > 0 && (
+                  <div className="bs-section">
+                    <BrandDocumentBlocks
+                      blocks={kit.sectionBlocks?.competitors || []}
+                      subpages={allSubpages}
+                      onChangeBlocks={(next) => setSectionBlocks('competitors', next)}
+                      onOpenSubpage={(id) => setActiveSubpageId(id)}
+                      onJumpSection={(sec) => scrollToCard(sec)}
+                    />
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -1666,8 +2297,31 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Products</h2>
-                  <a className="bs-btn-add" href="/studio/products">Manage products</a>
+                  <div className="flex items-center gap-1.5">
+                    <AddBlockMenu
+                      onAddBlock={(blk) => addSectionBlock('products', blk)}
+                      onCreateSubpage={() => createNewSubpage('products', 'New Product')}
+                    />
+                    <a className="bs-btn-add" href="/studio/products">Manage products</a>
+                  </div>
                 </div>
+
+                {kit.products.length > 0 && (
+                  <div className="bs-section">
+                    <div className="bs-section-head">
+                      <h3 className="bs-section-title">Lineup</h3>
+                    </div>
+                    <EditableBulletList
+                      items={kit.products}
+                      onChange={(next) => setField('products', next)}
+                      placeholder="Product name — key value…"
+                      itemLabel="Product"
+                      subpages={allSubpages}
+                      onOpenSubpage={(id) => setActiveSubpageId(id)}
+                      onJumpSection={(sec) => scrollToCard(sec)}
+                    />
+                  </div>
+                )}
 
                 <div className="bs-section">
                   <div className="bs-section-head">
@@ -1681,35 +2335,98 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                   />
                 </div>
 
+                {detectedProducts.length > 0 && (
+                  <div className="bs-section">
+                    <div className="bs-section-head">
+                      <h3 className="bs-section-title">
+                        Detected from website <span className="bs-section-count">{detectedProducts.length}</span>
+                      </h3>
+                      <button
+                        type="button"
+                        disabled={importingProducts}
+                        onClick={() => importDetectedProducts(workspaceId(), detectedProducts)}
+                        className="rounded-lg bg-[#5b45f2] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#4731d8] disabled:opacity-60"
+                      >
+                        {importingProducts ? 'Importing…' : `Import ${detectedProducts.length} produk`}
+                      </button>
+                    </div>
+                    <p className="mb-2.5 text-[12px] text-[#6d7082]">
+                      Produk ini otomatis akan masuk ke Products Library saat kamu klik Save (atau klik Import sekarang).
+                    </p>
+                    <div className="bs-entity-box">
+                      {detectedProducts.map((prod, idx) => (
+                        <div key={`${prod.name}-${idx}`} className="bs-product-row">
+                          <div className="bs-product-thumb">
+                            {prod.imageUrl ? (
+                              <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <span>{prod.name.charAt(0).toUpperCase()}</span>
+                            )}
+                          </div>
+                          <div className="bs-product-body">
+                            <div className="bs-product-name">
+                              {prod.name}
+                              {prod.price ? <span className="ml-2 text-[11px] font-medium text-[#5b45f2]">{prod.price}</span> : null}
+                            </div>
+                            <div className="bs-product-desc">{prod.usp || prod.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bs-section">
                   <div className="bs-section-head">
                     <h3 className="bs-section-title">
-                      All products <span className="bs-section-count">{parsedProducts.length}</span>
+                      All products <span className="bs-section-count">{productSubpages.length}</span>
                     </h3>
                   </div>
 
-                  {parsedProducts.length === 0 ? (
+                  {productSubpages.length === 0 ? (
                     <div className="bs-empty-state">
                       {catalogError || 'No products in this workspace yet.'}
                     </div>
                   ) : (
                     <div className="bs-entity-box">
-                      {parsedProducts.map((prod) => (
+                      {productSubpages.map((sp, idx) => (
                         <div
-                          key={prod.id}
-                          className={`bs-product-row${flashProductIdx === prod.index ? ' is-flash' : ''}`}
+                          key={sp.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setActiveSubpageId(sp.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setActiveSubpageId(sp.id);
+                            }
+                          }}
+                          className={`bs-product-row w-full cursor-pointer text-left transition hover:bg-violet-50/40${flashProductIdx === idx ? ' is-flash' : ''}`}
                         >
                           <div className="bs-product-thumb">
-                            {prod.thumb ? (
-                              <img src={prod.thumb} alt={prod.name || 'Product thumbnail'} width={38} height={38} />
+                            {sp.imageUrl ? (
+                              <img src={sp.imageUrl} alt={sp.title} className="h-full w-full object-cover" />
                             ) : (
-                              <span>{prod.letter}</span>
+                              <span>{sp.title.charAt(0).toUpperCase()}</span>
                             )}
                           </div>
-                          <div className="bs-product-fields">
-                            <strong>{prod.name}</strong>
-                            <p>{prod.description}</p>
+                          <div className="bs-product-body min-w-0 flex-1">
+                            <div className="bs-product-name">{sp.title}</div>
+                            {sp.subtitle && <div className="bs-product-desc">{sp.subtitle}</div>}
                           </div>
+                          {sp.url && (
+                            <a
+                              href={/^https?:\/\//i.test(sp.url) ? sp.url : `https://${sp.url}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#E6E6F2] bg-white px-2 py-0.5 text-[11px] font-medium text-[#5B45F2] transition hover:border-[#5B45F2] hover:bg-violet-50"
+                              title={`Buka halaman produk ${sp.title}`}
+                            >
+                              <ExternalLink size={11} />
+                            </a>
+                          )}
+                          <ChevronRight size={15} className="shrink-0 text-zinc-300" />
                         </div>
                       ))}
                     </div>
@@ -1729,23 +2446,53 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Avatars</h2>
-                  <button type="button" className="bs-btn-add" onClick={addAvatarRow}>
-                    <Plus size={13} strokeWidth={2.2} />
-                    <span>Add</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      className="bs-btn-add"
+                      onClick={() => (onNavigate ? onNavigate('ai-influencer') : addAvatarRow())}
+                    >
+                      <Sparkles size={13} strokeWidth={2.2} />
+                      <span>Add in AI Influencer</span>
+                    </button>
+                    <button type="button" className="bs-btn-add" onClick={addAvatarRow} title="Catat persona manual">
+                      <Plus size={13} strokeWidth={2.2} />
+                      <span>Note</span>
+                    </button>
+                  </div>
                 </div>
                 <p className="bs-card-subtitle">The avatars this brand uses in ads.</p>
 
                 {kit.avatars.length === 0 ? (
-                  <div className="bs-empty-state">
-                    The avatars you use with AI Director show up here.
+                  <div className="bs-empty-state flex flex-col items-center gap-2.5 py-6">
+                    <span>Buat avatar brand konsisten di AI Influencer Studio, atau tambahkan catatan persona manual.</span>
+                    {onNavigate && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('ai-influencer')}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#5b45f2] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#4731d8]"
+                      >
+                        <Sparkles size={13} />
+                        Buka AI Influencer
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="bs-entity-box">
                     {kit.avatars.map((avatar, idx) => (
                       <div key={avatar.id || idx} className="bs-entry-row">
-                        <div className="bs-product-thumb">
-                          <span>{(avatar.name || 'A').charAt(0).toUpperCase()}</span>
+                        <div className="bs-product-thumb overflow-hidden">
+                          {avatar.imageUrl ? (
+                            <a href={avatar.imageUrl} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
+                              <img
+                                src={avatar.imageUrl}
+                                alt={avatar.name || 'Brand Avatar'}
+                                className="h-full w-full object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <span>{(avatar.name || 'A').charAt(0).toUpperCase()}</span>
+                          )}
                         </div>
                         <div className="bs-product-fields">
                           <input
@@ -1803,16 +2550,32 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
               <div className="bs-card-body">
                 <div className="bs-card-head">
                   <h2 className="bs-card-title">Voices</h2>
-                  <button type="button" className="bs-btn-add" onClick={addVoiceRow}>
-                    <Plus size={13} strokeWidth={2.2} />
-                    <span>Add</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" className="bs-btn-add" onClick={() => setVoicePickerOpen((v) => !v)}>
+                      <Volume2 size={13} strokeWidth={2.2} />
+                      <span>{voicePickerOpen ? 'Close Voice Studio' : 'Add ElevenLabs Voice'}</span>
+                    </button>
+                    <button type="button" className="bs-btn-add" onClick={addVoiceRow} title="Tambah catatan manual">
+                      <Plus size={13} strokeWidth={2.2} />
+                      <span>Note</span>
+                    </button>
+                  </div>
                 </div>
-                <p className="bs-card-subtitle">The voices this brand uses in ads.</p>
+                <p className="bs-card-subtitle">The voices this brand uses in ads (ElevenLabs v4 & custom notes).</p>
+
+                {voicePickerOpen && (
+                  <BrandVoicePicker
+                    workspaceId={workspaceId()}
+                    brandName={kit.brandName}
+                    defaultSample={kit.headline || kit.slogans?.[0] || ''}
+                    onSelectVoice={(voiceEntry) => setField('voices', [...kit.voices, voiceEntry])}
+                    onClose={() => setVoicePickerOpen(false)}
+                  />
+                )}
 
                 {kit.voices.length === 0 ? (
                   <div className="bs-empty-state">
-                    The voices you use with AI Director show up here.
+                    Belum ada Brand Voice. Klik &ldquo;Add ElevenLabs Voice&rdquo; untuk memilih atau generate sample suara.
                   </div>
                 ) : (
                   <div className="bs-entity-box">
@@ -1850,6 +2613,9 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
                             ariaLabel={`Voice description ${idx + 1}`}
                             className="bs-product-desc-input"
                           />
+                          {voice.audioUrl && (
+                            <audio controls preload="none" src={voice.audioUrl} className="mt-2 h-8 w-full max-w-xs" />
+                          )}
                         </div>
                         <button
                           type="button"
@@ -2027,6 +2793,7 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
             ) : null
           )}
         </main>
+        )}
       </div>
 
       {/* FLOATING PURPLE AI DIRECTOR BRIEF BUTTON */}
@@ -2085,6 +2852,22 @@ export default function BrandKitContent({ onOpenDirector, onBack }) {
           </svg>
         </button>
       </div>
+
+      {historyOpen && (
+        <BrandHistoryDrawer
+          history={kit.history || []}
+          onClose={() => setHistoryOpen(false)}
+          onOpenSubpage={(id) => {
+            setActiveSubpageId(id);
+            setHistoryOpen(false);
+          }}
+          onJumpSection={(sec) => {
+            setActiveSubpageId(null);
+            setHistoryOpen(false);
+            setTimeout(() => scrollToCard(sec), 30);
+          }}
+        />
+      )}
     </div>
   );
 }

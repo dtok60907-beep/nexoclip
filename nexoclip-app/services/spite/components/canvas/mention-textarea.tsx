@@ -65,10 +65,10 @@ const ICONS: Record<FolderType, any> = {
 }
 
 const COLOR: Record<FolderType, string> = {
-  character: 'bg-slate-500/20 text-slate-200 border-slate-400/40',
-  prop: 'bg-blue-500/20 text-blue-200 border-blue-400/40',
-  location: 'bg-green-500/20 text-green-200 border-green-400/40',
-  general: 'bg-yellow-500/20 text-yellow-200 border-yellow-400/40',
+  character: 'bg-violet-100 text-violet-900 border-violet-300',
+  prop: 'bg-sky-100 text-sky-900 border-sky-300',
+  location: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+  general: 'bg-amber-100 text-amber-900 border-amber-300',
 }
 
 // Folder names can have spaces, apostrophes, accents, etc.; the @tag in
@@ -245,15 +245,15 @@ function makeChipElement(
   span.dataset.assetIds = selectedAssetIds.join(',')
   span.dataset.workspaceAssetIds = selectedWorkspaceAssetIds.join(',')
   span.contentEditable = 'false'
-  const cls = missing ? 'bg-red-500/15 text-red-300 border-red-500/40 line-through' : COLOR[folder.type]
+  const cls = missing ? 'bg-red-50 text-red-700 border-red-300 line-through' : COLOR[folder.type]
   span.className =
-    'mention-chip inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] border align-middle select-none cursor-pointer hover:opacity-90 ' +
+    'mention-chip mx-0.5 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 align-baseline text-[12px] font-medium leading-[1.35] select-none cursor-pointer transition-opacity hover:opacity-85 ' +
     cls
   if (missing) {
     span.dataset.missing = '1'
     span.title = 'This folder was deleted — remove this mention or pick another folder.'
   }
-  span.textContent = folder.name
+  span.textContent = `@${folder.name}`
   return span
 }
 
@@ -862,23 +862,23 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
         return createPortal(
           <div
             data-mention-popover
-            className="fixed z-[70] rounded-lg border border-white/10 bg-[#0E1014] shadow-xl"
+            className="fixed z-[70] rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-[0_14px_38px_-10px_rgba(15,23,42,0.18)]"
             style={{ left, top, width: W }}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
-              <div className={`w-5 h-5 rounded flex items-center justify-center ${COLOR[folder.type]}`}>
+            <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2">
+              <div className={`flex h-5 w-5 items-center justify-center rounded border ${COLOR[folder.type]}`}>
                 <Icon size={10} weight="fill" />
               </div>
-              <span className="text-[12px] text-foreground/90 truncate flex-1">{folder.name}</span>
-              <span className="text-[10px] text-muted-foreground/60">
+              <span className="flex-1 truncate text-[12px] font-semibold text-zinc-900">{folder.name}</span>
+              <span className="text-[10px] font-medium text-zinc-400">
                 {selectedIds.size}/{folder.assets.length}
               </span>
             </div>
 
             {folder.assets.length === 0 ? (
-              <div className="py-6 text-center text-[11px] text-muted-foreground/50">
+              <div className="py-6 text-center text-[11px] text-zinc-400">
                 Folder is empty — add assets to it first.
               </div>
             ) : (
@@ -894,7 +894,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
                         onClick={() => toggleAssetInChip(folder.id, asset.id, folder.assets)}
                         disabled={needsImport}
                         className={`relative aspect-square rounded-md overflow-hidden border transition ${
-                          needsImport ? 'border-amber-400/40 opacity-45 cursor-not-allowed' : isSel ? 'border-accent ring-1 ring-accent/60' : 'border-white/10 hover:border-white/30 opacity-50 hover:opacity-100'
+                          needsImport ? 'border-amber-300 opacity-50 cursor-not-allowed' : isSel ? 'border-violet-500 ring-1 ring-violet-400/70' : 'border-zinc-200 hover:border-zinc-400 opacity-65 hover:opacity-100'
                         }`}
                         title={needsImport ? 'Needs import into Assets before Seedance' : isSel ? 'Click to deselect' : 'Click to select'}
                       >
@@ -905,7 +905,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
                           </div>
                         )}
                         {isSel && (
-                          <div className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
+                          <div className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-violet-600">
                             <Check size={9} weight="bold" className="text-white" />
                           </div>
                         )}
@@ -916,19 +916,19 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
               </div>
             )}
 
-            <div className="flex items-center gap-2 px-2 pb-2">
+            <div className="flex items-center gap-2 border-t border-zinc-100 px-2.5 py-2">
               <button
                 type="button"
                 onClick={() => removeChip(folder.id)}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-red-400 hover:bg-red-500/10"
+                className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
               >
-                <Trash size={10} />
+                <Trash size={11} />
                 Remove
               </button>
               <button
                 type="button"
                 onClick={() => setPopover(null)}
-                className="ml-auto px-2 py-1 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-white/5"
+                className="ml-auto rounded px-2.5 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               >
                 Done
               </button>
@@ -1061,7 +1061,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 max-h-60 overflow-y-auto rounded-[12px] border border-zinc-800 bg-[#1c1c1e]/98 p-1 shadow-xl min-w-[210px] max-w-[360px]"
+          className="fixed z-50 max-h-60 min-w-[220px] max-w-[360px] overflow-y-auto rounded-[14px] border border-zinc-200 bg-white p-1.5 shadow-[0_14px_38px_-10px_rgba(15,23,42,0.18)]"
           style={{
             left: menuPos ? menuPos.left : -9999,
             top: menuPos ? menuPos.top : -9999,
@@ -1071,7 +1071,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
           onMouseDown={(e) => e.stopPropagation()}
         >
           {filteredFolders.length === 0 && (
-            <div className="px-3 py-2 text-[11px] text-zinc-500">
+            <div className="px-3 py-2 text-[11.5px] text-zinc-400">
               {folders.length === 0 ? 'No Characters, Props, or Locations yet.' : 'No matching folder.'}
             </div>
           )}
@@ -1088,22 +1088,22 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => { insertChipAtCursor(f, new Set(f.assets.map((a) => a.id))) }}
                 onMouseEnter={() => setHi(i)}
-                className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${i === hi ? 'bg-white/[0.09]' : 'hover:bg-white/[0.06]'}`}
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${i === hi ? 'bg-zinc-100' : 'hover:bg-zinc-50'}`}
               >
-                <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${COLOR[f.type]}`}>
+                <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${COLOR[f.type]}`}>
                   <Icon size={10} weight="fill" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-zinc-100 truncate">{f.name}</span>
+                    <span className="truncate text-[12px] font-medium text-zinc-900">{f.name}</span>
                     {hasVoice && (
-                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-500/15 px-1 py-0.5 text-[9px] font-medium text-violet-300">
+                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700">
                         <Volume2 size={9} strokeWidth={2.2} />
                         Voice
                       </span>
                     )}
                   </div>
-                  <div className="text-[9px] text-zinc-500 capitalize">
+                  <div className="text-[10px] text-zinc-400 capitalize">
                     {f.type} · {f.assets.length} asset{f.assets.length !== 1 ? 's' : ''}
                   </div>
                 </div>

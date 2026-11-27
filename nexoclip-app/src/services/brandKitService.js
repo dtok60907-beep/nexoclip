@@ -69,6 +69,19 @@ const CORE_LIST_FIELDS = [
 const OPTIONAL_TEXT_FIELDS = ['logoNote', 'compareAgainst', 'leadWith'];
 const OPTIONAL_LIST_FIELDS = ['glossary', 'deals'];
 
+export function buildBaseBrandKit(existing = {}) {
+  const base = {};
+  for (const key of CORE_TEXT_FIELDS) base[key] = '';
+  for (const key of CORE_LIST_FIELDS) base[key] = [];
+  base.colors = [];
+  if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+    for (const [k, v] of Object.entries(existing)) {
+      if (v !== undefined && v !== null) base[k] = v;
+    }
+  }
+  return base;
+}
+
 function validateStringList(list, label, maxItems = 40, maxLen = 500) {
   if (!Array.isArray(list) || list.length > maxItems || list.some((item) => typeof item !== 'string' || item.length > maxLen)) {
     throw Object.assign(new Error(`Daftar ${label} tidak valid.`), { status: 400 });
@@ -88,8 +101,101 @@ function validateNamedEntries(entries, label) {
     const name = typeof entry.name === 'string' ? entry.name.trim().slice(0, 120) : '';
     const description = typeof entry.description === 'string' ? entry.description.trim().slice(0, 600) : '';
     const tag = typeof entry.tag === 'string' ? entry.tag.trim().slice(0, 80) : '';
-    return { id, name, description, tag };
+    const extra = {};
+    if (typeof entry.voiceId === 'string' && entry.voiceId.trim()) extra.voiceId = entry.voiceId.trim().slice(0, 120);
+    if (typeof entry.audioUrl === 'string' && entry.audioUrl.trim()) extra.audioUrl = entry.audioUrl.trim().slice(0, 500);
+    if (typeof entry.assetId === 'string' && entry.assetId.trim()) extra.assetId = entry.assetId.trim().slice(0, 120);
+    if (typeof entry.imageUrl === 'string' && entry.imageUrl.trim()) extra.imageUrl = entry.imageUrl.trim().slice(0, 800);
+    if (typeof entry.wardrobe === 'string' && entry.wardrobe.trim()) extra.wardrobe = entry.wardrobe.trim().slice(0, 300);
+    if (typeof entry.voiceStyle === 'string' && entry.voiceStyle.trim()) extra.voiceStyle = entry.voiceStyle.trim().slice(0, 300);
+    if (typeof entry.lighting === 'string' && entry.lighting.trim()) extra.lighting = entry.lighting.trim().slice(0, 300);
+    if (typeof entry.setting === 'string' && entry.setting.trim()) extra.setting = entry.setting.trim().slice(0, 300);
+    return { id, name, description, tag, ...extra };
   }).filter((item) => item.name || item.description);
+}
+
+function validateRichBlocks(blocks) {
+  if (!Array.isArray(blocks)) return [];
+  const ALLOWED_TYPES = new Set(['heading', 'paragraph', 'bullets', 'numbers', 'image']);
+  return blocks
+    .slice(0, 40)
+    .map((b, idx) => {
+      if (!b || typeof b !== 'object' || Array.isArray(b)) return null;
+      const type = ALLOWED_TYPES.has(b.type) ? b.type : 'paragraph';
+      const id = typeof b.id === 'string' && b.id.trim() ? b.id.trim().slice(0, 80) : `blk-${idx + 1}`;
+      if (type === 'bullets' || type === 'numbers') {
+        const items = Array.isArray(b.items)
+          ? b.items.slice(0, 30).map((it) => String(it || '').trim().slice(0, 600)).filter(Boolean)
+          : [];
+        return { id, type, title: String(b.title || '').trim().slice(0, 140), items };
+      }
+      if (type === 'image') {
+        const url = String(b.url || '').trim().slice(0, 1000);
+        if (!url || !/^(https?:\/\/|\/|data:image\/)/i.test(url)) return null;
+        return { id, type, url, caption: String(b.caption || '').trim().slice(0, 240) };
+      }
+      return {
+        id,
+        type,
+        text: String(b.text || '').trim().slice(0, 3000),
+      };
+    })
+    .filter(Boolean);
+}
+
+function validateSubpages(subpages) {
+  if (!Array.isArray(subpages) || subpages.length > 40) return [];
+  const ALLOWED_PARENTS = new Set(['products', 'competitors', 'overview', 'audience', 'messaging', 'custom']);
+  return subpages
+    .map((sp, idx) => {
+      if (!sp || typeof sp !== 'object' || Array.isArray(sp)) return null;
+      const title = String(sp.title || '').trim().slice(0, 140);
+      if (!title) return null;
+      const slug =
+        typeof sp.slug === 'string' && sp.slug.trim()
+          ? sp.slug.trim().slice(0, 100)
+          : title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `page-${idx + 1}`;
+      const id = typeof sp.id === 'string' && sp.id.trim() ? sp.id.trim().slice(0, 80) : `sub-${slug}`;
+      const parent = ALLOWED_PARENTS.has(sp.parent) ? sp.parent : 'custom';
+      const subtitle = String(sp.subtitle || '').trim().slice(0, 320);
+      const url = String(sp.url || '').trim().slice(0, 500);
+      const imageUrl = String(sp.imageUrl || '').trim().slice(0, 800);
+      const blocks = validateRichBlocks(sp.blocks);
+      return { id, slug, parent, title, subtitle, url, imageUrl, blocks };
+    })
+    .filter(Boolean);
+}
+
+function validateHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .slice(0, 50)
+    .map((entry, idx) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim().slice(0, 80) : `hist-${idx + 1}`;
+      const actorType = entry.actorType === 'agent' ? 'agent' : 'user';
+      const actorName = String(entry.actorName || (actorType === 'agent' ? 'Ad Agent' : 'Team member')).trim().slice(0, 100);
+      const source = String(entry.source || (actorType === 'agent' ? 'Website' : 'Manual edit')).trim().slice(0, 80);
+      const createdAt = typeof entry.createdAt === 'string' && entry.createdAt.trim() ? entry.createdAt.trim().slice(0, 60) : new Date().toISOString();
+      const pages = Array.isArray(entry.pages)
+        ? entry.pages
+            .slice(0, 30)
+            .map((p) => {
+              if (!p || typeof p !== 'object') return null;
+              const title = String(p.title || '').trim().slice(0, 120);
+              if (!title) return null;
+              return {
+                targetType: p.targetType === 'subpage' ? 'subpage' : 'section',
+                targetId: String(p.targetId || '').trim().slice(0, 100),
+                title,
+                summary: String(p.summary || '').trim().slice(0, 160),
+              };
+            })
+            .filter(Boolean)
+        : [];
+      return { id, actorType, actorName, source, createdAt, pages };
+    })
+    .filter(Boolean);
 }
 
 function validateCustomPages(pages) {
@@ -164,6 +270,17 @@ export function validateBrandKit(value) {
   if (value.avatars !== undefined) data.avatars = validateNamedEntries(value.avatars, 'avatars');
   if (value.voices !== undefined) data.voices = validateNamedEntries(value.voices, 'voices');
   if (value.customPages !== undefined) data.customPages = validateCustomPages(value.customPages);
+  if (value.subpages !== undefined) data.subpages = validateSubpages(value.subpages);
+  if (value.history !== undefined) data.history = validateHistory(value.history);
+  if (value.sectionBlocks !== undefined && value.sectionBlocks && typeof value.sectionBlocks === 'object' && !Array.isArray(value.sectionBlocks)) {
+    const cleanSections = {};
+    for (const [k, v] of Object.entries(value.sectionBlocks)) {
+      if (['overview', 'audience', 'messaging', 'competitors', 'products'].includes(k)) {
+        cleanSections[k] = validateRichBlocks(v);
+      }
+    }
+    data.sectionBlocks = cleanSections;
+  }
 
   return data;
 }

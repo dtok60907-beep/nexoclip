@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
 import type { RemotePresencePeer } from '@/lib/realtime/presence'
 import { CanvasGuestList } from './canvas-guest-list'
@@ -66,21 +65,42 @@ export function CanvasToolbar({
     if (next && next !== projectName) onProjectNameChange(next)
   }
 
+  const handleBackToCanvasHome = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault()
+    if (typeof window === 'undefined') return
+    if (window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'nx-canvas-back' }, window.location.origin)
+      } catch {
+        // ignore cross-origin postMessage errors
+      }
+      try {
+        window.parent.history.replaceState(null, '', '/studio/canvas')
+      } catch {
+        // ignore cross-origin history errors
+      }
+      window.location.assign('/canvas?embedded=canvas')
+    } else {
+      window.location.assign('/studio/canvas')
+    }
+  }
+
   return (
     <header
       ref={toolbarRef}
       className="relative z-30 flex h-12 shrink-0 select-none items-center gap-3 border-b border-zinc-200/85 bg-white/95 px-3 sm:px-4"
     >
-      {/* Left: Back to Projects + Editable Project Title */}
+      {/* Left: Back to Studio Canvas (/studio/canvas) + Editable Project Title */}
       <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href="/"
-          className="hidden lg:inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none"
+        <a
+          href="/studio/canvas"
+          onClick={handleBackToCanvasHome}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none"
         >
           <ArrowLeft size={13} strokeWidth={2} />
           <span>Projects</span>
-        </Link>
-        <div className="hidden lg:block h-4 w-px bg-zinc-200" />
+        </a>
+        <div className="h-4 w-px bg-zinc-200" />
         {editing ? (
           <input
             autoFocus

@@ -390,7 +390,7 @@ export default function ProjectLibrary({ authStatus, onSignIn, selection }) {
           ) : modal.action === 'studios' ? (
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(labels).map(([k, v]) => (
-                <a key={k} className={field} href={k === 'canvas' ? '/canvas' : '/studio/' + k + '?new=1'}>
+                <a key={k} className={field} href={k === 'canvas' ? '/studio/canvas' : '/studio/' + k + '?new=1'}>
                   {v}
                 </a>
               ))}

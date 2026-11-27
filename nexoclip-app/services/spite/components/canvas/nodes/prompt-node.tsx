@@ -355,7 +355,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
         />
 
         {editorLockError && (
-          <div className="absolute left-3 right-3 bottom-3 rounded bg-amber-500/15 px-2 py-1 text-[10px] text-amber-200 pointer-events-none">
+          <div className="pointer-events-none absolute bottom-3 left-3 right-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-800">
             {editorLockError}
           </div>
         )}

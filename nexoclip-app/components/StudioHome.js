@@ -21,37 +21,20 @@ import {
 
 const HOME_TABS = [
   {
-    id: 'ugc',
-    label: 'AI Ads & UGC',
-    icon: 'chat',
-    targetTab: 'video',
-    heading: 'Create, produce, and share your next UGC story.',
-    placeholder: 'Describe your UGC ad, creator hook, product demo, or social creative...',
+    id: 'director',
+    label: 'AI Creative Marketing',
+    icon: 'director',
+    targetTab: 'director',
+    heading: 'Research, strategize, and produce winning campaigns with one AI agent.',
+    placeholder: 'Describe your marketing objective — research competitor ads, plan a 7-day launch campaign, or craft UGC hooks...',
     defaultCategory: 'all',
     categories: UGC_SHOWCASE_CATEGORIES,
     interleaveCategories: ['ugc-commercial', 'cinematic-ads', 'affiliate-ugc', 'ads-fnb'],
     typingPrompts: [
-      'Create a TikTok UGC product ad with a 3-second pattern-interrupt hook and a sunny kitchen demo...',
-      'Turn our skincare bottle photo into a studio-lit 9:16 launch video with macro water droplets...',
-      'Clone our top-performing morning coffee creator reel with fresh hooks and auto-captions...',
-      'Generate an editorial travertine plinth keyframe for our summer fragrance campaign...',
-    ],
-  },
-  {
-    id: 'director',
-    label: 'AI Director',
-    icon: 'director',
-    targetTab: 'director',
-    heading: 'Direct drama series, commercials, and multi-scene films.',
-    placeholder: 'Describe your campaign brief, scenes, pacing, and visual mood for AI Director...',
-    defaultCategory: 'drama',
-    categories: FILMMAKING_SHOWCASE_CATEGORIES,
-    interleaveCategories: ['micro-drama-movie', 'cinematic-ads', 'experimental-vfx', 'music-videos'],
-    typingPrompts: [
-      'Direct a tense micro-drama confrontation in a rain-lit hallway with 50mm anamorphic push-in...',
-      'Create a 20-second 9:16 F&B commercial with macro ice pour, hook, and voiceover...',
-      'Shoot a 35mm twilight establishing shot with volumetric fog and slow dolly motion...',
-      'Assemble a three-act cinematic trailer montage with golden-hour crane rise...',
+      'Riset iklan kompetitor dan tren TikTok skincare di Indonesia, lalu buatkan campaign 7 hari...',
+      'Create a 7-day TikTok & Instagram product launch campaign with 3-second hooks and UGC scripts...',
+      'Analyze winning Meta Ads in our category and build a Creative Strategy with 4 distinct angles...',
+      'Generate 5 problem-solution UGC video concepts ready to open directly in AI Video Canvas...',
     ],
   },
   {
@@ -274,7 +257,7 @@ const ShowcaseCard = memo(function ShowcaseCard({
 export default function StudioHome({ onNavigate, onCreate, initialPrompt = '', onPromptConsumed }) {
   const prefersReducedMotion = useReducedMotion();
   const [portalMounted, setPortalMounted] = useState(false);
-  const [activeHomeTab, setActiveHomeTab] = useState('ugc');
+  const [activeHomeTab, setActiveHomeTab] = useState('director');
   const [activeCategory, setActiveCategory] = useState('all');
   const [brokenIds, setBrokenIds] = useState(() => new Set());
   const [mode, setMode] = useState('video');

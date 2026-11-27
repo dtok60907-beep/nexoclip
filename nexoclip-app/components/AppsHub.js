@@ -48,8 +48,8 @@ const HERO_BANNERS = [
   },
   {
     id: 'director',
-    title: 'AI Director',
-    subtitle: 'Turn any creative brief into cinematic drama scenes and storyboards.',
+    title: 'AI Creative Marketing',
+    subtitle: 'Research competitor ads, craft creative strategies, build campaigns, and launch in Canvas.',
     cta: 'Try',
     image: '/showcase/cinematic-1600.webp',
     objectPosition: '76% center',
@@ -77,13 +77,13 @@ const APP_CATEGORIES = [
 export const APPS_CATALOG = [
   {
     id: 'director',
-    title: 'AI Director',
-    category: 'video-film',
-    categoryLabel: 'Video & Film',
+    title: 'AI Creative Marketing',
+    category: 'marketing',
+    categoryLabel: 'Marketing',
     pill: 'New',
     tone: 'violet',
-    icon: Clapperboard,
-    description: 'Turn briefs into scripts, scene plans & storyboards',
+    icon: Sparkles,
+    description: 'Research trends & ads, craft strategies, plan campaigns & open in Canvas',
   },
   {
     id: 'video',

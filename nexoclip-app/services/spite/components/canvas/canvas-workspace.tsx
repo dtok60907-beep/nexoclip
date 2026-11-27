@@ -1,6 +1,7 @@
 'use client'
 
 import { withBasePath } from '@/lib/base-path'
+import { workspaceAssetIdFromUrl } from '@/lib/byteplus-trust'
 import { uploadedMediaLabel } from '@/lib/canvas-media-label'
 import {
   createInvocationTimeRuntimeControls,
@@ -777,6 +778,257 @@ function CanvasInner({ projectId }: { projectId: string }) {
     window.addEventListener('spite:tour-seed-nodes', onSeed)
     return () => window.removeEventListener('spite:tour-seed-nodes', onSeed)
   }, [allowDocumentMutation, getNodes, fitView, screenToFlowPosition, commands, activeSceneId, updateNodeInternals])
+
+  // Auto-populate a fresh Canvas board when opened from AI Creative Marketing ("Open in Canvas"):
+  // 1. Creates real Props / Character / Location / General folders in the project with canonical workspace assets.
+  // 2. Populates PromptNode with active @mentions pointing to those folders.
+  // 3. Configures VideoNode with Seedance 2.5 Omni (`modelId: 'seedance-2.5'`, native audio, 9:16).
+  // Use stable refs for ReactFlow/Yjs callbacks so hydration re-renders never abort an in-flight seed!
+  const marketingSeedDoneRef = useRef<string | null>(null)
+  const marketingSeedInFlightRef = useRef<string | null>(null)
+  const marketingSeedFnsRef = useRef({ getNodes, fitView, commands, updateNodeInternals })
+  marketingSeedFnsRef.current = { getNodes, fitView, commands, updateNodeInternals }
+
+  useEffect(() => {
+    if (!allowDocumentMutation || typeof window === 'undefined' || !projectId || !activeSceneId) return
+    const params = new URLSearchParams(window.location.search)
+    const deliverableSeedId = params.get('marketingSeed')
+    const approvalSeedId = params.get('marketingApprovalSeed')
+    const seedKey = deliverableSeedId
+      ? `deliverable:${deliverableSeedId}`
+      : approvalSeedId
+        ? `approval:${approvalSeedId}`
+        : ''
+    if (!seedKey) return
+    if (marketingSeedDoneRef.current === seedKey || marketingSeedInFlightRef.current === seedKey) return
+    if (marketingSeedFnsRef.current.getNodes().length > 0) {
+      marketingSeedDoneRef.current = seedKey
+      return
+    }
+    marketingSeedInFlightRef.current = seedKey
+    const wsId = params.get('marketingWorkspace') || ''
+    const seedEndpoint = deliverableSeedId
+      ? `/api/marketing/deliverables/${encodeURIComponent(deliverableSeedId)}/canvas-seed`
+      : `/api/marketing/approvals/${encodeURIComponent(approvalSeedId!)}/canvas-seed`
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(seedEndpoint, {
+          credentials: 'include',
+          headers: wsId ? { 'x-workspace-id': wsId } : undefined,
+        })
+        if (!res.ok || cancelled) {
+          if (marketingSeedInFlightRef.current === seedKey) marketingSeedInFlightRef.current = null
+          return
+        }
+        const payload = await res.json().catch(() => null)
+        const seed = payload?.seed
+        if (!seed || cancelled || marketingSeedFnsRef.current.getNodes().length > 0) {
+          if (marketingSeedInFlightRef.current === seedKey) marketingSeedInFlightRef.current = null
+          return
+        }
+
+        // Step 1: Register assets & create real Canvas Folders (Props / Characters / Locations / General)
+        type SeedAsset = { url?: string; mediaType?: string; filename?: string; workspaceAssetId?: string | null }
+        type SeedFolder = { name?: string; tag?: string; type?: string; description?: string; assets?: SeedAsset[] }
+        type CreatedMention = {
+          folderId: string
+          name: string
+          selectedAssetIds: string[]
+          selectedWorkspaceAssetIds?: string[]
+        }
+
+        const seedFolders: SeedFolder[] = Array.isArray(seed.folders) ? seed.folders : []
+        const createdMentions: CreatedMention[] = []
+        const visualPreviewCards: { label: string; url: string; mediaType: 'image' | 'video' | 'audio' }[] = []
+
+        for (const folder of seedFolders) {
+          if (cancelled) return
+          const folderName = String(folder?.name || '').trim()
+          const folderType = ['character', 'prop', 'location', 'general'].includes(String(folder?.type || ''))
+            ? String(folder.type)
+            : 'prop'
+          if (!folderName || !Array.isArray(folder.assets) || !folder.assets.length) continue
+
+          const assetIds: string[] = []
+          const workspaceAssetIdsMap: Record<string, string> = {}
+          const selectedWorkspaceIds: string[] = []
+
+          let addedFolderPreview = false
+          for (const item of folder.assets) {
+            const rawUrl = String(item?.url || '').trim()
+            if (!rawUrl) continue
+            const mediaType: 'image' | 'video' | 'audio' =
+              item?.mediaType === 'video' || item?.mediaType === 'audio' ? item.mediaType : 'image'
+            const canonicalWsId = item?.workspaceAssetId || workspaceAssetIdFromUrl(rawUrl)
+            const assetUrl = canonicalWsId ? `/api/assets/${canonicalWsId}/download` : rawUrl
+
+            try {
+              const regRes = await fetch(withBasePath('/api/assets'), {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  url: assetUrl,
+                  type: mediaType,
+                  filename: item?.filename || folderName,
+                  projectId,
+                }),
+              })
+              const regJson = await regRes.json().catch(() => null)
+              const registeredId = regJson?.id ? String(regJson.id) : null
+              if (regRes.ok && registeredId) {
+                assetIds.push(registeredId)
+                if (canonicalWsId) {
+                  workspaceAssetIdsMap[registeredId] = canonicalWsId
+                  selectedWorkspaceIds.push(canonicalWsId)
+                }
+              }
+            } catch {
+              // continue best-effort
+            }
+
+            if (mediaType === 'image' && !addedFolderPreview && visualPreviewCards.length < 4) {
+              visualPreviewCards.push({ label: folderName, url: assetUrl, mediaType })
+              addedFolderPreview = true
+            }
+          }
+
+          if (assetIds.length === 0) continue
+
+          try {
+            const folderRes = await fetch(withBasePath('/api/folders'), {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: folderName,
+                description: folder.description || `Imported from AI Creative Marketing (${folderType})`,
+                type: folderType,
+                assetIds,
+                workspaceAssetIds: workspaceAssetIdsMap,
+                projectId,
+              }),
+            })
+            const folderJson = await folderRes.json().catch(() => null)
+            if (folderRes.ok && folderJson?.id) {
+              createdMentions.push({
+                folderId: String(folderJson.id),
+                name: folderName,
+                selectedAssetIds: assetIds,
+                ...(selectedWorkspaceIds.length ? { selectedWorkspaceAssetIds: selectedWorkspaceIds } : {}),
+              })
+            }
+          } catch {
+            // continue best-effort
+          }
+        }
+
+        if (createdMentions.length > 0) {
+          window.dispatchEvent(new Event('folders-changed'))
+        }
+        if (cancelled || marketingSeedFnsRef.current.getNodes().length > 0) {
+          if (marketingSeedInFlightRef.current === seedKey) marketingSeedInFlightRef.current = null
+          return
+        }
+
+        const { commands: liveCommands, updateNodeInternals: liveUpdateNodeInternals, fitView: liveFitView } = marketingSeedFnsRef.current
+
+        // Step 2: Create Brief Note -> Prompt Node (with active @mentions) -> Seedance 2.5 Omni Video Node
+        const originX = 120
+        const originY = 120
+        const createdIds: string[] = []
+
+        const noteNode = makeNode('stickyNote', { x: originX, y: originY }, undefined, activeSceneId, {
+          text: seed.briefNote || seed.projectName || '',
+          color: 'purple',
+          width: 340,
+          height: 260,
+        })
+        liveCommands.createNode(noteNode)
+        createdIds.push(noteNode.id)
+
+        const promptNode = makeNode('prompt', { x: originX + 390, y: originY }, undefined, activeSceneId, {
+          text: seed.visualPrompt || '',
+          mentions: createdMentions,
+          width: 420,
+          height: 260,
+        })
+        liveCommands.createNode(promptNode)
+        createdIds.push(promptNode.id)
+
+        const videoNode = makeNode('videoGen', { x: originX + 870, y: originY }, undefined, activeSceneId, {
+          modelId: seed.modelId || 'seedance-2.5',
+          aspectRatio: seed.aspectRatio || '9:16',
+          duration: seed.duration || '8s',
+          resolution: seed.resolution || '720p',
+          enableAudio: seed.enableAudio !== false,
+          ...(seed.renderedVideoUrl ? { outputUrl: seed.renderedVideoUrl } : {}),
+        })
+        liveCommands.createNode(videoNode)
+        createdIds.push(videoNode.id)
+
+        liveCommands.connect({
+          source: promptNode.id,
+          sourceHandle: 'prompt-out',
+          target: videoNode.id,
+          targetHandle: 'prompt-in',
+        })
+
+        // Place clean visual Reference cards below the PromptNode for quick visual inspection on the board
+        // (Seedance 2.5 Omni binds assets via the Props/Characters/Locations folders + @mentions above).
+        const previewItems: { label: string; url: string; mediaType: 'image' | 'video' | 'audio' }[] = visualPreviewCards.length
+          ? visualPreviewCards
+          : (Array.isArray(seed.productImages) ? (seed.productImages as { name?: string; url?: string }[]) : [])
+              .slice(0, 3)
+              .filter((img) => Boolean(img?.url))
+              .map((img, idx) => ({
+                label: img.name || `Product ${idx + 1}`,
+                url: img.url!,
+                mediaType: 'image' as const,
+              }))
+
+        previewItems.slice(0, 4).forEach((card, idx) => {
+          const refNode = makeNode('reference', { x: originX + 390 + idx * 230, y: originY + 310 }, card.label, activeSceneId, {
+            thumbnail: card.url,
+            label: card.label,
+            mediaType: card.mediaType,
+          })
+          liveCommands.createNode(refNode)
+          createdIds.push(refNode.id)
+        })
+
+        marketingSeedDoneRef.current = seedKey
+        marketingSeedInFlightRef.current = null
+
+        // Clean query params so page refresh never re-triggers seeding.
+        const cleanUrl = new URL(window.location.href)
+        cleanUrl.searchParams.delete('marketingSeed')
+        cleanUrl.searchParams.delete('marketingApprovalSeed')
+        cleanUrl.searchParams.delete('marketingWorkspace')
+        window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search)
+
+        if (createdMentions.length > 0) {
+          toast.success(`Seedance 2.5 Omni ready · ${createdMentions.length} folders & @mentions wired`)
+        }
+
+        window.setTimeout(() => {
+          createdIds.forEach((nid) => liveUpdateNodeInternals(nid))
+          liveFitView({ nodes: createdIds.map((nid) => ({ id: nid })), duration: 350, padding: 0.25, maxZoom: 1 })
+        }, 180)
+      } catch {
+        if (marketingSeedInFlightRef.current === seedKey) marketingSeedInFlightRef.current = null
+        // Non-blocking: user can still work in Canvas manually.
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (marketingSeedInFlightRef.current === seedKey) {
+        marketingSeedInFlightRef.current = null
+      }
+    }
+  }, [allowDocumentMutation, activeSceneId, projectId])
 
   // Scene handlers. Name = highest existing "Scene N" + 1 so deletes
   // don't reuse numbers (deleting Scene 3 then adding a new one gives

@@ -8,5 +8,5 @@ export default async function DirectorPage({ searchParams }) {
     for (const item of [].concat(value)) if (typeof item === 'string') params.append(key, item);
   }
   const query = params.toString();
-  redirect(`/studio/director${query ? `?${query}` : ''}`);
+  redirect(`/studio/marketing${query ? `?${query}` : ''}`);
 }

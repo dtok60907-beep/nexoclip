@@ -3,7 +3,6 @@
 import { confirmDialog } from '@/components/ui/dialog-host'
 import { withBasePath } from '@/lib/base-path'
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { ArrowLeft, Check, X } from '@phosphor-icons/react'
 import {
   getConnectorAnimation,
@@ -269,12 +268,24 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="glass border-b border-border/50 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link
-            href="/"
+          <a
+            href="/studio/canvas"
+            onClick={(e) => {
+              e.preventDefault()
+              if (typeof window !== 'undefined' && window.parent !== window) {
+                try {
+                  window.parent.postMessage({ type: 'nx-canvas-back' }, window.location.origin)
+                  window.parent.history.replaceState(null, '', '/studio/canvas')
+                } catch {}
+                window.location.assign('/canvas?embedded=canvas')
+              } else {
+                window.location.assign('/studio/canvas')
+              }
+            }}
             className="flex items-center justify-center w-8 h-8 rounded-lg glass-hover text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft size={16} weight="thin" />
-          </Link>
+          </a>
           <h1 className="text-lg font-serif tracking-tight">Settings</h1>
           <div className="ml-auto flex items-center gap-3">
             <button

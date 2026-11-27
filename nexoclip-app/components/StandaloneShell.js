@@ -13,6 +13,7 @@ import UsageContent from './UsageContent';
 import BillingContent, { ENTERPRISE_WHATSAPP_URL } from './BillingContent';
 import SettingsContent from './SettingsContent';
 import BrandKitContent from './BrandKitContent';
+import BrandAnalyzeToast from './BrandAnalyzeToast';
 import PricingModal from './PricingModal';
 import { PromoBanner, usePlanStatus } from './PlanStatus';
 import LowBalanceDialog from './LowBalanceDialog';
@@ -65,7 +66,7 @@ const createStudioLoader = (label, variant = 'split') => function LazyStudioSkel
   return <NxStudioSkeleton label={label} variant={variant} />;
 };
 
-const DirectorLoading = () => <NxDirectorSkeleton label="Loading AI Director" surface="light" variant="full" />;
+const DirectorLoading = () => <NxDirectorSkeleton label="Loading AI Creative Marketing" surface="light" variant="full" />;
 
 const ComingSoon = ({ title }) => (
   <div className="h-full w-full bg-white text-[#292733] flex items-center justify-center text-center px-6">
@@ -91,7 +92,7 @@ const CinemaStudio = studioLazy('CinemaStudio', 'Loading Cinema Studio', 'canvas
 const AudioStudio = studioLazy('AudioStudio', 'Loading Audio Studio', 'canvas');
 const MarketingStudio = studioLazy('MarketingStudio', 'Loading Marketing Studio', 'canvas');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio', 'Loading AI Influencer Studio', 'split');
-const DirectorApp = dynamic(() => import('./director/DirectorApp.js'), { ssr: false, loading: DirectorLoading });
+const DirectorApp = dynamic(() => import('./marketing/CreativeMarketingApp.js'), { ssr: false, loading: DirectorLoading });
 const DotGrid = dynamic(() => import('./ui/DotGrid'), { ssr: false });
 
 const PENDING_PROMPT_KEY = 'nexoclip_pending_director_prompt';
@@ -213,7 +214,7 @@ const TABS = [
   { id: 'cinema', label: 'Cinema Studio', icon: <NxIcon name="cinema" size={18} /> },
   { id: 'marketing', label: 'Marketing Studio', icon: <NxIcon name="marketing" size={18} /> },
   { id: 'canvas', label: 'Canvas', icon: <NxIcon name="canvas" size={18} /> },
-  { id: 'director', label: 'AI Director', icon: <NxIcon name="director" size={18} /> },
+  { id: 'director', label: 'AI Creative Marketing', icon: <NxIcon name="director" size={18} /> },
   { id: 'billing', label: 'Top Up', icon: <NxIcon name="billing" size={18} /> },
   { id: 'usage', label: 'Usage', icon: <NxIcon name="usage" size={18} /> },
   { id: 'brand-kit', label: 'Brand Kit', icon: <NxIcon name="settings" size={18} /> },
@@ -224,14 +225,13 @@ const TABS = [
 ];
 
 // The header's page title for each tab (sidebar labels where they differ from TABS).
-const TAB_TITLES = { home: 'Home', apps: 'Apps', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Director', billing: 'Top up', usage: 'Usage', 'brand-kit': 'Brand Kit', settings: 'Settings', accounts: 'Integration Apps', canvas: 'Canvas' };
+const TAB_TITLES = { home: 'Home', apps: 'Apps', image: 'Image', video: 'Video', cinema: 'World', 'ai-influencer': 'Character', audio: 'Audio', director: 'AI Creative Marketing', billing: 'Top up', usage: 'Usage', 'brand-kit': 'Brand Kit', settings: 'Settings', accounts: 'Integration Apps', canvas: 'Canvas' };
 
 const LIBRARY_TAB_IDS = new Set(['templates', 'products', 'media']);
 
 const APPS_EXT_NAV = [
   { id: 'apps', label: 'All Apps', group: 'overview', icon: LayoutGrid },
-  { id: 'home', label: 'AI Ads & UGC', group: 'studios', icon: Sparkles },
-  { id: 'director', label: 'AI Director', group: 'studios', icon: Clapperboard },
+  { id: 'director', label: 'AI Creative Marketing', group: 'studios', icon: Clapperboard },
   { id: 'canvas', label: 'Canvas Filmmaking', group: 'studios', icon: Workflow },
   { id: 'ai-influencer', label: 'AI Influencer', group: 'classic', icon: UserRound },
   { id: 'video', label: 'Video Studio', group: 'classic', icon: Video },
@@ -249,6 +249,23 @@ const WORKSPACE_EXT_NAV = [
   { id: 'team/members', view: 'manage', label: 'Team Members', group: 'workspace', icon: Users },
   { id: 'team/new', view: 'new', label: 'New Workspace', group: 'workspace', icon: Plus },
 ];
+
+const TAB_URL_SLUG = {
+  director: 'marketing',
+};
+
+const URL_SLUG_TO_TAB = {
+  marketing: 'director',
+  director: 'director',
+};
+
+const normalizeSlugToTab = (seg) => URL_SLUG_TO_TAB[seg] || seg;
+
+const tabToUrlPath = (destination) => {
+  const [tabId, ...rest] = String(destination || '').split('/');
+  const mapped = TAB_URL_SLUG[tabId] || tabId;
+  return `/studio/${[mapped, ...rest].filter(Boolean).join('/')}`;
+};
 
 const parseTeamSubView = (pathValue) => {
   const seg = (pathValue || '').split('/')[3];
@@ -320,8 +337,8 @@ export default function StandaloneShell({ initialTab, children }) {
   // Initialize activeTab from URL slug/params or default to 'image'
   const getInitialTab = () => {
     if (idFromParams || slug.includes('workflow') || slug.includes('canvas')) return 'canvas';
-    if (initialTab) return initialTab;
-    const firstSegment = slug[0];
+    if (initialTab) return normalizeSlugToTab(initialTab);
+    const firstSegment = normalizeSlugToTab(slug[0]);
     if (firstSegment && TABS.find(t => t.id === firstSegment)) return firstSegment;
     return 'home';
   };
@@ -377,11 +394,12 @@ export default function StandaloneShell({ initialTab, children }) {
     } else if (authReturnTo.current && authReturnTo.current !== '/studio/home') {
       const targetPath = authReturnTo.current;
       const match = targetPath.match(/^\/studio\/([^/?#]+)/);
-      if (match && TABS.some((t) => t.id === match[1])) {
-        const nextTab = match[1];
+      const matchedTab = match ? normalizeSlugToTab(match[1]) : null;
+      if (matchedTab && TABS.some((t) => t.id === matchedTab)) {
+        const nextTab = matchedTab;
         if (nextTab === 'image') setImageVisited(true);
         setActiveTab(nextTab);
-        window.history.pushState(null, '', targetPath);
+        window.history.pushState(null, '', tabToUrlPath(nextTab));
       } else {
         router.push(targetPath);
       }
@@ -398,6 +416,10 @@ export default function StandaloneShell({ initialTab, children }) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [getStartedOpen, setGetStartedOpen] = useState(false);
   const [imageVisited, setImageVisited] = useState(() => getInitialTab() === 'image');
+  const [directorVisited, setDirectorVisited] = useState(() => getInitialTab() === 'director');
+  useEffect(() => {
+    if (activeTab === 'director') setDirectorVisited(true);
+  }, [activeTab]);
   const [homeSelection, setHomeSelection] = useState(null);
   const [studioPrompt, setStudioPrompt] = useState('');
   const [tiktokVideo, setTiktokVideo] = useState(null);
@@ -574,7 +596,7 @@ export default function StandaloneShell({ initialTab, children }) {
     const handlePopState = () => {
       const path = window.location.pathname;
       const segments = path.split('/').filter(Boolean);
-      const tabId = segments[1] || 'home';
+      const tabId = normalizeSlugToTab(segments[1] || 'home');
       if (TABS.find(t => t.id === tabId)) {
         if (tabId === 'image') setImageVisited(true);
         if (tabId === 'team') setTeamSubView(parseTeamSubView(path));
@@ -586,6 +608,60 @@ export default function StandaloneShell({ initialTab, children }) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Canonicalize legacy /studio/director URL to /studio/marketing
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname === '/studio/director') {
+      window.history.replaceState(window.history.state, '', `/studio/marketing${window.location.search}${window.location.hash}`);
+    }
+  }, []);
+
+  // Resolve embedded Canvas iframe URL so /studio/canvas?project=<id>&marketingSeed=... opens the exact project inside Studio
+  const resolveCanvasIframeSrc = useCallback(() => {
+    if (typeof window === 'undefined') return '/canvas?embedded=canvas';
+    const params = new URLSearchParams(window.location.search);
+    const projectId = (params.get('project') || '').trim();
+    if (projectId && /^[a-zA-Z0-9_-]{4,100}$/.test(projectId)) {
+      const fwd = new URLSearchParams({ embedded: 'canvas' });
+      for (const key of ['marketingSeed', 'marketingApprovalSeed', 'marketingWorkspace']) {
+        const val = params.get(key);
+        if (val) fwd.set(key, val);
+      }
+      return `/canvas/project/${encodeURIComponent(projectId)}?${fwd.toString()}`;
+    }
+    return '/canvas?embedded=canvas';
+  }, []);
+
+  const [canvasIframeSrc, setCanvasIframeSrc] = useState(null);
+
+  useEffect(() => {
+    setCanvasIframeSrc(resolveCanvasIframeSrc());
+  }, [resolveCanvasIframeSrc, pathname]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'nx-canvas-back') {
+        if (window.location.pathname.startsWith('/studio/canvas') && window.location.search) {
+          window.history.replaceState(null, '', '/studio/canvas');
+        }
+        setCanvasIframeSrc('/canvas?embedded=canvas');
+      }
+    };
+    const onPop = () => {
+      if (window.location.pathname.startsWith('/studio/canvas')) {
+        setCanvasIframeSrc(resolveCanvasIframeSrc());
+      }
+    };
+    window.addEventListener('message', onMessage);
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('popstate', onPop);
+    };
+  }, [resolveCanvasIframeSrc]);
 
   useEffect(() => {
     if (pathname?.startsWith('/studio/team')) {
@@ -603,8 +679,9 @@ export default function StandaloneShell({ initialTab, children }) {
   }, []);
 
   const handleTabChange = useCallback((destination, prompt = '') => {
-    const [tabId, subSegment] = destination.split('/');
-    window.history.pushState(null, '', `/studio/${destination}`);
+    const [rawTabId, subSegment] = destination.split('/');
+    const tabId = normalizeSlugToTab(rawTabId);
+    window.history.pushState(null, '', tabToUrlPath(destination));
     if (tabId === 'projects') setSelectedProject(prompt);
     else if (typeof prompt === 'string' && prompt.trim()) setStudioPrompt(prompt.trim());
     if (tabId === 'image') setImageVisited(true);
@@ -616,17 +693,15 @@ export default function StandaloneShell({ initialTab, children }) {
     setExtSidebarSearch('');
   }, []);
 
-  // A brief handed over from the landing page (/studio/director?prompt=…) opens the
-  // Director's new-project form with it. It is kept in sessionStorage so it survives
-  // signing in with Google, which leaves the page; once the Director has it, it is dropped.
+  // A brief handed over from the landing page (/studio/marketing?prompt=…) opens AI Creative Marketing
   const handleHomeCreate = useCallback(async (tabId, prompt, files, modelId) => {
     if (!requireAuth()) {
-      authReturnTo.current = `/studio/${tabId}`;
+      authReturnTo.current = tabToUrlPath(tabId);
       return false;
     }
     if (files.length && !['image', 'video'].includes(tabId)) throw new Error('This studio does not accept references here.');
     // Load the destination before leaving the draft; failures remain recoverable in the composer.
-    if (tabId === 'director') await import('./director/DirectorApp.js');
+    if (tabId === 'director') await import('./marketing/CreativeMarketingApp.js');
     else await import('studio');
     setStudioPrompt(prompt);
     setHomeSelection({ tabId, modelId });
@@ -1033,7 +1108,7 @@ export default function StandaloneShell({ initialTab, children }) {
             return (
               <a
                 key={id}
-                href={`/studio/${id}`}
+                href={tabToUrlPath(id)}
                 onClick={(event) => handleNavigationItemClick(event, id)}
                 data-rail-id={id}
                 data-tour={id === 'canvas' ? 'canvas-link' : undefined}
@@ -1117,7 +1192,7 @@ export default function StandaloneShell({ initialTab, children }) {
                       return (
                         <a
                           key={item.id}
-                          href={`/studio/${item.id}`}
+                          href={tabToUrlPath(item.id)}
                           onClick={(event) => handleNavigationItemClick(event, item.id)}
                           className={`nx-rail-mobile-subitem${isSubActive ? ' is-active' : ''}`}
                         >
@@ -1154,7 +1229,7 @@ export default function StandaloneShell({ initialTab, children }) {
                       return (
                         <a
                           key={item.id}
-                          href={`/studio/${item.id}`}
+                          href={tabToUrlPath(item.id)}
                           onClick={(event) => handleNavigationItemClick(event, item.id)}
                           className={`nx-rail-mobile-subitem${currentTab === item.id ? ' is-active' : ''}`}
                         >
@@ -1192,7 +1267,7 @@ export default function StandaloneShell({ initialTab, children }) {
                       return (
                         <a
                           key={item.id}
-                          href={`/studio/${item.id}`}
+                          href={tabToUrlPath(item.id)}
                           onClick={(event) => handleNavigationItemClick(event, item.id)}
                           className={`nx-rail-mobile-subitem${currentTab === item.id ? ' is-active' : ''}`}
                         >
@@ -1350,7 +1425,7 @@ export default function StandaloneShell({ initialTab, children }) {
                         <div key={item.id}>
                           {showDivider && <div className="bs-tree-divider" role="separator" />}
                           <a
-                            href={`/studio/${item.id}`}
+                            href={tabToUrlPath(item.id)}
                             onClick={(event) => handleNavigationItemClick(event, item.id)}
                             aria-current={isActive ? 'page' : undefined}
                             className={`bs-tree-item${isActive ? ' is-active' : ''}`}
@@ -1514,7 +1589,7 @@ export default function StandaloneShell({ initialTab, children }) {
         {currentTab === 'templates' && <TemplatesHub onNavigate={handleTabChange} />}
         {currentTab === 'products' && <ProductsLibrary authStatus={authStatus} onSignIn={() => openAuth('login')} onNavigate={handleTabChange} />}
         {currentTab === 'media' && <WorkspaceLibrary kind="assets" data={dashboardData} authStatus={authStatus} onSignIn={() => openAuth('login')} selection={selectedProject} />}
-        {currentTab === 'director' && <div className="h-full w-full"><DirectorApp initialBrief={studioPrompt} onHeroChange={setDirectorHeroActive} /></div>}
+        {directorVisited && <div className={currentTab === 'director' ? 'h-full w-full' : 'hidden'}><DirectorApp initialBrief={studioPrompt} onHeroChange={setDirectorHeroActive} onNavigate={handleTabChange} /></div>}
         {currentTab === 'billing' && (
           <BillingContent
             workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null}
@@ -1544,6 +1619,7 @@ export default function StandaloneShell({ initialTab, children }) {
         {currentTab === 'brand-kit' && (
           <BrandKitContent
             onOpenDirector={(brief) => handleTabChange('director', brief)}
+            onNavigate={handleTabChange}
             onBack={() => handleTabChange('home')}
           />
         )}
@@ -1589,12 +1665,14 @@ export default function StandaloneShell({ initialTab, children }) {
         )}
         {currentTab === 'canvas' && (
           <div data-tour="canvas-frame" className="h-full w-full bg-black">
-            <iframe
-              title="Canvas"
-              src="/canvas?embedded=canvas"
-              className="h-full w-full border-0"
-              allow="clipboard-read; clipboard-write"
-            />
+            {canvasIframeSrc ? (
+              <iframe
+                title="Canvas"
+                src={canvasIframeSrc}
+                className="h-full w-full border-0"
+                allow="clipboard-read; clipboard-write"
+              />
+            ) : null}
           </div>
         )}
         {currentTab === 'ai-influencer' && (
@@ -1772,6 +1850,7 @@ export default function StandaloneShell({ initialTab, children }) {
       <CreateQuickModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} onSelect={handleTabChange} />
       <GetStartedPopover open={getStartedOpen} onClose={() => setGetStartedOpen(false)} onNavigate={handleTabChange} />
       <StudioTour open={tourOpen} mode={tourMode} onClose={() => setTourOpen(false)} activeTab={activeTab} onTabChange={handleTabChange} />
+      <BrandAnalyzeToast currentTab={currentTab} onOpenBrandKit={() => handleTabChange('brand-kit')} />
     </div>
   );
 }
